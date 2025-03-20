@@ -150,7 +150,7 @@ def get_local_sde_db(query: str) -> pd.DataFrame:
     return df
 
 def get_stats(stats_query):
-    engine = get_remote_mkt_engine()
+    engine = get_local_mkt_engine()
     with engine.connect() as conn:
         stats = pd.read_sql_query(stats_query, conn)
     logging.info(f"stats: {stats.head()}")
@@ -177,7 +177,7 @@ def get_market_orders(type_ids=None):
         type_ids_str = ','.join(map(str, type_ids))
         query += f" AND mo.type_id IN ({type_ids_str})"
     
-    return pd.read_sql_query(query, get_remote_mkt_engine())
+    return pd.read_sql_query(query, (get_local_mkt_engine()))
 
 def get_market_history(type_id):
     query = f"""
@@ -186,7 +186,7 @@ def get_market_history(type_id):
         WHERE type_id = {type_id}
         ORDER BY date
     """
-    return pd.read_sql_query(query, get_remote_mkt_engine())
+    return pd.read_sql_query(query, (get_local_mkt_engine()))
 
 def get_item_details(type_ids):
     type_ids_str = ','.join(map(str, type_ids))
@@ -198,20 +198,20 @@ def get_item_details(type_ids):
         JOIN invCategories ic ON ig.categoryID = ic.categoryID
         WHERE it.typeID IN ({type_ids_str})
     """
-    return pd.read_sql_query(query, get_remote_sde_engine())
+    return pd.read_sql_query(query, (get_local_sde_engine()))
 
-def get_remote_mkt_engine():
-    logging.info("attempting to connect to mkt")
-    dbUrl = f"sqlite+{mkt_url}/?authToken={mkt_auth_token}&secure=true"
-    logging.info('returning engine')
-    return create_engine(dbUrl, connect_args={'check_same_thread': False}, echo=False)
+# def get_remote_mkt_engine():
+#     logging.info("attempting to connect to mkt")
+#     dbUrl = f"sqlite+{mkt_url}/?authToken={mkt_auth_token}&secure=true"
+#     logging.info('returning engine')
+#     return create_engine(dbUrl, connect_args={'check_same_thread': False}, echo=False)
 
 
-def get_remote_sde_engine():
-    logging.info("attempting to connect to sde")
-    dbUrl = f"sqlite+{sde_url}/?authToken={sde_auth_token}&secure=true"
-    logging.info('returning engine')
-    return create_engine(dbUrl, connect_args={'check_same_thread': False}, echo=False)
+# def get_remote_sde_engine():
+#     logging.info("attempting to connect to sde")
+#     dbUrl = f"sqlite+{sde_url}/?authToken={sde_auth_token}&secure=true"
+#     logging.info('returning engine')
+#     return create_engine(dbUrl, connect_args={'check_same_thread': False}, echo=False)
 
 
 if __name__ == "__main__":

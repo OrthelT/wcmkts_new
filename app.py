@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, text, distinct
 from sqlalchemy.orm import Session
 import os
 from dotenv import load_dotenv
-from db_handler import  clean_mkt_data, get_local_mkt_engine, get_local_sde_engine, get_stats, get_remote_mkt_engine, get_remote_sde_engine, safe_format, get_mkt_data, get_market_orders, get_market_history, get_item_details
+from db_handler import  clean_mkt_data, get_local_mkt_engine, get_local_sde_engine, get_stats, safe_format, get_mkt_data, get_market_orders, get_market_history, get_item_details
 import sqlalchemy_libsql
 import libsql_client
 import logging
@@ -33,7 +33,7 @@ sde_auth_token = st.secrets["SDE_AUTH_TOKEN"]
 def schedule_db_sync():
     def sync_at_scheduled_time():
         while True:
-            now = datetime.datetime.utcnow()
+            now = datetime.datetime.now(datetime.UTC)
             target_time = now.replace(hour=13, minute=0, second=0, microsecond=0)
             
             # If it's already past 13:00 UTC today, sync now and then schedule for tomorrow
@@ -46,7 +46,7 @@ def schedule_db_sync():
                     
                     # Update session state
                     if "last_sync" not in st.session_state:
-                        st.session_state.last_sync = datetime.datetime.utcnow()
+                        st.session_state.last_sync = datetime.datetime.now(datetime.UTC)
                         st.session_state.sync_status = "Success"
                 except Exception as e:
                     logging.error(f"Initial database sync failed: {str(e)}")
@@ -70,7 +70,7 @@ def schedule_db_sync():
                 logging.info("Database sync completed successfully")
                 
                 # Display sync status in Streamlit
-                st.session_state.last_sync = datetime.datetime.utcnow()
+                st.session_state.last_sync = datetime.datetime.now(datetime.UTC)
                 st.session_state.sync_status = "Success"
             except Exception as e:
                 logging.error(f"Database sync failed: {str(e)}")
@@ -96,7 +96,7 @@ def get_filter_options(selected_categories=None):
         FROM marketorders 
         WHERE is_buy_order = 0
         """
-        
+        logging.info(f"mkt_query: {mkt_query}, get_local_mkt_engine()")
         with Session(get_local_mkt_engine()) as session:
             result = session.execute(text(mkt_query))
             type_ids = [row[0] for row in result.fetchall()]
@@ -116,7 +116,7 @@ def get_filter_options(selected_categories=None):
         JOIN invCategories ic ON ig.categoryID = ic.categoryID
         WHERE it.typeID IN ({type_ids_str})
         """
-        
+        logging.info(f"sde_query: {sde_query}, get_local_sde_engine()")
         with Session(get_local_sde_engine()) as session:
             result = session.execute(text(sde_query))
             df = pd.DataFrame(result.fetchall(), 
@@ -143,8 +143,6 @@ def get_filter_options(selected_categories=None):
 def get_market_data(show_all, selected_categories, selected_items):
     # Start with base condition for buy orders
     mkt_conditions = ["is_buy_order = 0"]
-    
-    
 
     print(f'selected_categories: {selected_categories}')
     print(f'selected_items: {selected_items}')
@@ -357,6 +355,7 @@ def main():
     )
     
     # Start database sync scheduler (only once)
+    logging.info("Starting sync scheduler")
     if 'sync_scheduler_started' not in st.session_state:
         schedule_db_sync()
         st.session_state.sync_scheduler_started = True
@@ -366,38 +365,13 @@ def main():
     if 'last_sync' not in st.session_state:
         st.session_state.last_sync = None
         st.session_state.sync_status = "Not yet run"
-    
+    logging.info("Sync status initialized")
     wclogo = "images/wclogo.png"
     st.image(wclogo, width=150)
 
     # Title
     st.title("Winter Coalition 4H Market Stats")
     
-    # Display database sync status in a small info area
-    with st.sidebar:
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("Database Sync Status")
-        status_color = "green" if st.session_state.sync_status == "Success" else "red"
-        
-        if st.session_state.last_sync:
-            last_sync_time = st.session_state.last_sync.strftime("%Y-%m-%d %H:%M UTC")
-            st.sidebar.markdown(f"**Last sync:** {last_sync_time}")
-        else:
-            st.sidebar.markdown("**Last sync:** Not yet run")
-            
-        st.sidebar.markdown(f"**Status:** <span style='color:{status_color}'>{st.session_state.sync_status}</span>", unsafe_allow_html=True)
-        
-        # Manual sync button
-        if st.sidebar.button("Sync Now"):
-            try:
-                sync_db()
-                st.session_state.last_sync = datetime.datetime.utcnow()
-                st.session_state.sync_status = "Success"
-                st.sidebar.success("Database sync completed successfully!")
-            except Exception as e:
-                st.session_state.sync_status = f"Failed: {str(e)}"
-                st.sidebar.error(f"Sync failed: {str(e)}")
-        st.sidebar.markdown("---")
 
     # Sidebar filters
     st.sidebar.header("Filters")
@@ -451,11 +425,17 @@ def main():
     logging.info(f"Data: {data.head()}")
     logging.info(f"Stats: {stats.head()}")
     
+
     if not data.empty:
+        if len(selected_items) == 1:
+            data = data[data['type_name'] == selected_items[0]]
+            stats = stats[stats['type_name'] == selected_items[0]]
+        elif len(selected_categories) == 1:
+            stats = stats[stats['category_name'] == selected_categories[0]]
         # Display metrics
         col1, col2, col3 = st.columns(3)
         with col1:
-            min_price = data['price'].min()
+            min_price = stats['min_price'].min()
             if pd.notna(min_price):
                 st.metric("Sell Price (min)", f"{min_price:,.2f} ISK")
         with col2:
@@ -463,7 +443,7 @@ def main():
             if pd.notna('volume_remain'):
                 st.metric("Market Stock", f"{volume:,.0f}")
         with col3:
-            days_remaining = stats['days_remaining'].mean()
+            days_remaining = stats['days_remaining'].min()
             if pd.notna(days_remaining):
                 st.metric("Days Remaining", f"{days_remaining:.1f}")
         # Format the DataFrame for display with null handling
@@ -519,5 +499,30 @@ def main():
     else:
         st.warning("No data found for the selected filters.")
 
+    # Display database sync status in a small info area
+    with st.sidebar:
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("Database Sync Status")
+        status_color = "green" if st.session_state.sync_status == "Success" else "red"
+        
+        if st.session_state.last_sync:
+            last_sync_time = st.session_state.last_sync.strftime("%Y-%m-%d %H:%M UTC")
+            st.sidebar.markdown(f"**Last sync:** {last_sync_time}")
+        else:
+            st.sidebar.markdown("**Last sync:** Not yet run")
+            
+        st.sidebar.markdown(f"**Status:** <span style='color:{status_color}'>{st.session_state.sync_status}</span>", unsafe_allow_html=True)
+        
+        # Manual sync button
+        if st.sidebar.button("Sync Now"):
+            try:
+                sync_db()
+                st.session_state.last_sync = datetime.datetime.now(datetime.UTC)
+                st.session_state.sync_status = "Success"
+                st.sidebar.success("Database sync completed successfully!")
+            except Exception as e:
+                st.session_state.sync_status = f"Failed: {str(e)}"
+                st.sidebar.error(f"Sync failed: {str(e)}")
+        st.sidebar.markdown("---")
 if __name__ == "__main__":
     main()
