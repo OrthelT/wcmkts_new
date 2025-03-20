@@ -1,0 +1,9 @@
+streamlit==1.41.1
+pandas==2.2.0
+sqlalchemy==2.0.25
+python-dotenv==1.0.1
+requests==2.31.0
+tenacity==8.2.3
+sqlalchemy-libsql==0.1.0
+plotly==6.0.0
+libsql_experimental==0.0.41
