@@ -13,6 +13,7 @@ import logging
 import time
 import threading
 import datetime
+import pytz
 from db_utils import sync_db
 # Configure logging
 logging.basicConfig(
@@ -491,11 +492,7 @@ def main():
             st.subheader("Price History")
             st.write("Price history is not available for multiple items. Select one item to view history")
         # Footer
-        st.markdown("---")
-        if 'issued' in data.columns:
-            last_update = data['issued'].max()
-            if pd.notna(last_update):
-                st.markdown(f"Last data update: {last_update}")
+
     else:
         st.warning("No data found for the selected filters.")
 
@@ -523,6 +520,19 @@ def main():
             except Exception as e:
                 st.session_state.sync_status = f"Failed: {str(e)}"
                 st.sidebar.error(f"Sync failed: {str(e)}")
+        
         st.sidebar.markdown("---")
+
+        if 'last_update' in stats.columns:
+            last_update = stats['last_update'].max()
+            if pd.notna(last_update):
+                # Parse the timestamp as US Eastern
+                eastern = pytz.timezone('US/Eastern')
+                last_update = datetime.datetime.strptime(last_update, "%Y-%m-%d %H:%M:%S.%f")
+                last_update = eastern.localize(last_update)
+                # Convert to UTC
+                last_update_utc = last_update.astimezone(pytz.UTC)
+                formatted_time = last_update_utc.strftime("%Y-%m-%d %H:%M UTC")
+                st.sidebar.markdown(f"Last data update: {formatted_time}")
 if __name__ == "__main__":
     main()
