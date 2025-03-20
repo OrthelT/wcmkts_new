@@ -139,7 +139,6 @@ def get_filter_options(selected_categories=None):
         st.error(f"Database error: {str(e)}")
         return [], []
 
-
 # Query function
 def get_market_data(show_all, selected_categories, selected_items):
     # Start with base condition for buy orders
