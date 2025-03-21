@@ -196,18 +196,10 @@ def get_market_data(show_all, selected_categories, selected_items):
     """
     # Get market data
     df = get_mkt_data(mkt_query)
-    logging.info(f"df: {type(df)}")
-
     if df.empty:
-        logging.info(f"df is empty")
         return df
-    
     stats = get_stats(stats_query)
 
-    logging.info(f"stats: {stats.head()}")
-
-
-    logging.info(f"stats: {type(stats)}")
     # Get SDE data for all type_ids in the result
     type_ids_str = ','.join(map(str, df['type_id'].unique()))
     sde_query = f"""
@@ -228,13 +220,8 @@ def get_market_data(show_all, selected_categories, selected_items):
     # Merge market data with SDE data
     df = df.merge(sde_df, on='type_id', how='left')
     df = clean_mkt_data(df)
-
     logging.info(f"df: {df.head()}")
     logging.info(f"stats: {stats.head()}")
-    logging.info(f"df.columns: {df.columns}")
-    logging.info(f"stats.columns: {stats.columns}")
-
-
     return df, stats
 
 def load_data(selected_categories=None, selected_items=None):
