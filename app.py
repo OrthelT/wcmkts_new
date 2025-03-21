@@ -503,11 +503,11 @@ def main():
         
         if st.session_state.last_sync:
             last_sync_time = st.session_state.last_sync.strftime("%Y-%m-%d %H:%M UTC")
-            st.sidebar.markdown(f"**Last sync:** {last_sync_time}")
+            ls = st.sidebar.markdown(f"**Last sync:** {last_sync_time}")
         else:
             st.sidebar.markdown("**Last sync:** Not yet run")
             
-        st.sidebar.markdown(f"**Status:** <span style='color:{status_color}'>{st.session_state.sync_status}</span>", unsafe_allow_html=True)
+        sync_status = st.sidebar.markdown(f"**Status:** <span style='color:{status_color}'>{st.session_state.sync_status}</span>", unsafe_allow_html=True)
         
         # Manual sync button
         if st.sidebar.button("Sync Now"):
@@ -515,11 +515,14 @@ def main():
                 sync_db()
                 st.session_state.last_sync = datetime.datetime.now(datetime.UTC)
                 st.session_state.sync_status = "Success"
-                st.sidebar.success("Database sync completed successfully!")
+                last_sync_time = st.session_state.last_sync.strftime("%Y-%m-%d %H:%M UTC")
+                ls = st.sidebar.markdown(f"**Last sync:** {last_sync_time}")
+                st.rerun()
             except Exception as e:
                 st.session_state.sync_status = f"Failed: {str(e)}"
                 st.sidebar.error(f"Sync failed: {str(e)}")
-        
+        if st.session_state.sync_status == "Success":
+            st.sidebar.success("Database sync completed successfully!")
         st.sidebar.markdown("---")
 
         if 'last_update' in stats.columns:
@@ -533,5 +536,6 @@ def main():
                 last_update_utc = last_update.astimezone(pytz.UTC)
                 formatted_time = last_update_utc.strftime("%Y-%m-%d %H:%M UTC")
                 st.sidebar.markdown(f"Last data update: {formatted_time}")
+
 if __name__ == "__main__":
     main()
