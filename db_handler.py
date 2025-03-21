@@ -200,18 +200,7 @@ def get_item_details(type_ids):
     """
     return pd.read_sql_query(query, (get_local_sde_engine()))
 
-# def get_remote_mkt_engine():
-#     logging.info("attempting to connect to mkt")
-#     dbUrl = f"sqlite+{mkt_url}/?authToken={mkt_auth_token}&secure=true"
-#     logging.info('returning engine')
-#     return create_engine(dbUrl, connect_args={'check_same_thread': False}, echo=False)
 
-
-# def get_remote_sde_engine():
-#     logging.info("attempting to connect to sde")
-#     dbUrl = f"sqlite+{sde_url}/?authToken={sde_auth_token}&secure=true"
-#     logging.info('returning engine')
-#     return create_engine(dbUrl, connect_args={'check_same_thread': False}, echo=False)
 
 
 if __name__ == "__main__":

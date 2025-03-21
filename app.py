@@ -173,18 +173,24 @@ def get_market_data(show_all, selected_categories, selected_items):
             """
             
             with Session(get_local_sde_engine()) as session:
-                result = session.execute(text(sde_query))
-                filtered_type_ids = [str(row[0]) for row in result.fetchall()]
-                session.commit()
-                session.close()
-            
-            logging.info(f"filtered_type_ids: {len(filtered_type_ids)}")
-            
-            if filtered_type_ids:
-                type_ids_str = ','.join(filtered_type_ids)
-                mkt_conditions.append(f"type_id IN ({type_ids_str})")
-            else:
-                return pd.DataFrame()  # Return empty if no matching types
+                try:
+                    result = session.execute(text(sde_query))
+                    filtered_type_ids = [str(row[0]) for row in result.fetchall()]
+                    session.commit()
+                    session.close()
+                except Exception as e:
+                    logging.error(f"Error executing SDE query: {e}")
+
+            try:
+                
+                if filtered_type_ids:
+                    logging.info(f"filtered_type_ids: {len(filtered_type_ids)}")
+                    type_ids_str = ','.join(filtered_type_ids)
+                    mkt_conditions.append(f"type_id IN ({type_ids_str})")
+                else:
+                    return pd.DataFrame()  # Return empty if no matching types
+            except Exception as e:
+                logging.error(f"Error executing SDE query: {e}")
     
     # Build final market query
     where_clause = " AND ".join(mkt_conditions)
@@ -435,7 +441,6 @@ def main():
     
     logging.info(f"Data: {data.head()}")
     logging.info(f"Stats: {stats.head()}")
-    
 
     if not data.empty:
         if len(selected_items) == 1:
