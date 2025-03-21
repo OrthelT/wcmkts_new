@@ -378,9 +378,12 @@ def main():
                 last_sync_state = json.load(f)
                 if 'last_sync' in last_sync_state:
                     updated_sync_state = datetime.datetime.strptime(last_sync_state['last_sync'], "%Y-%m-%d %H:%M UTC")
+                    st.session_state.last_sync = updated_sync_state
+
         except Exception as e:
             logging.error(f"Error loading last sync state: {e}")
-        st.session_state.last_sync = updated_sync_state
+        
+        st.session_state.last_sync = None
         st.session_state.sync_status = "Not yet run"
     
     logging.info("Sync status initialized")
