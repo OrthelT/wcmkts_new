@@ -43,3 +43,4 @@ dialect.py
 *.log
 *.csv
 CLAUDE.md
+experimental.py
