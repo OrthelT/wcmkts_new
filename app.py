@@ -506,30 +506,40 @@ def main():
             history_chart = create_history_chart(data['type_id'].iloc[0])
             if history_chart:
                 st.plotly_chart(history_chart, use_container_width=True)
-            
-            colh1, colh2 = st.columns(2)
-            with colh1:
-                # Display history data
-                st.subheader("History Data")
-                history_df = get_market_history(data['type_id'].iloc[0])
-                history_df.date = pd.to_datetime(history_df.date).dt.strftime("%Y-%m-%d")
-                history_df.average = round(history_df.average.astype(float), 2)
-                history_df = history_df.sort_values(by='date', ascending=False)
-                history_df.volume = history_df.volume.astype(int)
-                st.dataframe(history_df, hide_index=True)
-
-            with colh2:
-                avgpr30 = history_df[:30].average.mean()
-                avgvol30 = history_df[:30].volume.mean()
-                st.subheader(f"{data['type_name'].iloc[0]}",divider=True)
-                st.metric("Average Price (30 days)", f"{avgpr30:,.2f} ISK")
-                st.metric("Average Volume (30 days)", f"{avgvol30:,.0f}")
-
         else:
             st.subheader("Price History")
-            st.write("Price history is not available for multiple items. Select one item to view history")
-        
-        
+            st.write("Price history is not available")
+                    
+        colh1, colh2 = st.columns(2)
+            
+        with colh1:
+            # Display history data
+            st.subheader("History Data")
+            history_df = get_market_history(data['type_id'].iloc[0])
+            history_df.date = pd.to_datetime(history_df.date).dt.strftime("%Y-%m-%d")
+            history_df.average = round(history_df.average.astype(float), 2)
+            history_df = history_df.sort_values(by='date', ascending=False)
+            history_df.volume = history_df.volume.astype(int)
+            st.dataframe(history_df, hide_index=True)
+
+        with colh2:
+            avgpr30 = history_df[:30].average.mean()
+            avgvol30 = history_df[:30].volume.mean()
+            st.subheader(f"{data['type_name'].iloc[0]}",divider=True)
+            st.metric("Average Price (30 days)", f"{avgpr30:,.2f} ISK")
+            st.metric("Average Volume (30 days)", f"{avgvol30:,.0f}")
+
+        st.subheader("History Data")
+        history_df = get_market_history(data['type_id'].iloc[0])
+        history_df.date = pd.to_datetime(history_df.date).dt.strftime("%Y-%m-%d")
+        history_df.average = round(history_df.average.astype(float), 2)
+        history_df = history_df.sort_values(by='date', ascending=False)
+        history_df.volume = history_df.volume.astype(int)
+        st.dataframe(history_df, hide_index=True)
+
+        st.subheader("30 Day Metrics")
+        st.metric("Average Price (30 days)", f"{avgpr30:,.2f} ISK")
+        st.metric("Average Volume (30 days)", f"{avgvol30:,.0f}")
 
     else:
         st.warning("No data found for the selected filters.")
