@@ -44,3 +44,4 @@ dialect.py
 *.csv
 CLAUDE.md
 experimental.py
+last_sync_state.json

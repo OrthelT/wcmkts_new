@@ -15,6 +15,8 @@ import threading
 import datetime
 import pytz
 from db_utils import sync_db
+import json
+import datetime
 # Configure logging
 logging.basicConfig(
     filename='app.log',  # Name of the log file
@@ -29,6 +31,12 @@ mkt_auth_token = st.secrets["TURSO_AUTH_TOKEN"]
 
 sde_url = st.secrets["SDE_URL"]
 sde_auth_token = st.secrets["SDE_AUTH_TOKEN"]
+
+mkt_query = """
+    SELECT DISTINCT type_id 
+    FROM marketorders 
+    WHERE is_buy_order = 0
+    """
 
 # Function to schedule daily database sync at 1300 UTC
 def schedule_db_sync():
@@ -82,11 +90,7 @@ def schedule_db_sync():
     sync_thread.start()
     logging.info("Database sync scheduler started")
 
-mkt_query = """
-    SELECT DISTINCT type_id 
-    FROM marketorders 
-    WHERE is_buy_order = 0
-    """
+
 
 # Function to get unique categories and item names
 def get_filter_options(selected_categories=None):
@@ -363,8 +367,16 @@ def main():
 
     # Initialize sync status in session state if not present
     if 'last_sync' not in st.session_state:
-        st.session_state.last_sync = None
+        try:
+            with open("last_sync_state.json", "r") as f:
+                last_sync_state = json.load(f)
+                if 'last_sync' in last_sync_state:
+                    updated_sync_state = datetime.datetime.strptime(last_sync_state['last_sync'], "%Y-%m-%d %H:%M UTC")
+        except Exception as e:
+            logging.error(f"Error loading last sync state: {e}")
+        st.session_state.last_sync = updated_sync_state
         st.session_state.sync_status = "Not yet run"
+    
     logging.info("Sync status initialized")
     wclogo = "images/wclogo.png"
     st.image(wclogo, width=150)
@@ -372,7 +384,6 @@ def main():
     # Title
     st.title("Winter Coalition 4H Market Stats")
     
-
     # Sidebar filters
     st.sidebar.header("Filters")
 
@@ -523,6 +534,14 @@ def main():
                 st.sidebar.error(f"Sync failed: {str(e)}")
         if st.session_state.sync_status == "Success":
             st.sidebar.success("Database sync completed successfully!")
+
+    if st.session_state.last_sync:
+        last_sync_state = {}
+        last_sync_state['last_sync'] = st.session_state.last_sync.strftime("%Y-%m-%d %H:%M UTC")
+
+        with open("last_sync_state.json", "w") as f:
+            json.dump(last_sync_state, f)
+        
         st.sidebar.markdown("---")
 
         if 'last_update' in stats.columns:
