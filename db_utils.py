@@ -6,6 +6,7 @@ import os
 from dotenv import load_dotenv
 import libsql_experimental as libsql
 import logging
+from db_handler import get_local_mkt_engine, get_local_mkt_db, get_local_sde_db
 
 logging = logging.getLogger(__name__)
 
@@ -55,6 +56,17 @@ def get_recent_items():
        'volume_remain', 'duration', 'issued']]
     return df4
 
-if __name__ == "__main__":
-		pass
+def get_stats(stats_query):
+    engine = get_local_mkt_engine()
+    with engine.connect() as conn:
+        stats = pd.read_sql_query(stats_query, conn)
+        logging.info(f"stats: {stats.head()}")
+    return stats
 	
+
+if __name__ == "__main__":
+    
+    stats_query = f"""
+        SELECT * FROM marketstats   """
+    df = get_stats(stats_query)
+    print(df.head())
