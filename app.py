@@ -553,15 +553,15 @@ def main():
         st.sidebar.markdown("---")
 
         if 'last_update' in stats.columns:
-            last_update = stats['last_update'].max()
-            if pd.notna(last_update):
+            last_stats_update = stats['last_update'].max()
+            if pd.notna(last_stats_update):
                 # Parse the timestamp as US Eastern
                 eastern = pytz.timezone('US/Eastern')
-                last_update = datetime.datetime.strptime(last_update, "%Y-%m-%d %H:%M:%S.%f")
-                last_update = eastern.localize(last_update)
+                last_stats_update = datetime.datetime.strptime(last_stats_update, "%Y-%m-%d %H:%M:%S.%f")
+                last_stats_update = eastern.localize(last_stats_update)
                 # Convert to UTC
-                last_update_utc = last_update.astimezone(pytz.UTC)
-                formatted_time = last_update_utc.strftime("%Y-%m-%d %H:%M UTC")
+                last_stats_update_utc = last_stats_update.astimezone(pytz.UTC)
+                formatted_time = last_stats_update_utc.strftime("%Y-%m-%d %H:%M UTC")
                 st.sidebar.markdown(f"Last data update: {formatted_time}")
 
 if __name__ == "__main__":
