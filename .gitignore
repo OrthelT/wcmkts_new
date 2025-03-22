@@ -45,3 +45,4 @@ dialect.py
 CLAUDE.md
 experimental.py
 last_sync_state.json
+dd.py
