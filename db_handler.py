@@ -20,12 +20,6 @@ local_sde_url = "sqlite:///sde.db"    # Changed to standard SQLite format for lo
 # Load environment variables
 load_dotenv()
 
-# mkt_url = st.secrets["TURSO_DATABASE_URL"]      
-# mkt_auth_token = st.secrets["TURSO_AUTH_TOKEN"]
-
-# sde_url = st.secrets["SDE_URL"]
-# sde_auth_token = st.secrets["SDE_AUTH_TOKEN"]
-
 # Use environment variables for production
 mkt_url = os.getenv('TURSO_DATABASE_URL')
 mkt_auth_token = os.getenv("TURSO_AUTH_TOKEN")
@@ -125,6 +119,58 @@ def clean_mkt_data(df):
     
     return df
 
+def get_fitting_data(type_id):
+
+    with Session(get_local_mkt_engine()) as session:
+        query = f"""
+            SELECT * FROM doctrines 
+            """
+        
+        try:
+            fit = session.execute(text(query))
+            fit = fit.fetchall()
+            df = pd.DataFrame(fit)
+        except Exception as e:
+            print(f"Failed to get data for {fit_id}: {str(e)}")
+            raise
+        session.close()
+
+        df2 = df.copy()
+        df2 = df2[df2['type_id'] == type_id]
+        df2.reset_index(drop=True, inplace=True)
+        try:
+            fit_id = df2.iloc[0]['fit_id']
+        except:
+            return None, None
+
+        df3 = df.copy()
+        df3 = df3[df3['fit_id'] == fit_id]
+        df3.reset_index(drop=True, inplace=True)
+        
+        cols = ['fit_id', 'ship_id', 'ship_name', 'hulls', 'type_id', 'type_name',
+       'fit_qty', 'fits_on_mkt', 'total_stock', '4H_price', 'avg_vol', 'days',
+       'group_id', 'group_name', 'category_id', 'category_name', 'timestamp',
+       'id']
+        timestamp = df3.iloc[0]['timestamp']
+        df3.drop(columns=['fit_id', 'type_id','ship_id', 'hulls', 'group_id', 'group_name', 'category_id', 'category_name', 'id', 'timestamp'], inplace=True)
+
+
+        numeric_formats = {
+
+            'total_stock': '{:,.0f}',
+            '4H_price': '{:,.2f}',
+            'avg_vol': '{:,.0f}',
+            'days': '{:,.0f}',
+        }
+
+        for col, format_str in numeric_formats.items():
+            if col in df3.columns:  # Only format if column exists
+                df3[col] = df3[col].apply(lambda x: safe_format(x, format_str))
+        df3.rename(columns={'fits_on_mkt': 'Fits on Market'}, inplace=True)
+        df3 = df3.sort_values(by='Fits on Market', ascending=True)
+        df3.reset_index(drop=True, inplace=True)
+    return df3, timestamp
+
 def fetch_mkt_orders():
     df = get_mkt_data(mkt_query)
     df = insert_type_names(df)
@@ -204,5 +250,6 @@ def get_item_details(type_ids):
 
 
 if __name__ == "__main__":
-    
     pass
+
+    

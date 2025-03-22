@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, text, distinct
 from sqlalchemy.orm import Session
 import os
 from dotenv import load_dotenv
-from db_handler import  clean_mkt_data, get_local_mkt_engine, get_local_sde_engine, get_stats, safe_format, get_mkt_data, get_market_orders, get_market_history, get_item_details
+from db_handler import  clean_mkt_data, get_local_mkt_engine, get_local_sde_engine, get_stats,safe_format, get_mkt_data, get_market_orders, get_market_history, get_item_details, get_fitting_data
 import sqlalchemy_libsql
 import libsql_client
 import logging
@@ -441,6 +441,7 @@ def main():
     logging.info(f"Selected item: {selected_item}")
     # Main content
     data, stats = get_market_data(show_all, selected_categories, selected_items)
+
     
     logging.info(f"Data: {data.head()}")
     logging.info(f"Stats: {stats.head()}")
@@ -449,10 +450,16 @@ def main():
         if len(selected_items) == 1:
             data = data[data['type_name'] == selected_items[0]]
             stats = stats[stats['type_name'] == selected_items[0]]
+            type_id = data['type_id'].iloc[0]
+            if type_id: 
+                fit_df, timestamp = get_fitting_data(type_id)
+            else:
+                fit_df = pd.DataFrame()
+                timestamp = None
         elif len(selected_categories) == 1:
             stats = stats[stats['category_name'] == selected_categories[0]]
         # Display metrics
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             min_price = stats['min_price'].min()
             if pd.notna(min_price):
@@ -465,6 +472,17 @@ def main():
             days_remaining = stats['days_remaining'].min()
             if pd.notna(days_remaining):
                 st.metric("Days Remaining", f"{days_remaining:.1f}")
+        with col4:
+        
+            try:
+      
+                fits_on_mkt = fit_df['Fits on Market'].min()
+                st.metric("Fits on Market", f"{fits_on_mkt:,.0f}")
+            
+            except:
+                pass
+        
+        st.divider()
         # Format the DataFrame for display with null handling
         display_df = data.copy()
         # Display detailed data
@@ -472,8 +490,16 @@ def main():
         if len(selected_items) == 1:
             image_id = display_df.iloc[0]['type_id']
             type_name = display_df.iloc[0]['type_name']
-            st.subheader(f"Detailed Market Data: {type_name}")
-            st.image(f'https://images.evetech.net/types/{image_id}/render?size=64')
+            st.subheader(f"Market Data: {type_name}")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.image(f'https://images.evetech.net/types/{image_id}/render?size=64')
+            with col2:
+                try:
+                    if fits_on_mkt:
+                        st.subheader("Winter Co. Doctrine", divider="orange")
+                except:
+                    st.write("No fitting data found")
         else:
             st.subheader("Detailed Market Data")
 
@@ -499,40 +525,45 @@ def main():
         st.subheader("Market Order Distribution")
         price_vol_chart = create_price_volume_chart(data)
         st.plotly_chart(price_vol_chart, use_container_width=True)
+        
+        st.divider()
 
-        # If single item is selected, show history chart
-        if len(data['type_id'].unique()) == 1:
-            st.subheader("Price History")
-            history_chart = create_history_chart(data['type_id'].iloc[0])
-            if history_chart:
-                st.plotly_chart(history_chart, use_container_width=True)
-            
-            colh1, colh2 = st.columns(2)
-            with colh1:
-                # Display history data
-                st.subheader("History Data")
-                history_df = get_market_history(data['type_id'].iloc[0])
-                history_df.date = pd.to_datetime(history_df.date).dt.strftime("%Y-%m-%d")
-                history_df.average = round(history_df.average.astype(float), 2)
-                history_df = history_df.sort_values(by='date', ascending=False)
-                history_df.volume = history_df.volume.astype(int)
-                st.dataframe(history_df, hide_index=True)
+        st.subheader("Price History")
+        history_chart = create_history_chart(data['type_id'].iloc[0])
+        if history_chart:
+            st.plotly_chart(history_chart, use_container_width=True)
+        
+        colh1, colh2 = st.columns(2)
+        with colh1:
+            # Display history data
+            st.subheader("History Data")
+            history_df = get_market_history(data['type_id'].iloc[0])
+            history_df.date = pd.to_datetime(history_df.date).dt.strftime("%Y-%m-%d")
+            history_df.average = round(history_df.average.astype(float), 2)
+            history_df = history_df.sort_values(by='date', ascending=False)
+            history_df.volume = history_df.volume.astype(int)
+            st.dataframe(history_df, hide_index=True)
 
-            with colh2:
-                avgpr30 = history_df[:30].average.mean()
-                avgvol30 = history_df[:30].volume.mean()
-                st.subheader(f"{data['type_name'].iloc[0]}",divider=True)
-                st.metric("Average Price (30 days)", f"{avgpr30:,.2f} ISK")
-                st.metric("Average Volume (30 days)", f"{avgvol30:,.0f}")
+        with colh2:
+            avgpr30 = history_df[:30].average.mean()
+            avgvol30 = history_df[:30].volume.mean()
+            st.subheader(f"{data['type_name'].iloc[0]}",divider=True)
+            st.metric("Average Price (30 days)", f"{avgpr30:,.2f} ISK")
+            st.metric("Average Volume (30 days)", f"{avgvol30:,.0f}")
+        
+        st.divider()
 
+        st.subheader("Fitting Data")
+        if len(selected_items) == 1:
+            st.dataframe(fit_df, hide_index=True)
+            st.write(f"Last updated: {timestamp}")
         else:
-            st.subheader("Price History")
-            st.write("Price history is not available for multiple items. Select one item to view history")
-        
-        
+            st.write("No fitting data found")
 
+   
     else:
         st.warning("No data found for the selected filters.")
+    
 
     # Display database sync status in a small info area
     with st.sidebar:
