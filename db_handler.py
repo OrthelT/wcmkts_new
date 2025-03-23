@@ -251,5 +251,3 @@ def get_item_details(type_ids):
 
 if __name__ == "__main__":
     pass
-
-    

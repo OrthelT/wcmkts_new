@@ -531,7 +531,7 @@ def main():
         st.subheader("Price History")
         history_chart = create_history_chart(data['type_id'].iloc[0])
         if history_chart:
-            st.plotly_chart(history_chart, use_container_width=True)
+            st.plotly_chart(history_chart, use_container_width=False)
         
         colh1, colh2 = st.columns(2)
         with colh1:
@@ -560,7 +560,6 @@ def main():
         else:
             st.write("No fitting data found")
 
-   
     else:
         st.warning("No data found for the selected filters.")
     
