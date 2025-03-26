@@ -639,5 +639,4 @@ def main():
 
 
 if __name__ == "__main__":
-    sync_db()
     main()
