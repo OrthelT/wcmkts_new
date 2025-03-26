@@ -7,3 +7,4 @@ tenacity==8.2.3
 sqlalchemy-libsql==0.1.0
 plotly==6.0.0
 libsql_experimental==0.0.41
+pytz==2024.1
