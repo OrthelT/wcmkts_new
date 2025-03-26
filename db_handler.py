@@ -9,7 +9,8 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 import sqlalchemy_libsql
 import libsql_experimental as libsql
 import logging
-import libsql_client
+import pytz
+import datetime
 
 logging = logging.getLogger(__name__)
 
@@ -199,7 +200,6 @@ def get_stats(stats_query):
     engine = get_local_mkt_engine()
     with engine.connect() as conn:
         stats = pd.read_sql_query(stats_query, conn)
-    logging.info(f"stats: {stats.head()}")
     return stats
 
 
@@ -247,7 +247,18 @@ def get_item_details(type_ids):
     return pd.read_sql_query(query, (get_local_sde_engine()))
 
 
-
+def get_update_time():
+    query = """
+        SELECT last_update FROM marketstats LIMIT 1
+    """
+    df = get_local_mkt_db(query)
+    data_update = df.iloc[0]['last_update']
+    data_update = pd.to_datetime(data_update)
+    eastern = pytz.timezone('US/Eastern')
+    data_update = eastern.localize(data_update)
+    data_update = data_update.astimezone(pytz.utc)
+    data_update = data_update.strftime('%Y-%m-%d \n %H:%M:%S')
+    return data_update
 
 if __name__ == "__main__":
     pass

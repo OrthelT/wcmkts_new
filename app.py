@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, text, distinct
 from sqlalchemy.orm import Session
 import os
 from dotenv import load_dotenv
-from db_handler import  clean_mkt_data, get_local_mkt_engine, get_local_sde_engine, get_stats,safe_format, get_mkt_data, get_market_orders, get_market_history, get_item_details, get_fitting_data
+from db_handler import  clean_mkt_data, get_local_mkt_engine, get_local_sde_engine, get_stats,safe_format, get_mkt_data, get_market_orders, get_market_history, get_item_details, get_fitting_data, get_update_time
 import sqlalchemy_libsql
 import libsql_client
 import logging
@@ -291,7 +291,7 @@ def create_history_chart(type_id):
         rows=2, 
         cols=1, 
         shared_xaxes=True,
-        vertical_spacing=0.02,
+        vertical_spacing=0.05,
         row_heights=[0.7, 0.3],  # Price gets more space than volume
         
     )
@@ -590,7 +590,6 @@ def main():
         st.subheader("Fitting Data")
         if len(selected_items) == 1:
             st.dataframe(fit_df, hide_index=True)
-            st.write(f"Last updated: {timestamp}")
         else:
             st.write("No fitting data found")
 
@@ -599,14 +598,16 @@ def main():
     
 
     # Display database sync status in a small info area
+    
     with st.sidebar:
+        st.sidebar.write(f"Last ESI update: {get_update_time()}")
         st.sidebar.markdown("---")
         st.sidebar.subheader("Database Sync Status")
         status_color = "green" if st.session_state.sync_status == "Success" else "red"
         
         if st.session_state.last_sync:
             last_sync_time = st.session_state.last_sync.strftime("%Y-%m-%d %H:%M UTC")
-            ls = st.sidebar.markdown(f"**Last sync:** {last_sync_time}")
+            st.sidebar.markdown(f"**Last sync:** {last_sync_time}")
         else:
             st.sidebar.markdown("**Last sync:** Not yet run")
             
@@ -636,17 +637,7 @@ def main():
         
         st.sidebar.markdown("---")
 
-        if 'last_update' in stats.columns:
-            last_stats_update = stats['last_update'].max()
-            if pd.notna(last_stats_update):
-                # Parse the timestamp as US Eastern
-                eastern = pytz.timezone('US/Eastern')
-                last_stats_update = datetime.datetime.strptime(last_stats_update, "%Y-%m-%d %H:%M:%S.%f")
-                last_stats_update = eastern.localize(last_stats_update)
-                # Convert to UTC
-                last_stats_update_utc = last_stats_update.astimezone(pytz.UTC)
-                formatted_time = last_stats_update_utc.strftime("%Y-%m-%d %H:%M UTC")
-                st.sidebar.markdown(f"Last data update: {formatted_time}")
 
 if __name__ == "__main__":
+    sync_db()
     main()
