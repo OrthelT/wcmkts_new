@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from sqlalchemy import create_engine, text, distinct
 from sqlalchemy.orm import Session
 import os
@@ -284,73 +285,106 @@ def create_history_chart(type_id):
     df = get_market_history(type_id)
     if df.empty:
         return None
-    
-    # Create figure with secondary y-axis
     fig = go.Figure()
-    
-    # Add volume bars
-    fig.add_trace(
-        go.Bar(
-            x=df['date'],
-            y=df['volume'],
-            name='Volume',
-            yaxis='y2',
-            opacity=0.5,
-            marker_color='#00B5F7'  # Bright blue bars
-        )
+    # Create subplots: 2 rows, 1 column, shared x-axis
+    fig = make_subplots(
+        rows=2, 
+        cols=1, 
+        shared_xaxes=True,
+        vertical_spacing=0.02,
+        row_heights=[0.7, 0.3],  # Price gets more space than volume
+        
     )
     
-    # Add price line
+    # Add price line to the top subplot (row 1)
     fig.add_trace(
         go.Scatter(
             x=df['date'],
             y=df['average'],
             name='Average Price',
             line=dict(color='#FF69B4', width=2)  # Hot pink line
-        )
+        ),
+        row=1, col=1
     )
     
-    # Update layout for dual axis with dark theme
+    # Add volume bars to the bottom subplot (row 2)
+    fig.add_trace(
+        go.Bar(
+            x=df['date'],
+            y=df['volume'],
+            name='Volume',
+            opacity=0.5,            
+            marker_color='#00B5F7', 
+            base=0,
+            
+         
+              # Bright blue bars
+        ),
+        row=2, col=1
+    )
+    
+    # Calculate ranges with padding
+    min_price = df['average'].min()
+    max_price = df['average'].max()
+    price_padding = (max_price - min_price) * 0.05  # 5% padding
+    min_volume = df['volume'].min()
+    max_volume = df['volume'].max()
+    
+    # Update layout for both subplots
     fig.update_layout(
         title='Market History',
         paper_bgcolor='#0F1117',  # Dark background
         plot_bgcolor='#0F1117',   # Dark background
-        yaxis=dict(
-            title=dict(
-                text='Price (ISK)',
-                font=dict(color='white')
-            ),
-            gridcolor='rgba(128,128,128,0.2)',  # Subtle grid
-            tickfont=dict(color='white')
-        ),
-        yaxis2=dict(
-            title=dict(
-                text='Volume',
-                font=dict(color='white')
-            ),
-            tickfont=dict(color='white'),
-            gridcolor='rgba(128,128,128,0.2)',  # Subtle grid
-            overlaying='y',
-            side='right'
-        ),
-        xaxis=dict(
-            gridcolor='rgba(128,128,128,0.2)',  # Subtle grid
-            tickfont=dict(color='white')
-        ),
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=1.02,
+            y=1,
             xanchor="right",
             x=1,
-            font=dict(color='white')
+            font=dict(color='white'),
+            bgcolor='rgba(10,10,10,0)'  # Transparent background
         ),
-        margin=dict(t=50, b=50),
-        title_font_color='white'
+        # margin=dict(t=50, b=50, r=20, l=50),
+        title_font_color='white',
+        # height=600,  # Taller to accommodate both plots
+        hovermode='x unified',  # Show all data on hover
+        autosize=True,
     )
     
-    # Format price axis with commas for thousands
-    fig.update_yaxes(tickformat=",")
+    
+    fig.update_yaxes(
+        title=dict(text='Price (ISK)', font=dict(color='white', size=10), standoff=5),
+        gridcolor='rgba(128,128,128,0.2)',
+        tickfont=dict(color='white'),
+        tickformat=",",
+        row=1, col=1,
+        automargin = True
+
+        
+    )
+    
+    # Update axes for the volume subplot (bottom)
+    fig.update_yaxes(
+        title=dict(text='Volume', font=dict(color='white', size=10), standoff=5),
+        gridcolor='rgba(128,128,128,0.2)',
+        tickfont=dict(color='white'),
+        tickformat=",",
+        row=2, col=1,
+        automargin = True
+    )
+    
+    # Update shared x-axis
+    fig.update_xaxes(
+        gridcolor='rgba(128,128,128,0.2)',
+        tickfont=dict(color='white'),
+        row=2, col=1  # Apply to the bottom subplot's x-axis
+    )
+    
+    # Hide x-axis labels for top subplot
+    fig.update_xaxes(
+        showticklabels=False,
+        row=1, col=1
+    )
     
     return fig
 
