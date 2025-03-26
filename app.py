@@ -18,6 +18,7 @@ import pytz
 from db_utils import sync_db
 import json
 import datetime
+import millify
 # Configure logging
 logging.basicConfig(
     filename='app.log',  # Name of the log file
@@ -497,11 +498,11 @@ def main():
         with col1:
             min_price = stats['min_price'].min()
             if pd.notna(min_price):
-                st.metric("Sell Price (min)", f"{min_price:,.2f} ISK")
+                st.metric("Sell Price (min)", f"{millify.millify(min_price, precision=2)} ISK")
         with col2:
             volume = data['volume_remain'].sum()
             if pd.notna('volume_remain'):
-                st.metric("Market Stock", f"{volume:,.0f}")
+                st.metric("Market Stock", f"{millify.millify(volume, precision=2)}")
         with col3:
             days_remaining = stats['days_remaining'].min()
             if pd.notna(days_remaining):
