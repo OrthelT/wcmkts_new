@@ -1,6 +1,12 @@
-# Winter Coalition Market Stats Viewer
+# Winter Coalition Market Stats Viewer (v.02)
 
 A Streamlit application for viewing EVE Online market statistics for Winter Coalition. This tool provides real-time market data analysis, historical price tracking, and fitting information for various items in the EVE Online market.
+
+##UPDATES: 
+*version 0.2*
+- added fitting information features
+- added doctrine metrics
+- improved history chart behavior
 
 ## Features
 
@@ -28,7 +34,7 @@ A Streamlit application for viewing EVE Online market statistics for Winter Coal
 
 ## Data Updates
 
-The application automatically syncs with the EVE Online market data daily at 13:00 UTC. Users can also trigger manual updates using the sync button in the sidebar.
+The app uses Turso's embedded-replica feature to allow a local SQLlite-libsql database that allows extremely fast data fetches. The application automatically syncs with EVE Online market stored on the parent database daily at 13:00 UTC. Users can also trigger manual updates using the sync button in the sidebar to obtain new data, if it is available. 
 
 ## Setup
 
