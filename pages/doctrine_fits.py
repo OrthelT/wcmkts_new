@@ -65,9 +65,9 @@ def get_fit_summary():
         # Get target value from database if available, otherwise use default
         target = 20  # Default
         if targets_df is not None:
-            target_row = targets_df[targets_df['ship_name'] == ship_name]
+            target_row = targets_df[targets_df['fit_id'] == fit_id]
             if not target_row.empty:
-                target = target_row.iloc[0]['target']
+                target = target_row.iloc[0]['ship_target']
         
         # Calculate target percentage
         if target > 0:
@@ -90,10 +90,12 @@ def get_fit_summary():
         # Get daily average volume if available
         daily_avg = fit_data['avg_vol'].mean() if 'avg_vol' in fit_data.columns else 0
         
-        # Prepare the fit display name
-        fit_name = f"{ship_name} Fit"
-        if 'fit' in fit_data.columns and not pd.isna(fit_data['fit'].iloc[0]):
-            fit_name = fit_data['fit'].iloc[0]
+        # Get fit name from the ship_targets table if available
+        fit_name = f"{ship_name} Fit"  # Default fallback
+        if targets_df is not None:
+            target_row = targets_df[targets_df['fit_id'] == fit_id]
+            if not target_row.empty and 'fit_name' in target_row.columns and not pd.isna(target_row.iloc[0]['fit_name']):
+                fit_name = target_row.iloc[0]['fit_name']
         
         # Add to summary list
         fit_summary.append({
@@ -137,50 +139,42 @@ def main():
         st.warning("No doctrine fits found in the database.")
         return
     
-    # Display the data in a format similar to the Excel sheet
+    # Display the data in a more compact format
     for i, row in fit_summary.iterrows():
-        # Create a horizontal section for each fit
-        col1, col2, col3, col4, col5, col6, col7 = st.columns([1, 1, 1.5, 1, 1, 2, 1])
+        # Create a more compact horizontal section for each fit
+        col1, col2, col3 = st.columns([1, 3, 2])
         
         with col1:
-            # Display fit ID and ship ID
-            st.subheader(f"Fit #{row['fit_id']}")
-            st.text(f"Ship ID: {row['ship_id']}")
+            # Ship image and ID info
             try:
-                # Display ship image
-                st.image(f"https://images.evetech.net/types/{row['ship_id']}/render?size=128", width=100)
+                st.image(f"https://images.evetech.net/types/{row['ship_id']}/render?size=64", width=64)
             except:
                 st.text("Image not available")
+            
+            st.text(f"ID: {row['fit_id']}")
         
         with col2:
-            # Display fit name
-            st.subheader("Fit")
-            st.write(row['fit'])
-        
-        with col3:
-            # Display ship name
-            st.subheader("Ship")
-            st.write(row['ship'])
+            # Ship name, fit name, and metrics in a more compact layout
+            st.markdown(f"### {row['ship_name']}")
+            st.text(f"Fit: {row['fit']}")
             
-            # Display fits and hulls
-            col3a, col3b = st.columns(2)
-            with col3a:
+            # Display metrics in a single row
+            metric_cols = st.columns(3)
+            with metric_cols[0]:
                 st.metric("Fits", f"{int(row['fits'])}")
-            with col3b:
+            with metric_cols[1]:
                 st.metric("Hulls", f"{int(row['hulls'])}")
-        
-        with col4:
-            # Display target percentage
-            st.subheader("Target (%)")
+            with metric_cols[2]:
+                st.metric("Target", f"{int(row['target'])}")
             
-            # Create a progress bar
+            # Progress bar for target percentage
             target_pct = row['target_percentage']
             color = "green" if target_pct >= 90 else "orange" if target_pct >= 50 else "red"
             st.markdown(
                 f"""
-                <div style="margin-top: 37px;">
-                    <div style="background-color: #333; width: 100%; height: 30px; border-radius: 5px;">
-                        <div style="background-color: {color}; width: {target_pct}%; height: 30px; border-radius: 5px; text-align: center; line-height: 30px; color: white; font-weight: bold;">
+                <div style="margin-top: 5px;">
+                    <div style="background-color: #333; width: 100%; height: 20px; border-radius: 3px;">
+                        <div style="background-color: {color}; width: {target_pct}%; height: 20px; border-radius: 3px; text-align: center; line-height: 20px; color: white; font-weight: bold;">
                             {target_pct}%
                         </div>
                     </div>
@@ -189,25 +183,14 @@ def main():
                 unsafe_allow_html=True
             )
         
-        with col5:
-            # Display daily average
-            st.subheader("Daily Avg")
-            st.metric("", f"{row.get('daily_avg', 0):.1f}")
-        
-        with col6:
-            # Display lowest stocked modules
-            st.subheader("Low Stock")
+        with col3:
+            # Low stock modules and daily average in a more compact format
+            st.markdown("**Low Stock Modules:**")
             for module in row['lowest_modules']:
                 st.text(module)
         
-        with col7:
-            # Display target and percentage
-            st.subheader("Target")
-            st.metric("", f"{int(row['target'])}")
-            st.metric("% Target", f"{row['target_percentage']}%")
-        
-        # Add a divider between fits
-        st.divider()
+        # Add a thinner divider between fits
+        st.markdown("<hr style='margin: 0.5em 0; border-width: 1px'>", unsafe_allow_html=True)
     
     # Display last update timestamp
     st.sidebar.write(f"Last ESI update: {get_update_time()}")

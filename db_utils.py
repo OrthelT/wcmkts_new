@@ -29,10 +29,22 @@ mkt_auth_token = os.getenv("TURSO_AUTH_TOKEN")
 sde_url = os.getenv('SDE_URL')
 sde_auth_token = os.getenv("SDE_AUTH_TOKEN")
 
-def sync_db(db_url="wcmkt.db",sync_url=mkt_url, auth_token=mkt_auth_token):
-    conn = libsql.connect(db_url, sync_url=sync_url, auth_token=auth_token)
-    conn.sync()
-    print("Database synced")
+def sync_db(db_url="wcmkt.db", sync_url=mkt_url, auth_token=mkt_auth_token):
+    # Skip sync in development mode or when sync_url/auth_token are not provided
+    if not sync_url or not auth_token or db_url.endswith('.db'):
+        print("Skipping database sync in development mode or missing sync credentials")
+        return
+        
+    try:
+        conn = libsql.connect(db_url, sync_url=sync_url, auth_token=auth_token)
+        conn.sync()
+        print("Database synced")
+    except ValueError as e:
+        if "Sync is not supported" in str(e):
+            print("Skipping sync: This appears to be a local file database that doesn't support sync")
+        else:
+            # Re-raise other ValueErrors
+            raise
 
 def get_type_name(type_ids):
     engine = create_engine(local_sde_url)

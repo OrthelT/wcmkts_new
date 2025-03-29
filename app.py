@@ -11,6 +11,7 @@ from db_handler import  clean_mkt_data, get_local_mkt_engine, get_local_sde_engi
 import sqlalchemy_libsql
 import libsql_client
 import logging
+from logging.handlers import RotatingFileHandler
 import time
 import threading
 import datetime
@@ -19,12 +20,20 @@ from db_utils import sync_db
 import json
 import datetime
 import millify
-# Configure logging
-logging.basicConfig(
-    filename='app.log',  # Name of the log file
-    level=logging.INFO,  # Set the logging level
-    format='%(asctime)s - %(levelname)s - %(message)s',  # Log message format
+
+# Configure logging with rotation
+log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+log_handler = RotatingFileHandler(
+    filename='app.log',
+    maxBytes=5*1024*1024,  # 5 MB per file
+    backupCount=3,         # Keep 3 backup files
+    encoding='utf-8'
 )
+log_handler.setFormatter(log_formatter)
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+logger.addHandler(log_handler)
+
 # Log application start
 logging.info("Application started")
 
@@ -642,4 +651,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        sync_db()
+        main()
+    except Exception as e:
+        logging.error(f"Error during startup: {e}")
+        main()  # Still try to run the main app even if sync fails
