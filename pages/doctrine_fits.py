@@ -196,7 +196,7 @@ def main():
         
         with col6:
             # Display lowest stocked modules
-            st.subheader("3 Lowest Stock Modules")
+            st.subheader("Low Stock")
             for module in row['lowest_modules']:
                 st.text(module)
         
