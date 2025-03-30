@@ -50,3 +50,11 @@ dd.py
 *.sh
 *.ps1
 notes.txt
+logs/
+*.log
+*.log.*
+*.log.*.*
+*.log.*.*.*
+*.log.*.*.*.*
+*.log.*.*.*.*.*
+*.log.*.*.*.*.*.*
