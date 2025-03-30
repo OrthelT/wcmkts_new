@@ -651,9 +651,4 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
-        sync_db()
-        main()
-    except Exception as e:
-        logging.error(f"Error during startup: {e}")
-        main()  # Still try to run the main app even if sync fails
+    main()

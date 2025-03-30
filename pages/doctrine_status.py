@@ -59,6 +59,13 @@ def get_fit_summary():
         ship_name = first_row['ship_name']
         hulls = first_row['hulls']
         
+        # Extract ship group from the data
+        ship_group = "Ungrouped"  # Default
+        # Find the row that matches the ship_id
+        ship_rows = fit_data[fit_data['type_id'] == ship_id]
+        if not ship_rows.empty and 'group_name' in ship_rows.columns:
+            ship_group = ship_rows['group_name'].iloc[0]
+        
         # Calculate minimum fits (how many complete fits can be made)
         min_fits = fit_data['fits_on_mkt'].min()
         
@@ -109,7 +116,8 @@ def get_fit_summary():
             'target': target,
             'target_percentage': target_percentage,
             'lowest_modules': lowest_modules_list,
-            'daily_avg': daily_avg
+            'daily_avg': daily_avg,
+            'ship_group': ship_group
         })
     
     return pd.DataFrame(fit_summary)
@@ -139,58 +147,72 @@ def main():
         st.warning("No doctrine fits found in the database.")
         return
     
-    # Display the data in a more compact format
-    for i, row in fit_summary.iterrows():
-        # Create a more compact horizontal section for each fit
-        col1, col2, col3 = st.columns([1, 3, 2])
+    # Group the data by ship_group
+    grouped_fits = fit_summary.groupby('ship_group')
+    
+    # Iterate through each group and display fits
+    for group_name, group_data in grouped_fits:
+        # Display group header
+        st.subheader(body=f"{group_name}", help="Ship doctrine group", divider="orange")
+        # Add divider between groups
+        # st.markdown("<hr style='margin: 1.5em 0; border-width: 3px'>", unsafe_allow_html=True)
+    
         
-        with col1:
-            # Ship image and ID info
-            try:
-                st.image(f"https://images.evetech.net/types/{row['ship_id']}/render?size=64", width=64)
-            except:
-                st.text("Image not available")
+        # Display the fits in this group
+        for i, row in group_data.iterrows():
+            # Create a more compact horizontal section for each fit
+            col1, col2, col3 = st.columns([1, 3, 2])
             
-            st.text(f"ID: {row['fit_id']}")
-            st.text(f"Fit: {row['fit']}")
-        
-        with col2:
-            # Ship name and metrics in a more compact layout
-            st.markdown(f"### {row['ship_name']}")
+            with col1:
+                # Ship image and ID info
+                try:
+                    st.image(f"https://images.evetech.net/types/{row['ship_id']}/render?size=64", width=64)
+                except:
+                    st.text("Image not available")
+                
+                st.text(f"ID: {row['fit_id']}")
+                st.text(f"Fit: {row['fit']}")
             
-            # Display metrics in a single row
-            metric_cols = st.columns(3)
-            with metric_cols[0]:
-                st.metric("Fits", f"{int(row['fits'])}")
-            with metric_cols[1]:
-                st.metric("Hulls", f"{int(row['hulls'])}")
-            with metric_cols[2]:
-                st.metric("Target", f"{int(row['target'])}")
-            
-            # Progress bar for target percentage
-            target_pct = row['target_percentage']
-            color = "green" if target_pct >= 90 else "orange" if target_pct >= 50 else "red"
-            st.markdown(
-                f"""
-                <div style="margin-top: 5px;">
-                    <div style="background-color: #333; width: 100%; height: 20px; border-radius: 3px;">
-                        <div style="background-color: {color}; width: {target_pct}%; height: 20px; border-radius: 3px; text-align: center; line-height: 20px; color: white; font-weight: bold;">
-                            {target_pct}%
+            with col2:
+                # Ship name and metrics in a more compact layout
+                st.markdown(f"### {row['ship_name']}")
+                
+                # Display metrics in a single row
+                metric_cols = st.columns(3)
+                with metric_cols[0]:
+                    st.metric("Fits", f"{int(row['fits'])}")
+                with metric_cols[1]:
+                    st.metric("Hulls", f"{int(row['hulls'])}")
+                with metric_cols[2]:
+                    st.metric("Target", f"{int(row['target'])}")
+                
+                # Progress bar for target percentage
+                target_pct = row['target_percentage']
+                color = "green" if target_pct >= 90 else "orange" if target_pct >= 50 else "red"
+                st.markdown(
+                    f"""
+                    <div style="margin-top: 5px;">
+                        <div style="background-color: #333; width: 100%; height: 20px; border-radius: 3px;">
+                            <div style="background-color: {color}; width: {target_pct}%; height: 20px; border-radius: 3px; text-align: center; line-height: 20px; color: white; font-weight: bold;">
+                                {target_pct}%
+                            </div>
                         </div>
                     </div>
-                </div>
-                """, 
-                unsafe_allow_html=True
-            )
+                    """, 
+                    unsafe_allow_html=True
+                )
+            
+            with col3:
+                # Low stock modules in a more compact format
+                st.markdown("**Low Stock Modules:**")
+                for module in row['lowest_modules']:
+                    st.text(module)
+            
+            # Add a thinner divider between fits
+            st.markdown("<hr style='margin: 0.5em 0; border-width: 1px'>", unsafe_allow_html=True)
         
-        with col3:
-            # Low stock modules in a more compact format
-            st.markdown("**Low Stock Modules:**")
-            for module in row['lowest_modules']:
-                st.text(module)
-        
-        # Add a thinner divider between fits
-        st.markdown("<hr style='margin: 0.5em 0; border-width: 1px'>", unsafe_allow_html=True)
+        # Add divider between groups
+        # st.markdown("<hr style='margin: 1.5em 0; border-width: 2px'>", unsafe_allow_html=True)
     
     # Display last update timestamp
     st.sidebar.write(f"Last ESI update: {get_update_time()}")

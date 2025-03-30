@@ -96,7 +96,11 @@ def create_fit_df():
         fit_df["ship_id"] = [df2['ship_id'].iloc[0]]
         fit_df["hulls"] = [df2['hulls'].iloc[0]]
         fit_df["fits"] = [df2["fits_on_mkt"].min()]
-        
+
+        #get the ship group
+        ship_row = df2[df2.type_id == df2['ship_id'].iloc[0]]
+        group_name = ship_row['group_name'].iloc[0]
+        fit_df["ship_group"] = [group_name]
         # Get ship price
         try:
             df3 = df2[df2.type_id == df2['ship_id'].iloc[0]]
@@ -106,7 +110,7 @@ def create_fit_df():
         
         # Get target value based on ship name
         target_value = get_target_value(df2['ship_name'].iloc[0])
-        fit_df["target"] = [target_value]
+        fit_df["ship_target"] = [target_value]
         
         # Calculate target percentage - using scalar values to avoid Series comparison
         fits_value = df2["fits_on_mkt"].min()
@@ -118,13 +122,15 @@ def create_fit_df():
         fit_df["target_percentage"] = [target_percentage]
         
         # Get daily average volume if available
-        avg_vol = df2['avg_vol'].mean() if 'avg_vol' in df2.columns else 0
-        fit_df["daily_avg"] = [avg_vol]
+        avg_vol = ship_row['avg_vol'].iloc[0] if 'avg_vol' in ship_row.columns else 0
+        fit_df["daily_avg"] = avg_vol
         
         # Add to master dataframe
         master_df = pd.concat([master_df, df2])
+        
+        # master_df = pd.merge(master_df, ship_group_df, on="ship_id", how="left")
+        print(master_df.head())
         fits.append(fit_df)
-    
     # Add all the fit summary rows if needed (for a summary view)
     if fits:
         fit_summary_df = pd.concat(fits)

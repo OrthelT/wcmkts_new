@@ -16,12 +16,6 @@ local_sde_url = "sqlite:///sde.db"    # Changed to standard SQLite format for lo
 # Load environment variables
 load_dotenv()
 
-# mkt_url = st.secrets["TURSO_DATABASE_URL"]      
-# mkt_auth_token = st.secrets["TURSO_AUTH_TOKEN"]
-
-# sde_url = st.secrets["SDE_URL"]
-# sde_auth_token = st.secrets["SDE_AUTH_TOKEN"]
-
 # Use environment variables for production
 mkt_url = os.getenv('TURSO_DATABASE_URL')
 mkt_auth_token = os.getenv("TURSO_AUTH_TOKEN")
@@ -29,9 +23,11 @@ mkt_auth_token = os.getenv("TURSO_AUTH_TOKEN")
 sde_url = os.getenv('SDE_URL')
 sde_auth_token = os.getenv("SDE_AUTH_TOKEN")
 
+
+
 def sync_db(db_url="wcmkt.db", sync_url=mkt_url, auth_token=mkt_auth_token):
     # Skip sync in development mode or when sync_url/auth_token are not provided
-    if not sync_url or not auth_token or db_url.endswith('.db'):
+    if not sync_url or not auth_token:
         print("Skipping database sync in development mode or missing sync credentials")
         return
         
@@ -68,5 +64,8 @@ def get_recent_items():
     return df4
 
 if __name__ == "__main__":
-	pass
-	
+    
+    print(mkt_url)
+    print(mkt_auth_token)
+    print(sde_url)
+    print(sde_auth_token)

@@ -29,17 +29,18 @@ def create_targets_table():
     
     # Create the table if it doesn't exist
     if not table_exists:
-        with engine.connect() as conn:
-            conn.execute(text("""
-                CREATE TABLE ship_targets (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    ship_name TEXT UNIQUE,
-                    target INTEGER,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """))
-            conn.commit()
-            print("Created ship_targets table")
+        print("ship_targets table does not exist")
+        # with engine.connect() as conn:
+        #     conn.execute(text("""
+        #         CREATE TABLE ship_targets (
+        #             id INTEGER PRIMARY KEY AUTOINCREMENT,
+        #             ship_name TEXT UNIQUE,
+        #             target INTEGER,
+        #             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        #         )
+        #     """))
+        #     conn.commit()
+        #     print("Created ship_targets table")
     else:
         print("ship_targets table already exists")
 
@@ -70,7 +71,7 @@ def get_target_from_db(ship_name):
     
     with engine.connect() as conn:
         result = conn.execute(text("""
-            SELECT target FROM ship_targets WHERE ship_name = :ship_name
+            SELECT ship_target FROM ship_targets WHERE ship_name = :ship_name
         """), {"ship_name": ship_name})
         row = result.fetchone()
         
@@ -80,7 +81,7 @@ def get_target_from_db(ship_name):
         # Return default if not found
         with engine.connect() as conn:
             result = conn.execute(text("""
-                SELECT target FROM ship_targets WHERE ship_name = 'default'
+                SELECT ship_target FROM ship_targets WHERE ship_name = 'default'
             """))
             row = result.fetchone()
             
@@ -92,7 +93,7 @@ def list_targets():
     
     with engine.connect() as conn:
         result = conn.execute(text("""
-            SELECT ship_name, target FROM ship_targets ORDER BY ship_name
+            SELECT ship_name, ship_target FROM ship_targets ORDER BY ship_name
         """))
         targets = result.fetchall()
     
@@ -104,10 +105,6 @@ def list_targets():
         print("No targets set in database")
 
 if __name__ == "__main__":
-    set_targets()
     list_targets()
     
-    # Test getting a target
-    test_ship = "Flycatcher"
-    target = get_target_from_db(test_ship)
-    print(f"\nTarget for {test_ship}: {target}") 
+ 
