@@ -46,6 +46,3 @@ CLAUDE.md
 experimental.py
 last_sync_state.json
 dd.py
-*.xlsx
-*.ps1
-*.sh
