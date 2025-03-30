@@ -138,7 +138,7 @@ def main():
         st.warning("Logo image not found")
     
     # Page title
-    st.title("Winter Coalition Doctrine Fits")
+    st.title("Doctrine Status")
     
     # Fetch the data
     fit_summary = get_fit_summary()

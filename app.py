@@ -403,7 +403,7 @@ def main():
     logging.info("Starting main function")
 
     st.set_page_config(
-        page_title="Market Stats Viewer",
+        page_title="WinterCo Markets",
         page_icon="📈",
         layout="wide"
     )
@@ -435,7 +435,7 @@ def main():
     st.image(wclogo, width=150)
 
     # Title
-    st.title("Winter Coalition 4H Market Stats")
+    st.title("Winter Coalition Market Stats")
     
     # Sidebar filters
     st.sidebar.header("Filters")
