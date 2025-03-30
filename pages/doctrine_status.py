@@ -152,11 +152,11 @@ def main():
                 st.text("Image not available")
             
             st.text(f"ID: {row['fit_id']}")
+            st.text(f"Fit: {row['fit']}")
         
         with col2:
-            # Ship name, fit name, and metrics in a more compact layout
+            # Ship name and metrics in a more compact layout
             st.markdown(f"### {row['ship_name']}")
-            st.text(f"Fit: {row['fit']}")
             
             # Display metrics in a single row
             metric_cols = st.columns(3)
@@ -184,7 +184,7 @@ def main():
             )
         
         with col3:
-            # Low stock modules and daily average in a more compact format
+            # Low stock modules in a more compact format
             st.markdown("**Low Stock Modules:**")
             for module in row['lowest_modules']:
                 st.text(module)
@@ -197,4 +197,4 @@ def main():
     st.sidebar.write(f"Page updated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}")
 
 if __name__ == "__main__":
-    main() 
+    main()
