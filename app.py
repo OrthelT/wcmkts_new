@@ -159,9 +159,6 @@ def get_market_data(show_all, selected_categories, selected_items):
     # Start with base condition for buy orders
     mkt_conditions = ["is_buy_order = 0"]
 
-    print(f'selected_categories: {selected_categories}')
-    print(f'selected_items: {selected_items}')
-
     if not show_all:
         # Get type_ids for the selected categories from SDE first
         sde_conditions = []

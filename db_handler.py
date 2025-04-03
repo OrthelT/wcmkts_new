@@ -182,7 +182,7 @@ def get_local_mkt_engine():
     return create_engine(local_mkt_url, echo=False)  # Set echo=False to reduce console output
 
 def get_local_mkt_db(query: str) -> pd.DataFrame:
-    engine = create_engine(local_mkt_url, echo=True)
+    engine = create_engine(local_mkt_url, echo=False)
     with engine.connect() as conn:
         df = pd.read_sql_query(query, conn)
     return df
@@ -191,7 +191,7 @@ def get_local_sde_engine():
     return create_engine(local_sde_url, echo=False)
 
 def get_local_sde_db(query: str) -> pd.DataFrame:
-    engine = create_engine(local_sde_url, echo=True)
+    engine = create_engine(local_sde_url, echo=False)
     with engine.connect() as conn:
         df = pd.read_sql_query(query, conn)
     return df
