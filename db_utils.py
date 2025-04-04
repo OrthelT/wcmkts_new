@@ -63,9 +63,15 @@ def get_recent_items():
        'volume_remain', 'duration', 'issued']]
     return df4
 
-if __name__ == "__main__":
+def update_targets(fit_id, target_value):
+    conn = libsql.connect("wcmkt.db", sync_url=mkt_url, auth_token=mkt_auth_token)
+    cursor = conn.cursor()
+    cursor.execute(f"""UPDATE ship_targets
+    SET ship_target = {target_value}
+    WHERE fit_id = {fit_id};""")
+    conn.commit()
+   
+    print(f"Updated target for fit_id {fit_id} to {target_value}")
     
-    print(mkt_url)
-    print(mkt_auth_token)
-    print(sde_url)
-    print(sde_auth_token)
+if __name__ == "__main__":
+    pass
