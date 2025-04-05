@@ -153,7 +153,7 @@ def get_fitting_data(type_id):
        'group_id', 'group_name', 'category_id', 'category_name', 'timestamp',
        'id']
         timestamp = df3.iloc[0]['timestamp']
-        df3.drop(columns=['ship_id', 'hulls', 'group_id', 'group_name', 'category_name', 'id', 'timestamp'], inplace=True)
+        df3.drop(columns=['ship_id', 'hulls', 'group_id', 'category_name', 'id', 'timestamp'], inplace=True)
 
 
         numeric_formats = {
@@ -247,7 +247,6 @@ def get_item_details(type_ids):
     """
     return pd.read_sql_query(query, (get_local_sde_engine()))
 
-
 def get_update_time():
     query = """
         SELECT last_update FROM marketstats LIMIT 1
@@ -260,6 +259,31 @@ def get_update_time():
     data_update = data_update.astimezone(pytz.utc)
     data_update = data_update.strftime('%Y-%m-%d \n %H:%M:%S')
     return data_update
+
+def get_module_fits(type_id):
+    
+    with Session(get_local_mkt_engine()) as session:
+        query = f"""
+            SELECT * FROM doctrines WHERE type_id = {type_id}
+            """
+        try:
+            fit = session.execute(text(query))
+            fit = fit.fetchall()
+            df = pd.DataFrame(fit)
+        except Exception as e:
+            print(f"Failed to get data for {type_id}: {str(e)}")
+            raise
+        session.close()
+
+        df2 = df.copy()
+        try:
+            ships = df2['ship_name'].tolist()
+            fit_qty = df2['fit_qty'].tolist()
+            ships = [f"{ship} ({qty})" for ship, qty in zip(ships, fit_qty)]
+            ships = ', '.join(ships)
+            return ships
+        except:
+            return None
 
 if __name__ == "__main__":
     pass

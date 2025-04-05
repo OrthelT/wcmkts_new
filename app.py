@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, text, distinct
 from sqlalchemy.orm import Session
 import os
 from dotenv import load_dotenv
-from db_handler import  clean_mkt_data, get_local_mkt_engine, get_local_sde_engine, get_stats,safe_format, get_mkt_data, get_market_orders, get_market_history, get_item_details, get_fitting_data, get_update_time
+from db_handler import  clean_mkt_data, get_module_fits, get_local_mkt_engine, get_local_sde_engine, get_stats,safe_format, get_mkt_data, get_market_orders, get_market_history, get_item_details, get_fitting_data, get_update_time
 import sqlalchemy_libsql
 import libsql_client
 import logging
@@ -517,10 +517,10 @@ def main():
             isship = False
             try:
 
-                stats_cat_id = stats['category_id'].iloc[0]
+                cat_id = stats['category_id'].iloc[0]
                 fits_on_mkt = fit_df['Fits on Market'].min()
 
-                if stats_cat_id == 6:
+                if cat_id == 6:
                     st.metric("Fits on Market", f"{fits_on_mkt:,.0f}")
                     isship = True
                 
@@ -536,7 +536,7 @@ def main():
         if len(selected_items) == 1:
             image_id = display_df.iloc[0]['type_id']
             type_name = display_df.iloc[0]['type_name']
-            st.subheader(f"Market Data: {type_name}")
+            st.subheader(f"{type_name}")
             col1, col2 = st.columns(2)
             with col1:
                 if isship:
@@ -547,8 +547,12 @@ def main():
                 try:
                     if fits_on_mkt:
                         st.subheader("Winter Co. Doctrine", divider="orange")
+                        if cat_id in [7,8,18]:
+                            st.write(get_module_fits(type_id))
+                        else:
+                            st.write(fit_df[fit_df['type_id'] == type_id]['group_name'].iloc[0])
                 except:
-                    st.write("No fitting data found")
+                    pass
         else:
             st.subheader("Detailed Market Data")
 
