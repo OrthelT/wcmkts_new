@@ -514,14 +514,19 @@ def main():
             if pd.notna(days_remaining):
                 st.metric("Days Remaining", f"{days_remaining:.1f}")
         with col4:
-        
+            isship = False
             try:
-      
+
+                stats_cat_id = stats['category_id'].iloc[0]
                 fits_on_mkt = fit_df['Fits on Market'].min()
-                st.metric("Fits on Market", f"{fits_on_mkt:,.0f}")
-            
+
+                if stats_cat_id == 6:
+                    st.metric("Fits on Market", f"{fits_on_mkt:,.0f}")
+                    isship = True
+                
             except:
                 pass
+        
         
         st.divider()
         # Format the DataFrame for display with null handling
@@ -534,7 +539,10 @@ def main():
             st.subheader(f"Market Data: {type_name}")
             col1, col2 = st.columns(2)
             with col1:
-                st.image(f'https://images.evetech.net/types/{image_id}/render?size=64')
+                if isship:
+                    st.image(f'https://images.evetech.net/types/{image_id}/render?size=64')
+                else:
+                    st.image(f'https://images.evetech.net/types/{image_id}/icon')
             with col2:
                 try:
                     if fits_on_mkt:
@@ -598,7 +606,10 @@ def main():
 
         st.subheader("Fitting Data")
         if len(selected_items) == 1:
-            st.dataframe(fit_df, hide_index=True)
+            if isship:
+                st.dataframe(fit_df, hide_index=True)
+            else:
+                st.write("Fitting data only available for ships")
         else:
             st.write("Fitting data not available for this item or no item selected")
 

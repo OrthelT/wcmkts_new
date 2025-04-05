@@ -153,7 +153,7 @@ def get_fitting_data(type_id):
        'group_id', 'group_name', 'category_id', 'category_name', 'timestamp',
        'id']
         timestamp = df3.iloc[0]['timestamp']
-        df3.drop(columns=['fit_id', 'type_id','ship_id', 'hulls', 'group_id', 'group_name', 'category_id', 'category_name', 'id', 'timestamp'], inplace=True)
+        df3.drop(columns=['ship_id', 'hulls', 'group_id', 'group_name', 'category_name', 'id', 'timestamp'], inplace=True)
 
 
         numeric_formats = {
@@ -171,6 +171,7 @@ def get_fitting_data(type_id):
         df3 = df3.sort_values(by='Fits on Market', ascending=True)
         df3.reset_index(drop=True, inplace=True)
     return df3, timestamp
+
 
 def fetch_mkt_orders():
     df = get_mkt_data(mkt_query)
