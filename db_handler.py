@@ -285,5 +285,12 @@ def get_module_fits(type_id):
         except:
             return None
 
+def get_group_fits(group_id):
+    with Session(get_local_mkt_engine()) as session:
+        query = f"""
+            SELECT * FROM doctrines WHERE group_id = {group_id}
+            """
+        return pd.read_sql_query(query, (get_local_mkt_engine()))
+
 if __name__ == "__main__":
     pass
