@@ -147,8 +147,8 @@ if __name__ == "__main__":
     st.title("Winter Coalition Market Low Stock Alert")
     st.markdown("""
     This page shows items that are running low on the market. The **Days Remaining** column shows how many days of sales 
-    can be sustained by the current stock based on historical average sales. Items with fewer days remaining need attention. Doctrine items are highlighted in blue.
-    When the **Show Doctrine Items Only** checkbox is checked, the **Used In Fits** column shows the doctrine ships that use the item.
+    can be sustained by the current stock based on historical average sales. Items with fewer days remaining need attention. The **Used In Fits** column 
+    shows the doctrine ships that use the item (if any) and the number of fits that the current market stock of the item can support.
     """)
     
     # Sidebar filters
