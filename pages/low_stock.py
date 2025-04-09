@@ -147,7 +147,7 @@ if __name__ == "__main__":
     st.title("Winter Coalition Market Low Stock Alert")
     st.markdown("""
     This page shows items that are running low on the market. The **Days Remaining** column shows how many days of sales 
-    can be sustained by the current stock based on historical average sales. Items with fewer days remaining need attention. 
+    can be sustained by the current stock based on historical average sales. Items with fewer days remaining need attention. Doctrine items are highlighted in blue.
     When the **Show Doctrine Items Only** checkbox is checked, the **Used In Fits** column shows the doctrine ships that use the item.
     """)
     
@@ -256,8 +256,26 @@ if __name__ == "__main__":
             except:
                 return ''
         
+        # Add a color indicator for doctrine items
+        def highlight_doctrine(row):
+            # Check if the "Used In Fits" column has data
+            try:
+                # Check if the value is not empty and not NaN
+                if isinstance(row['Used In Fits'], list) and len(row['Used In Fits']) > 0:
+                    # Create a list of empty strings for all columns
+                    styles = [''] * len(row)
+                    # Apply highlighting only to the "Item" column (index 0)
+                    styles[0] = 'background-color: #328fed'
+                    return styles
+            except:
+                pass
+            return [''] * len(row)
+        
         # Apply the styling - updated from applymap to map
         styled_df = display_df.style.map(highlight_critical, subset=['Days Remaining'])
+        
+        # Add doctrine highlighting
+        styled_df = styled_df.apply(highlight_doctrine, axis=1)
         
         # Display the dataframe
         st.subheader("Low Stock Items")
