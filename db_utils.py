@@ -23,8 +23,6 @@ mkt_auth_token = os.getenv("TURSO_AUTH_TOKEN")
 sde_url = os.getenv('SDE_URL')
 sde_auth_token = os.getenv("SDE_AUTH_TOKEN")
 
-
-
 def sync_db(db_url="wcmkt.db", sync_url=mkt_url, auth_token=mkt_auth_token):
     # Skip sync in development mode or when sync_url/auth_token are not provided
     if not sync_url or not auth_token:

@@ -166,9 +166,9 @@ def main():
             col1, col2, col3 = st.columns([1, 3, 2])
             
             target_pct = row['target_percentage']
-            target = row['target']
-            fits = row['fits']
-            delta = fits-target
+            target = int(row['target'])
+            fits = int(row['fits'])
+            hulls = int(row['hulls'])
             
             with col1:
                 # Ship image and ID info
@@ -198,13 +198,15 @@ def main():
                 
                 # Display metrics in a single row
                 metric_cols = st.columns(3)
-                
+                fits_delta = fits-target
+                hulls_delta = hulls-target
+
                 with metric_cols[0]:
-                    st.metric(label="Fits", value=f"{int(fits)}", delta=delta)
+                    st.metric(label="Fits", value=f"{int(fits)}", delta=fits_delta)
                 with metric_cols[1]:
-                    st.metric(label="Hulls", value=f"{int(row['hulls'])}", delta=delta)
+                    st.metric(label="Hulls", value=f"{int(hulls)}", delta=hulls_delta)
                 with metric_cols[2]:
-                    st.metric(label="Target", value=f"{int(row['target'])}")
+                    st.metric(label="Target", value=f"{int(target)}")
                 
                 # Progress bar for target percentage
                 target_pct = row['target_percentage']
