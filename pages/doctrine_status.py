@@ -10,7 +10,9 @@ import sys
 import datetime
 import millify
 import pathlib
+import logging
 
+logger = logging.getLogger(__name__)
 # Import from the root directory
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from doctrines import get_doctrine_fits, create_fit_df
@@ -163,6 +165,11 @@ def main():
             # Create a more compact horizontal section for each fit
             col1, col2, col3 = st.columns([1, 3, 2])
             
+            target_pct = row['target_percentage']
+            target = row['target']
+            fits = row['fits']
+            delta = fits-target
+            
             with col1:
                 # Ship image and ID info
                 try:
@@ -170,29 +177,48 @@ def main():
                 except:
                     st.text("Image not available")
                 
+                if target_pct > 90:
+                    color = "green"
+                    status = "Good"
+                elif target_pct > 40:
+                    color = "orange"
+                    status = "Needs Attention"
+                else:
+                    color = "red"
+                    status = "Critical"
+
+                st.badge(status, color=color)
                 st.text(f"ID: {row['fit_id']}")
                 st.text(f"Fit: {row['fit']}")
             
             with col2:
                 # Ship name and metrics in a more compact layout
                 st.markdown(f"### {row['ship_name']}")
+                logger.info(f"Ship name: {row['ship_name']}")
                 
                 # Display metrics in a single row
                 metric_cols = st.columns(3)
+                
                 with metric_cols[0]:
-                    st.metric("Fits", f"{int(row['fits'])}")
+                    st.metric(label="Fits", value=f"{int(fits)}", delta=delta)
                 with metric_cols[1]:
-                    st.metric("Hulls", f"{int(row['hulls'])}")
+                    st.metric(label="Hulls", value=f"{int(row['hulls'])}", delta=delta)
                 with metric_cols[2]:
-                    st.metric("Target", f"{int(row['target'])}")
+                    st.metric(label="Target", value=f"{int(row['target'])}")
                 
                 # Progress bar for target percentage
                 target_pct = row['target_percentage']
                 color = "green" if target_pct >= 90 else "orange" if target_pct >= 50 else "red"
+                logger.info(f"Target percentage: {target_pct}, Color: {color}")
+                if target_pct == 0:
+                    color2 = "#5c1f06"
+                else:
+                    color2 = "#333"
+
                 st.markdown(
                     f"""
                     <div style="margin-top: 5px;">
-                        <div style="background-color: #333; width: 100%; height: 20px; border-radius: 3px;">
+                        <div style="background-color: {color2}; width: 100%; height: 20px; border-radius: 3px;">
                             <div style="background-color: {color}; width: {target_pct}%; height: 20px; border-radius: 3px; text-align: center; line-height: 20px; color: white; font-weight: bold;">
                                 {target_pct}%
                             </div>
@@ -204,9 +230,16 @@ def main():
             
             with col3:
                 # Low stock modules in a more compact format
-                st.markdown("**Low Stock Modules:**")
+                
+                st.markdown(":blue[**Low Stock Modules:**]")
                 for module in row['lowest_modules']:
-                    st.text(module)
+                    module_qty = module.split("(")[1].split(")")[0]
+                    if int(module_qty) <= row['target'] * 0.2:
+                        st.markdown(f":red-badge[:material/error: {module}]")
+                    elif int(module_qty) <= row['target']:
+                        st.markdown(f":orange-badge[:material/error: {module}]")
+                    else:
+                        st.text(module)
             
             # Add a thinner divider between fits
             st.markdown("<hr style='margin: 0.5em 0; border-width: 1px'>", unsafe_allow_html=True)
