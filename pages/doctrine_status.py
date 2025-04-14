@@ -149,8 +149,88 @@ def main():
         st.warning("No doctrine fits found in the database.")
         return
     
+    # Add filters in the sidebar
+    st.sidebar.header("Filters")
+    
+    # Status filter
+    status_options = ["All", "Critical", "Needs Attention", "Good"]
+    selected_status = st.sidebar.selectbox("Doctrine Status:", status_options)
+    
+    # Ship group filter
+    ship_groups = ["All"] + sorted(fit_summary["ship_group"].unique().tolist())
+    selected_group = st.sidebar.selectbox("Ship Group:", ship_groups)
+    
+    # Ship selection filter
+    st.sidebar.subheader("Select Ships")
+    
+    # Get unique ship names for selection
+    unique_ships = sorted(fit_summary["ship_name"].unique().tolist())
+    
+    # Initialize session state for ship selection if not exists
+    if 'selected_ships' not in st.session_state:
+        st.session_state.selected_ships = unique_ships.copy()
+    
+    # Add "Select All Ships" checkbox
+    all_ships_selected = st.sidebar.checkbox("Select All Ships", 
+                                            value=len(st.session_state.selected_ships) == len(unique_ships))
+    
+    if all_ships_selected:
+        st.session_state.selected_ships = unique_ships.copy()
+    elif not all_ships_selected and len(st.session_state.selected_ships) == len(unique_ships):
+        st.session_state.selected_ships = []
+    
+    # Create a container with scrolling for ship checkboxes
+    ship_container = st.sidebar.container()
+    with ship_container:
+        # Create columns for more compact display
+        col1, col2 = st.columns(2)
+        
+        # Distribute ship checkboxes between columns
+        for i, ship in enumerate(unique_ships):
+            col = col1 if i % 2 == 0 else col2
+            ship_selected = col.checkbox(ship, key=f"ship_{ship}", 
+                                       value=ship in st.session_state.selected_ships)
+            
+            if ship_selected and ship not in st.session_state.selected_ships:
+                st.session_state.selected_ships.append(ship)
+            elif not ship_selected and ship in st.session_state.selected_ships:
+                st.session_state.selected_ships.remove(ship)
+    
+    # Module status filter
+    st.sidebar.subheader("Module Filters")
+    module_status_options = ["All", "Critical (< 20%)", "Low (< 100%)", "Sufficient"]
+    selected_module_status = st.sidebar.selectbox("Module Status:", module_status_options)
+    
+    # Apply filters
+    filtered_df = fit_summary.copy()
+    
+    # Apply status filter
+    if selected_status != "All":
+        if selected_status == "Good":
+            filtered_df = filtered_df[filtered_df['target_percentage'] > 90]
+        elif selected_status == "Needs Attention":
+            filtered_df = filtered_df[(filtered_df['target_percentage'] > 40) & (filtered_df['target_percentage'] <= 90)]
+        elif selected_status == "Critical":
+            filtered_df = filtered_df[filtered_df['target_percentage'] <= 40]
+    
+    # Apply ship group filter
+    if selected_group != "All":
+        filtered_df = filtered_df[filtered_df['ship_group'] == selected_group]
+        
+    # Apply ship selection filter
+    if st.session_state.selected_ships:
+        filtered_df = filtered_df[filtered_df['ship_name'].isin(st.session_state.selected_ships)]
+    
+    if filtered_df.empty:
+        st.info(f"No fits found with the selected filters.")
+        return
+    
+    # Initialize module selection for export
+    if 'selected_modules' not in st.session_state:
+        st.session_state.selected_modules = []
+    
     # Group the data by ship_group
-    grouped_fits = fit_summary.groupby('ship_group')
+    grouped_fits = filtered_df.groupby('ship_group')
     
     # Iterate through each group and display fits
     for group_name, group_data in grouped_fits:
@@ -194,7 +274,6 @@ def main():
             with col2:
                 # Ship name and metrics in a more compact layout
                 st.markdown(f"### {row['ship_name']}")
-                logger.info(f"Ship name: {row['ship_name']}")
                 
                 # Display metrics in a single row
                 metric_cols = st.columns(3)
@@ -202,16 +281,27 @@ def main():
                 hulls_delta = hulls-target
 
                 with metric_cols[0]:
-                    st.metric(label="Fits", value=f"{int(fits)}", delta=fits_delta)
+                    # Format the delta values
+                    if fits:
+                        st.metric(label="Fits", value=f"{int(fits)}", delta=fits_delta)
+                    else:
+                        st.metric(label="Fits", value=f"0", delta=fits_delta)
+
                 with metric_cols[1]:
-                    st.metric(label="Hulls", value=f"{int(hulls)}", delta=hulls_delta)
+                    if hulls:
+                        st.metric(label="Hulls", value=f"{int(hulls)}", delta=hulls_delta)
+                    else:
+                        st.metric(label="Hulls", value=f"0", delta=hulls_delta)
+
                 with metric_cols[2]:
-                    st.metric(label="Target", value=f"{int(target)}")
+                    if target:
+                        st.metric(label="Target", value=f"{int(target)}")
+                    else:
+                        st.metric(label="Target", value=f"0")
                 
                 # Progress bar for target percentage
                 target_pct = row['target_percentage']
                 color = "green" if target_pct >= 90 else "orange" if target_pct >= 50 else "red"
-                logger.info(f"Target percentage: {target_pct}, Color: {color}")
                 if target_pct == 0:
                     color2 = "#5c1f06"
                 else:
@@ -231,17 +321,43 @@ def main():
                 )
             
             with col3:
-                # Low stock modules in a more compact format
-                
+                # Low stock modules with selection checkboxes
                 st.markdown(":blue[**Low Stock Modules:**]")
-                for module in row['lowest_modules']:
+                for i, module in enumerate(row['lowest_modules']):
                     module_qty = module.split("(")[1].split(")")[0]
+                    module_name = module.split(" (")[0]
+                    # Make each key unique by adding fit_id and index to avoid duplicates
+                    module_key = f"{row['fit_id']}_{i}_{module_name}_{module_qty}"
+                    display_key = f"{module_name}_{module_qty}"
+                    
+                    # Determine module status
                     if int(module_qty) <= row['target'] * 0.2:
-                        st.markdown(f":red-badge[:material/error: {module}]")
+                        module_status = "Critical (< 20%)"
                     elif int(module_qty) <= row['target']:
-                        st.markdown(f":orange-badge[:material/error: {module}]")
+                        module_status = "Low (< 100%)"
                     else:
-                        st.text(module)
+                        module_status = "Sufficient"
+                    
+                    # Apply module status filter
+                    if selected_module_status != "All" and selected_module_status != module_status:
+                        continue
+                    
+                    col_a, col_b = st.columns([0.1, 0.9])
+                    with col_a:
+                        is_selected = st.checkbox("1", key=module_key, label_visibility="hidden", 
+                                               value=display_key in st.session_state.selected_modules)
+                        if is_selected and display_key not in st.session_state.selected_modules:
+                            st.session_state.selected_modules.append(display_key)
+                        elif not is_selected and display_key in st.session_state.selected_modules:
+                            st.session_state.selected_modules.remove(display_key)
+                    
+                    with col_b:
+                        if int(module_qty) <= row['target'] * 0.2:
+                            st.markdown(f":red-badge[:material/error: {module}]")
+                        elif int(module_qty) <= row['target']:
+                            st.markdown(f":orange-badge[:material/error: {module}]")
+                        else:
+                            st.text(module)
             
             # Add a thinner divider between fits
             st.markdown("<hr style='margin: 0.5em 0; border-width: 1px'>", unsafe_allow_html=True)
@@ -249,7 +365,89 @@ def main():
         # Add divider between groups
         # st.markdown("<hr style='margin: 1.5em 0; border-width: 2px'>", unsafe_allow_html=True)
     
+    # Module Export Section
+    st.sidebar.markdown("---")
+    st.sidebar.header("🔄 Module Export")
+    
+    col1, col2 = st.sidebar.columns(2)
+    
+    # Add "Select All Visible" functionality
+    if col1.button("📋 Select All Visible", use_container_width=True):
+        # Create a list to collect all module keys that are currently visible based on filters
+        visible_modules = []
+        for _, group_data in grouped_fits:
+            for _, row in group_data.iterrows():
+                # Check if ship is selected
+                if row['ship_name'] not in st.session_state.selected_ships:
+                    continue
+                    
+                for module in row['lowest_modules']:
+                    module_qty = module.split("(")[1].split(")")[0]
+                    module_name = module.split(" (")[0]
+                    display_key = f"{module_name}_{module_qty}"
+                    
+                    # Determine module status for filtering
+                    if int(module_qty) <= row['target'] * 0.2:
+                        module_status = "Critical (< 20%)"
+                    elif int(module_qty) <= row['target']:
+                        module_status = "Low (< 100%)"
+                    else:
+                        module_status = "Sufficient"
+                    
+                    # Apply module status filter
+                    if selected_module_status != "All" and selected_module_status != module_status:
+                        continue
+                    
+                    visible_modules.append(display_key)
+        
+        # Update session state with all visible modules
+        st.session_state.selected_modules = list(set(visible_modules))
+        st.rerun()
+    
+    # Clear selection button
+    if col2.button("🗑️ Clear Selection", use_container_width=True):
+        st.session_state.selected_modules = []
+        st.rerun()
+    
+    # Display selected modules
+    if st.session_state.selected_modules:
+        module_list = []
+        for display_key in st.session_state.selected_modules:
+            module_name, module_qty = display_key.rsplit("_", 1)
+            module_list.append(f"{module_name} ({module_qty})")
+        
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("### Selected Modules:")
+        
+        # Create a scrollable container for selected modules
+        with st.sidebar.container(height=200):
+            for module in module_list:
+                st.text(module)
+        
+        st.sidebar.markdown("---")
+        
+        # Export options in columns
+        col1, col2 = st.sidebar.columns(2)
+        
+        # Download button
+        export_text = "\n".join(module_list)
+        col1.download_button(
+            label="📥 Download List",
+            data=export_text,
+            file_name="module_export.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
+        
+        # Copy to clipboard button
+        if col2.button("📋 Copy to Clipboard", use_container_width=True):
+            st.sidebar.code(export_text, language="")
+            st.sidebar.success("Copied to clipboard! Use Ctrl+C to copy the text above.")
+    else:
+        st.sidebar.info("Select modules to export by checking the boxes next to them.")
+    
     # Display last update timestamp
+    st.sidebar.markdown("---")
     st.sidebar.write(f"Last ESI update: {get_update_time()}")
     st.sidebar.write(f"Page updated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}")
 
