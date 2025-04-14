@@ -160,41 +160,16 @@ def main():
     ship_groups = ["All"] + sorted(fit_summary["ship_group"].unique().tolist())
     selected_group = st.sidebar.selectbox("Ship Group:", ship_groups)
     
-    # Ship selection filter
-    st.sidebar.subheader("Select Ships")
-    
     # Get unique ship names for selection
     unique_ships = sorted(fit_summary["ship_name"].unique().tolist())
     
     # Initialize session state for ship selection if not exists
     if 'selected_ships' not in st.session_state:
-        st.session_state.selected_ships = unique_ships.copy()
-    
-    # Add "Select All Ships" checkbox
-    all_ships_selected = st.sidebar.checkbox("Select All Ships", 
-                                            value=len(st.session_state.selected_ships) == len(unique_ships))
-    
-    if all_ships_selected:
-        st.session_state.selected_ships = unique_ships.copy()
-    elif not all_ships_selected and len(st.session_state.selected_ships) == len(unique_ships):
         st.session_state.selected_ships = []
-    
-    # Create a container with scrolling for ship checkboxes
-    ship_container = st.sidebar.container()
-    with ship_container:
-        # Create columns for more compact display
-        col1, col2 = st.columns(2)
         
-        # Distribute ship checkboxes between columns
-        for i, ship in enumerate(unique_ships):
-            col = col1 if i % 2 == 0 else col2
-            ship_selected = col.checkbox(ship, key=f"ship_{ship}", 
-                                       value=ship in st.session_state.selected_ships)
-            
-            if ship_selected and ship not in st.session_state.selected_ships:
-                st.session_state.selected_ships.append(ship)
-            elif not ship_selected and ship in st.session_state.selected_ships:
-                st.session_state.selected_ships.remove(ship)
+    # Initialize session state for ship display (showing all ships)
+    if 'displayed_ships' not in st.session_state:
+        st.session_state.displayed_ships = unique_ships.copy()
     
     # Module status filter
     st.sidebar.subheader("Module Filters")
@@ -216,10 +191,9 @@ def main():
     # Apply ship group filter
     if selected_group != "All":
         filtered_df = filtered_df[filtered_df['ship_group'] == selected_group]
-        
-    # Apply ship selection filter
-    if st.session_state.selected_ships:
-        filtered_df = filtered_df[filtered_df['ship_name'].isin(st.session_state.selected_ships)]
+    
+    # Update the displayed ships based on filters
+    st.session_state.displayed_ships = filtered_df['ship_name'].unique().tolist()
     
     if filtered_df.empty:
         st.info(f"No fits found with the selected filters.")
@@ -272,8 +246,21 @@ def main():
                 st.text(f"Fit: {row['fit']}")
             
             with col2:
-                # Ship name and metrics in a more compact layout
-                st.markdown(f"### {row['ship_name']}")
+                # Ship name with checkbox and metrics in a more compact layout
+                ship_cols = st.columns([0.05, 0.95])
+                
+                with ship_cols[0]:
+                    # Add checkbox next to ship name with unique key using fit_id and ship_name
+                    unique_key = f"ship_{row['fit_id']}_{row['ship_name']}"
+                    ship_selected = st.checkbox("x", key=unique_key, 
+                                             value=row['ship_name'] in st.session_state.selected_ships, label_visibility="hidden")
+                    if ship_selected and row['ship_name'] not in st.session_state.selected_ships:
+                        st.session_state.selected_ships.append(row['ship_name'])
+                    elif not ship_selected and row['ship_name'] in st.session_state.selected_ships:
+                        st.session_state.selected_ships.remove(row['ship_name'])
+                
+                with ship_cols[1]:
+                    st.markdown(f"### {row['ship_name']}")
                 
                 # Display metrics in a single row
                 metric_cols = st.columns(3)
@@ -365,20 +352,36 @@ def main():
         # Add divider between groups
         # st.markdown("<hr style='margin: 1.5em 0; border-width: 2px'>", unsafe_allow_html=True)
     
-    # Module Export Section
+    # Ship and Module Export Section
     st.sidebar.markdown("---")
-    st.sidebar.header("🔄 Module Export")
+    st.sidebar.header("🔄 Export")
     
+    # Ship selection
+    st.sidebar.subheader("Ship Selection")
+    ship_col1, ship_col2 = st.sidebar.columns(2)
+    
+    # Add "Select All Ships" button
+    if ship_col1.button("📋 Select All Ships", use_container_width=True):
+        st.session_state.selected_ships = st.session_state.displayed_ships.copy()
+        st.rerun()
+    
+    # Add "Clear Ship Selection" button
+    if ship_col2.button("🗑️ Clear Ships", use_container_width=True):
+        st.session_state.selected_ships = []
+        st.rerun()
+    
+    # Module selection
+    st.sidebar.subheader("Module Selection")
     col1, col2 = st.sidebar.columns(2)
     
-    # Add "Select All Visible" functionality
-    if col1.button("📋 Select All Visible", use_container_width=True):
+    # Add "Select All Modules" functionality
+    if col1.button("📋 Select All Modules", use_container_width=True):
         # Create a list to collect all module keys that are currently visible based on filters
         visible_modules = []
         for _, group_data in grouped_fits:
             for _, row in group_data.iterrows():
-                # Check if ship is selected
-                if row['ship_name'] not in st.session_state.selected_ships:
+                # Only include ships that are displayed (match filters)
+                if row['ship_name'] not in st.session_state.displayed_ships:
                     continue
                     
                 for module in row['lowest_modules']:
@@ -404,12 +407,22 @@ def main():
         st.session_state.selected_modules = list(set(visible_modules))
         st.rerun()
     
-    # Clear selection button
-    if col2.button("🗑️ Clear Selection", use_container_width=True):
+    # Clear module selection button
+    if col2.button("🗑️ Clear Modules", use_container_width=True):
         st.session_state.selected_modules = []
         st.rerun()
     
-    # Display selected modules
+    # Display selected ships if any
+    if st.session_state.selected_ships:
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("### Selected Ships:")
+        
+        # Create a scrollable container for selected ships
+        with st.sidebar.container(height=100):
+            for ship in st.session_state.selected_ships:
+                st.text(ship)
+    
+    # Display selected modules if any
     if st.session_state.selected_modules:
         module_list = []
         for display_key in st.session_state.selected_modules:
@@ -423,18 +436,33 @@ def main():
         with st.sidebar.container(height=200):
             for module in module_list:
                 st.text(module)
-        
+    
+    # Show export options if anything is selected
+    if st.session_state.selected_ships or st.session_state.selected_modules:
         st.sidebar.markdown("---")
         
         # Export options in columns
         col1, col2 = st.sidebar.columns(2)
         
+        # Prepare export text
+        export_text = ""
+        if st.session_state.selected_ships:
+            export_text += "SHIPS:\n" + "\n".join(st.session_state.selected_ships)
+            if st.session_state.selected_modules:
+                export_text += "\n\n"
+                
+        if st.session_state.selected_modules:
+            module_list = []
+            for display_key in st.session_state.selected_modules:
+                module_name, module_qty = display_key.rsplit("_", 1)
+                module_list.append(f"{module_name} ({module_qty})")
+            export_text += "MODULES:\n" + "\n".join(module_list)
+        
         # Download button
-        export_text = "\n".join(module_list)
         col1.download_button(
             label="📥 Download List",
             data=export_text,
-            file_name="module_export.txt",
+            file_name="doctrine_export.txt",
             mime="text/plain",
             use_container_width=True
         )
@@ -444,7 +472,7 @@ def main():
             st.sidebar.code(export_text, language="")
             st.sidebar.success("Copied to clipboard! Use Ctrl+C to copy the text above.")
     else:
-        st.sidebar.info("Select modules to export by checking the boxes next to them.")
+        st.sidebar.info("Select ships and modules to export by checking the boxes next to them.")
     
     # Display last update timestamp
     st.sidebar.markdown("---")
