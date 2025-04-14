@@ -3,6 +3,11 @@
 A Streamlit application for viewing EVE Online market statistics for Winter Coalition. This tool provides real-time market data analysis, historical price tracking, and fitting information for various items in the EVE Online market.
 
 ##UPDATES: 
+
+*version 0.3*
+- added low stock analysis
+- added additional filtering and export functionality to doctrine status tool. 
+
 *version 0.2*
 - added fitting information features
 - added doctrine metrics
