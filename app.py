@@ -56,25 +56,13 @@ def schedule_db_sync():
             now = datetime.datetime.now(datetime.UTC)
             target_time = now.replace(hour=13, minute=0, second=0, microsecond=0)
             
-            # If it's already past 13:00 UTC today, sync now and then schedule for tomorrow
-            if now >= target_time:
-                # Sync immediately if it's past 1300 UTC
-                try:
-                    logging.info("Past 1300 UTC, running initial sync now")
-                    sync_db()
-                    logging.info("Initial database sync completed successfully")
-                    
-                    # Update session state
-                    if "last_sync" not in st.session_state:
-                        st.session_state.last_sync = datetime.datetime.now(datetime.UTC)
-                        st.session_state.sync_status = "Success"
-                except Exception as e:
-                    logging.error(f"Initial database sync failed: {str(e)}")
-                    if "last_sync" in st.session_state:
-                        st.session_state.sync_status = f"Failed: {str(e)}"
-                
-                # Schedule for tomorrow
-                target_time += datetime.timedelta(days=1)
+            # Check if we've already synced today
+            if "last_sync" in st.session_state:
+                last_sync_date = st.session_state.last_sync.date()
+                today = now.date()
+                if last_sync_date == today:
+                    # Already synced today, wait until tomorrow
+                    target_time += datetime.timedelta(days=1)
             
             # Calculate seconds until the next sync
             seconds_until_sync = (target_time - now).total_seconds()
@@ -89,7 +77,7 @@ def schedule_db_sync():
                 sync_db()
                 logging.info("Database sync completed successfully")
                 
-                # Display sync status in Streamlit
+                # Update session state
                 st.session_state.last_sync = datetime.datetime.now(datetime.UTC)
                 st.session_state.sync_status = "Success"
             except Exception as e:
