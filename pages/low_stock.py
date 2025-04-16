@@ -100,7 +100,7 @@ def get_market_stats(selected_categories=None, selected_items=None, max_days_rem
     # Group by item and aggregate ship information
     if not df.empty:
         # Create a list of ships for each item
-        ship_groups = df.groupby('type_id').apply(
+        ship_groups = df.groupby('type_id', group_keys=False).apply(
             lambda x: [f"{row['ship_name']} ({int(row['fits_on_mkt'])})" 
                       for _, row in x.iterrows() 
                       if pd.notna(row['ship_name'])]

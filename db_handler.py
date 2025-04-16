@@ -179,6 +179,7 @@ def fetch_mkt_orders():
     df = clean_mkt_data(df)
     return df
 
+@st.cache_resource
 def get_local_mkt_engine():
     return create_engine(local_mkt_url, echo=False)  # Set echo=False to reduce console output
 
