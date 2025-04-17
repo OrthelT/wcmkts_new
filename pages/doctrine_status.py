@@ -10,6 +10,8 @@ import datetime
 import millify
 import pathlib
 import logging
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 # Import from the root directory
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -425,10 +427,27 @@ def main():
     
     # Display selected modules if any
     if st.session_state.selected_modules:
+        # Get module names
+        module_names = [display_key.rsplit("_", 1)[0] for display_key in st.session_state.selected_modules]
+        
+        # Query market stock (total_stock) for these modules
         module_list = []
-        for display_key in st.session_state.selected_modules:
-            module_name, module_qty = display_key.rsplit("_", 1)
-            module_list.append(f"{module_name} ({module_qty})")
+        with Session(get_local_mkt_engine()) as session:
+            for module_name in module_names:
+                query = f"""
+                    SELECT type_name, total_stock 
+                    FROM doctrines 
+                    WHERE type_name = '{module_name}'
+                    LIMIT 1
+                """
+                result = session.execute(text(query))
+                row = result.fetchone()
+                if row and row[1] is not None:
+                    # Use market stock (total_stock)
+                    module_list.append(f"{module_name} ({int(row[1])})")
+                else:
+                    # No quantity if market stock not available
+                    module_list.append(module_name)
         
         st.sidebar.markdown("---")
         st.sidebar.markdown("### Selected Modules:")
@@ -453,10 +472,28 @@ def main():
                 export_text += "\n\n"
                 
         if st.session_state.selected_modules:
+            # Get module names
+            module_names = [display_key.rsplit("_", 1)[0] for display_key in st.session_state.selected_modules]
+            
+            # Query market stock (total_stock) for these modules
             module_list = []
-            for display_key in st.session_state.selected_modules:
-                module_name, module_qty = display_key.rsplit("_", 1)
-                module_list.append(f"{module_name} ({module_qty})")
+            with Session(get_local_mkt_engine()) as session:
+                for module_name in module_names:
+                    query = f"""
+                        SELECT type_name, total_stock 
+                        FROM doctrines 
+                        WHERE type_name = '{module_name}'
+                        LIMIT 1
+                    """
+                    result = session.execute(text(query))
+                    row = result.fetchone()
+                    if row and row[1] is not None:
+                        # Use market stock (total_stock)
+                        module_list.append(f"{module_name} ({int(row[1])})")
+                    else:
+                        # No quantity if market stock not available
+                        module_list.append(module_name)
+            
             export_text += "MODULES:\n" + "\n".join(module_list)
         
         # Download button
