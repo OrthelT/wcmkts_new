@@ -5,17 +5,18 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import os
 from dotenv import load_dotenv
-from db_handler import get_local_mkt_engine, get_local_sde_engine, get_fitting_data, get_update_time
 import sys
 import datetime
 import millify
 import pathlib
 import logging
 
-logger = logging.getLogger(__name__)
 # Import from the root directory
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from db_handler import get_local_mkt_engine, get_local_sde_engine, get_fitting_data, get_update_time
 from doctrines import get_doctrine_fits, create_fit_df
+
+logger = logging.getLogger(__name__)
 
 # Page configuration
 st.set_page_config(
