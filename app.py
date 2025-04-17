@@ -24,9 +24,9 @@ import millify
 # Configure logging with rotation
 log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 log_handler = RotatingFileHandler(
-    filename='app.log',
+    filename='logs/app.log',
     maxBytes=5*1024*1024,  # 5 MB per file
-    backupCount=3,         # Keep 3 backup files
+    backupCount=1,         # Keep 3 backup files
     encoding='utf-8'
 )
 log_handler.setFormatter(log_formatter)
@@ -57,13 +57,22 @@ def schedule_db_sync():
             target_time = now.replace(hour=13, minute=0, second=0, microsecond=0)
             
             # Check if we've already synced today
-            if "last_sync" in st.session_state:
-                last_sync_date = st.session_state.last_sync.date()
-                today = now.date()
-                if last_sync_date == today:
-                    # Already synced today, wait until tomorrow
+            if "last_sync" not in st.session_state:
+                with open("last_sync_state.json", "r") as f:
+                    last_sync_state = json.load(f)
+                    if 'last_sync' in last_sync_state:
+                        updated_sync_state = datetime.datetime.strptime(last_sync_state['last_sync'], "%Y-%m-%d %H:%M %Z")
+                        st.session_state.last_sync = updated_sync_state
+                        
+            last_sync_time = st.session_state.last_sync
+            last_sync_date = last_sync_time.date()
+            today = now.date()
+            if last_sync_date == today:
+                if last_sync_time.hour >= 13:
+                # Already synced today, wait until tomorrow
                     target_time += datetime.timedelta(days=1)
-            
+
+                    
             # Calculate seconds until the next sync
             seconds_until_sync = (target_time - now).total_seconds()
             logging.info(f"Next database sync scheduled at {target_time} UTC ({seconds_until_sync/3600:.2f} hours from now)")
@@ -470,10 +479,6 @@ def main():
     logging.info(f"Selected item: {selected_item}")
     # Main content
     data, stats = get_market_data(show_all, selected_categories, selected_items)
-
-    
-    logging.info(f"Data: {data.head()}")
-    logging.info(f"Stats: {stats.head()}")
 
     if not data.empty:
         if len(selected_items) == 1:

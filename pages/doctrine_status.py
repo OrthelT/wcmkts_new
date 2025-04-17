@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 # Import from the root directory
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from db_handler import get_local_mkt_engine, get_local_sde_engine, get_fitting_data, get_update_time
-from doctrines import get_doctrine_fits, create_fit_df
+from doctrines import create_fit_df
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,7 @@ st.set_page_config(
 )
 
 # Function to get unique fit_ids and their details
+@st.cache_data(ttl=600)
 def get_fit_summary():
     """Get a summary of all doctrine fits"""
     # Get the raw data with all fit details
@@ -43,12 +44,8 @@ def get_fit_summary():
     fit_summary = []
     
     # Create a summary row for each fit_id
-    engine = get_local_mkt_engine()
-    with engine.connect() as conn:
-        # Get the fit data directly from the database
-        df = pd.read_sql_query("SELECT * FROM ship_targets", conn)
-        targets_df = df if not df.empty else None
-    
+    targets_df = get_targets()
+
     for fit_id in fit_ids:
         # Filter data for this fit
         fit_data = all_fits_data[all_fits_data['fit_id'] == fit_id]
@@ -132,6 +129,16 @@ def format_module_list(modules_list):
     if not modules_list:
         return ""
     return "<br>".join(modules_list)
+
+@st.cache_data(ttl=600)
+def get_targets()->pd.DataFrame:
+    """Get the targets dataframe"""
+    engine = get_local_mkt_engine()
+    with engine.connect() as conn:
+        # Get the fit data directly from the database
+        df = pd.read_sql_query("SELECT * FROM ship_targets", conn)
+        targets_df = df if not df.empty else None
+    return targets_df
 
 def main():
     # App title and logo

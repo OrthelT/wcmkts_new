@@ -42,15 +42,17 @@ SHIP_TARGETS = {
     'default': 20  # Default target if ship not found
 }
 
-def get_doctrine_fits(db_name: str = 'wc_fitting') -> pd.DataFrame:
-    """Get all doctrine fits from the database"""
-    engine = get_local_mkt_engine()
-    query = """
-        SELECT * FROM doctrines
-    """
-    with engine.connect() as conn:
-        df = pd.read_sql_query(query, conn)
-    return df
+# def get_doctrine_fits(db_name: str = 'wc_fitting') -> pd.DataFrame:
+#     """Get all doctrine fits from the database"""
+#     engine = get_local_mkt_engine()
+#     query = """
+#         SELECT * FROM doctrines
+#     """
+#     with engine.connect() as conn:
+#         df = pd.read_sql_query(query, conn)
+    # return df
+
+
 
 def get_target_value(ship_name):
     """Get the target value for a ship type"""
@@ -68,20 +70,20 @@ def get_target_value(ship_name):
     # Look up in the targets dictionary, default to 20 if not found
     return SHIP_TARGETS.get(ship_name, SHIP_TARGETS['default'])
 
-def create_fit_df():
-    """Create a dataframe with all fit information"""
-    engine = get_local_mkt_engine()
-    with engine.connect() as conn:
-        df = pd.read_sql_query("SELECT * FROM doctrines", conn)
+@st.cache_data(ttl=600)
+def create_fit_df()->pd.DataFrame:
+    df = get_fit_info()
     
     if df.empty:
         return pd.DataFrame()
     
-    # Process each fit
-    fits = []
     fit_ids = df['fit_id'].unique()
     master_df = pd.DataFrame()
     
+    #note: only used if you want the fit summary as its own dataframe
+    fits = []
+
+    # Process each fit
     for fit_id in fit_ids:
         # Filter data for this fit
         df2 = df[df['fit_id'] == fit_id]
@@ -128,23 +130,33 @@ def create_fit_df():
         # Add to master dataframe
         master_df = pd.concat([master_df, df2])
         
-        # master_df = pd.merge(master_df, ship_group_df, on="ship_id", how="left")
-        print(master_df.head())
-        fits.append(fit_df)
-    # Add all the fit summary rows if needed (for a summary view)
-    if fits:
-        fit_summary_df = pd.concat(fits)
-        # Uncomment if you want to add the summary rows to the master dataframe
-        # master_df = pd.concat([master_df, fit_summary_df])
+        #uncomment this to get the fit summary as its own dataframe
+        # fits.append(fit_df)
     
+    # summary_df = get_fit_summary(fits)
+    # return master_df, summary_df
+
     return master_df
 
+def get_fit_summary(fits:list)->pd.DataFrame:
+    """Get a summary of all doctrine fits"""
+    # Add all the fit summary rows if needed (for a summary view)
+    fit_summary_df = pd.DataFrame()
+    if fits:
+        fit_summary_df = pd.concat(fits)
+        fit_summary_df.to_csv("fit_summary_df.csv", index=False)
+
+    return fit_summary_df
+
+@st.cache_data(ttl=600)
+def get_fit_info()->pd.DataFrame:
+    """Create a dataframe with all fit information"""
+    engine = get_local_mkt_engine()
+    with engine.connect() as conn:
+        df = pd.read_sql_query("SELECT * FROM doctrines", conn)
+    return df
+
+
+
 if __name__ == "__main__":
-    df = create_fit_df()
-    pd.set_option('display.max_columns', None)
-    print(df.head())
-    
-    # Print unique ship names for target reference
-    if not df.empty and 'ship_name' in df.columns:
-        print("\nUnique ship names:")
-        print(sorted(df['ship_name'].unique()))
+    pass

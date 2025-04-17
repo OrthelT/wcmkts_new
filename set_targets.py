@@ -1,8 +1,7 @@
 import pandas as pd
-import sqlite3
-import os
 from sqlalchemy import create_engine, text
 from db_handler import get_local_mkt_engine
+import streamlit as st
 
 # Ship targets based on the Excel file
 SHIP_TARGETS = {
@@ -65,6 +64,7 @@ def set_targets():
     
     print("Target values set in database")
 
+@st.cache_data(ttl=600)
 def get_target_from_db(ship_name):
     """Get the target value for a ship from the database"""
     engine = get_local_mkt_engine()
@@ -105,6 +105,6 @@ def list_targets():
         print("No targets set in database")
 
 if __name__ == "__main__":
-    list_targets()
+    pass
     
  
