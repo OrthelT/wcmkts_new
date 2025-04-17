@@ -24,7 +24,7 @@ import millify
 # Configure logging with rotation
 log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 log_handler = RotatingFileHandler(
-    filename='logs/app.log',
+    filename='app.log',
     maxBytes=5*1024*1024,  # 5 MB per file
     backupCount=1,         # Keep 3 backup files
     encoding='utf-8'
