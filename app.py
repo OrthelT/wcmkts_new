@@ -58,23 +58,40 @@ def schedule_db_sync():
             
             # Check if we've already synced today
             if "last_sync" not in st.session_state:
+                logging.info("No last sync state found, loading from file")
                 with open("last_sync_state.json", "r") as f:
                     last_sync_state = json.load(f)
                     if 'last_sync' in last_sync_state:
                         updated_sync_state = datetime.datetime.strptime(last_sync_state['last_sync'], "%Y-%m-%d %H:%M %Z")
+                        logging.info(f"Updated sync state: {updated_sync_state}")
                         st.session_state.last_sync = updated_sync_state
-                        
+                    else:
+                        logging.info("No last sync state found, setting to today")
+                        st.session_state.last_sync = now
+            else:
+                logging.info("Last sync state found, using session state")
             last_sync_time = st.session_state.last_sync
+            logging.info(f"Last sync time: {last_sync_time}")
             last_sync_date = last_sync_time.date()
+            logging.info(f"Last sync date: {last_sync_date}")
             today = now.date()
+            logging.info(f"Today's date: {today}")
             if last_sync_date == today:
+                logging.info("Last sync date is today, checking time")
                 if last_sync_time.hour >= 13:
-                # Already synced today, wait until tomorrow
+                    logging.info("Last sync time is 1300 or later, waiting until tomorrow")
+                    # Already synced today, wait until tomorrow
                     target_time += datetime.timedelta(days=1)
+                else:
+                    logging.info("Last sync time is before 1300, waiting until 1300")
+            else:
+                logging.info("Last sync date is not today, waiting until tomorrow")
+                target_time += datetime.timedelta(days=1)
 
                     
             # Calculate seconds until the next sync
             seconds_until_sync = (target_time - now).total_seconds()
+            logging.info(f"seconds_until_sync: {seconds_until_sync}")
             logging.info(f"Next database sync scheduled at {target_time} UTC ({seconds_until_sync/3600:.2f} hours from now)")
             
             # Sleep until the scheduled time
