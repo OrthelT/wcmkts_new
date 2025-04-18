@@ -2,12 +2,6 @@ import streamlit as st
 
 from sqlalchemy import text
 import pandas as pd
-import os
-from dotenv import load_dotenv
-import sys
-import datetime
-import logging
-from logging.handlers import RotatingFileHandler
 import plotly.express as px
 from sqlalchemy.orm import Session
 
@@ -196,16 +190,17 @@ if __name__ == "__main__":
         
         # Format the DataFrame for display
         display_df = df.copy()
-        display_df = display_df.drop(columns=['min_price', 'avg_price', 'avg_volume', 'category_id', 'group_id'])
+        display_df = display_df.drop(columns=['min_price', 'avg_price', 'category_id', 'group_id'])
         
         # Select and rename columns
-        columns_to_show = ['type_id', 'type_name', 'price', 'days_remaining', 'total_volume_remain', 'category_name', 'group_name', 'ships']
+        columns_to_show = ['type_id', 'type_name', 'price', 'days_remaining', 'total_volume_remain', 'avg_volume', 'category_name', 'group_name', 'ships']
         display_df = display_df[columns_to_show]
         
         numeric_formats = {
             'total_volume_remain': '{:,.0f}',
             'price': '{:,.2f}',
             'days_remaining': '{:.1f}',
+            'avg_volume': '{:,.0f}',
         }
 
         for col, format_str in numeric_formats.items():
@@ -220,12 +215,13 @@ if __name__ == "__main__":
             'price': 'Price', 
             'group_name': 'Group', 
             'category_name': 'Category',
+            'avg_volume': 'Avg Volume',
             'ships': 'Used In Fits'
         }
         display_df = display_df.rename(columns=column_renames)
         
         # Reorder columns
-        column_order = ['Item', 'Days Remaining', 'Price', 'Volume Remaining', 'Used In Fits', 'Category', 'Group']
+        column_order = ['Item', 'Days Remaining', 'Price', 'Volume Remaining', 'Avg Volume', 'Used In Fits', 'Category', 'Group']
         display_df = display_df[column_order]
         
         # Add a color indicator for critical items
