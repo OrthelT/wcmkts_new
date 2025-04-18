@@ -69,7 +69,19 @@ def schedule_db_sync():
             else:
                 logger.info("Last sync date is not today, waiting until tomorrow")
                 target_time += datetime.timedelta(days=1)
+            
+            if target_time < now:
+                logger.info("Syncing database")
+                logger.info(f"Target time: {target_time}")
+                logger.info(f"Now: {now}")
+                sync_db()
 
+                logger.info("Database sync completed successfully")
+                st.session_state.last_sync = datetime.datetime.now(datetime.UTC)
+                st.session_state.sync_status = "Success"
+                now = datetime.datetime.now(datetime.UTC)
+                target_time = target_time + datetime.timedelta(days=1)
+                logger.info(f"New Target time: {target_time}")
                     
             # Calculate seconds until the next sync
             seconds_until_sync = (target_time - now).total_seconds()
@@ -96,8 +108,6 @@ def schedule_db_sync():
     sync_thread = threading.Thread(target=sync_at_scheduled_time, daemon=True)
     sync_thread.start()
     logger.info("Database sync scheduler started")
-
-
 
 # Function to get unique categories and item names
 def get_filter_options(selected_categories=None):

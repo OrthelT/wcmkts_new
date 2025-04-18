@@ -7,24 +7,23 @@ from dotenv import load_dotenv
 import requests
 from tenacity import retry, stop_after_attempt, wait_exponential
 import sqlalchemy_libsql
-import logging
 import pytz
+from logging_config import setup_logging
 
-logging = logging.getLogger(__name__)
 
 # Database URLs
 local_mkt_url = "sqlite:///wcmkt.db"  # Changed to standard SQLite format for local dev
 local_sde_url = "sqlite:///sde.db"    # Changed to standard SQLite format for local dev
 
 # Load environment variables
-load_dotenv()
+logger = setup_logging()
 
 # Use environment variables for production
-mkt_url = os.getenv('TURSO_DATABASE_URL')
-mkt_auth_token = os.getenv("TURSO_AUTH_TOKEN")
+mkt_url = st.secrets["TURSO_DATABASE_URL"]
+mkt_auth_token = st.secrets["TURSO_AUTH_TOKEN"]
 
-sde_url = os.getenv('SDE_URL')
-sde_auth_token = os.getenv("SDE_AUTH_TOKEN")
+sde_url = st.secrets["SDE_URL"]
+sde_auth_token = st.secrets["SDE_AUTH_TOKEN"]
 
 
 mkt_query = """
@@ -250,14 +249,18 @@ def get_update_time():
     query = """
         SELECT last_update FROM marketstats LIMIT 1
     """
-    df = get_local_mkt_db(query)
-    data_update = df.iloc[0]['last_update']
-    data_update = pd.to_datetime(data_update)
-    eastern = pytz.timezone('US/Eastern')
-    data_update = eastern.localize(data_update)
-    data_update = data_update.astimezone(pytz.utc)
-    data_update = data_update.strftime('%Y-%m-%d \n %H:%M:%S')
-    return data_update
+    try:
+        df = get_local_mkt_db(query)
+        data_update = df.iloc[0]['last_update']
+        data_update = pd.to_datetime(data_update)
+        eastern = pytz.timezone('US/Eastern')
+        data_update = eastern.localize(data_update)
+        data_update = data_update.astimezone(pytz.utc)
+        data_update = data_update.strftime('%Y-%m-%d \n %H:%M:%S')
+        return data_update
+    except Exception as e:
+        logger.error(f"Failed to get update time: {str(e)}")
+        return None
 
 def get_module_fits(type_id):
     
