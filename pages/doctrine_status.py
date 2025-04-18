@@ -12,14 +12,6 @@ from doctrines import create_fit_df
 # Insert centralized logging configuration
 logger = setup_logging()
 
-# Page configuration
-st.set_page_config(
-    page_title="WC Doctrine Fits",
-    page_icon="📈",
-    layout="wide"
-)
-
-# Function to get unique fit_ids and their details
 @st.cache_data(ttl=600, show_spinner="Loading cacheddoctrine fits...")
 def get_fit_summary():
     """Get a summary of all doctrine fits"""

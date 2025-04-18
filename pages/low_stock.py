@@ -1,5 +1,6 @@
-from sqlalchemy import text
 import streamlit as st
+
+from sqlalchemy import text
 import pandas as pd
 import os
 from dotenv import load_dotenv
@@ -17,12 +18,6 @@ logger = setup_logging()
 
 # Import from the root directory
 from db_handler import get_local_mkt_engine, safe_format
-
-st.set_page_config(
-    page_title="WC Market Low Stock Alert",
-    page_icon="⚠️",
-    layout="wide"
-)
 
 def get_filter_options(selected_categories=None):
     try:
