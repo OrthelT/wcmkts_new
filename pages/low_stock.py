@@ -88,7 +88,7 @@ def get_market_stats(selected_categories=None, selected_items=None, max_days_rem
         ship_groups = df.groupby('type_id', group_keys=False).apply(
             lambda x: [f"{row['ship_name']} ({int(row['fits_on_mkt'])})" 
                       for _, row in x.iterrows() 
-                      if pd.notna(row['ship_name'])]
+                      if pd.notna(row['ship_name'])], include_groups = False
         ).to_dict()
         
         # Keep only one row per item

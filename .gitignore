@@ -58,3 +58,5 @@ logs/
 *.log.*.*.*.*.*
 *.log.*.*.*.*.*.*
 .env2
+*.db-shm
+*.db-wal
