@@ -84,10 +84,14 @@ def schedule_db_sync():
                 logger.info(f"New Target time: {target_time}")
                     
             # Calculate seconds until the next sync
-            seconds_until_sync = (target_time - now).total_seconds()
-            logger.info(f"seconds_until_sync: {seconds_until_sync}")
-            logger.info(f"Next database sync scheduled at {target_time} UTC ({seconds_until_sync/3600:.2f} hours from now)")
-            
+            if target_time > now:
+                seconds_until_sync = (target_time - now).total_seconds()
+                logger.info(f"seconds_until_sync: {seconds_until_sync}")
+                logger.info(f"Next database sync scheduled at {target_time} UTC ({seconds_until_sync/3600:.2f} hours from now)")
+            else:
+                seconds_until_sync = 1
+                logger.info(f"seconds_until_sync: {seconds_until_sync}")
+                logger.info(f"Next database sync scheduled at {target_time} UTC ({seconds_until_sync/3600:.2f} hours from now)")
             # Sleep until the scheduled time
             time.sleep(seconds_until_sync)
             
@@ -402,12 +406,16 @@ def main():
 
     logger.info("Starting main function")
 
-
+  
     # Start database sync scheduler (only once)
     if 'sync_scheduler_started' not in st.session_state:
-        schedule_db_sync()
-        st.session_state.sync_scheduler_started = True
-        logger.info("Sync scheduler started from main function")
+        try:
+            schedule_db_sync()
+            st.session_state.sync_scheduler_started = True
+            logger.info("Sync scheduler started from main function")
+        except Exception as e:
+            logger.error(f"Error starting sync scheduler: {e}")
+            st.error(f"Error starting sync scheduler: {e}")
 
     # Initialize sync status in session state if not present
     if 'last_sync' not in st.session_state:
@@ -417,14 +425,18 @@ def main():
                 if 'last_sync' in last_sync_state:
                     updated_sync_state = datetime.datetime.strptime(last_sync_state['last_sync'], "%Y-%m-%d %H:%M UTC")
                     st.session_state.last_sync = updated_sync_state
+                    st.session_state.sync_status = "Not yet run"
+                else:
+                    st.session_state.last_sync = None
+                    st.session_state.sync_status = "Not yet run"
 
         except Exception as e:
             logger.error(f"Error loading last sync state: {e}")
-        
-        st.session_state.last_sync = None
-        st.session_state.sync_status = "Not yet run"
+    else:
+        logger.info("Last sync state already initialized")
     
     logger.info("Sync status initialized")
+
     wclogo = "images/wclogo.png"
     st.image(wclogo, width=150)
 
@@ -656,4 +668,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    
+    try:
+        main()
+    except Exception as e:
+        logger.error(f"Error in main function: {e}")
+        st.error(f"Error in main function: {e}")
