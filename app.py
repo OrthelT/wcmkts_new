@@ -3,51 +3,32 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from sqlalchemy import create_engine, text, distinct
+from sqlalchemy import text
 from sqlalchemy.orm import Session
-import os
 from dotenv import load_dotenv
 from db_handler import  clean_mkt_data, get_module_fits, get_local_mkt_engine, get_local_sde_engine, get_stats,safe_format, get_mkt_data, get_market_orders, get_market_history, get_item_details, get_fitting_data, get_update_time
 import sqlalchemy_libsql
-import libsql_client
-import logging
-from logging.handlers import RotatingFileHandler
 import time
 import threading
 import datetime
-import pytz
 from db_utils import sync_db
 import json
 import datetime
 import millify
+from logging_config import setup_logging
 
-# Configure logging with rotation
-log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-log_handler = RotatingFileHandler(
-    filename='app.log',
-    maxBytes=5*1024*1024,  # 5 MB per file
-    backupCount=1,         # Keep 3 backup files
-    encoding='utf-8'
-)
-log_handler.setFormatter(log_formatter)
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-logger.addHandler(log_handler)
+
+# Insert centralized logging configuration
+logger = setup_logging()
 
 # Log application start
-logging.info("Application started")
+logger.info("Application started")
 
 mkt_url = st.secrets["TURSO_DATABASE_URL"]
 mkt_auth_token = st.secrets["TURSO_AUTH_TOKEN"]
 
 sde_url = st.secrets["SDE_URL"]
 sde_auth_token = st.secrets["SDE_AUTH_TOKEN"]
-
-mkt_query = """
-    SELECT DISTINCT type_id 
-    FROM marketorders 
-    WHERE is_buy_order = 0
-    """
 
 # Function to schedule daily database sync at 1300 UTC
 def schedule_db_sync():
@@ -58,62 +39,62 @@ def schedule_db_sync():
             
             # Check if we've already synced today
             if "last_sync" not in st.session_state:
-                logging.info("No last sync state found, loading from file")
+                logger.info("No last sync state found, loading from file")
                 with open("last_sync_state.json", "r") as f:
                     last_sync_state = json.load(f)
                     if 'last_sync' in last_sync_state:
                         updated_sync_state = datetime.datetime.strptime(last_sync_state['last_sync'], "%Y-%m-%d %H:%M %Z")
-                        logging.info(f"Updated sync state: {updated_sync_state}")
+                        logger.info(f"Updated sync state: {updated_sync_state}")
                         st.session_state.last_sync = updated_sync_state
                     else:
-                        logging.info("No last sync state found, setting to today")
+                        logger.info("No last sync state found, setting to today")
                         st.session_state.last_sync = now
             else:
-                logging.info("Last sync state found, using session state")
+                logger.info("Last sync state found, using session state")
             last_sync_time = st.session_state.last_sync
-            logging.info(f"Last sync time: {last_sync_time}")
+            logger.info(f"Last sync time: {last_sync_time}")
             last_sync_date = last_sync_time.date()
-            logging.info(f"Last sync date: {last_sync_date}")
+            logger.info(f"Last sync date: {last_sync_date}")
             today = now.date()
-            logging.info(f"Today's date: {today}")
+            logger.info(f"Today's date: {today}")
             if last_sync_date == today:
-                logging.info("Last sync date is today, checking time")
+                logger.info("Last sync date is today, checking time")
                 if last_sync_time.hour >= 13:
-                    logging.info("Last sync time is 1300 or later, waiting until tomorrow")
+                    logger.info("Last sync time is 1300 or later, waiting until tomorrow")
                     # Already synced today, wait until tomorrow
                     target_time += datetime.timedelta(days=1)
                 else:
-                    logging.info("Last sync time is before 1300, waiting until 1300")
+                    logger.info("Last sync time is before 1300, waiting until 1300")
             else:
-                logging.info("Last sync date is not today, waiting until tomorrow")
+                logger.info("Last sync date is not today, waiting until tomorrow")
                 target_time += datetime.timedelta(days=1)
 
                     
             # Calculate seconds until the next sync
             seconds_until_sync = (target_time - now).total_seconds()
-            logging.info(f"seconds_until_sync: {seconds_until_sync}")
-            logging.info(f"Next database sync scheduled at {target_time} UTC ({seconds_until_sync/3600:.2f} hours from now)")
+            logger.info(f"seconds_until_sync: {seconds_until_sync}")
+            logger.info(f"Next database sync scheduled at {target_time} UTC ({seconds_until_sync/3600:.2f} hours from now)")
             
             # Sleep until the scheduled time
             time.sleep(seconds_until_sync)
             
             # Perform sync
             try:
-                logging.info("Starting scheduled database sync")
+                logger.info("Starting scheduled database sync")
                 sync_db()
-                logging.info("Database sync completed successfully")
+                logger.info("Database sync completed successfully")
                 
                 # Update session state
                 st.session_state.last_sync = datetime.datetime.now(datetime.UTC)
                 st.session_state.sync_status = "Success"
             except Exception as e:
-                logging.error(f"Database sync failed: {str(e)}")
+                logger.error(f"Database sync failed: {str(e)}")
                 st.session_state.sync_status = f"Failed: {str(e)}"
     
     # Start the sync scheduler in a separate thread
     sync_thread = threading.Thread(target=sync_at_scheduled_time, daemon=True)
     sync_thread.start()
-    logging.info("Database sync scheduler started")
+    logger.info("Database sync scheduler started")
 
 
 
@@ -126,7 +107,7 @@ def get_filter_options(selected_categories=None):
         FROM marketorders 
         WHERE is_buy_order = 0
         """
-        logging.info(f"mkt_query: {mkt_query}, get_local_mkt_engine()")
+        logger.info("getting filter options")
         with Session(get_local_mkt_engine()) as session:
             result = session.execute(text(mkt_query))
             type_ids = [row[0] for row in result.fetchall()]
@@ -135,7 +116,7 @@ def get_filter_options(selected_categories=None):
                 return [], []
             type_ids_str = ','.join(map(str, type_ids))
         
-        logging.info(f"type_ids: {len(type_ids)}")
+        logger.info(f"type_ids: {len(type_ids)}")
 
         # Then get category info from SDE database
         sde_query = f"""
@@ -146,7 +127,6 @@ def get_filter_options(selected_categories=None):
         JOIN invCategories ic ON ig.categoryID = ic.categoryID
         WHERE it.typeID IN ({type_ids_str})
         """
-        logging.info(f"sde_query: {sde_query}, get_local_sde_engine()")
         with Session(get_local_sde_engine()) as session:
             result = session.execute(text(sde_query))
             df = pd.DataFrame(result.fetchall(), 
@@ -158,8 +138,7 @@ def get_filter_options(selected_categories=None):
                 df = df[df['category_name'].isin(selected_categories)]   
         
         items = sorted(df['type_name'].unique())
-        logging.info(f"items: {len(items)}")
-        logging.info(f"categories: {len(categories)}")
+      
         
         return categories, items
         
@@ -201,18 +180,17 @@ def get_market_data(show_all, selected_categories, selected_items):
                     session.commit()
                     session.close()
                 except Exception as e:
-                    logging.error(f"Error executing SDE query: {e}")
+                    logger.error(f"Error executing SDE query: {e}")
 
             try:
-                
+                logger.info(f"filtered_type_ids: {len(filtered_type_ids)}")
                 if filtered_type_ids:
-                    logging.info(f"filtered_type_ids: {len(filtered_type_ids)}")
                     type_ids_str = ','.join(filtered_type_ids)
                     mkt_conditions.append(f"type_id IN ({type_ids_str})")
                 else:
                     return pd.DataFrame()  # Return empty if no matching types
             except Exception as e:
-                logging.error(f"Error executing SDE query: {e}")
+                logger.error(f"Error executing SDE query: {e}")
     
     # Build final market query
     where_clause = " AND ".join(mkt_conditions)
@@ -252,8 +230,8 @@ def get_market_data(show_all, selected_categories, selected_items):
     # Merge market data with SDE data
     df = df.merge(sde_df, on='type_id', how='left')
     df = clean_mkt_data(df)
-    logging.info(f"df: {df.head()}")
-    logging.info(f"stats: {stats.head()}")
+    logger.info(f"returning market data")
+
     return df, stats
 
 def load_data(selected_categories=None, selected_items=None):
@@ -411,20 +389,19 @@ def create_history_chart(type_id):
 
 def main():
 
-    logging.info("Starting main function")
+    logger.info("Starting main function")
 
     st.set_page_config(
         page_title="WinterCo Markets",
         page_icon="📈",
         layout="wide"
     )
-    
+
     # Start database sync scheduler (only once)
-    logging.info("Starting sync scheduler")
     if 'sync_scheduler_started' not in st.session_state:
         schedule_db_sync()
         st.session_state.sync_scheduler_started = True
-        logging.info("Sync scheduler started from main function")
+        logger.info("Sync scheduler started from main function")
 
     # Initialize sync status in session state if not present
     if 'last_sync' not in st.session_state:
@@ -436,12 +413,12 @@ def main():
                     st.session_state.last_sync = updated_sync_state
 
         except Exception as e:
-            logging.error(f"Error loading last sync state: {e}")
+            logger.error(f"Error loading last sync state: {e}")
         
         st.session_state.last_sync = None
         st.session_state.sync_status = "Not yet run"
     
-    logging.info("Sync status initialized")
+    logger.info("Sync status initialized")
     wclogo = "images/wclogo.png"
     st.image(wclogo, width=150)
 
@@ -454,7 +431,7 @@ def main():
     # Show all option
     show_all = st.sidebar.checkbox("Show All Data", value=False)
 
-    logging.info("Getting initial categories")
+    logger.info("Getting initial categories")
     # Get initial categories
     categories, _ = get_filter_options()
 
@@ -469,7 +446,7 @@ def main():
     # Convert to list format for compatibility with existing code
     selected_categories = [selected_category] if selected_category else []
 
-    logging.info(f"Selected category: {selected_category}")
+    logger.info(f"Selected category: {selected_category}")
     
     # Debug info
     if selected_category:
@@ -493,7 +470,7 @@ def main():
     if selected_item:
         st.sidebar.text(f"Item: {selected_item}")
     
-    logging.info(f"Selected item: {selected_item}")
+    logger.info(f"Selected item: {selected_item}")
     # Main content
     data, stats = get_market_data(show_all, selected_categories, selected_items)
 

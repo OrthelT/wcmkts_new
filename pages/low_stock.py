@@ -8,24 +8,14 @@ import datetime
 import logging
 from logging.handlers import RotatingFileHandler
 import plotly.express as px
-import millify
 from sqlalchemy.orm import Session
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+from logging_config import setup_logging
 
-# Configure logging with rotation
-log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-log_handler = RotatingFileHandler(
-    'market_stats.log',
-    backupCount=3,
-    maxBytes=1000000
-)
-log_handler.setFormatter(log_formatter)
-logger.addHandler(log_handler)
+# Insert centralized logging configuration
+logger = setup_logging()
 
 # Import from the root directory
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from db_handler import get_local_mkt_engine, safe_format
 
 st.set_page_config(

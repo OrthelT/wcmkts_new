@@ -7,10 +7,8 @@ from dotenv import load_dotenv
 import requests
 from tenacity import retry, stop_after_attempt, wait_exponential
 import sqlalchemy_libsql
-import libsql_experimental as libsql
 import logging
 import pytz
-import datetime
 
 logging = logging.getLogger(__name__)
 

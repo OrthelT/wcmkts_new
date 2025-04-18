@@ -1,24 +1,12 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-from sqlalchemy import create_engine, text, distinct
-from sqlalchemy.orm import Session
-import os
-from dotenv import load_dotenv
-from db_handler import  clean_mkt_data, get_local_mkt_engine, get_local_sde_engine, get_stats,safe_format, get_mkt_data, get_market_orders, get_market_history, get_item_details, get_fitting_data, get_update_time
-import sqlalchemy_libsql
-import libsql_client
-import logging
-import time
-import threading
-import datetime
-import pytz
-from db_utils import sync_db
-import json
-import datetime
-import millify
+from sqlalchemy import text
+from db_handler import  get_local_mkt_engine
+
+from logging_config import setup_logging
+
+# Insert centralized logging configuration
+logger = setup_logging()
 
 # Import target handling functions if set_targets.py exists
 try:
@@ -42,18 +30,6 @@ SHIP_TARGETS = {
     'default': 20  # Default target if ship not found
 }
 
-# def get_doctrine_fits(db_name: str = 'wc_fitting') -> pd.DataFrame:
-#     """Get all doctrine fits from the database"""
-#     engine = get_local_mkt_engine()
-#     query = """
-#         SELECT * FROM doctrines
-#     """
-#     with engine.connect() as conn:
-#         df = pd.read_sql_query(query, conn)
-    # return df
-
-
-
 def get_target_value(ship_name):
     """Get the target value for a ship type"""
     # First try to get from database if available
@@ -61,19 +37,20 @@ def get_target_value(ship_name):
         try:
             return get_target_from_db(ship_name)
         except Exception as e:
-            print(f"Error getting target from database: {e}")
+            logger.error(f"Error getting target from database: {e}")
             # Fall back to dictionary if database lookup fails
-    
+    logger.info(f"Getting target value for {ship_name}")
     # Convert to title case for standardized lookup in dictionary
     ship_name = ship_name.title() if isinstance(ship_name, str) else ''
     
     # Look up in the targets dictionary, default to 20 if not found
     return SHIP_TARGETS.get(ship_name, SHIP_TARGETS['default'])
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, show_spinner="Loading cached doctrine fits...")
 def create_fit_df()->pd.DataFrame:
+    logger.info(f"Creating fit dataframe")
     df = get_fit_info()
-    
+
     if df.empty:
         return pd.DataFrame()
     
@@ -90,7 +67,7 @@ def create_fit_df()->pd.DataFrame:
         
         if df2.empty:
             continue
-        
+        logger.info(f"Processing fit {fit_id}; {df2['ship_name'].iloc[0]}")
         # Create a dataframe for this fit
         fit_df = pd.DataFrame()
         fit_df["fit_id"] = [df2['fit_id'].iloc[0]]
@@ -138,6 +115,7 @@ def create_fit_df()->pd.DataFrame:
 
     return master_df
 
+
 def get_fit_summary(fits:list)->pd.DataFrame:
     """Get a summary of all doctrine fits"""
     # Add all the fit summary rows if needed (for a summary view)
@@ -151,6 +129,7 @@ def get_fit_summary(fits:list)->pd.DataFrame:
 @st.cache_data(ttl=600)
 def get_fit_info()->pd.DataFrame:
     """Create a dataframe with all fit information"""
+    logger.info(f"Getting fit info from doctrines table")
     engine = get_local_mkt_engine()
     with engine.connect() as conn:
         df = pd.read_sql_query("SELECT * FROM doctrines", conn)

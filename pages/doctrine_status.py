@@ -1,24 +1,16 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import os
-from dotenv import load_dotenv
-import sys
 import datetime
-import millify
 import pathlib
-import logging
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-# Import from the root directory
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from db_handler import get_local_mkt_engine, get_local_sde_engine, get_fitting_data, get_update_time
+from logging_config import setup_logging
+from db_handler import get_local_mkt_engine, get_update_time
 from doctrines import create_fit_df
 
-logger = logging.getLogger(__name__)
+# Insert centralized logging configuration
+logger = setup_logging()
 
 # Page configuration
 st.set_page_config(
@@ -28,9 +20,11 @@ st.set_page_config(
 )
 
 # Function to get unique fit_ids and their details
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, show_spinner="Loading cacheddoctrine fits...")
 def get_fit_summary():
     """Get a summary of all doctrine fits"""
+    logger.info("Getting fit summary")
+    
     # Get the raw data with all fit details
     all_fits_data = create_fit_df()
     
@@ -101,6 +95,7 @@ def get_fit_summary():
         
         # Get fit name from the ship_targets table if available
         fit_name = f"{ship_name} Fit"  # Default fallback
+
         if targets_df is not None:
             target_row = targets_df[targets_df['fit_id'] == fit_id]
             if not target_row.empty and 'fit_name' in target_row.columns and not pd.isna(target_row.iloc[0]['fit_name']):
