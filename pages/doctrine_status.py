@@ -207,10 +207,7 @@ def main():
     for group_name, group_data in grouped_fits:
         # Display group header
         st.subheader(body=f"{group_name}", help="Ship doctrine group", divider="orange")
-        # Add divider between groups
-        # st.markdown("<hr style='margin: 1.5em 0; border-width: 3px'>", unsafe_allow_html=True)
-    
-        
+       
         # Display the fits in this group
         for i, row in group_data.iterrows():
             # Create a more compact horizontal section for each fit

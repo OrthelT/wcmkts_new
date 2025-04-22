@@ -2,6 +2,10 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 from db_handler import get_local_mkt_engine
 import streamlit as st
+from logging_config import setup_logging
+
+# Set up logging
+logger = setup_logging()
 
 # Ship targets based on the Excel file
 SHIP_TARGETS = {
@@ -44,7 +48,25 @@ def create_targets_table():
         print("ship_targets table already exists")
 
 def set_targets():
-    """Set target values in the database"""
+    """Utility function to initialize or update ship targets in the database.
+    
+    This function is a standalone utility that:
+    1. Creates the ship_targets table if it doesn't exist
+    2. Populates/updates the table with default target values from SHIP_TARGETS dictionary
+    3. Skips the 'default' entry as it's used as a fallback value only
+    
+    Usage:
+    - Run this function manually when you need to:
+        * Initialize the ship_targets table for the first time
+        * Reset targets to default values
+        * Update targets after modifying the SHIP_TARGETS dictionary
+    
+    The targets set by this function are used by the doctrine status page
+    to calculate whether ship and module stocks meet target levels.
+    
+    Note: This function is not called automatically by the application.
+    It should be run manually when target values need to be initialized or reset.
+    """
     create_targets_table()
     
     engine = get_local_mkt_engine()
@@ -63,6 +85,8 @@ def set_targets():
             conn.commit()
     
     print("Target values set in database")
+
+
 
 @st.cache_data(ttl=600)
 def get_target_from_db(ship_name):
@@ -103,6 +127,47 @@ def list_targets():
             print(f"{ship_name}: {target}")
     else:
         print("No targets set in database")
+
+def update_target(fit_id: int, new_target: int) -> bool:
+    """Update the target value for a specific fit ID in the ship_targets table.
+    
+    Args:
+        fit_id (int): The ID of the fit to update
+        new_target (int): The new target value to set
+        
+    Returns:
+        bool: True if update was successful, False otherwise
+        
+    Example:
+        >>> update_target(123, 50)  # Sets target to 50 for fit ID 123
+    """
+    try:
+        engine = get_local_mkt_engine()
+        with engine.connect() as conn:
+            # First check if the fit_id exists
+            result = conn.execute(text("""
+                SELECT fit_id FROM ship_targets 
+                WHERE fit_id = :fit_id
+            """), {"fit_id": fit_id})
+            
+            if result.fetchone() is None:
+                logger.warning(f"No target found for fit ID {fit_id}")
+                return False
+            
+            # Update the target value
+            conn.execute(text("""
+                UPDATE ship_targets 
+                SET ship_target = :new_target 
+                WHERE fit_id = :fit_id
+            """), {"fit_id": fit_id, "new_target": new_target})
+            
+            conn.commit()
+            logger.info(f"Successfully updated target for fit ID {fit_id} to {new_target}")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Error updating target: {str(e)}")
+        return False
 
 if __name__ == "__main__":
     pass
