@@ -6,6 +6,7 @@ import os
 from dotenv import load_dotenv
 import libsql_experimental as libsql
 from logging_config import setup_logging
+import json
 
 logger = setup_logging()
 
@@ -23,23 +24,37 @@ mkt_auth_token = st.secrets["TURSO_AUTH_TOKEN"]
 sde_url = st.secrets["SDE_URL"]
 sde_auth_token = st.secrets["SDE_AUTH_TOKEN"]
 
-def sync_db(db_url="wcmkt.db", sync_url=mkt_url, auth_token=mkt_auth_token):
+def sync_db(db_url="wcmkt.db", sync_url=mkt_url, auth_token=mkt_auth_token)->tuple[datetime.datetime, datetime.datetime]:
     logger.info("database sync started")
     # Skip sync in development mode or when sync_url/auth_token are not provided
     if not sync_url or not auth_token:
         logger.info("Skipping database sync in development mode or missing sync credentials")
-        return
+        return None, None
         
     try:
         conn = libsql.connect(db_url, sync_url=sync_url, auth_token=auth_token)
         conn.sync()
         logger.info("Database synced")
+
+        last_sync = datetime.datetime.now().astimezone(datetime.UTC)
+        logger.info(f"updated Last sync: {last_sync.strftime('%Y-%m-%d %H:%M %Z')}")
+        next_sync = last_sync.replace(hour=13, minute=0, second=0, microsecond=0) + datetime.timedelta(days=1)
+        logger.info(f"updated Next sync: {next_sync.strftime('%Y-%m-%d %H:%M %Z')}")
+
+        with open("last_sync_state.json", "w") as f:
+            json.dump({"last_sync": last_sync.strftime("%Y-%m-%d %H:%M %Z"), "next_sync": next_sync.strftime("%Y-%m-%d %H:%M %Z")}, f)
+        logger.info(f"Last sync state updated to: {last_sync.strftime('%Y-%m-%d %H:%M %Z')}")
+        logger.info(f"Next sync state updated to: {next_sync.strftime('%Y-%m-%d %H:%M %Z')}")
+        
+        return last_sync, next_sync
+
     except ValueError as e:
         if "Sync is not supported" in str(e):
             logger.info("Skipping sync: This appears to be a local file database that doesn't support sync")
         else:
             # Re-raise other ValueErrors
             raise
+    return None, None
 
 def get_type_name(type_ids):
     engine = create_engine(local_sde_url)

@@ -10,8 +10,8 @@ from logging_config import setup_logging
 import time
 import threading
 import datetime
+from db_utils import sync_db
 import json
-
 
 # Database URLs
 local_mkt_url = "sqlite:///wcmkt.db"  # Changed to standard SQLite format for local dev
@@ -34,85 +34,71 @@ mkt_query = """
     ORDER BY order_id
 """
 def schedule_db_sync():
-    def sync_at_scheduled_time():
-        while True:
-            now = datetime.datetime.now(datetime.UTC)
-            target_time = now.replace(hour=13, minute=0, second=0, microsecond=0)
-            
-            # Check if we've already synced today
-            if "last_sync" not in st.session_state:
-                logger.info("No last sync state found, loading from file")
-                with open("last_sync_state.json", "r") as f:
-                    last_sync_state = json.load(f)
-                    if 'last_sync' in last_sync_state:
-                        updated_sync_state = datetime.datetime.strptime(last_sync_state['last_sync'], "%Y-%m-%d %H:%M %Z")
-                        logger.info(f"Updated sync state: {updated_sync_state}")
-                        st.session_state.last_sync = updated_sync_state
-                    else:
-                        logger.info("No last sync state found, setting to today")
-                        st.session_state.last_sync = now
-            else:
-                logger.info("Last sync state found, using session state")
-            last_sync_time = st.session_state.last_sync
-            logger.info(f"Last sync time: {last_sync_time}")
-            last_sync_date = last_sync_time.date()
-            logger.info(f"Last sync date: {last_sync_date}")
-            today = now.date()
-            logger.info(f"Today's date: {today}")
-            if last_sync_date == today:
-                logger.info("Last sync date is today, checking time")
-                if last_sync_time.hour >= 13:
-                    logger.info("Last sync time is 1300 or later, waiting until tomorrow")
-                    # Already synced today, wait until tomorrow
-                    target_time += datetime.timedelta(days=1)
-                else:
-                    logger.info("Last sync time is before 1300, waiting until 1300")
-            else:
-                logger.info("Last sync date is not today, waiting until tomorrow")
-                target_time += datetime.timedelta(days=1)
-            
-            if target_time < now:
-                logger.info("Syncing database")
-                logger.info(f"Target time: {target_time}")
-                logger.info(f"Now: {now}")
-                sync_db()
+    """Check if sync is needed and return sync status without using threads."""
+    now = datetime.datetime.now(datetime.UTC)
+    target_time = now.replace(hour=13, minute=0, second=0, microsecond=0)
+    logger.info(f"Target time: {target_time}, time zone: {target_time.tzname()}")
+    logger.info(f"Now: {now}, time zone: {now.tzname()}")
 
-                logger.info("Database sync completed successfully")
-                st.session_state.last_sync = datetime.datetime.now(datetime.UTC)
+    if "last_sync" not in st.session_state:
+        logger.info("No last sync state found, loading from file")
+        try:
+            with open("last_sync_state.json", "r") as f:
+                saved_sync_state = json.load(f)
+                if 'last_sync' in saved_sync_state:
+                    st.session_state.last_sync = datetime.datetime.strptime(saved_sync_state['last_sync'], "%Y-%m-%d %H:%M %Z").astimezone(datetime.UTC)
+                    logger.info(f"saved Last sync: {st.session_state.last_sync}, timezone: {st.session_state.last_sync.tzname()}")
+
+                else:
+                    st.session_state.last_sync = target_time - datetime.timedelta(days=1)
+                    logger.info(f"else last sync: {st.session_state.last_sync}, timezone: {st.session_state.last_sync.tzname()}")
+
+                if 'next_sync' in saved_sync_state:
+                    st.session_state.next_sync = datetime.datetime.strptime(saved_sync_state['next_sync'], "%Y-%m-%d %H:%M %Z").astimezone(datetime.UTC)
+                    logger.info(f"saved next sync: {st.session_state.next_sync}, timezone: {st.session_state.next_sync.tzname()}")
+                else:
+                    st.session_state.next_sync = target_time
+                    logger.info(f"else next sync: {st.session_state.next_sync}, timezone: {st.session_state.next_sync.tzname()}")
+        
+        except Exception as e:
+            logger.error(f"Error loading sync state: {e}")
+            st.session_state.last_sync = target_time - datetime.timedelta(days=1)
+            logger.info(f"error last sync: {st.session_state.last_sync}, timezone: {st.session_state.last_sync.tzname()}")
+            st.session_state.next_sync = target_time
+            logger.info(f"error next sync: {st.session_state.next_sync}, timezone: {st.session_state.next_sync.tzname()}")
+
+
+    logger.info(f"Last sync: {st.session_state.last_sync}, timezone: {st.session_state.last_sync.tzname()}")
+    logger.info(f"Next sync: {st.session_state.next_sync}, timezone: {st.session_state.next_sync.tzname()}")
+
+    # Check if sync is needed
+    if now >= st.session_state.next_sync:
+        logger.info(f"Sync overdue by {now - st.session_state.next_sync}, next sync at {st.session_state.next_sync}")
+        try:
+            last_sync, next_sync = sync_db()
+            if last_sync and next_sync:
+                st.session_state.last_sync = last_sync
+                st.session_state.next_sync = next_sync
                 st.session_state.sync_status = "Success"
-                now = datetime.datetime.now(datetime.UTC)
-                target_time = target_time + datetime.timedelta(days=1)
-                logger.info(f"New Target time: {target_time}")
-                    
-            # Calculate seconds until the next sync
-            if target_time > now:
-                seconds_until_sync = (target_time - now).total_seconds()
-                logger.info(f"seconds_until_sync: {seconds_until_sync}")
-                logger.info(f"Next database sync scheduled at {target_time} UTC ({seconds_until_sync/3600:.2f} hours from now)")
-            else:
-                seconds_until_sync = 1
-                logger.info(f"seconds_until_sync: {seconds_until_sync}")
-                logger.info(f"Next database sync scheduled at {target_time} UTC ({seconds_until_sync/3600:.2f} hours from now)")
-            # Sleep until the scheduled time
-            time.sleep(seconds_until_sync)
-            
-            # Perform sync
-            try:
-                logger.info("Starting scheduled database sync")
-                sync_db()
-                logger.info("Database sync completed successfully")
-                
-                # Update session state
-                st.session_state.last_sync = datetime.datetime.now(datetime.UTC)
-                st.session_state.sync_status = "Success"
-            except Exception as e:
-                logger.error(f"Database sync failed: {str(e)}")
-                st.session_state.sync_status = f"Failed: {str(e)}"
+                logger.info(f"Database sync completed successfully at {last_sync}")
+            return True
+        except Exception as e:
+            logger.error(f"Database sync failed: {str(e)}")
+            st.session_state.sync_status = f"Failed: {str(e)}"
+            return False
     
-    # Start the sync scheduler in a separate thread
-    sync_thread = threading.Thread(target=sync_at_scheduled_time, daemon=True)
-    sync_thread.start()
-    logger.info("Database sync scheduler started")
+    return False
+
+@st.cache_data(ttl=60)  # Cache for 60 seconds
+def get_seconds_until_next_sync():
+    """Get seconds until next sync, cached to avoid too frequent recalculations."""
+    if "next_sync" not in st.session_state:
+        return 3600  # Default to 1 hour if no next sync time is set
+    
+    now = datetime.datetime.now(datetime.UTC)
+    next_sync = st.session_state.next_sync
+    seconds = (next_sync - now).total_seconds()
+    return max(0, seconds)
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
 def execute_query_with_retry(session, query):

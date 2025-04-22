@@ -321,40 +321,29 @@ def create_history_chart(type_id):
     return fig
 
 def main():
-
     logger.info("Starting main function")
 
-  
-    # Start database sync scheduler (only once)
-    if 'sync_scheduler_started' not in st.session_state:
-        try:
-            schedule_db_sync()
-            st.session_state.sync_scheduler_started = True
-            logger.info("Sync scheduler started from main function")
-        except Exception as e:
-            logger.error(f"Error starting sync scheduler: {e}")
-            st.error(f"Error starting sync scheduler: {e}")
+    # Initialize sync status if not present
+    if 'sync_status' not in st.session_state:
+        st.session_state.sync_status = "Not yet run"
 
-    # Initialize sync status in session state if not present
-    if 'last_sync' not in st.session_state:
-        try:
-            with open("last_sync_state.json", "r") as f:
-                last_sync_state = json.load(f)
-                if 'last_sync' in last_sync_state:
-                    updated_sync_state = datetime.datetime.strptime(last_sync_state['last_sync'], "%Y-%m-%d %H:%M UTC")
-                    st.session_state.last_sync = updated_sync_state
-                    st.session_state.sync_status = "Not yet run"
-                else:
-                    st.session_state.last_sync = None
-                    st.session_state.sync_status = "Not yet run"
+    # Check for sync needs every time the page loads
+    logger.info("Checking for sync needs")
 
-        except Exception as e:
-            logger.error(f"Error loading last sync state: {e}")
-    else:
-        logger.info("Last sync state already initialized")
+    try:
+        if schedule_db_sync():
+            logger.info("Sync occurred, rerunning page.")
+            st.rerun()  # Rerun the page if sync occurred
+        else:
+            logger.info("No sync needed")
     
-    logger.info("Sync status initialized")
+    except Exception as e:
+        logger.error(f"Error in sync scheduling: {e}")
+        st.error(f"Error in sync scheduling: {e}")
 
+    # Get time until next sync
+    seconds_until_next = get_seconds_until_next_sync()
+    
     wclogo = "images/wclogo.png"
     st.image(wclogo, width=150)
 
@@ -555,6 +544,9 @@ def main():
         if st.session_state.last_sync:
             last_sync_time = st.session_state.last_sync.strftime("%Y-%m-%d %H:%M UTC")
             st.sidebar.markdown(f"**Last sync:** {last_sync_time}")
+            if st.session_state.next_sync:
+                next_sync_time = st.session_state.next_sync.strftime("%Y-%m-%d %H:%M UTC")
+                st.sidebar.markdown(f"**Next scheduled sync:** {next_sync_time}")
         else:
             st.sidebar.markdown("**Last sync:** Not yet run")
             
@@ -563,26 +555,24 @@ def main():
         # Manual sync button
         if st.sidebar.button("Sync Now"):
             try:
-                sync_db()
-                st.session_state.last_sync = datetime.datetime.now(datetime.UTC)
+                last_sync, next_sync = sync_db()
+                st.session_state.last_sync = last_sync
+                st.session_state.next_sync = next_sync
                 st.session_state.sync_status = "Success"
                 last_sync_time = st.session_state.last_sync.strftime("%Y-%m-%d %H:%M UTC")
-                ls = st.sidebar.markdown(f"**Last sync:** {last_sync_time}")
+                next_sync_time = st.session_state.next_sync.strftime("%Y-%m-%d %H:%M UTC")
+                st.sidebar.markdown(f"**Last sync:** {last_sync_time}")
+                st.sidebar.markdown(f"**Next scheduled sync:** {next_sync_time}")
+                st.sidebar.markdown(f"**Status:** <span style='color:{status_color}'>{st.session_state.sync_status}</span>", unsafe_allow_html=True)
+                with open("last_sync_state.json", "w") as f:
+                    json.dump({"last_sync": last_sync_time, "next_sync": next_sync_time}, f)
                 st.rerun()
+
             except Exception as e:
                 st.session_state.sync_status = f"Failed: {str(e)}"
                 st.sidebar.error(f"Sync failed: {str(e)}")
         if st.session_state.sync_status == "Success":
             st.sidebar.success("Database sync completed successfully!")
-
-    if st.session_state.last_sync:
-        last_sync_state = {}
-        last_sync_state['last_sync'] = st.session_state.last_sync.strftime("%Y-%m-%d %H:%M UTC")
-
-        with open("last_sync_state.json", "w") as f:
-            json.dump(last_sync_state, f)
-        
-        st.sidebar.markdown("---")
 
 
 if __name__ == "__main__":

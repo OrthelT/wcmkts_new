@@ -60,4 +60,4 @@ logs/
 .env2
 *.db-shm
 *.db-wal
-test.py
+test*
