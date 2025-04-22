@@ -170,11 +170,6 @@ def update_target(fit_id: int, new_target: int) -> bool:
         return False
 
 if __name__ == "__main__":
-    list_targets()
-    success = update_target(475, 15)
-    if success:
-        print("Target updated successfully")
-    else:
-        print("Failed to update target")
-    list_targets()
- 
+    pass
+
+
