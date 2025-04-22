@@ -340,10 +340,7 @@ def main():
     except Exception as e:
         logger.error(f"Error in sync scheduling: {e}")
         st.error(f"Error in sync scheduling: {e}")
-
-    # Get time until next sync
-    seconds_until_next = get_seconds_until_next_sync()
-    
+   
     wclogo = "images/wclogo.png"
     st.image(wclogo, width=150)
 
