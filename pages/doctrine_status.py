@@ -312,7 +312,7 @@ def main():
                     module_name = module.split(" (")[0]
                     # Make each key unique by adding fit_id and index to avoid duplicates
                     module_key = f"{row['fit_id']}_{i}_{module_name}_{module_qty}"
-                    display_key = f"{module_name}_{module_qty}"
+                    display_key = f"{module_name}"
                     
                     # Determine module status
                     if int(module_qty) <= row['target'] * 0.2:
@@ -416,13 +416,29 @@ def main():
         
         # Create a scrollable container for selected ships
         with st.sidebar.container(height=100):
+        
             for ship in st.session_state.selected_ships:
-                st.text(ship)
+                with Session(get_local_mkt_engine()) as session:
+                    query = f"""
+                        SELECT type_name, total_stock 
+                        FROM doctrines 
+                        WHERE type_name = '{ship}'
+                        LIMIT 1
+                    """
+                    result = session.execute(text(query))
+                    row = result.fetchone()
+                    if row and row[1] is not None:
+                        st.text(f"{ship} ({int(row[1])})")
+                    else:
+                        st.text(ship)
     
     # Display selected modules if any
     if st.session_state.selected_modules:
         # Get module names
         module_names = [display_key.rsplit("_", 1)[0] for display_key in st.session_state.selected_modules]
+        module_names = list(set(module_names))
+
+        logger.info(f"Module names: {module_names}")
         
         # Query market stock (total_stock) for these modules
         module_list = []
