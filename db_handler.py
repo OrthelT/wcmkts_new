@@ -89,17 +89,6 @@ def schedule_db_sync():
     
     return False
 
-@st.cache_data(ttl=60)  # Cache for 60 seconds
-def get_seconds_until_next_sync():
-    """Get seconds until next sync, cached to avoid too frequent recalculations."""
-    if "next_sync" not in st.session_state:
-        return 3600  # Default to 1 hour if no next sync time is set
-    
-    now = datetime.datetime.now(datetime.UTC)
-    next_sync = st.session_state.next_sync
-    seconds = (next_sync - now).total_seconds()
-    return max(0, seconds)
-
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
 def execute_query_with_retry(session, query):
     try:

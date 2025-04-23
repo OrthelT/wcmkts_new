@@ -93,7 +93,7 @@ def get_market_data(show_all, selected_categories, selected_items):
             sde_conditions.append(f"ic.categoryName IN ({categories_str})")
         
         if selected_items:
-            items_str = ', '.join(f"'{item}'" for item in selected_items)
+            items_str = ', '.join(f'"{item}"' for item in selected_items)
             sde_conditions.append(f"it.typeName IN ({items_str})")
             
         if sde_conditions:
