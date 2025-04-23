@@ -128,7 +128,7 @@ def get_targets()->pd.DataFrame:
     return targets_df
 
 def get_module_stock_list(module_names: list) -> tuple[list, list]:
-    logger.info(f"Getting module stock list for {module_names}")    
+
     """Get lists of modules with their stock quantities for display and CSV export."""
     module_list = []
     csv_module_list = []
@@ -153,7 +153,7 @@ def get_module_stock_list(module_names: list) -> tuple[list, list]:
     return module_list, csv_module_list
 
 def get_ship_stock_list(ship_names: list) -> tuple[list, list]:
-    logger.info(f"Getting ship stock list for {ship_names}")    
+
     """Get lists of ships with their stock quantities for display and CSV export."""
     ship_list = []
     csv_ship_list = []
