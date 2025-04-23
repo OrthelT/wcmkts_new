@@ -371,9 +371,13 @@ def display_sync_status():
 def main():
     logger.info("Starting main function")
 
-    # Initialize sync status if not present
+    # Initialize all session state variables
     if 'sync_status' not in st.session_state:
         st.session_state.sync_status = "Not yet run"
+    if 'last_sync' not in st.session_state:
+        st.session_state.last_sync = None
+    if 'next_sync' not in st.session_state:
+        st.session_state.next_sync = None
 
     # Check for sync needs using cached function
     if check_sync_status():
