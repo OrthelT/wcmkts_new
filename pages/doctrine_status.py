@@ -127,6 +127,54 @@ def get_targets()->pd.DataFrame:
         targets_df = df if not df.empty else None
     return targets_df
 
+def get_module_stock_list(module_names: list) -> tuple[list, list]:
+    logger.info(f"Getting module stock list for {module_names}")    
+    """Get lists of modules with their stock quantities for display and CSV export."""
+    module_list = []
+    csv_module_list = []
+    with Session(get_local_mkt_engine()) as session:
+        for module_name in module_names:
+            query = f"""
+                SELECT type_name, type_id, total_stock 
+                FROM doctrines 
+                WHERE type_name = '{module_name}'
+                LIMIT 1
+            """
+            result = session.execute(text(query))
+            row = result.fetchone()
+            if row and row[2] is not None:  # total_stock is now at index 2
+                # Use market stock (total_stock)
+                module_list.append(f"{module_name} ({int(row[2])})")
+                csv_module_list.append(f"{module_name},{row[1]},{int(row[2])}\n")
+            else:
+                # No quantity if market stock not available
+                module_list.append(module_name)
+                csv_module_list.append(f"{module_name},0,0\n")
+    return module_list, csv_module_list
+
+def get_ship_stock_list(ship_names: list) -> tuple[list, list]:
+    logger.info(f"Getting ship stock list for {ship_names}")    
+    """Get lists of ships with their stock quantities for display and CSV export."""
+    ship_list = []
+    csv_ship_list = []
+    with Session(get_local_mkt_engine()) as session:
+        for ship in ship_names:
+            query = f"""
+                SELECT type_name, type_id, total_stock 
+                FROM doctrines 
+                WHERE type_name = '{ship}'
+                LIMIT 1
+            """
+            result = session.execute(text(query))
+            row = result.fetchone()
+            if row and row[2] is not None:  # total_stock is now at index 2
+                ship_list.append(f"{ship} ({int(row[2])})")
+                csv_ship_list.append(f"{ship},{row[1]},{int(row[2])}\n")
+            else:
+                ship_list.append(ship)
+                csv_ship_list.append(f"{ship},0,0\n")
+    return ship_list, csv_ship_list
+
 def main():
     # App title and logo
     # Handle path properly for WSL environment
@@ -413,49 +461,18 @@ def main():
         
         # Create a scrollable container for selected ships
         with st.sidebar.container(height=100):
-        
-            for ship in st.session_state.selected_ships:
-                with Session(get_local_mkt_engine()) as session:
-                    query = f"""
-                        SELECT type_name, total_stock 
-                        FROM doctrines 
-                        WHERE type_name = '{ship}'
-                        LIMIT 1
-                    """
-                    result = session.execute(text(query))
-                    row = result.fetchone()
-                    if row and row[1] is not None:
-                        st.text(f"{ship} ({int(row[1])})")
-                    else:
-                        st.text(ship)
-    
+            ship_list, csv_ship_list = get_ship_stock_list(st.session_state.selected_ships)
+            for ship in ship_list:
+                st.text(ship)
     # Display selected modules if any
     if st.session_state.selected_modules:
         # Get module names
         module_names = [display_key.rsplit("_", 1)[0] for display_key in st.session_state.selected_modules]
         module_names = list(set(module_names))
 
-        logger.info(f"Module names: {module_names}")
-        
         # Query market stock (total_stock) for these modules
-        module_list = []
-        with Session(get_local_mkt_engine()) as session:
-            for module_name in module_names:
-                query = f"""
-                    SELECT type_name, total_stock 
-                    FROM doctrines 
-                    WHERE type_name = '{module_name}'
-                    LIMIT 1
-                """
-                result = session.execute(text(query))
-                row = result.fetchone()
-                if row and row[1] is not None:
-                    # Use market stock (total_stock)
-                    module_list.append(f"{module_name} ({int(row[1])})")
-                else:
-                    # No quantity if market stock not available
-                    module_list.append(module_name)
-        
+        module_list, csv_module_list = get_module_stock_list(module_names)
+
         st.sidebar.markdown("---")
         st.sidebar.markdown("### Selected Modules:")
         
@@ -473,45 +490,38 @@ def main():
         
         # Prepare export text
         export_text = ""
+        csv_export = ""
+        
         if st.session_state.selected_ships:
-            export_text += "SHIPS:\n" + "\n".join(st.session_state.selected_ships)
+            export_text += "SHIPS:\n" + "\n".join(ship_list)
+            csv_export += "Type,TypeID,Quantity\n"  # Updated CSV header
+            csv_export += "".join(csv_ship_list)
+            
             if st.session_state.selected_modules:
                 export_text += "\n\n"
+                csv_export += "\n"  # Add separator between ships and modules
                 
         if st.session_state.selected_modules:
             # Get module names
             module_names = [display_key.rsplit("_", 1)[0] for display_key in st.session_state.selected_modules]
+            module_names = list(set(module_names))
             
             # Query market stock (total_stock) for these modules
-            module_list = []
-            with Session(get_local_mkt_engine()) as session:
-                for module_name in module_names:
-                    query = f"""
-                        SELECT type_name, total_stock 
-                        FROM doctrines 
-                        WHERE type_name = '{module_name}'
-                        LIMIT 1
-                    """
-                    result = session.execute(text(query))
-                    row = result.fetchone()
-                    if row and row[1] is not None:
-                        # Use market stock (total_stock)
-                        module_list.append(f"{module_name} ({int(row[1])})")
-                    else:
-                        # No quantity if market stock not available
-                        module_list.append(module_name)
+            module_list, csv_module_list = get_module_stock_list(module_names)
             
             export_text += "MODULES:\n" + "\n".join(module_list)
+            if not st.session_state.selected_ships:
+                csv_export += "Type,TypeID,Quantity\n"  # Updated CSV header
+            csv_export += "".join(csv_module_list)
         
         # Download button
         col1.download_button(
-            label="📥 Download List",
-            data=export_text,
-            file_name="doctrine_export.txt",
-            mime="text/plain",
+            label="📥 Download CSV",
+            data=csv_export,
+            file_name="doctrine_export.csv",
+            mime="text/csv",
             use_container_width=True
         )
-        
         # Copy to clipboard button
         if col2.button("📋 Copy to Clipboard", use_container_width=True):
             st.sidebar.code(export_text, language="")
@@ -522,7 +532,6 @@ def main():
     # Display last update timestamp
     st.sidebar.markdown("---")
     st.sidebar.write(f"Last ESI update: {get_update_time()}")
-    st.sidebar.write(f"Page updated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}")
 
 if __name__ == "__main__":
     main()
