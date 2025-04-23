@@ -39,8 +39,8 @@ def schedule_db_sync():
     target_time = now.replace(hour=13, minute=0, second=0, microsecond=0)
     logger.info(f"Target time: {target_time}, time zone: {target_time.tzname()}")
     logger.info(f"Now: {now}, time zone: {now.tzname()}")
-
-    if "last_sync" not in st.session_state:
+    
+    if "last_sync" not in st.session_state or st.session_state.last_sync is None:
         logger.info("No last sync state found, loading from file")
         try:
             with open("last_sync_state.json", "r") as f:
