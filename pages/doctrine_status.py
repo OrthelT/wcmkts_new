@@ -499,7 +499,6 @@ def main():
             
             if st.session_state.selected_modules:
                 export_text += "\n\n"
-                csv_export += "\n"  # Add separator between ships and modules
                 
         if st.session_state.selected_modules:
             # Get module names
