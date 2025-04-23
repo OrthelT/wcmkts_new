@@ -2,20 +2,16 @@ import pandas as pd
 import datetime
 from sqlalchemy import create_engine
 import streamlit as st
-import os
-from dotenv import load_dotenv
 import libsql_experimental as libsql
 from logging_config import setup_logging
 import json
+import time
 
 logger = setup_logging()
 
 # Database URLs
 local_mkt_url = "sqlite:///wcmkt.db"  # Changed to standard SQLite format for local dev
 local_sde_url = "sqlite:///sde.db"    # Changed to standard SQLite format for local dev
-
-# Load environment variables
-
 
 # Use environment variables for production
 mkt_url = st.secrets["TURSO_DATABASE_URL"]
@@ -26,6 +22,10 @@ sde_auth_token = st.secrets["SDE_AUTH_TOKEN"]
 
 def sync_db(db_url="wcmkt.db", sync_url=mkt_url, auth_token=mkt_auth_token)->tuple[datetime.datetime, datetime.datetime]:
     logger.info("database sync started")
+
+    # Clear cache of all data before syncing
+    st.cache_data.clear()
+    time.sleep(0.5)  # Give connections time to fully close
     # Skip sync in development mode or when sync_url/auth_token are not provided
     if not sync_url or not auth_token:
         logger.info("Skipping database sync in development mode or missing sync credentials")
