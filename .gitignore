@@ -62,3 +62,5 @@ wcmkt.db-shm
 wcmkt.db-wal
 test*
 market.db
+sde.db-shm
+sde.db-wal

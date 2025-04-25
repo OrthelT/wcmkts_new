@@ -146,7 +146,7 @@ def get_market_data(show_all, selected_categories, selected_items):
     # Get SDE data for all type_ids in the result
     type_ids_str = ','.join(map(str, df['type_id'].unique()))
     sde_query = f"""
-        SELECT it.typeID as type_id, it.typeName, ig.groupName, ic.categoryName
+        SELECT it.typeID as type_id, ig.groupName as group_name, ic.categoryName as category_name
         FROM invTypes it 
         JOIN invGroups ig ON it.groupID = ig.groupID
         JOIN invCategories ic ON ig.categoryID = ic.categoryID
@@ -155,13 +155,15 @@ def get_market_data(show_all, selected_categories, selected_items):
     
     with Session(get_local_sde_engine()) as session:
         result = session.execute(text(sde_query))
-        sde_df = pd.DataFrame(result.fetchall(), 
-                            columns=['type_id', 'type_name', 'group_name', 'category_name'])
-        session.commit()
+        sde_df = pd.DataFrame(result.fetchall(), columns=['type_id', 'group_name', 'category_name'])
         session.close()
 
     # Merge market data with SDE data
     df = df.merge(sde_df, on='type_id', how='left')
+    df = df.reset_index(drop=True)
+
+
+    # Clean up the DataFrame
     df = clean_mkt_data(df)
     logger.info(f"returning market data")
 
@@ -579,8 +581,4 @@ def main():
 
 if __name__ == "__main__":
     
-    try:
-        main()
-    except Exception as e:
-        logger.error(f"Error in main function: {e}")
-        st.error(f"Error in main function: {e}")
+    main()

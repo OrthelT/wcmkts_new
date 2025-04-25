@@ -154,6 +154,9 @@ def insert_type_names(df):
 def clean_mkt_data(df):
     # Create a copy first
     df = df.copy()
+    df = df.reset_index(drop=True)
+
+    df.rename(columns={'typeID': 'type_id', 'typeName': 'type_name'}, inplace=True)
     
     new_cols = ['order_id', 'is_buy_order', 'type_id', 'type_name', 'price',
         'volume_remain', 'duration', 'issued']
