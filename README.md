@@ -1,12 +1,21 @@
-# Winter Coalition Market Stats Viewer (v.02)
+# Winter Coalition Market Stats Viewer (v.0.4)
 
 A Streamlit application for viewing EVE Online market statistics for Winter Coalition. This tool provides real-time market data analysis, historical price tracking, and fitting information for various items in the EVE Online market.
 
-##UPDATES: 
+## UPDATES: 
+
+*version 0.4*
+- Enhanced doctrine status page with:
+  - Advanced filtering (ship status, ship group, module stock levels)
+  - Item selection via checkboxes
+  - Bulk selection/deselection options
+  - CSV export functionality for shopping lists
+  - Copy to clipboard feature
+- Caching and other performance improvements
 
 *version 0.3*
 - added low stock analysis
-- added additional filtering and export functionality to doctrine status tool. 
+- added additional filtering and export functionality to doctrine status tool
 
 *version 0.2*
 - added fitting information features
@@ -36,6 +45,8 @@ A Streamlit application for viewing EVE Online market statistics for Winter Coal
   - Doctrine fit details
   - Market availability of fit components
   - Last update timestamps
+  - Advanced filtering by status, group, and stock levels 
+  - Export functionality for modules and ships
 
 ## Data Updates
 
