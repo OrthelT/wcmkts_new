@@ -3,7 +3,7 @@
 ## Introduction
 The Winter Coalition Market Stats Viewer is a Streamlit application that provides near real-time market data analysis for EVE Online items, specifically for the Winter Coalition. This tool helps monitor market conditions, track prices, analyze inventory levels, and monitor markey availability of doctrine ship fittings. For Chrome users, you can run it on your local machine as a standalone app by clicking on the install stramlet icon. 
 
-**App## URL: https://wcmkts.streamlit.app/
+**App** URL: https://wcmkts.streamlit.app/
 
 **Support:** This app was developed by Orthel Toralen, who only vaguely knows what he's doing. For support, or to report bugs, please visit my development Discord, OrthelsLab: https://discord.gg/87Tb7YP5 
 
