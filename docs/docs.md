@@ -107,7 +107,7 @@ The application automatically syncs with the remote EVE Online market database d
 
 ## Troubleshooting
 
-- If it is not working properly, it's probably because your humble developer managed to breaj something. Please feel free to send me a DM on Discord and I will try to address the issue. Discord: orthel_toralen
+- If it is not working properly, it's probably because your humble developer managed to break something. Please feel free to send me a DM on Discord and I will try to address the issue. Discord: orthel_toralen
 
 ## Support and Feedback
 
