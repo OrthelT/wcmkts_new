@@ -1,54 +1,34 @@
 # Winter Coalition Market Stats Viewer - User Guide
 
 ## Introduction
-The Winter Coalition Market Stats Viewer is a Streamlit application that provides near real-time market data analysis for EVE Online items, specifically for the Winter Coalition. This tool helps monitor market conditions, track prices, analyze inventory levels, and manage doctrine ship fittings.
+The Winter Coalition Market Stats Viewer is a Streamlit application that provides near real-time market data analysis for EVE Online items, specifically for the Winter Coalition. This tool helps monitor market conditions, track prices, analyze inventory levels, and monitor markey availability of doctrine ship fittings. For Chrome users, you can run it on your local machine as a standalone app by clicking on the install stramlet icon. 
 
-## Installation and Setup
+**App## URL: https://wcmkts.streamlit.app/
 
-### System Requirements
-- Python 3.8 or higher
-- Internet connection for syncing with remote database
-- Turso database credentials (for production environments)
+**Support:** This app was developed by Orthel Toralen, who only vaguely knows what he's doing. For support, or to report bugs, please visit my development Discord, OrthelsLab: https://discord.gg/87Tb7YP5 
 
-### Installation Steps
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/wc_mkts_streamlit.git
-   cd wc_mkts_streamlit
-   ```
+**How to Contribute:** WCMkts is an open source project written in Python 3.12 and provided under the MIT License. The source code is available on GitHub at https://github.com/OrthelT/wcmkts_new Contributions to this project are very welcome. 
 
-2. Install required dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+**NOTE:** Note, this app was designed to be used in dark mode. Use the "hamburger" menu in the upper right-hand corner to select Settings -> "Choose app theme, colors and fonts" -> "dark."
 
-3. Set up environment variables:
-   Create a `.env` file with the following:
-   ```
-   TURSO_DATABASE_URL=your_turso_database_url
-   TURSO_AUTH_TOKEN=your_turso_auth_token
-   SDE_URL=your_sde_url
-   SDE_AUTH_TOKEN=your_sde_auth_token
-   ```
+**Update Frequency:** While not fully real time, data is refreshed every few hours, with full market history updated each day around 1300 Eve time. This allows for very fast performance, because we handle calls to the Eve ESI and data processing elsewhere. The app uses just a local sqlite database that syncs periodically with a remote master database to generate data displays. Hit the "Sync Now" button on the market stats page to update the app with the most recent data.  
 
-4. Run the application:
-   ```bash
-   streamlit run app.py
-   ```
-
-## Pages and Features
+# Pages and Features
 
 ### 1. Market Stats Page
 ![Market Stats](images/wclogo.png)
 
-**Purpose:** Provides detailed market information for EVE Online items.
+**Purpose:** Provides detailed market information for current sell orders on the 4-HWWF market. Includes history data for over 800 commonly used items and ships, with more detailed data available for Winter Co. doctrine items.
+
+The central dataframe displays all currently selected items. Currently, only sell orders are displayed however buy orders could be added later if there is interest.
 
 **Key Features:**
 - **Item Selection:** Filter by category and specific items using the sidebar filters
+- **Data Export:** All dataframes on the site can be downloaded as .csv files suitable for use in your own spreadsheets by clicking the download icon at the top of each table. By default it exports the current view. Select the Show All Data checkbox if you want to make sure you are getting everything in your download. 
 - **Market Metrics:** View minimum sell prices, current stock levels, and days of inventory
 - **Price Distribution Chart:** Visual representation of market orders by price
 - **Price History Chart:** Track price and volume trends over time
-- **Fitting Information:** For ship items, see compatible doctrine fits
+- **Fitting Information:** For ships used in Winter Co. doctrines, see market information for items used in that fit. 
 
 **How to Use:**
 1. Use the sidebar filters to select a category and/or specific item
@@ -57,7 +37,7 @@ The Winter Coalition Market Stats Viewer is a Streamlit application that provide
 4. Check the price history chart for trends over the past 30 days
 5. For ships, review doctrine fitting information
 
-### 2. Low Stock Alert Page
+### 2. Low Stock Page
 **Purpose:** Identifies items that are running low on the market, helping prioritize restocking.
 
 **Key Features:**
@@ -99,7 +79,7 @@ The Winter Coalition Market Stats Viewer is a Streamlit application that provide
 
 ## Database Synchronization
 
-The application automatically syncs with the remote EVE Online market database daily at 13:00 UTC. You can also trigger a manual sync using the "Sync Now" button in the sidebar.
+The application automatically syncs with the remote EVE Online market database daily at 13:00 UTC. You can also trigger a manual sync using the "Sync Now" button in the sidebar. If new data is available, it will update in the app. 
 
 **Sync Status Indicators:**
 - Last ESI Update: Shows when market data was last updated from ESI
@@ -120,26 +100,14 @@ The application automatically syncs with the remote EVE Online market database d
 - Use the export feature to create shopping lists for restocking
 
 ### Performance Tips
-- The application caches data for 60 seconds to improve performance
-- Database syncs are scheduled to minimize disruption
+- This app was built with performance in mind. It uses Turso Cloud's embedded replica functionality to allow the performance of a locally embedded SQLite database in a production environment, using libSQL, an extremely performant fork of SQLite written in Rust. 
+- The application caches data to improve performance
+- Database syncs are scheduled to minimize disruption and general take just a couple seconds to complete
 - Large data queries are processed in batches to prevent timeouts
 
 ## Troubleshooting
 
-**Sync Fails:**
-- Check your internet connection
-- Verify Turso credentials are correct in your environment variables
-- Check the logs directory for detailed error messages
-
-**No Data Appears:**
-- Confirm the database has been synced at least once
-- Check filters to ensure they're not too restrictive
-- Verify that the selected items exist in the market database
-
-**Slow Performance:**
-- Large datasets may take longer to process
-- Consider using more specific filters
-- Wait for the initial data load to complete before changing filters
+- If it is not working properly, it's probably because your humble developer managed to breaj something. Please feel free to send me a DM on Discord and I will try to address the issue. Discord: orthel_toralen
 
 ## Support and Feedback
 
