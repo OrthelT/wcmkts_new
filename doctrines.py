@@ -39,7 +39,7 @@ def get_target_value(ship_name):
         except Exception as e:
             logger.error(f"Error getting target from database: {e}")
             # Fall back to dictionary if database lookup fails
-    logger.info(f"Getting target value for {ship_name}")
+
     # Convert to title case for standardized lookup in dictionary
     ship_name = ship_name.title() if isinstance(ship_name, str) else ''
     

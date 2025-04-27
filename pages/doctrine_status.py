@@ -28,17 +28,25 @@ def get_fit_summary():
     
     # Create a summary dataframe
     fit_summary = []
+    errors = {}
     
     # Create a summary row for each fit_id
     targets_df = get_targets()
 
     for fit_id in fit_ids:
         # Filter data for this fit
-        fit_data = all_fits_data[all_fits_data['fit_id'] == fit_id]
-        
-        if fit_data.empty:
+        try:
+            fit_data = all_fits_data[all_fits_data['fit_id'] == fit_id]
+        except Exception as e:
+            errors[fit_id] = "Error getting fit data for fit_id: " + fit_id + " " + str(e)
+            logger.error(f"Error: {e}")
             continue
         
+        if fit_data.empty:
+            errors[fit_id] = "No data found for fit_id: " + fit_id
+            logger.error(f"Error: No data found for fit_id: {fit_id}")
+            continue
+
         # Get the first row for fit metadata
         first_row = fit_data.iloc[0]
         
@@ -49,20 +57,42 @@ def get_fit_summary():
         
         # Extract ship group from the data
         ship_group = "Ungrouped"  # Default
+        
         # Find the row that matches the ship_id
         ship_rows = fit_data[fit_data['type_id'] == ship_id]
+
+        # Check if ship_rows is not empty and has a 'group_name' column
         if not ship_rows.empty and 'group_name' in ship_rows.columns:
-            ship_group = ship_rows['group_name'].iloc[0]
+            try:
+                # Get the first row's group_name value
+                ship_group = ship_rows['group_name'].iloc[0]
+            except Exception as e:
+                logger.error(f"Error getting group_name for fit_id: {fit_id}")
+                logger.error(f"Error: {e}")
+                errors[fit_id] = "Error getting group_name for fit_id: " + fit_id + " " + str(e)
+                continue
         
         # Calculate minimum fits (how many complete fits can be made)
-        min_fits = fit_data['fits_on_mkt'].min()
+        try:
+            min_fits = fit_data['fits_on_mkt'].min()
+        except Exception as e:
+            logger.error(f"Error getting min_fits for fit_id: {fit_id}")
+            logger.error(f"Error: {e}")
+            errors[fit_id] = "Error getting min_fits for fit_id: " + fit_id + " " + str(e)
+            continue
         
         # Get target value from database if available, otherwise use default
         target = 20  # Default
         if targets_df is not None:
-            target_row = targets_df[targets_df['fit_id'] == fit_id]
-            if not target_row.empty:
-                target = target_row.iloc[0]['ship_target']
+            try:
+                target_row = targets_df[targets_df['fit_id'] == fit_id]
+                if not target_row.empty:
+                    target = target_row.iloc[0]['ship_target']
+            except Exception as e:
+                logger.error(f"Error getting target for fit_id: {fit_id}")
+                logger.error(f"Error: {e}")
+                errors[fit_id] = "Error getting target for fit_id: " + fit_id + " " + str(e)
+                continue
         
         # Calculate target percentage
         if target > 0:
@@ -108,6 +138,9 @@ def get_fit_summary():
             'daily_avg': daily_avg,
             'ship_group': ship_group
         })
+    
+    if errors:
+        logger.error(f"Errors: {errors}")
     
     return pd.DataFrame(fit_summary)
 
