@@ -174,7 +174,6 @@ def get_fitting_data(type_id):
         df3.reset_index(drop=True, inplace=True)
     return df3, timestamp
 
-
 def fetch_mkt_orders():
     df = get_mkt_data(mkt_query)
     df = insert_type_names(df)

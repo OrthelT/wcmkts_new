@@ -425,6 +425,11 @@ def main():
     logger.info(f"Selected item: {selected_item}")
     # Main content
     data, stats = get_market_data(show_all, selected_categories, selected_items)
+    order_count = data['order_id'].nunique()
+    total_value = (data['price'] * data['volume_remain']).sum()
+
+    logger.info(f"order_count: {order_count}")
+    logger.info(f"total_value: {total_value}")
 
     if not data.empty:
         if len(selected_items) == 1:
@@ -438,20 +443,33 @@ def main():
                 timestamp = None
         elif len(selected_categories) == 1:
             stats = stats[stats['category_name'] == selected_categories[0]]
+        
         # Display metrics
         col1, col2, col3, col4 = st.columns(4)
+        
         with col1:
             min_price = stats['min_price'].min()
-            if pd.notna(min_price):
+            if pd.notna(min_price) and selected_items:
                 st.metric("Sell Price (min)", f"{millify.millify(min_price, precision=2)} ISK")
+            elif total_value > 0:
+                st.metric("Market Value (sell orders)", f"{millify.millify(total_value, precision=2)} ISK")
+            else:
+                st.metric("Market Value (sell orders)", "0 ISK")
+
         with col2:
             volume = data['volume_remain'].sum()
-            if pd.notna('volume_remain'):
-                st.metric("Market Stock", f"{millify.millify(volume, precision=2)}")
+            if pd.notna(volume):
+                st.metric("Market Stock (sell orders)", f"{millify.millify(volume, precision=2)}")
+        
         with col3:
             days_remaining = stats['days_remaining'].min()
-            if pd.notna(days_remaining):
+            if pd.notna(days_remaining) and selected_items:
                 st.metric("Days Remaining", f"{days_remaining:.1f}")
+            elif order_count > 0:
+                st.metric("Total Sell Orders", f"{order_count:,.0f}")
+            else:
+                st.metric("Total Sell Orders", "0")
+
         with col4:
             isship = False
             try:
@@ -472,10 +490,11 @@ def main():
         display_df = data.copy()
         # Display detailed data
 
+        #create a header for the item
         if len(selected_items) == 1:
             image_id = display_df.iloc[0]['type_id']
             type_name = display_df.iloc[0]['type_name']
-            st.subheader(f"{type_name}")
+            st.subheader(f"{type_name}", divider="blue")
             col1, col2 = st.columns(2)
             with col1:
                 if isship:
@@ -492,8 +511,15 @@ def main():
                             st.write(fit_df[fit_df['type_id'] == type_id]['group_name'].iloc[0])
                 except:
                     pass
+        elif selected_categories:
+            cat_label = selected_categories[0]
+            if cat_label.endswith("s"):
+                cat_label = cat_label
+            else:
+                cat_label = cat_label + "s"
+            st.subheader(f"Sell Orders for {cat_label}", divider="blue")
         else:
-            st.subheader("Detailed Market Data")
+            st.subheader("All Sell Orders", divider="green")
 
         display_df.type_id = display_df.type_id.astype(str)
         display_df.order_id = display_df.order_id.astype(str)
