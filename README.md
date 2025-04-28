@@ -6,6 +6,8 @@ SUPPORT: Join my Discord for support https://discord.gg/87Tb7YP5
 CONTRIBUTING: Contributors welcome. This project is fully open source under MIT License. Source code and full documentation available on GitHub: https://github.com/OrthelT/wcmkts_new
 
 ## UPDATES: 
+*version 0.41*
+- simplified sync scheduling with periodic syncs every three hours. 
 
 *version 0.4*
 - Enhanced doctrine status page with:

@@ -11,7 +11,7 @@ from logging_config import setup_logging
 logger = setup_logging()
 
 # Import from the root directory
-from db_handler import get_local_mkt_engine, safe_format
+from db_handler import get_local_mkt_engine, get_update_time, safe_format
 
 def get_filter_options(selected_categories=None):
     try:
@@ -21,7 +21,6 @@ def get_filter_options(selected_categories=None):
         FROM marketstats
         """
         
-        logger.info(f"Query: {query}, get_local_mkt_engine()")
         with Session(get_local_mkt_engine()) as session:
             result = session.execute(text(query))
             df = pd.DataFrame(result.fetchall(), 
@@ -269,3 +268,7 @@ if __name__ == "__main__":
         
     else:
         st.warning("No items found with the selected filters.") 
+
+    # Display last update timestamp
+    st.sidebar.markdown("---")
+    st.sidebar.write(f"Last ESI update: {get_update_time()}")

@@ -11,7 +11,7 @@ The Winter Coalition Market Stats Viewer is a Streamlit application that provide
 
 **NOTE:** Note, this app was designed to be used in dark mode. Use the "hamburger" menu in the upper right-hand corner to select Settings -> "Choose app theme, colors and fonts" -> "dark."
 
-**Update Frequency:** While not fully real time, data is refreshed every few hours, with full market history updated each day around 1300 Eve time. This allows for very fast performance, because we handle calls to the Eve ESI and data processing elsewhere. The app uses just a local sqlite database that syncs periodically with a remote master database to generate data displays. Hit the "Sync Now" button on the market stats page to update the app with the most recent data.  
+**Update Frequency:** While not fully real time, data is refreshed every three hours, with full market history updated each day around 1300 Eve time. This allows for very fast performance, because we handle calls to the Eve ESI and data processing elsewhere. The app uses just a local sqlite database that syncs periodically with a remote master database to generate data displays. Hit the "Sync Now" button on the market stats page to update the app with the most recent data.  
 
 # Pages and Features
 
@@ -79,7 +79,7 @@ The central dataframe displays all currently selected items. Currently, only sel
 
 ## Database Synchronization
 
-The application automatically syncs with the remote EVE Online market database daily at 13:00 UTC. You can also trigger a manual sync using the "Sync Now" button in the sidebar. If new data is available, it will update in the app. 
+The application automatically syncs with the remote EVE Online market database beginning with a full refresh of market orders and history daily at 13:00 UTC and updates market orders every three hours throughout the day. You can also trigger a manual sync using the "Sync Now" button in the sidebar. If new data is available, it will update in the app. 
 
 **Sync Status Indicators:**
 - Last ESI Update: Shows when market data was last updated from ESI

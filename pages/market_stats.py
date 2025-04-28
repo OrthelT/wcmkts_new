@@ -7,14 +7,13 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 from db_handler import  *
-
+from sync_scheduler import initialize_sync_state, check_sync_status
 import datetime
-from db_utils import sync_db
 import json
 import datetime
 import millify
 from logging_config import setup_logging
-
+from db_utils import sync_db
 
 
 # Insert centralized logging configuration
@@ -322,20 +321,6 @@ def create_history_chart(type_id):
     
     return fig
 
-@st.cache_data(ttl=60)  # Cache for 60 seconds
-def check_sync_status():
-    """Check if sync is needed and perform sync if necessary."""
-    logger.info("Checking sync status")
-    try:
-        if schedule_db_sync():
-            logger.info("Sync occurred")
-            return True
-        logger.info("No sync needed")
-        return False
-    except Exception as e:
-        logger.error(f"Error in sync scheduling: {e}")
-        return False
-
 def display_sync_status():
     """Display sync status in the sidebar."""
     st.sidebar.write(f"Last ESI update: {get_update_time()}")
@@ -357,14 +342,10 @@ def display_sync_status():
     # Manual sync button
     if st.sidebar.button("Sync Now"):
         try:
-            last_sync, next_sync = sync_db()
-            if last_sync and next_sync:
-                st.session_state.last_sync = last_sync
-                st.session_state.next_sync = next_sync
-                st.session_state.sync_status = "Success"
-                st.rerun()
+            sync_db()
+            st.rerun()
         except Exception as e:
-            st.session_state.sync_status = f"Failed: {str(e)}"
+            logger.error(f"st.session_state.sync_status: {st.session_state.sync_status}")
             st.sidebar.error(f"Sync failed: {str(e)}")
     
     if st.session_state.sync_status == "Success":
@@ -374,16 +355,18 @@ def main():
     logger.info("Starting main function")
 
     # Initialize all session state variables
-    if 'sync_status' not in st.session_state:
-        st.session_state.sync_status = "Not yet run"
-    if 'last_sync' not in st.session_state:
-        st.session_state.last_sync = None
-    if 'next_sync' not in st.session_state:
-        st.session_state.next_sync = None
+    initialize_sync_state()
 
     # Check for sync needs using cached function
+    logger.info("Checking sync status")
+
     if check_sync_status():
+        logger.info("Sync needed, syncing now")
+        sync_db()
+        logger.info(f"Sync status updated to: {st.session_state.sync_status}\n, last sync: {st.session_state.last_sync}\n, next sync: {st.session_state.next_sync}\n")
         st.rerun()
+    else:
+        logger.info(f"No sync needed: last sync: {st.session_state.last_sync}, next sync: {st.session_state.next_sync}\n")
 
     wclogo = "images/wclogo.png"
     st.image(wclogo, width=150)

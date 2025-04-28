@@ -33,61 +33,6 @@ mkt_query = """
     WHERE is_buy_order = 1 
     ORDER BY order_id
 """
-def schedule_db_sync():
-    """Check if sync is needed and return sync status without using threads."""
-    now = datetime.datetime.now(datetime.UTC)
-    target_time = now.replace(hour=13, minute=0, second=0, microsecond=0)
-    logger.info(f"Target time: {target_time}, time zone: {target_time.tzname()}")
-    logger.info(f"Now: {now}, time zone: {now.tzname()}")
-    
-    if "last_sync" not in st.session_state or st.session_state.last_sync is None:
-        logger.info("No last sync state found, loading from file")
-        try:
-            with open("last_sync_state.json", "r") as f:
-                saved_sync_state = json.load(f)
-                if 'last_sync' in saved_sync_state:
-                    st.session_state.last_sync = datetime.datetime.strptime(saved_sync_state['last_sync'], "%Y-%m-%d %H:%M %Z").astimezone(datetime.UTC)
-                    logger.info(f"saved Last sync: {st.session_state.last_sync}, timezone: {st.session_state.last_sync.tzname()}")
-
-                else:
-                    st.session_state.last_sync = target_time - datetime.timedelta(days=1)
-                    logger.info(f"else last sync: {st.session_state.last_sync}, timezone: {st.session_state.last_sync.tzname()}")
-
-                if 'next_sync' in saved_sync_state:
-                    st.session_state.next_sync = datetime.datetime.strptime(saved_sync_state['next_sync'], "%Y-%m-%d %H:%M %Z").astimezone(datetime.UTC)
-                    logger.info(f"saved next sync: {st.session_state.next_sync}, timezone: {st.session_state.next_sync.tzname()}")
-                else:
-                    st.session_state.next_sync = target_time
-                    logger.info(f"else next sync: {st.session_state.next_sync}, timezone: {st.session_state.next_sync.tzname()}")
-        
-        except Exception as e:
-            logger.error(f"Error loading sync state: {e}")
-            st.session_state.last_sync = target_time - datetime.timedelta(days=1)
-            logger.info(f"error last sync: {st.session_state.last_sync}, timezone: {st.session_state.last_sync.tzname()}")
-            st.session_state.next_sync = target_time
-            logger.info(f"error next sync: {st.session_state.next_sync}, timezone: {st.session_state.next_sync.tzname()}")
-
-
-    logger.info(f"Last sync: {st.session_state.last_sync}, timezone: {st.session_state.last_sync.tzname()}")
-    logger.info(f"Next sync: {st.session_state.next_sync}, timezone: {st.session_state.next_sync.tzname()}")
-
-    # Check if sync is needed
-    if now >= st.session_state.next_sync:
-        logger.info(f"Sync overdue by {now - st.session_state.next_sync}, next sync at {st.session_state.next_sync}")
-        try:
-            last_sync, next_sync = sync_db()
-            if last_sync and next_sync:
-                st.session_state.last_sync = last_sync
-                st.session_state.next_sync = next_sync
-                st.session_state.sync_status = "Success"
-                logger.info(f"Database sync completed successfully at {last_sync}")
-            return True
-        except Exception as e:
-            logger.error(f"Database sync failed: {str(e)}")
-            st.session_state.sync_status = f"Failed: {str(e)}"
-            return False
-    
-    return False
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
 def execute_query_with_retry(session, query):
@@ -236,7 +181,7 @@ def fetch_mkt_orders():
     df = clean_mkt_data(df)
     return df
 
-@st.cache_resource
+@st.cache_resource(ttl=600)
 def get_local_mkt_engine():
     return create_engine(local_mkt_url, echo=False)  # Set echo=False to reduce console output
 
@@ -305,7 +250,8 @@ def get_item_details(type_ids):
     """
     return pd.read_sql_query(query, (get_local_sde_engine()))
 
-def get_update_time():
+@st.cache_data(ttl=600)
+def get_update_time()->str:
     query = """
         SELECT last_update FROM marketstats LIMIT 1
     """

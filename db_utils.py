@@ -6,6 +6,7 @@ import libsql_experimental as libsql
 from logging_config import setup_logging
 import json
 import time
+from sync_scheduler import schedule_next_sync
 
 logger = setup_logging()
 
@@ -20,7 +21,7 @@ mkt_auth_token = st.secrets["TURSO_AUTH_TOKEN"]
 sde_url = st.secrets["SDE_URL"]
 sde_auth_token = st.secrets["SDE_AUTH_TOKEN"]
 
-def sync_db(db_url="wcmkt.db", sync_url=mkt_url, auth_token=mkt_auth_token)->tuple[datetime.datetime, datetime.datetime]:
+def sync_db(db_url="wcmkt.db", sync_url=mkt_url, auth_token=mkt_auth_token):
     logger.info("database sync started")
 
     # Clear cache of all data before syncing
@@ -29,7 +30,7 @@ def sync_db(db_url="wcmkt.db", sync_url=mkt_url, auth_token=mkt_auth_token)->tup
     # Skip sync in development mode or when sync_url/auth_token are not provided
     if not sync_url or not auth_token:
         logger.info("Skipping database sync in development mode or missing sync credentials")
-        return None, None
+        
         
     try:
         conn = libsql.connect(db_url, sync_url=sync_url, auth_token=auth_token)
@@ -38,23 +39,38 @@ def sync_db(db_url="wcmkt.db", sync_url=mkt_url, auth_token=mkt_auth_token)->tup
 
         last_sync = datetime.datetime.now().astimezone(datetime.UTC)
         logger.info(f"updated Last sync: {last_sync.strftime('%Y-%m-%d %H:%M %Z')}")
-        next_sync = last_sync.replace(hour=13, minute=0, second=0, microsecond=0) + datetime.timedelta(days=1)
+        
+        # Use schedule_next_sync to determine the next sync time
+        next_sync = schedule_next_sync(last_sync)
         logger.info(f"updated Next sync: {next_sync.strftime('%Y-%m-%d %H:%M %Z')}")
 
+        # Save sync state with sync_times preserved
+        with open("last_sync_state.json", "r") as f:
+            current_state = json.load(f)
+        
+        current_state.update({
+            "last_sync": last_sync.strftime("%Y-%m-%d %H:%M %Z"),
+            "next_sync": next_sync.strftime("%Y-%m-%d %H:%M %Z")
+        })
+        
         with open("last_sync_state.json", "w") as f:
-            json.dump({"last_sync": last_sync.strftime("%Y-%m-%d %H:%M %Z"), "next_sync": next_sync.strftime("%Y-%m-%d %H:%M %Z")}, f)
+            json.dump(current_state, f)
+            
         logger.info(f"Last sync state updated to: {last_sync.strftime('%Y-%m-%d %H:%M %Z')}")
         logger.info(f"Next sync state updated to: {next_sync.strftime('%Y-%m-%d %H:%M %Z')}")
         
-        return last_sync, next_sync
-
-    except ValueError as e:
+        #update session state
+        st.session_state.last_sync = last_sync
+        st.session_state.next_sync = next_sync
+        st.session_state.sync_status = "Success"
+        
+    except Exception as e:
         if "Sync is not supported" in str(e):
             logger.info("Skipping sync: This appears to be a local file database that doesn't support sync")
+            st.session_state.sync_status = "Skipping sync: This appears to be a local file database that doesn't support sync"
         else:
-            # Re-raise other ValueErrors
-            raise
-    return None, None
+            logger.error(f"Sync failed: {str(e)}")
+            st.session_state.sync_status = f"Failed: {str(e)}"
 
 def get_type_name(type_ids):
     engine = create_engine(local_sde_url)
