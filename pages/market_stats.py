@@ -343,6 +343,7 @@ def display_sync_status():
     if st.sidebar.button("Sync Now"):
         try:
             sync_db()
+            st.session_state.sync_status = "Success"
             st.rerun()
         except Exception as e:
             logger.error(f"st.session_state.sync_status: {st.session_state.sync_status}")
@@ -355,7 +356,8 @@ def main():
     logger.info("Starting main function")
 
     # Initialize all session state variables
-    initialize_sync_state()
+    if not st.session_state.get('sync_status'):
+        initialize_sync_state()
 
     # Check for sync needs using cached function
     logger.info("Checking sync status")
@@ -363,6 +365,7 @@ def main():
     if check_sync_status():
         logger.info("Sync needed, syncing now")
         sync_db()
+        st.session_state.sync_status = "Success"
         logger.info(f"Sync status updated to: {st.session_state.sync_status}\n, last sync: {st.session_state.last_sync}\n, next sync: {st.session_state.next_sync}\n")
         st.rerun()
     else:
