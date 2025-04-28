@@ -67,7 +67,6 @@ def create_fit_df()->pd.DataFrame:
         
         if df2.empty:
             continue
-        logger.info(f"Processing fit {fit_id}; {df2['ship_name'].iloc[0]}")
         # Create a dataframe for this fit
         fit_df = pd.DataFrame()
         fit_df["fit_id"] = [df2['fit_id'].iloc[0]]
