@@ -170,7 +170,7 @@ def get_module_stock_list(module_names: list) -> tuple[list, list]:
             query = f"""
                 SELECT type_name, type_id, total_stock 
                 FROM doctrines 
-                WHERE type_name = '{module_name}'
+                WHERE type_name = "{module_name}"
                 LIMIT 1
             """
             result = session.execute(text(query))
