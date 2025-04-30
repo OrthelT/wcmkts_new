@@ -120,7 +120,7 @@ def get_market_data(show_all, selected_categories, selected_items):
                     type_ids_str = ','.join(filtered_type_ids)
                     mkt_conditions.append(f"type_id IN ({type_ids_str})")
                 else:
-                    return pd.DataFrame()  # Return empty if no matching types
+                    return pd.DataFrame(), pd.DataFrame()  # Return empty DataFrames for both values
             except Exception as e:
                 logger.error(f"Error executing SDE query: {e}")
     
@@ -139,7 +139,7 @@ def get_market_data(show_all, selected_categories, selected_items):
     # Get market data
     df = get_mkt_data(mkt_query)
     if df.empty:
-        return df
+        return pd.DataFrame(), pd.DataFrame()  # Return empty DataFrames for both values
     stats = get_stats(stats_query)
 
     # Get SDE data for all type_ids in the result
