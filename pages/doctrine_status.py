@@ -196,7 +196,7 @@ def get_ship_stock_list(ship_names: list) -> tuple[list, list]:
     with Session(get_local_mkt_engine()) as session:
         for ship in ship_names:
             query = f"""
-                SELECT type_name, type_id, total_stock 
+                SELECT type_name, type_id, total_stock, fits_on_mkt
                 FROM doctrines 
                 WHERE type_name = '{ship}'
                 LIMIT 1
@@ -205,10 +205,10 @@ def get_ship_stock_list(ship_names: list) -> tuple[list, list]:
             row = result.fetchone()
             if row and row[2] is not None:  # total_stock is now at index 2
                 ship_list.append(f"{ship} ({int(row[2])})")
-                csv_ship_list.append(f"{ship},{row[1]},{int(row[2])}\n")
+                csv_ship_list.append(f"{ship},{row[1]},{int(row[2])},{int(row[3])}\n")
             else:
                 ship_list.append(ship)
-                csv_ship_list.append(f"{ship},0,0\n")
+                csv_ship_list.append(f"{ship},0,0,0\n")
     return ship_list, csv_ship_list
 
 def main():
@@ -530,7 +530,7 @@ def main():
         
         if st.session_state.selected_ships:
             export_text += "SHIPS:\n" + "\n".join(ship_list)
-            csv_export += "Type,TypeID,Quantity\n"  # Updated CSV header
+            csv_export += "Type,TypeID,Quantity,Fits\n"  # Updated CSV header
             csv_export += "".join(csv_ship_list)
             
             if st.session_state.selected_modules:
@@ -545,8 +545,9 @@ def main():
             module_list, csv_module_list = get_module_stock_list(module_names)
             
             export_text += "MODULES:\n" + "\n".join(module_list)
+            
             if not st.session_state.selected_ships:
-                csv_export += "Type,TypeID,Quantity,Fits\n"  # Updated CSV header
+                csv_export += "Type,TypeID,Quantity,Fits\n"
             csv_export += "".join(csv_module_list)
         
         # Download button
