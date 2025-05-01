@@ -176,9 +176,6 @@ def get_module_stock_list(module_names: list) -> tuple[list, list]:
             result = session.execute(text(query))
             row = result.fetchone()
             if row and row[2] is not None:  # total_stock is now at index 2
-                logger.info(f"row: {row}")
-                logger.info(f"row[2]: {row[2]}")
-                logger.info(f"row[3]: {row[3]}")
                 # Use market stock (total_stock)
                 module_list.append(f"{module_name} (Total: {int(row[2])} | Fits: {int(row[3])})")
                 csv_module_list.append(f"{module_name},{row[1]},{int(row[2])},{int(row[3])}\n")
@@ -195,21 +192,38 @@ def get_ship_stock_list(ship_names: list) -> tuple[list, list]:
     csv_ship_list = []
     with Session(get_local_mkt_engine()) as session:
         for ship in ship_names:
+            if ship == "Ferox Navy Issue":
+                where_clause = "type_name = 'Ferox Navy Issue' AND fit_id = 473"
+            else:
+                where_clause = f"type_name = '{ship}'"
             query = f"""
                 SELECT type_name, type_id, total_stock, fits_on_mkt
                 FROM doctrines 
-                WHERE type_name = '{ship}'
+                WHERE {where_clause}
                 LIMIT 1
             """
             result = session.execute(text(query))
             row = result.fetchone()
-            if row and row[2] is not None:  # total_stock is now at index 2
-                ship_list.append(f"{ship} ({int(row[2])})")
-                csv_ship_list.append(f"{ship},{row[1]},{int(row[2])},{int(row[3])}\n")
+            if row and row[2] is not None:
+                ship_name = row[0]
+                ship_id = row[1]
+                ship_stock = int(row[2])
+                ship_fits = int(row[3])
+                ship_target = find_shiptarget(ship_id)
+                ship_list.append(f"{ship} (Qty: {ship_stock} | Fits: {ship_fits} | Target: {ship_target})")
+                csv_ship_list.append(f"{ship},{ship_id},{ship_stock},{ship_fits},{ship_target}\n")
             else:
                 ship_list.append(ship)
-                csv_ship_list.append(f"{ship},0,0,0\n")
+                csv_ship_list.append(f"{ship},0,0,0,0\n")
     return ship_list, csv_ship_list
+
+def find_shiptarget(ship_id: int) -> int:
+    """Find the target for a given ship name""" 
+    targets_df = get_targets()
+    if targets_df is not None:
+        target_row = targets_df[targets_df['ship_id'] == ship_id]
+        return target_row.iloc[0]['ship_target']
+    return 0
 
 def main():
     # App title and logo
@@ -530,7 +544,7 @@ def main():
         
         if st.session_state.selected_ships:
             export_text += "SHIPS:\n" + "\n".join(ship_list)
-            csv_export += "Type,TypeID,Quantity,Fits\n"  # Updated CSV header
+            csv_export += "Type,TypeID,Quantity,Fits,Target\n"  # Updated CSV header
             csv_export += "".join(csv_ship_list)
             
             if st.session_state.selected_modules:
@@ -547,7 +561,7 @@ def main():
             export_text += "MODULES:\n" + "\n".join(module_list)
             
             if not st.session_state.selected_ships:
-                csv_export += "Type,TypeID,Quantity,Fits\n"
+                csv_export += "Type,TypeID,Quantity,Fits,Target\n"
             csv_export += "".join(csv_module_list)
         
         # Download button

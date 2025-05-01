@@ -156,6 +156,7 @@ def get_market_data(show_all, selected_categories, selected_items):
     """
     
     # Get market data
+
     sell_df = get_mkt_data(sell_query)
     buy_df = get_mkt_data(buy_query)
     

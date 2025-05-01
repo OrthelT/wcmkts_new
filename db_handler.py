@@ -43,7 +43,9 @@ def execute_query_with_retry(session, query):
         print(f"Query failed, retrying... Error: {str(e)}")
         raise
 
+@st.cache_data(ttl=600)
 def get_mkt_data(base_query, batch_size=5000):
+    logger.info(f"getting market data with cache")
     mkt_data = []
     offset = 0
     columns = None
@@ -70,7 +72,9 @@ def get_mkt_data(base_query, batch_size=5000):
 
     return pd.DataFrame(mkt_data, columns=columns)
 
+@st.cache_data(ttl=600)
 def request_type_names(type_ids):
+    logger.info(f"requesting type names with cache")
     # Process in chunks of 1000
     chunk_size = 1000
     all_results = []
@@ -122,8 +126,9 @@ def clean_mkt_data(df):
     
     return df
 
+@st.cache_data(ttl=600)
 def get_fitting_data(type_id):
-
+    logger.info(f"getting fitting data with cache")
     with Session(get_local_mkt_engine()) as session:
         query = f"""
             SELECT * FROM doctrines 
@@ -184,21 +189,25 @@ def fetch_mkt_orders():
 def get_local_mkt_engine():
     return create_engine(local_mkt_url, echo=False)  # Set echo=False to reduce console output
 
+@st.cache_resource(ttl=600)
 def get_local_mkt_db(query: str) -> pd.DataFrame:
     engine = create_engine(local_mkt_url, echo=False)
     with engine.connect() as conn:
         df = pd.read_sql_query(query, conn)
     return df
 
+@st.cache_resource(ttl=600)
 def get_local_sde_engine():
     return create_engine(local_sde_url, echo=False)
 
+@st.cache_resource(ttl=600)
 def get_local_sde_db(query: str) -> pd.DataFrame:
     engine = create_engine(local_sde_url, echo=False)
     with engine.connect() as conn:
         df = pd.read_sql_query(query, conn)
     return df
 
+@st.cache_resource(ttl=600)
 def get_stats(stats_query):
     engine = get_local_mkt_engine()
     with engine.connect() as conn:
@@ -215,6 +224,7 @@ def safe_format(value, format_string):
     except (ValueError, TypeError):
         return ''
 
+@st.cache_data(ttl=600)
 def get_market_orders(type_ids=None):
     query = """
         SELECT mo.*, ms.min_price, ms.days_remaining
@@ -228,6 +238,7 @@ def get_market_orders(type_ids=None):
     
     return pd.read_sql_query(query, (get_local_mkt_engine()))
 
+@st.cache_data(ttl=600)
 def get_market_history(type_id):
     query = f"""
         SELECT date, average, volume
@@ -249,7 +260,7 @@ def get_item_details(type_ids):
     """
     return pd.read_sql_query(query, (get_local_sde_engine()))
 
-@st.cache_data(ttl=600)
+
 def get_update_time()->str:
     query = """
         SELECT last_update FROM marketstats LIMIT 1
