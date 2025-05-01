@@ -81,9 +81,9 @@ def get_filter_options(selected_categories=None):
 
 # Query function
 def get_market_data(show_all, selected_categories, selected_items):
-    # Start with base condition for buy orders
-    mkt_conditions = ["is_buy_order = 0"]
-
+    # Get filtered_type_ids based on selected categories and items
+    filtered_type_ids = None
+    
     if not show_all:
         # Get type_ids for the selected categories from SDE first
         sde_conditions = []
@@ -116,34 +116,63 @@ def get_market_data(show_all, selected_categories, selected_items):
 
             try:
                 logger.info(f"filtered_type_ids: {len(filtered_type_ids)}")
-                if filtered_type_ids:
-                    type_ids_str = ','.join(filtered_type_ids)
-                    mkt_conditions.append(f"type_id IN ({type_ids_str})")
-                else:
-                    return pd.DataFrame(), pd.DataFrame()  # Return empty DataFrames for both values
+                if not filtered_type_ids:
+                    return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()  # Return empty DataFrames for both values
             except Exception as e:
                 logger.error(f"Error executing SDE query: {e}")
     
-    # Build final market query
-    where_clause = " AND ".join(mkt_conditions)
-    mkt_query = f"""
+    # Get sell orders
+    sell_conditions = ["is_buy_order = 0"]
+    if filtered_type_ids:
+        type_ids_str = ','.join(filtered_type_ids)
+        sell_conditions.append(f"type_id IN ({type_ids_str})")
+    
+    # Build market query for sell orders
+    sell_where_clause = " AND ".join(sell_conditions)
+    sell_query = f"""
         SELECT mo.* 
         FROM marketorders mo
-        WHERE {where_clause}
+        WHERE {sell_where_clause}
         ORDER BY type_id
     """
+    
+    # Get buy orders
+    buy_conditions = ["is_buy_order = 1"]
+    if filtered_type_ids:
+        type_ids_str = ','.join(filtered_type_ids)
+        buy_conditions.append(f"type_id IN ({type_ids_str})")
+    
+    # Build market query for buy orders
+    buy_where_clause = " AND ".join(buy_conditions)
+    buy_query = f"""
+        SELECT mo.* 
+        FROM marketorders mo
+        WHERE {buy_where_clause}
+        ORDER BY type_id
+    """
+    
     stats_query = f"""
         SELECT * FROM marketstats
-
     """
+    
     # Get market data
-    df = get_mkt_data(mkt_query)
-    if df.empty:
-        return pd.DataFrame(), pd.DataFrame()  # Return empty DataFrames for both values
+    sell_df = get_mkt_data(sell_query)
+    buy_df = get_mkt_data(buy_query)
+    
+    if sell_df.empty and buy_df.empty:
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()  # Return empty DataFrames
+    
     stats = get_stats(stats_query)
 
+    # Get all unique type_ids from both dataframes
+    all_type_ids = set()
+    if not sell_df.empty:
+        all_type_ids.update(sell_df['type_id'].unique())
+    if not buy_df.empty:
+        all_type_ids.update(buy_df['type_id'].unique())
+    
     # Get SDE data for all type_ids in the result
-    type_ids_str = ','.join(map(str, df['type_id'].unique()))
+    type_ids_str = ','.join(map(str, all_type_ids))
     sde_query = f"""
         SELECT it.typeID as type_id, ig.groupName as group_name, ic.categoryName as category_name
         FROM invTypes it 
@@ -157,16 +186,23 @@ def get_market_data(show_all, selected_categories, selected_items):
         sde_df = pd.DataFrame(result.fetchall(), columns=['type_id', 'group_name', 'category_name'])
         session.close()
 
-    # Merge market data with SDE data
-    df = df.merge(sde_df, on='type_id', how='left')
-    df = df.reset_index(drop=True)
-
-
-    # Clean up the DataFrame
-    df = clean_mkt_data(df)
+    # Merge market data with SDE data for sell orders
+    if not sell_df.empty:
+        sell_df = sell_df.merge(sde_df, on='type_id', how='left')
+        sell_df = sell_df.reset_index(drop=True)
+        # Clean up the DataFrame
+        sell_df = clean_mkt_data(sell_df)
+    
+    # Merge market data with SDE data for buy orders
+    if not buy_df.empty:
+        buy_df = buy_df.merge(sde_df, on='type_id', how='left')
+        buy_df = buy_df.reset_index(drop=True)
+        # Clean up the DataFrame
+        buy_df = clean_mkt_data(buy_df)
+    
     logger.info(f"returning market data")
 
-    return df, stats
+    return sell_df, buy_df, stats
 
 def load_data(selected_categories=None, selected_items=None):
     # Get all market orders
@@ -424,18 +460,37 @@ def main():
     
     logger.info(f"Selected item: {selected_item}")
     # Main content
-    data, stats = get_market_data(show_all, selected_categories, selected_items)
-    order_count = data['order_id'].nunique()
-    total_value = (data['price'] * data['volume_remain']).sum()
+    sell_data, buy_data, stats = get_market_data(show_all, selected_categories, selected_items)
+    
+    # Process sell orders
+    sell_order_count = 0
+    sell_total_value = 0
+    if not sell_data.empty:
+        sell_order_count = sell_data['order_id'].nunique()
+        sell_total_value = (sell_data['price'] * sell_data['volume_remain']).sum()
 
-    logger.info(f"order_count: {order_count}")
-    logger.info(f"total_value: {total_value}")
+    # Process buy orders
+    buy_order_count = 0
+    buy_total_value = 0
+    if not buy_data.empty:
+        buy_order_count = buy_data['order_id'].nunique()
+        buy_total_value = (buy_data['price'] * buy_data['volume_remain']).sum()
 
-    if not data.empty:
+    logger.info(f"sell_order_count: {sell_order_count}")
+    logger.info(f"sell_total_value: {sell_total_value}")
+    logger.info(f"buy_order_count: {buy_order_count}")
+    logger.info(f"buy_total_value: {buy_total_value}")
+
+    fit_df = pd.DataFrame()
+    timestamp = None
+    
+    if not sell_data.empty:
         if len(selected_items) == 1:
-            data = data[data['type_name'] == selected_items[0]]
+            sell_data = sell_data[sell_data['type_name'] == selected_items[0]]
+            if not buy_data.empty:
+                buy_data = buy_data[buy_data['type_name'] == selected_items[0]]
             stats = stats[stats['type_name'] == selected_items[0]]
-            type_id = data['type_id'].iloc[0]
+            type_id = sell_data['type_id'].iloc[0]
             if type_id: 
                 fit_df, timestamp = get_fitting_data(type_id)
             else:
@@ -451,29 +506,31 @@ def main():
             min_price = stats['min_price'].min()
             if pd.notna(min_price) and selected_items:
                 st.metric("Sell Price (min)", f"{millify.millify(min_price, precision=2)} ISK")
-            elif total_value > 0:
-                st.metric("Market Value (sell orders)", f"{millify.millify(total_value, precision=2)} ISK")
+            elif sell_total_value > 0:
+                st.metric("Market Value (sell orders)", f"{millify.millify(sell_total_value, precision=2)} ISK")
             else:
                 st.metric("Market Value (sell orders)", "0 ISK")
 
         with col2:
-            volume = data['volume_remain'].sum()
-            if pd.notna(volume):
-                st.metric("Market Stock (sell orders)", f"{millify.millify(volume, precision=2)}")
+            if not sell_data.empty:
+                volume = sell_data['volume_remain'].sum()
+                if pd.notna(volume):
+                    st.metric("Market Stock (sell orders)", f"{millify.millify(volume, precision=2)}")
+            else:
+                st.metric("Market Stock (sell orders)", "0")
         
         with col3:
             days_remaining = stats['days_remaining'].min()
             if pd.notna(days_remaining) and selected_items:
                 st.metric("Days Remaining", f"{days_remaining:.1f}")
-            elif order_count > 0:
-                st.metric("Total Sell Orders", f"{order_count:,.0f}")
+            elif sell_order_count > 0:
+                st.metric("Total Sell Orders", f"{sell_order_count:,.0f}")
             else:
                 st.metric("Total Sell Orders", "0")
 
         with col4:
             isship = False
             try:
-
                 cat_id = stats['category_id'].iloc[0]
                 fits_on_mkt = fit_df['Fits on Market'].min()
 
@@ -487,7 +544,7 @@ def main():
         
         st.divider()
         # Format the DataFrame for display with null handling
-        display_df = data.copy()
+        display_df = sell_data.copy()
         # Display detailed data
 
         #create a header for the item
@@ -526,7 +583,6 @@ def main():
         display_df.drop(columns='is_buy_order', inplace=True)
         # Format numeric columns safely
         numeric_formats = {
-
             'volume_remain': '{:,.0f}',
             'price': '{:,.2f}',
             'min_price': '{:,.2f}',
@@ -538,16 +594,58 @@ def main():
                 display_df[col] = display_df[col].apply(lambda x: safe_format(x, format_str))
 
         st.dataframe(display_df, hide_index=True)
+        
+        # Display buy orders if they exist
+        if not buy_data.empty:
+            # Display buy orders header
+            if len(selected_items) == 1:
+                st.subheader(f"Buy Orders for {type_name}", divider="orange")
+            elif selected_categories:
+                cat_label = selected_categories[0]
+                if cat_label.endswith("s"):
+                    cat_label = cat_label
+                else:
+                    cat_label = cat_label + "s"
+                st.subheader(f"Buy Orders for {cat_label}", divider="orange")
+            else:
+                st.subheader("All Buy Orders", divider="orange")
+            
+            # Display buy orders metrics
+            col1, col2 = st.columns(2)
+            with col1:
+                if buy_total_value > 0:
+                    st.metric("Market Value (buy orders)", f"{millify.millify(buy_total_value, precision=2)} ISK")
+                else:
+                    st.metric("Market Value (buy orders)", "0 ISK")
+            
+            with col2:
+                if buy_order_count > 0:
+                    st.metric("Total Buy Orders", f"{buy_order_count:,.0f}")
+                else:
+                    st.metric("Total Buy Orders", "0")
+            
+            # Format buy orders for display
+            buy_display_df = buy_data.copy()
+            buy_display_df.type_id = buy_display_df.type_id.astype(str)
+            buy_display_df.order_id = buy_display_df.order_id.astype(str)
+            buy_display_df.drop(columns='is_buy_order', inplace=True)
+            
+            # Format numeric columns safely
+            for col, format_str in numeric_formats.items():
+                if col in buy_display_df.columns:  # Only format if column exists
+                    buy_display_df[col] = buy_display_df[col].apply(lambda x: safe_format(x, format_str))
+            
+            st.dataframe(buy_display_df, hide_index=True)
 
         # Display charts
         st.subheader("Market Order Distribution")
-        price_vol_chart = create_price_volume_chart(data)
+        price_vol_chart = create_price_volume_chart(sell_data)
         st.plotly_chart(price_vol_chart, use_container_width=True)
         
         st.divider()
 
         st.subheader("Price History")
-        history_chart = create_history_chart(data['type_id'].iloc[0])
+        history_chart = create_history_chart(sell_data['type_id'].iloc[0])
         if history_chart:
             st.plotly_chart(history_chart, use_container_width=False)
         
@@ -555,7 +653,7 @@ def main():
             with colh1:
                 # Display history data
                 st.subheader("History Data")
-                history_df = get_market_history(data['type_id'].iloc[0])
+                history_df = get_market_history(sell_data['type_id'].iloc[0])
                 history_df.date = pd.to_datetime(history_df.date).dt.strftime("%Y-%m-%d")
                 history_df.average = round(history_df.average.astype(float), 2)
                 history_df = history_df.sort_values(by='date', ascending=False)
@@ -565,7 +663,7 @@ def main():
             with colh2:
                 avgpr30 = history_df[:30].average.mean()
                 avgvol30 = history_df[:30].volume.mean()
-                st.subheader(f"{data['type_name'].iloc[0]}",divider=True)
+                st.subheader(f"{sell_data['type_name'].iloc[0]}",divider=True)
                 st.metric("Average Price (30 days)", f"{avgpr30:,.2f} ISK")
                 st.metric("Average Volume (30 days)", f"{avgvol30:,.0f}")
         else:

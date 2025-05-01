@@ -1,4 +1,4 @@
-# Winter Coalition Market Stats Viewer (v.0.4)
+# Winter Coalition Market Stats Viewer (v.0.42)
 
 A Streamlit application for viewing EVE Online market statistics for Winter Coalition. This tool provides real-time market data analysis, historical price tracking, and fitting information for various items in the EVE Online market.
 
@@ -6,6 +6,8 @@ SUPPORT: Join my Discord for support https://discord.gg/87Tb7YP5
 CONTRIBUTING: Contributors welcome. This project is fully open source under MIT License. Source code and full documentation available on GitHub: https://github.com/OrthelT/wcmkts_new
 
 ## UPDATES: 
+*version 0.42*
+- added display of buy orders on market stats page. 
 *version 0.41*
 - simplified sync scheduling with periodic syncs every three hours. 
 
