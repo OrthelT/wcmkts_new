@@ -14,7 +14,7 @@ import datetime
 import millify
 from logging_config import setup_logging
 from db_utils import sync_db
-
+from doctrines import create_fit_df
 
 # Insert centralized logging configuration
 logger = setup_logging()
