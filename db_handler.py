@@ -40,45 +40,30 @@ def execute_query_with_retry(session, query):
         result = session.execute(text(query))
         return result.fetchall(), result.keys()
     except Exception as e:
-        print(f"Query failed, retrying... Error: {str(e)}")
+        logger.error(f"Query failed, retrying... Error: {str(e)}")
         raise
 
 @st.cache_data(ttl=600)
-def get_mkt_data(base_query, batch_size=5000):
+def get_mkt_data(base_query):
     mkt_start = time.time()
     logger.info("\n")
     logger.info(f"="*80)
     logger.info(f"getting market data with cache, start time: {mkt_start}")
-    mkt_data = []
-    offset = 0
-    columns = None
     
     with Session(get_local_mkt_engine()) as session:
-        while True:
-            query = f"{base_query} LIMIT {batch_size} OFFSET {offset}"
-            try:
-                chunk, keys = execute_query_with_retry(session, query)
-                if not columns:
-                    columns = keys
-                
-                if not chunk:
-                    break
-                    
-                mkt_data.extend(chunk)
-                print(f"Processed {len(mkt_data)} rows...")
-                offset += batch_size
-            except Exception as e:
-                print(f"Failed to get chunk at offset {offset}: {str(e)}")
-                if not mkt_data:
-                    raise
-                return pd.DataFrame(mkt_data, columns=columns)
+        try:
+            result, columns = execute_query_with_retry(session, base_query)
+            df = pd.DataFrame(result, columns=columns)
+        except Exception as e:
+            logger.error(f"Failed to get market data: {str(e)}")
+            raise
 
     mkt_end = time.time()
     logger.info(f"getting market data, end time: {mkt_end}")
     logger.info(f"getting market data, total time: {mkt_end - mkt_start} seconds")
     logger.info(f"="*80)
     logger.info("\n")
-    return pd.DataFrame(mkt_data, columns=columns)
+    return df
 
 def request_type_names(type_ids):
     logger.info(f"requesting type names with cache")
