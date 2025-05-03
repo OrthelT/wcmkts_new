@@ -26,16 +26,23 @@ def sync_db(db_url="wcmkt.db", sync_url=mkt_url, auth_token=mkt_auth_token):
 
     # Clear cache of all data before syncing
     st.cache_data.clear()
-    time.sleep(0.5)  # Give connections time to fully close
+    sleep_time = 0.2
+    time.sleep(sleep_time)
+    logger.info(f"cache cleared for sync; sleeping {sleep_time} seconds")
+    # Give connections time to fully close
     # Skip sync in development mode or when sync_url/auth_token are not provided
     if not sync_url or not auth_token:
         logger.info("Skipping database sync in development mode or missing sync credentials")
         
         
     try:
+        sync_start = time.time()
         conn = libsql.connect(db_url, sync_url=sync_url, auth_token=auth_token)
+        logger.info("\n")
+        logger.info(f"="*80)
+        logger.info(f"Database sync started at {sync_start}")
         conn.sync()
-        logger.info("Database synced")
+        logger.info(f"Database synced in {1000*(time.time() - sync_start)} milliseconds")
 
         last_sync = datetime.datetime.now().astimezone(datetime.UTC)
         logger.info(f"updated Last sync: {last_sync.strftime('%Y-%m-%d %H:%M %Z')}")
@@ -58,11 +65,14 @@ def sync_db(db_url="wcmkt.db", sync_url=mkt_url, auth_token=mkt_auth_token):
             
         logger.info(f"Last sync state updated to: {last_sync.strftime('%Y-%m-%d %H:%M %Z')}")
         logger.info(f"Next sync state updated to: {next_sync.strftime('%Y-%m-%d %H:%M %Z')}")
-        
+     
+
         #update session state
         st.session_state.last_sync = last_sync
         st.session_state.next_sync = next_sync
         st.session_state.sync_status = "Success"
+        logger.info(f"="*80)
+        logger.info("\n")
         
     except Exception as e:
         if "Sync is not supported" in str(e):

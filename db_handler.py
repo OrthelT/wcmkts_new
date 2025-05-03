@@ -45,7 +45,10 @@ def execute_query_with_retry(session, query):
 
 @st.cache_data(ttl=600)
 def get_mkt_data(base_query, batch_size=5000):
-    logger.info(f"getting market data with cache")
+    mkt_start = time.time()
+    logger.info("\n")
+    logger.info(f"="*80)
+    logger.info(f"getting market data with cache, start time: {mkt_start}")
     mkt_data = []
     offset = 0
     columns = None
@@ -70,9 +73,13 @@ def get_mkt_data(base_query, batch_size=5000):
                     raise
                 return pd.DataFrame(mkt_data, columns=columns)
 
+    mkt_end = time.time()
+    logger.info(f"getting market data, end time: {mkt_end}")
+    logger.info(f"getting market data, total time: {mkt_end - mkt_start} seconds")
+    logger.info(f"="*80)
+    logger.info("\n")
     return pd.DataFrame(mkt_data, columns=columns)
 
-@st.cache_data(ttl=600)
 def request_type_names(type_ids):
     logger.info(f"requesting type names with cache")
     # Process in chunks of 1000
