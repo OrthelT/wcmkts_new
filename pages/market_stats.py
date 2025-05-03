@@ -504,11 +504,17 @@ def main():
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            min_price = stats['min_price'].min()
-            if pd.notna(min_price) and selected_items:
-                st.metric("Sell Price (min)", f"{millify.millify(min_price, precision=2)} ISK")
-            elif sell_total_value > 0:
-                st.metric("Market Value (sell orders)", f"{millify.millify(sell_total_value, precision=2)} ISK")
+            if not sell_data.empty:
+                min_price = stats['min_price'].min()
+                if pd.notna(min_price) and selected_items:
+                    display_min_price = millify.millify(min_price, precision=2)
+                    st.metric("Sell Price (min)", f"{display_min_price} ISK")
+            else:
+                st.metric("Sell Price (min)", "0 ISK")
+
+            if sell_total_value > 0:
+                display_sell_total_value = millify.millify(sell_total_value, precision=2)
+                st.metric("Market Value (sell orders)", f"{display_sell_total_value} ISK")
             else:
                 st.metric("Market Value (sell orders)", "0 ISK")
 
@@ -516,16 +522,19 @@ def main():
             if not sell_data.empty:
                 volume = sell_data['volume_remain'].sum()
                 if pd.notna(volume):
-                    st.metric("Market Stock (sell orders)", f"{millify.millify(volume, precision=2)}")
+                    display_volume = millify.millify(volume, precision=2)
+                    st.metric("Market Stock (sell orders)", f"{display_volume}")
             else:
                 st.metric("Market Stock (sell orders)", "0")
         
         with col3:
             days_remaining = stats['days_remaining'].min()
             if pd.notna(days_remaining) and selected_items:
-                st.metric("Days Remaining", f"{days_remaining:.1f}")
+                display_days_remaining = f"{days_remaining:.1f}"
+                st.metric("Days Remaining", f"{display_days_remaining}")
             elif sell_order_count > 0:
-                st.metric("Total Sell Orders", f"{sell_order_count:,.0f}")
+                display_sell_order_count = f"{sell_order_count:,.0f}"
+                st.metric("Total Sell Orders", f"{display_sell_order_count}")
             else:
                 st.metric("Total Sell Orders", "0")
 
@@ -536,7 +545,8 @@ def main():
                 fits_on_mkt = fit_df['Fits on Market'].min()
 
                 if cat_id == 6:
-                    st.metric("Fits on Market", f"{fits_on_mkt:,.0f}")
+                    display_fits_on_mkt = f"{fits_on_mkt:,.0f}"
+                    st.metric("Fits on Market", f"{display_fits_on_mkt}")
                     isship = True
                 
             except:
