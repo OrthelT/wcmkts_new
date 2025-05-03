@@ -156,7 +156,6 @@ def get_market_data(show_all, selected_categories, selected_items):
     """
     
     # Get market data
-
     sell_df = get_mkt_data(sell_query)
     buy_df = get_mkt_data(buy_query)
     
@@ -205,23 +204,6 @@ def get_market_data(show_all, selected_categories, selected_items):
 
     return sell_df, buy_df, stats
 
-def load_data(selected_categories=None, selected_items=None):
-    # Get all market orders
-    df = get_market_orders()
-    if df.empty:
-        return pd.DataFrame()
-    
-    # Get item details from SDE
-    items_df = get_item_details(df['type_id'].unique())
-    df = df.merge(items_df, on='type_id', how='left')
-    
-    # Apply filters
-    if selected_categories:
-        df = df[df['category_name'].isin(selected_categories)]
-    if selected_items:
-        df = df[df['type_name'].isin(selected_items)]
-    
-    return df
 
 def create_price_volume_chart(df):
     # Create histogram with price bins

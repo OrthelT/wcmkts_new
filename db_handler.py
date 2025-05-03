@@ -171,12 +171,6 @@ def get_fitting_data(type_id):
         df3.reset_index(drop=True, inplace=True)
     return df3, timestamp
 
-def fetch_mkt_orders():
-    df = get_mkt_data(mkt_query)
-    df = insert_type_names(df)
-    df = clean_mkt_data(df)
-    return df
-
 @st.cache_resource(ttl=600)
 def get_local_mkt_engine():
     return create_engine(local_mkt_url, echo=False)  # Set echo=False to reduce console output
@@ -217,20 +211,6 @@ def safe_format(value, format_string):
         return ''
 
 @st.cache_data(ttl=600)
-def get_market_orders(type_ids=None):
-    query = """
-        SELECT mo.*, ms.min_price, ms.days_remaining
-        FROM marketorders mo
-        LEFT JOIN marketstats ms ON mo.type_id = ms.type_id
-        WHERE mo.is_buy_order = 0
-    """
-    if type_ids:
-        type_ids_str = ','.join(map(str, type_ids))
-        query += f" AND mo.type_id IN ({type_ids_str})"
-    
-    return pd.read_sql_query(query, (get_local_mkt_engine()))
-
-@st.cache_data(ttl=600)
 def get_market_history(type_id):
     query = f"""
         SELECT date, average, volume
@@ -239,19 +219,6 @@ def get_market_history(type_id):
         ORDER BY date
     """
     return pd.read_sql_query(query, (get_local_mkt_engine()))
-
-def get_item_details(type_ids):
-    type_ids_str = ','.join(map(str, type_ids))
-    query = f"""
-        SELECT it.typeID as type_id, it.typeName as type_name, 
-               ig.groupName as group_name, ic.categoryName as category_name
-        FROM invTypes it 
-        JOIN invGroups ig ON it.groupID = ig.groupID
-        JOIN invCategories ic ON ig.categoryID = ic.categoryID
-        WHERE it.typeID IN ({type_ids_str})
-    """
-    return pd.read_sql_query(query, (get_local_sde_engine()))
-
 
 def get_update_time()->str:
     query = """
