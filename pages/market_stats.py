@@ -536,9 +536,10 @@ def main():
         
         
         st.divider()
+        # Display detailed data
+
         # Format the DataFrame for display with null handling
         display_df = sell_data.copy()
-        # Display detailed data
 
         #create a header for the item
         if len(selected_items) == 1:
