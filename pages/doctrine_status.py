@@ -221,8 +221,14 @@ def find_shiptarget(ship_id: int) -> int:
     """Find the target for a given ship name""" 
     targets_df = get_targets()
     if targets_df is not None:
-        target_row = targets_df[targets_df['ship_id'] == ship_id]
-        return target_row.iloc[0]['ship_target']
+        try:
+            target_row = targets_df[targets_df['ship_id'] == ship_id]
+            return target_row.iloc[0]['ship_target']
+        except Exception as e:
+            logger.error(f"Error getting target for ship_id: {ship_id}")
+            logger.error(f"Error: {e}")
+            st.error(f"Did not find a target for ship_id: {ship_id}, we'll just use 20 as default")
+            return 20
     return 0
 
 def main():

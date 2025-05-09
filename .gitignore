@@ -64,3 +64,4 @@ test*
 market.db
 sde.db-shm
 sde.db-wal
+misc_functions.py
