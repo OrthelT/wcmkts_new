@@ -8,9 +8,17 @@ from sqlalchemy.orm import Session
 from logging_config import setup_logging
 from db_handler import get_local_mkt_engine, get_update_time
 from doctrines import create_fit_df
+import libsql_experimental as libsql
+
+mktdb = "wcmkt.db"
 
 # Insert centralized logging configuration
 logger = setup_logging()
+
+@st.cache_resource(ttl=600, show_spinner="Loading libsql connection...")
+def get_libsql_connection():
+    """Get a connection to the libsql database"""
+    return libsql.connect(mktdb)
 
 @st.cache_data(ttl=600, show_spinner="Loading cacheddoctrine fits...")
 def get_fit_summary():
@@ -31,7 +39,7 @@ def get_fit_summary():
     errors = {}
     
     # Create a summary row for each fit_id
-    targets_df = get_targets()
+    # targets_df = get_targets()
 
     for fit_id in fit_ids:
         # Filter data for this fit
@@ -83,16 +91,8 @@ def get_fit_summary():
         
         # Get target value from database if available, otherwise use default
         target = 20  # Default
-        if targets_df is not None:
-            try:
-                target_row = targets_df[targets_df['fit_id'] == fit_id]
-                if not target_row.empty:
-                    target = target_row.iloc[0]['ship_target']
-            except Exception as e:
-                logger.error(f"Error getting target for fit_id: {fit_id}")
-                logger.error(f"Error: {e}")
-                errors[fit_id] = "Error getting target for fit_id: " + fit_id + " " + str(e)
-                continue
+
+        target = get_ship_target(0, fit_id)
         
         # Calculate target percentage
         if target > 0:
@@ -114,14 +114,10 @@ def get_fit_summary():
         
         # Get daily average volume if available
         daily_avg = fit_data['avg_vol'].mean() if 'avg_vol' in fit_data.columns else 0
-        
-        # Get fit name from the ship_targets table if available
-        fit_name = f"{ship_name} Fit"  # Default fallback
 
-        if targets_df is not None:
-            target_row = targets_df[targets_df['fit_id'] == fit_id]
-            if not target_row.empty and 'fit_name' in target_row.columns and not pd.isna(target_row.iloc[0]['fit_name']):
-                fit_name = target_row.iloc[0]['fit_name']
+        # Get fit name from the ship_targets table if available
+        fit_name = get_fit_name(fit_id)
+
         
         # Add to summary list
         fit_summary.append({
@@ -150,18 +146,20 @@ def format_module_list(modules_list):
         return ""
     return "<br>".join(modules_list)
 
-@st.cache_data(ttl=600)
-def get_targets()->pd.DataFrame:
-    """Get the targets dataframe"""
-    engine = get_local_mkt_engine()
-    with engine.connect() as conn:
-        # Get the fit data directly from the database
-        df = pd.read_sql_query("SELECT * FROM ship_targets", conn)
-        targets_df = df if not df.empty else None
-    return targets_df
+def get_fit_name(fit_id: int) -> str:
+    """Get the fit name for a given fit id"""
+    try:
+        conn = get_libsql_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT fit_name FROM ship_targets WHERE fit_id = ?", (fit_id,))
+        result = cursor.fetchone()
+        return result[0] if result else "Unknown Fit"
+    except Exception as e:
+        logger.error(f"Error getting fit name for fit_id: {fit_id}")
+        logger.error(f"Error: {e}")
+        return "Unknown Fit"
 
 def get_module_stock_list(module_names: list) -> tuple[list, list]:
-
     """Get lists of modules with their stock quantities for display and CSV export."""
     module_list = []
     csv_module_list = []
@@ -209,7 +207,7 @@ def get_ship_stock_list(ship_names: list) -> tuple[list, list]:
                 ship_id = row[1]
                 ship_stock = int(row[2])
                 ship_fits = int(row[3])
-                ship_target = find_shiptarget(ship_id)
+                ship_target = get_ship_target(ship_id, 0)
                 ship_list.append(f"{ship} (Qty: {ship_stock} | Fits: {ship_fits} | Target: {ship_target})")
                 csv_ship_list.append(f"{ship},{ship_id},{ship_stock},{ship_fits},{ship_target}\n")
             else:
@@ -217,19 +215,49 @@ def get_ship_stock_list(ship_names: list) -> tuple[list, list]:
                 csv_ship_list.append(f"{ship},0,0,0,0\n")
     return ship_list, csv_ship_list
 
-def find_shiptarget(ship_id: int) -> int:
-    """Find the target for a given ship name""" 
-    targets_df = get_targets()
-    if targets_df is not None:
+def get_ship_target(ship_id: int, fit_id: int) -> int:
+    """Get the target for a given ship id or fit id
+    if searching by ship_id, enter zero for fit_id
+    if searching by fit_id, enter zero for ship_id
+    """
+    if ship_id == 0 and fit_id == 0:
+        logger.error("Error: Both ship_id and fit_id are zero")
+        st.error("Error: Both ship_id and fit_id are zero")
+        return 20
+    
+    elif ship_id == 0:
         try:
-            target_row = targets_df[targets_df['ship_id'] == ship_id]
-            return target_row.iloc[0]['ship_target']
+            conn = get_libsql_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT ship_target FROM ship_targets WHERE fit_id = ?", (fit_id,))
+            result = cursor.fetchone()
+            if result:
+                target = result[0]
+            else:
+                target = 20
+            return target
         except Exception as e:
-            logger.error(f"Error getting target for ship_id: {ship_id}")
+            logger.error(f"Error getting target for fit_id: {fit_id}")
             logger.error(f"Error: {e}")
-            st.error(f"Did not find a target for ship_id: {ship_id}, we'll just use 20 as default")
+            st.sidebar.error(f"Did not find a target for fit_id: {fit_id}, we'll just use 20 as default")
             return 20
-    return 0
+    else:
+        try:
+            conn = get_libsql_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT ship_target FROM ship_targets WHERE ship_id = ?", (ship_id,))
+            result = cursor.fetchone()
+            if result:
+                target = result[0]
+            else:
+                target = 20
+            return target
+        except Exception as e:
+            logger.error(f"Error getting target for ship_id: {ship_id}, using 20 as default")
+            logger.error(f"Error: {e}")
+            st.sidebar.error(f"Did not find a target for ship_id: {ship_id}, we'll just use 20 as default")
+            return 20
+
 
 def main():
     # App title and logo
@@ -525,6 +553,7 @@ def main():
         # Get module names
         module_names = [display_key.rsplit("_", 1)[0] for display_key in st.session_state.selected_modules]
         module_names = list(set(module_names))
+        logger.info(f"Selected modules: {module_names}")
 
         # Query market stock (total_stock) for these modules
         module_list, csv_module_list = get_module_stock_list(module_names)
