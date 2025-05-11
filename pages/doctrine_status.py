@@ -311,7 +311,7 @@ def main():
     st.sidebar.header("Filters")
     
     # Status filter
-    status_options = ["All", "Critical", "Needs Attention", "Good"]
+    status_options = ["All", "Critical", "Needs Attention", "All Low Stock", "Good"]
     selected_status = st.sidebar.selectbox("Doctrine Status:", status_options)
     
     # Ship group filter
@@ -331,7 +331,7 @@ def main():
     
     # Module status filter
     st.sidebar.subheader("Module Filters")
-    module_status_options = ["All", "Critical (< 20%)", "Low (< 100%)", "Sufficient"]
+    module_status_options = ["All", "Critical", "Needs Attention", "All Low Stock", "Good"]
     selected_module_status = st.sidebar.selectbox("Module Status:", module_status_options)
     
     # Apply filters
@@ -341,6 +341,8 @@ def main():
     if selected_status != "All":
         if selected_status == "Good":
             filtered_df = filtered_df[filtered_df['target_percentage'] > 90]
+        elif selected_status == "All Low Stock":
+            filtered_df = filtered_df[filtered_df['target_percentage'] <= 90]
         elif selected_status == "Needs Attention":
             filtered_df = filtered_df[(filtered_df['target_percentage'] > 40) & (filtered_df['target_percentage'] <= 90)]
         elif selected_status == "Critical":
@@ -474,13 +476,16 @@ def main():
                     
                     # Determine module status
                     if int(module_qty) <= row['target'] * 0.2:
-                        module_status = "Critical (< 20%)"
+                        module_status = "Critical"
                     elif int(module_qty) <= row['target']:
-                        module_status = "Low (< 100%)"
+                        module_status = "Needs Attention"
                     else:
-                        module_status = "Sufficient"
+                        module_status = "Good"
                     
                     # Apply module status filter
+                    if selected_module_status == "All Low Stock":
+                        if int(module_qty) <= row['target'] * 0.9:
+                            module_status = "All Low Stock"
                     if selected_module_status != "All" and selected_module_status != module_status:
                         continue
                     
@@ -539,6 +544,7 @@ def main():
     if col1.button("📋 Select All Modules", use_container_width=True):
         # Create a list to collect all module keys that are currently visible based on filters
         visible_modules = []
+        low_stock_modules = []
         for _, group_data in grouped_fits:
             for _, row in group_data.iterrows():
                 # Only include ships that are displayed (match filters)
@@ -551,21 +557,30 @@ def main():
                     display_key = f"{module_name}_{module_qty}"
                     
                     # Determine module status for filtering
-                    if int(module_qty) <= row['target'] * 0.2:
-                        module_status = "Critical (< 20%)"
+                    if selected_module_status == "All Low Stock":
+                        if int(module_qty) <= row['target'] * 0.9:
+                            low_stock_modules.append(display_key)
+                    elif int(module_qty) <= row['target'] * 0.2:
+                        module_status = "Critical"
                     elif int(module_qty) <= row['target']:
-                        module_status = "Low (< 100%)"
+                        module_status = "Needs Attention"
                     else:
-                        module_status = "Sufficient"
+                        module_status = "Good"
                     
                     # Apply module status filter
                     if selected_module_status != "All" and selected_module_status != module_status:
                         continue
-                    
+
+                    logger.info(f"Module status: {module_status}")
+                    logger.info(f"Module qty: {display_key}")
+    
                     visible_modules.append(display_key)
         
         # Update session state with all visible modules
-        st.session_state.selected_modules = list(set(visible_modules))
+        if selected_module_status == "All Low Stock":
+            st.session_state.selected_modules = list(set(low_stock_modules))
+        else:
+            st.session_state.selected_modules = list(set(visible_modules))
         st.rerun()
     
     # Clear module selection button
