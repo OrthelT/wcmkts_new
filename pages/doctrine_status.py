@@ -159,61 +159,85 @@ def get_fit_name(fit_id: int) -> str:
         logger.error(f"Error: {e}")
         return "Unknown Fit"
 
-def get_module_stock_list(module_names: list) -> tuple[list, list]:
+def get_module_stock_list(module_names: list):
     """Get lists of modules with their stock quantities for display and CSV export."""
-    module_list = []
-    csv_module_list = []
+
+    #set the session state variables for the module list and csv module list
+    if not st.session_state.get('module_list_state'):
+        st.session_state.module_list_state = {}
+    if not st.session_state.get('csv_module_list_state'):
+        st.session_state.csv_module_list_state = {}
+
     with Session(get_local_mkt_engine()) as session:
         for module_name in module_names:
-            query = f"""
-                SELECT type_name, type_id, total_stock, fits_on_mkt
-                FROM doctrines 
-                WHERE type_name = "{module_name}"
-                LIMIT 1
+
+            #check if the module is already in the list, if not, we will get the data from the database and add it to the list
+            if module_name not in st.session_state.module_list_state:
+                logger.info(f"Querying database for {module_name}")
+
+                query = f"""
+                    SELECT type_name, type_id, total_stock, fits_on_mkt
+                    FROM doctrines 
+                    WHERE type_name = "{module_name}"
+                    LIMIT 1
             """
-            result = session.execute(text(query))
-            row = result.fetchone()
-            if row and row[2] is not None:  # total_stock is now at index 2
-                # Use market stock (total_stock)
-                module_list.append(f"{module_name} (Total: {int(row[2])} | Fits: {int(row[3])})")
-                csv_module_list.append(f"{module_name},{row[1]},{int(row[2])},{int(row[3])}\n")
-            else:
-                # No quantity if market stock not available
-                module_list.append(module_name)
-                csv_module_list.append(f"{module_name},0,0,0\n")
-    return module_list, csv_module_list
+                result = session.execute(text(query))
+                row = result.fetchone()
+                if row and row[2] is not None:  # total_stock is now at index 2
+                    # Use market stock (total_stock)
+                    module_info = f"{module_name} (Total: {int(row[2])} | Fits: {int(row[3])})"
+                    csv_module_info = f"{module_name},{row[1]},{int(row[2])},{int(row[3])}\n"
+                else:
+                    # No quantity if market stock not available
+                    module_info = f"{module_name}"
+                    csv_module_info = f"{module_name},0,0,0\n"
 
-def get_ship_stock_list(ship_names: list) -> tuple[list, list]:
+                #add the module to the session state list
+                st.session_state.module_list_state[module_name] = module_info
+                st.session_state.csv_module_list_state[module_name] = csv_module_info
 
-    """Get lists of ships with their stock quantities for display and CSV export."""
-    ship_list = []
-    csv_ship_list = []
+        #with the session state variables, we can now return the lists by saving to the session state variables, we
+        #won't need to run the query again
+
+def get_ship_stock_list(ship_names: list):
+    if not st.session_state.get('ship_list_state'):
+        st.session_state.ship_list_state = {}
+    if not st.session_state.get('csv_ship_list_state'):
+        st.session_state.csv_ship_list_state = {}
+
+    logger.info(f"Ship names: {ship_names}")
     with Session(get_local_mkt_engine()) as session:
         for ship in ship_names:
-            if ship == "Ferox Navy Issue":
-                where_clause = "type_name = 'Ferox Navy Issue' AND fit_id = 473"
-            else:
-                where_clause = f"type_name = '{ship}'"
-            query = f"""
-                SELECT type_name, type_id, total_stock, fits_on_mkt
-                FROM doctrines 
-                WHERE {where_clause}
-                LIMIT 1
-            """
-            result = session.execute(text(query))
-            row = result.fetchone()
-            if row and row[2] is not None:
-                ship_name = row[0]
-                ship_id = row[1]
-                ship_stock = int(row[2])
-                ship_fits = int(row[3])
-                ship_target = get_ship_target(ship_id, 0)
-                ship_list.append(f"{ship} (Qty: {ship_stock} | Fits: {ship_fits} | Target: {ship_target})")
-                csv_ship_list.append(f"{ship},{ship_id},{ship_stock},{ship_fits},{ship_target}\n")
-            else:
-                ship_list.append(ship)
-                csv_ship_list.append(f"{ship},0,0,0,0\n")
-    return ship_list, csv_ship_list
+            #check if the ship is already in the list, if not, we will get the data from the database and add it to the list
+            if ship not in st.session_state.ship_list_state:
+                logger.info(f"Querying database for {ship}")
+                if ship == "Ferox Navy Issue":
+                    where_clause = "type_name = 'Ferox Navy Issue' AND fit_id = 473"
+                else:
+                    where_clause = f"type_name = '{ship}'"
+
+                query = f"""
+                    SELECT type_name, type_id, total_stock, fits_on_mkt
+                    FROM doctrines 
+                    WHERE {where_clause}
+                    LIMIT 1
+                """
+                result = session.execute(text(query))
+                row = result.fetchone()
+                if row and row[2] is not None:
+                    ship_name = row[0]
+                    ship_id = row[1]
+                    ship_stock = int(row[2])
+                    ship_fits = int(row[3])
+                    ship_target = get_ship_target(ship_id, 0)
+                    ship_info = f"{ship} (Qty: {ship_stock} | Fits: {ship_fits} | Target: {ship_target})"
+                    csv_ship_info = f"{ship},{ship_id},{ship_stock},{ship_fits},{ship_target}\n"
+                else:
+                    ship_info = ship
+                    csv_ship_info = f"{ship},0,0,0,0\n"
+
+                st.session_state.ship_list_state[ship] = ship_info
+                st.session_state.csv_ship_list_state[ship] = csv_ship_info
 
 def get_ship_target(ship_id: int, fit_id: int) -> int:
     """Get the target for a given ship id or fit id
@@ -494,6 +518,12 @@ def main():
     # Add "Clear Ship Selection" button
     if ship_col2.button("🗑️ Clear Ships", use_container_width=True):
         st.session_state.selected_ships = []
+        st.session_state.ship_list_state = {}
+        st.session_state.csv_ship_list_state = {}
+        logger.info(f"Cleared ship selection and session state")
+        logger.info(f"Session state ship list: {st.session_state.ship_list_state}")
+        logger.info(f"Session state csv ship list: {st.session_state.csv_ship_list_state}")
+        logger.info(f"\n{"-"*60}\n")
         st.rerun()
     
     # Module selection
@@ -536,6 +566,12 @@ def main():
     # Clear module selection button
     if col2.button("🗑️ Clear Modules", use_container_width=True):
         st.session_state.selected_modules = []
+        st.session_state.module_list_state = {}
+        st.session_state.csv_module_list_state = {}
+        logger.info(f"Cleared module selection and session state")
+        logger.info(f"Session state module list: {st.session_state.module_list_state}")
+        logger.info(f"Session state csv module list: {st.session_state.csv_module_list_state}")
+        logger.info(f"\n{"-"*60}\n")
         st.rerun()
     
     # Display selected ships if any
@@ -545,7 +581,10 @@ def main():
         
         # Create a scrollable container for selected ships
         with st.sidebar.container(height=100):
-            ship_list, csv_ship_list = get_ship_stock_list(st.session_state.selected_ships)
+            logger.info(f"Selected ships: {st.session_state.selected_ships}")
+            get_ship_stock_list(st.session_state.selected_ships)
+            ship_list = [st.session_state.ship_list_state[ship] for ship in st.session_state.selected_ships]
+            csv_ship_list = [st.session_state.csv_ship_list_state[ship] for ship in st.session_state.selected_ships]
             for ship in ship_list:
                 st.text(ship)
     # Display selected modules if any
@@ -553,14 +592,15 @@ def main():
         # Get module names
         module_names = [display_key.rsplit("_", 1)[0] for display_key in st.session_state.selected_modules]
         module_names = list(set(module_names))
-        logger.info(f"Selected modules: {module_names}")
-
         # Query market stock (total_stock) for these modules
-        module_list, csv_module_list = get_module_stock_list(module_names)
+        get_module_stock_list(module_names)
 
         st.sidebar.markdown("---")
         st.sidebar.markdown("### Selected Modules:")
         
+        module_list = [st.session_state.module_list_state[module] for module in module_names]
+        csv_module_list = [st.session_state.csv_module_list_state[module] for module in module_names]
+
         # Create a scrollable container for selected modules
         with st.sidebar.container(height=200):
             for module in module_list:
@@ -589,9 +629,6 @@ def main():
             # Get module names
             module_names = [display_key.rsplit("_", 1)[0] for display_key in st.session_state.selected_modules]
             module_names = list(set(module_names))
-            
-            # Query market stock (total_stock) for these modules
-            module_list, csv_module_list = get_module_stock_list(module_names)
             
             export_text += "MODULES:\n" + "\n".join(module_list)
             
