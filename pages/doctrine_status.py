@@ -159,6 +159,7 @@ def get_fit_name(fit_id: int) -> str:
         logger.error(f"Error: {e}")
         return "Unknown Fit"
 
+@st.cache_data(ttl=600, show_spinner="Loading cached module stock list...")
 def get_module_stock_list(module_names: list):
     """Get lists of modules with their stock quantities for display and CSV export."""
 
@@ -199,6 +200,7 @@ def get_module_stock_list(module_names: list):
         #with the session state variables, we can now return the lists by saving to the session state variables, we
         #won't need to run the query again
 
+@st.cache_data(ttl=600, show_spinner="Loading cached ship stock list...")
 def get_ship_stock_list(ship_names: list):
     if not st.session_state.get('ship_list_state'):
         st.session_state.ship_list_state = {}
@@ -282,6 +284,9 @@ def get_ship_target(ship_id: int, fit_id: int) -> int:
             st.sidebar.error(f"Did not find a target for ship_id: {ship_id}, we'll just use 20 as default")
             return 20
 
+def get_tgt_from_fit_summary(fit_summary: pd.DataFrame, fit_id: int) -> int:
+    """Get the target for a given fit id from the fit summary"""
+    return fit_summary[fit_summary['fit_id'] == fit_id]['target'].iloc[0]
 
 def main():
     # App title and logo
@@ -578,10 +583,11 @@ def main():
     if st.session_state.selected_ships:
         st.sidebar.markdown("---")
         st.sidebar.markdown("### Selected Ships:")
+        num_selected_ships = len(st.session_state.selected_ships)
+        ship_container_height = 100 if num_selected_ships <= 2 else num_selected_ships * 50
         
         # Create a scrollable container for selected ships
-        with st.sidebar.container(height=100):
-            logger.info(f"Selected ships: {st.session_state.selected_ships}")
+        with st.sidebar.container(height=ship_container_height):
             get_ship_stock_list(st.session_state.selected_ships)
             ship_list = [st.session_state.ship_list_state[ship] for ship in st.session_state.selected_ships]
             csv_ship_list = [st.session_state.csv_ship_list_state[ship] for ship in st.session_state.selected_ships]
@@ -597,12 +603,15 @@ def main():
 
         st.sidebar.markdown("---")
         st.sidebar.markdown("### Selected Modules:")
+        num_selected_modules = len(st.session_state.selected_modules)
+        module_container_height =  100 if num_selected_modules <= 2 else num_selected_modules * 50
         
+
         module_list = [st.session_state.module_list_state[module] for module in module_names]
         csv_module_list = [st.session_state.csv_module_list_state[module] for module in module_names]
 
         # Create a scrollable container for selected modules
-        with st.sidebar.container(height=200):
+        with st.sidebar.container(height=module_container_height):
             for module in module_list:
                 st.text(module)
     
