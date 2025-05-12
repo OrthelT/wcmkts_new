@@ -6,7 +6,8 @@ import threading
 import streamlit as st
 from logging_config import setup_logging
 
-logger = setup_logging()
+
+logger = setup_logging(__name__)
 
 sync_file = "last_sync_state.json"
 

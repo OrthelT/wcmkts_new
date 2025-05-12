@@ -232,6 +232,8 @@ def get_update_time()->str:
         data_update = eastern.localize(data_update)
         data_update = data_update.astimezone(pytz.utc)
         data_update = data_update.strftime('%Y-%m-%d \n %H:%M:%S')
+        logger.info(f"Last ESI update: {data_update}")
+        st.session_state['update_time'] = data_update
         return data_update
     except Exception as e:
         logger.error(f"Failed to get update time: {str(e)}")
