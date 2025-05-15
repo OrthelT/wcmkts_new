@@ -7,7 +7,6 @@ from logging_config import setup_logging
 import json
 import time
 from sync_scheduler import schedule_next_sync
-from pages.market_stats import get_update_time
 
 logger = setup_logging()
 
