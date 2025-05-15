@@ -73,8 +73,7 @@ def sync_db(db_url="wcmkt.db", sync_url=mkt_url, auth_token=mkt_auth_token):
         #update session state
         st.session_state.last_sync = last_sync
         st.session_state.next_sync = next_sync
-        st.session_state.sync_status = "Success"
-        st.session_state.update_time = get_update_time()
+        
         logger.info(f"="*80)
         logger.info("\n")
         

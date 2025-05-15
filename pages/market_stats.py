@@ -385,6 +385,7 @@ def main():
         logger.info("Sync needed, syncing now")
         sync_db()
         st.session_state.sync_status = "Success"
+        st.session_state.update_time = get_update_time()
         logger.info(f"Sync status updated to: {st.session_state.sync_status}\n, last sync: {st.session_state.last_sync}\n, next sync: {st.session_state.next_sync}\n")
         st.rerun()
     else:
