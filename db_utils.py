@@ -26,7 +26,10 @@ def sync_db(db_url="wcmkt.db", sync_url=mkt_url, auth_token=mkt_auth_token):
 
     # Clear cache of all data before syncing
     st.cache_data.clear()
-    sleep_time = 0.2
+    st.cache_resource.clear()
+    logger.info("cache cleared")
+    
+    sleep_time = 0.5
     time.sleep(sleep_time)
     logger.info(f"cache cleared for sync; sleeping {sleep_time} seconds")
     # Give connections time to fully close
