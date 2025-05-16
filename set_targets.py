@@ -88,7 +88,6 @@ def set_targets():
 
 
 
-@st.cache_data(ttl=600)
 def get_target_from_db(ship_name):
     """Get the target value for a ship from the database"""
     engine = get_local_mkt_engine()
@@ -171,5 +170,3 @@ def update_target(fit_id: int, new_target: int) -> bool:
 
 if __name__ == "__main__":
     pass
-
-
