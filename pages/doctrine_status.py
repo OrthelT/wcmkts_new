@@ -1,3 +1,8 @@
+import sys
+import os
+# Add the parent directory to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import streamlit as st
 import pandas as pd
 import datetime
@@ -13,7 +18,7 @@ import libsql_experimental as libsql
 mktdb = "wcmkt.db"
 
 # Insert centralized logging configuration
-logger = setup_logging()
+logger = setup_logging(__name__)
 
 @st.cache_resource(ttl=600, show_spinner="Loading libsql connection...")
 def get_libsql_connection():
@@ -680,4 +685,12 @@ def main():
     st.sidebar.write(f"Last ESI update: {get_update_time()}")
 
 if __name__ == "__main__":
-    main()
+    # main()
+    ship_targets = pd.read_csv("data/ship_targets.csv")
+    updated_targets = pd.read_csv("data/updated_missing_targets.csv")
+
+    print(ship_targets.columns)
+    print(updated_targets.columns)
+
+    missing_targets = updated_targets[~updated_targets['fit_id'].isin(ship_targets['fit_id'])]
+    missing_targets.to_csv("data/missing_targets.csv", index=False)

@@ -17,7 +17,7 @@ from db_utils import sync_db
 
 
 # Insert centralized logging configuration
-logger = setup_logging()
+logger = setup_logging(__name__)
 
 # Log application start
 logger.info("Application started")

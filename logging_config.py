@@ -1,9 +1,9 @@
 import logging
 from logging.handlers import RotatingFileHandler
 
-def setup_logging(log_file="app.log", level=logging.INFO, max_bytes=5*1024*1024, backup_count=3):
+def setup_logging(name="app", log_file="app.log", level=logging.INFO, max_bytes=5*1024*1024, backup_count=3):
     """Set up logging configuration with a rotating file handler and a stream handler."""
-    logger = logging.getLogger()
+    logger = logging.getLogger(name)
     # Clear existing handlers to avoid duplicate logs
     if logger.hasHandlers():
         logger.handlers.clear()

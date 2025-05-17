@@ -41,7 +41,6 @@ dialect.py
 # Streamlit secrets
 .streamlit/secrets.toml
 *.log
-*.csv
 CLAUDE.md
 experimental.py
 dd.py
@@ -65,5 +64,5 @@ market.db
 sde.db-shm
 sde.db-wal
 misc_functions.py
-data/
 tests/
+misc_files/

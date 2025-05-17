@@ -8,7 +8,7 @@ import json
 import time
 from sync_scheduler import schedule_next_sync
 
-logger = setup_logging()
+logger = setup_logging(__name__)
 
 # Database URLs
 local_mkt_url = "sqlite:///wcmkt.db"  # Changed to standard SQLite format for local dev

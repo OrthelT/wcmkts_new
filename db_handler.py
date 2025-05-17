@@ -18,7 +18,7 @@ local_mkt_url = "sqlite:///wcmkt.db"  # Changed to standard SQLite format for lo
 local_sde_url = "sqlite:///sde.db"    # Changed to standard SQLite format for local dev
 
 # Load environment variables
-logger = setup_logging()
+logger = setup_logging(__name__)
 
 # Use environment variables for production
 mkt_url = st.secrets["TURSO_DATABASE_URL"]

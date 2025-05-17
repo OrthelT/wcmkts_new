@@ -5,7 +5,7 @@ import streamlit as st
 from logging_config import setup_logging
 
 # Set up logging
-logger = setup_logging()
+logger = setup_logging(__name__)
 
 # Ship targets based on the Excel file
 SHIP_TARGETS = {

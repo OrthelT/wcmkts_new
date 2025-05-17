@@ -6,7 +6,7 @@ from db_handler import  get_local_mkt_engine
 from logging_config import setup_logging
 
 # Insert centralized logging configuration
-logger = setup_logging()
+logger = setup_logging(__name__)
 
 # Import target handling functions if set_targets.py exists
 try:

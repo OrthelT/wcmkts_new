@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from logging_config import setup_logging
 
 # Insert centralized logging configuration
-logger = setup_logging()
+logger = setup_logging(__name__)
 
 # Import from the root directory
 from db_handler import get_local_mkt_engine, get_update_time, safe_format
