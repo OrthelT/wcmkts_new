@@ -86,8 +86,6 @@ def set_targets():
     
     print("Target values set in database")
 
-
-
 def get_target_from_db(ship_name):
     """Get the target value for a ship from the database"""
     engine = get_local_mkt_engine()
@@ -167,6 +165,119 @@ def update_target(fit_id: int, new_target: int) -> bool:
     except Exception as e:
         logger.error(f"Error updating target: {str(e)}")
         return False
+    
+def get_full_ship_targets():
+    """Get all ship targets from the database"""
+    engine = get_local_mkt_engine()
+    with engine.connect() as conn:
+        result = conn.execute(text("SELECT * FROM ship_targets"))
+
+    df = pd.DataFrame(result.fetchall(), columns=result.keys())
+    return df
+
+def update_ship_targets(old_ship_targets: pd.DataFrame, updated_targets: pd.DataFrame):
+    """Update the ship targets with the new targets from a csv file
+    Example usage:     
+    ship_targets = pd.read_csv("data/ship_targets.csv")
+    updated_targets = pd.read_csv("data/new_targets.csv")
+    update_ship_targets(ship_targets, updated_targets)"""
+    
+    old_length = len(old_ship_targets)
+    new_ship_targets = pd.concat([old_ship_targets, updated_targets])
+    new_ship_targets=new_ship_targets.reset_index(drop=True)
+    new_ship_targets['id'] = new_ship_targets.index
+    print(new_ship_targets)
+    new_length = len(new_ship_targets)
+
+    print(f"Old length: {old_length}")
+    print(f"New length: {new_length}")
+    print(f"Difference: {new_length - old_length}")
+
+    if new_ship_targets.duplicated(subset=['fit_id']).any():
+        print("Duplicates found")
+    else:
+        print("No duplicates found")
+    confirm = input("Confirm? (y/n)")
+    if confirm == "y":
+        #confirm update
+        if len(updated_targets) > len(ship_targets):
+            new_ship_targets = new_ship_targets[~new_ship_targets['fit_id'].isin(ship_targets['fit_id'])]
+            print(f"New ships: {len(new_ship_targets)}")
+            print(new_ship_targets)
+            
+            confirm_update = input("Confirm update? (y/n)")
+        else:
+            print("No new ships found")
+            confirm_update = "y"
+        if confirm_update == "y":
+            updated_target_values = new_ship_targets[new_ship_targets['fit_id'].isin(updated_targets['fit_id'])]
+            if len(updated_target_values) > 0:
+                print(updated_target_values)
+                confirm_update_values = input("Confirm update values? (y/n)")
+            else:
+                print("No updated target values found")
+                confirm_update_values = "y"
+
+
+
+        if confirm_update == "y" and confirm_update_values == "y":
+            
+            
+            new_ship_targets.to_csv("data/ship_targets.csv", index=False)
+        else:
+            print("Update cancelled")
+    else:
+        print("No update needed")
+    
+    return new_ship_targets
+
+def compare_ship_targets(old_df: pd.DataFrame, new_df: pd.DataFrame):
+    """Compare the old and new ship targets"""
+    # Merge on fit_id only
+    merged = pd.merge(
+        old_df[["fit_id", "fit_name", "ship_name", "ship_target"]].rename(columns={"ship_target": "old_target"}),
+        new_df[["fit_id", "fit_name", "ship_name", "ship_target"]].rename(columns={"ship_target": "new_target"}),
+        on="fit_id",
+        how="inner",
+        suffixes=("_old", "_new")
+    )
+
+    # Filter where the ship_target changed
+    changed = merged[merged["old_target"] != merged["new_target"]].copy()
+    changed = changed.drop(columns=["fit_name_old", "ship_name_old"])
+
+    # Drop duplicate fit_id (keeping first match)
+    changed = changed.drop_duplicates(subset="fit_id").reset_index(drop=True)
+
+    # Optional: select clean output
+    result = changed[["fit_id", "fit_name_new", "ship_name_new", "old_target", "new_target"]].rename(
+        columns={"fit_name_new": "fit_name", "ship_name_new": "ship_name"}
+    )
+
+    result.to_csv("data/ship_targets_comparison.csv", index=False)
+    return result
+
+def load_ship_targets(new_targets: pd.DataFrame):
+    """Load the ship targets to the database"""
+    engine = get_local_mkt_engine()
+    with engine.connect() as conn:
+        logger.info("Deleting ship_targets table")
+        conn.execute(text("DELETE FROM ship_targets"))
+        conn.commit()
+
+        if new_targets is not None:
+            logger.info("Loading new targets")
+            new_targets.to_sql("ship_targets", get_local_mkt_engine(), if_exists="replace", index=False)
+            conn.commit()
+        else:
+            logger.info("No new targets found")
+    logger.info("Ship targets loaded")
 
 if __name__ == "__main__":
-    pass
+    
+    new_targets = pd.read_csv("data/ship_targets.csv")
+    load_ship_targets(new_targets)
+
+    targets = get_full_ship_targets()
+    print(targets)
+

@@ -684,13 +684,8 @@ def main():
     st.sidebar.markdown("---")
     st.sidebar.write(f"Last ESI update: {get_update_time()}")
 
+
+
 if __name__ == "__main__":
-    # main()
-    ship_targets = pd.read_csv("data/ship_targets.csv")
-    updated_targets = pd.read_csv("data/updated_missing_targets.csv")
+     main()
 
-    print(ship_targets.columns)
-    print(updated_targets.columns)
-
-    missing_targets = updated_targets[~updated_targets['fit_id'].isin(ship_targets['fit_id'])]
-    missing_targets.to_csv("data/missing_targets.csv", index=False)

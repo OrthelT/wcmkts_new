@@ -1,91 +1,98 @@
 id,fit_id,fit_name,ship_id,ship_name,ship_target,created_at
-1,466,1406 WC-EN Covert Cyno (Nullified),11188,Anathema,20,2025-03-29 20:52:00.000000
-2,138,2211 WC Kikistuka-Logi Bantam v1.1 MWD/后勤矮脚鸡,582,Bantam,25,2025-03-29 20:52:00.000000
-3,397,2308 WC-EN Basilisk,11985,Basilisk,25,2025-03-29 20:52:00.000000
-4,126,2202 WC Hurricane - Bellicose - Ewar,630,Bellicose,0,2025-03-29 20:52:00.000000
-5,366,2307 WC TFI - Support Bhaalgorn v1.2,17920,Bhaalgorn,5,2025-03-29 20:52:00.000000
-6,140,2202 WC Kikistuka-Links Bifrost v1.1 MWD/天梯,37480,Bifrost,25,2025-03-29 20:52:00.000000
-7,127,2202 WC Hurricane - Blackbird - Ewar,632,Blackbird,20,2025-03-29 20:52:00.000000
-8,451,2404 WC-EN Broadsword v2.0,12013,Broadsword,5,2025-03-29 20:52:00.000000
-9,237,2202 WC-EN Jackdaw - Logi Burst/ WC寒鸦-后勤爆发,599,Burst,20,2025-03-29 20:52:00.000000
-10,372,2301 WCEN Ewar - Support Newbro Celestis v1.0,633,Celestis,15,2025-03-29 20:52:00.000000
-11,265,WC-EN - Links Claymore (AB Refit) v1.2,22468,Claymore,15,2025-03-29 20:52:00.000000
-12,355,WC-EN - Links Claymore (MWD) v1.2,22468,Claymore,15,2025-03-29 20:52:00.000000
-13,182,2202 WC Tackle-Tackle Crow v1.0,11176,Crow,10,2025-03-29 20:52:00.000000
-14,242,2407 WC Newbro Crucifier v2.0 - MWD,2161,Crucifier,20,2025-03-29 20:52:00.000000
-15,442,2405 WC-EN Cyclone Fleet Issue v2.5,72811,Cyclone Fleet Issue,100,2025-03-29 20:52:00.000000
-16,206,2301 WC TFI - Links Damnation v1.2,22474,Damnation,10,2025-03-29 20:52:00.000000
-17,334,2211 WC Retri-Logi Deacon v1.0,37457,Deacon,20,2025-03-29 20:52:00.000000
-18,202,WC AHACs-DPS Deimos v1.2,12023,Deimos,50,2025-03-29 20:52:00.000000
-19,330,2211 WCEN FC Deimos Deimos,12023,Deimos,5,2025-03-29 20:52:00.000000
-20,208,2211 WC Uprising Devoter v1.2,12017,Devoter,10,2025-03-29 20:52:00.000000
-21,452,2404 WC-EN Fast Tackle Eris - Interdictor v1.0,22460,Eris,20,2025-03-29 20:52:00.000000
-22,362,2211 WC TFI-Logi T1 Exequror,634,Exequror,20,2025-03-29 20:52:00.000000
-23,476,WC-EN Armor DPS ENI v1.0,29344,Exequror Navy Issue,50,2025-03-29 20:52:00.000000
-24,473,WC-EN Shield DPS FNI v1.0,72812,Ferox Navy Issue,100,2025-03-29 20:52:00.000000
-25,474,WC-EN Shield DPS FNI (N.E.) v1.0,72812,Ferox Navy Issue,25,2025-03-29 20:52:00.000000
-26,184,2307 WC Tackle-Dictor Flycatcher v1.3,22464,Flycatcher,20,2025-03-29 20:52:00.000000
-27,471,2407 WC Newbro Griffin v1.0 - MWD,584,Griffin,20,2025-03-29 20:52:00.000000
-28,205,WC AHACs-Logi Guardian v1.2/WC狂热-后勤守卫,11987,Guardian,25,2025-03-29 20:52:00.000000
-29,314,2211 WCEN Shield-DPS LR Harpy v1.0 MWD,11381,Harpy,100,2025-03-29 20:52:00.000000
-30,387,2307 WC Tackle Heretic v1.2,22452,Heretic,20,2025-03-29 20:52:00.000000
-31,447,2403 WC-EN Bombing Hound v3.0,12034,Hound,50,2025-03-29 20:52:00.000000
-32,361,2211 WCEN Shield Support - Huginn,11961,Huginn,20,2025-03-29 20:52:00.000000
-33,123,2202 WC Hurricane T2 - DPS,24702,Hurricane,100,2025-03-29 20:52:00.000000
-34,374,2302 WC Hurricane T1 - DPS,24702,Hurricane,50,2025-03-29 20:52:00.000000
-35,134,WC-EN - Shield Support Hyena (MWD) v1.3,11387,Hyena,20,2025-03-29 20:52:00.000000
-36,460,2407 WC-EN Shield Hyena v2.0 - AB Refit,11387,Hyena,20,2025-03-29 20:52:00.000000
-37,391,2307 WC-EN Inquisitor,590,Inquisitor,20,2025-03-29 20:52:00.000000
-38,120,2202 WC HD-Tackle Jaguar v5.0/WC本地防御抓人美洲虎,11400,Jaguar,20,2025-03-29 20:52:00.000000
-39,245,2211 WC Tackle-Tackle RamJag v1.1,11400,Jaguar,20,2025-03-29 20:52:00.000000
-40,36,2407 WC Shield Keres v2.0 - AB Refit,11174,Keres,20,2025-03-29 20:52:00.000000
-41,135,2407 WC Shield Keres v2.0 - MWD,11174,Keres,20,2025-03-29 20:52:00.000000
-42,313,2407 WC Kikistuka v2.0 - AB Kiki 加力奇奇莫拉,49710,Kikimora,50,2025-03-29 20:52:00.000000
-43,136,2211 WC Kikistuka-Logi Kirin v1.1 MWD/微曲后勤麒麟,37458,Kirin,25,2025-03-29 20:52:00.000000
-44,234,2407 WC Kirin v2.0 - AB Refit,37458,Kirin,25,2025-03-29 20:52:00.000000
-45,385,WCEN Harpy Kitsune,11194,Kitsune,15,2025-03-29 20:52:00.000000
-46,364,2404 WC-EN Lachesis v1.2,11971,Lachesis,10,2025-03-29 20:52:00.000000
-47,271,WC-EN - Shield Web Loki (AB refit) v1.0,29990,Loki,10,2025-03-29 20:52:00.000000
-48,443,WC-EN - Armor Support Loki v1.0,29990,Loki,10,2025-03-29 20:52:00.000000
-49,463,WC-EN - Shield Web Loki (MWD) v1.0,29990,Loki,10,2025-03-29 20:52:00.000000
-50,389,2307 WC-EN Retribution Fleet Magus v1.0,37483,Magus,20,2025-03-29 20:52:00.000000
-51,446,2403 WC-EN Bombing Manticore v1.0,12032,Manticore,50,2025-03-29 20:52:00.000000
-52,323,2407 WC Newbro Maulus v2.0 - MWD,609,Maulus,20,2025-03-29 20:52:00.000000
-53,445,2403 WC-EN Bombing Nemesis v1.0,11377,Nemesis,50,2025-03-29 20:52:00.000000
-54,461,WC-EN - Links Nighthawk (AB Refit) v1.0,22470,Nighthawk,10,2025-03-29 20:52:00.000000
-55,462,WC-EN - Links Nighthawk (MWD) v1.0,22470,Nighthawk,10,2025-03-29 20:52:00.000000
-56,262,WC-EN - DPS Nightmare v1.3,17736,Nightmare,50,2025-03-29 20:52:00.000000
-57,203,2202 WC AHACs-Logi Oneiros v1.0,11989,Oneiros,25,2025-03-29 20:52:00.000000
-58,359,2211 WC TFI - Logi Oneiros,11989,Oneiros,25,2025-03-29 20:52:00.000000
-59,351,2404 WC-EN Onyx v2.0,11995,Onyx,10,2025-03-29 20:52:00.000000
-60,129,2211 WC Hurricane - Osprey - Logi v1.1,620,Osprey,25,2025-03-29 20:52:00.000000
-61,368,2211 WCEN Phobos v1.1,12021,Phobos,10,2025-03-29 20:52:00.000000
-62,332,2307 WC Retri-Links Pontifex v1.1,37481,Pontifex,20,2025-03-29 20:52:00.000000
-63,336,2211 WC Punisher Meta,597,Punisher,15,2025-03-29 20:52:00.000000
-64,444,2403 WC-EN Bombing Purifier v3.0,12038,Purifier,50,2025-03-29 20:52:00.000000
-65,465,1406 WC-EN FC Bombing Purifier,12038,Purifier,50,2025-03-29 20:52:00.000000
-66,311,230801 WC-EN Racecar Raptor,11178,Raptor,20,2025-03-29 20:52:00.000000
-67,331,2307 WC-EN Retribution Fleet,11393,Retribution,50,2025-03-29 20:52:00.000000
-68,450,2404 WC-EN Fast Tackle Sabre v1.4,22456,Sabre,20,2025-03-29 20:52:00.000000
-69,137,2211 WC Kikistuka-Logi Scalp v1.1 MWD/微曲手术刀,37460,Scalpel,15,2025-03-29 20:52:00.000000
-70,411,2407 WC Scalpel v2.0 - AB Refit,37460,Scalpel,15,2025-03-29 20:52:00.000000
-71,273,WC-EN - Shield Logi Scimitar (AB Refit) 1.2,11978,Scimitar,25,2025-03-29 20:52:00.000000
-72,354,WC-EN - Shield Logi Scimitar (MWD) 1.3,11978,Scimitar,25,2025-03-29 20:52:00.000000
-73,440,2401 WC-EN Mainline Armor Jams v1.0,640,Scorpion,10,2025-03-29 20:52:00.000000
-74,133,WC kikistuka - neut Sentinel毁电哨兵,11190,Sentinel,20,2025-03-29 20:52:00.000000
-75,61,2407 WC Stork v2.0 - AB Refit,37482,Stork,20,2025-03-29 20:52:00.000000
-76,139,2202 WC Kikistuka-Links Stork v1.0 MWD/鹮鸟,37482,Stork,20,2025-03-29 20:52:00.000000
-77,333,WCEN Armor-Support Svipul v1.2,34562,Svipul,20,2025-03-29 20:52:00.000000
-78,356,2211 WCEN Shield Support - Svipul,34562,Svipul,20,2025-03-29 20:52:00.000000
-79,357,2404 WC TFI - DP Arty TFI v1.4,17732,Tempest Fleet Issue,50,2025-03-29 20:52:00.000000
-80,335,2211 WC Retri-Logi Thalia v1.0,37459,Thalia,15,2025-03-29 20:52:00.000000
-81,390,2307 WC Retribution FC Vengeance [No Probes],11365,Vengeance,15,2025-03-29 20:52:00.000000
-82,325,2407 WC Newbro Vigil v2.0 - MWD,3766,Vigil,15,2025-03-29 20:52:00.000000
-83,386,230711 WC-EN TFI Web Vindi,17740,Vindicator,5,2025-03-29 20:52:00.000000
-84,369,WC-EN Shield DPS Vulture v1.2,22446,Vulture,50,2025-03-29 20:52:00.000000
-85,475,WC-EN Shield Links Vulture v1.2,22446,Vulture,15,2025-03-29 20:52:00.000000
-86,204,2202 WC AHACs-Logi Zarmazd v1.0,49713,Zarmazd,10,2025-03-29 20:52:00.000000
-87,201,WC AHACs-DPS Zealot v1.2/WC狂热-火力狂热,12003,Zealot,50,2025-03-29 20:52:00.000000
-88,492,WC-EN Shield DPS Moa v1.0,623,Moa,50,2025-03-29 20:52:00.000000
-89,412,2310 WC-EN Windrunner Tornado,4310,Tornado,50,2025-03-29 20:52:00.000000
-90,395,2308 WC Rokh,24688,Rokh,100,2025-03-29 20:52:00.000000
+0,466,1406 WC-EN Covert Cyno (Nullified),11188,Anathema,20,52:00.0
+1,138,2211 WC Kikistuka-Logi Bantam v1.1 MWD/后勤矮脚鸡,582,Bantam,25,52:00.0
+2,397,2308 WC-EN Basilisk,11985,Basilisk,50,52:00.0
+3,126,2202 WC Hurricane - Bellicose - Ewar,630,Bellicose,0,52:00.0
+4,366,2307 WC TFI - Support Bhaalgorn v1.2,17920,Bhaalgorn,5,52:00.0
+5,140,2202 WC Kikistuka-Links Bifrost v1.1 MWD/天梯,37480,Bifrost,25,52:00.0
+6,127,2202 WC Hurricane - Blackbird - Ewar,632,Blackbird,20,52:00.0
+7,451,2404 WC-EN Broadsword v2.0,12013,Broadsword,5,52:00.0
+8,237,2202 WC-EN Jackdaw - Logi Burst/ WC寒鸦-后勤爆发,599,Burst,20,52:00.0
+9,372,2301 WCEN Ewar - Support Newbro Celestis v1.0,633,Celestis,15,52:00.0
+10,265,WC-EN - Links Claymore (AB Refit) v1.2,22468,Claymore,15,52:00.0
+11,355,WC-EN - Links Claymore (MWD) v1.2,22468,Claymore,15,52:00.0
+12,182,2202 WC Tackle-Tackle Crow v1.0,11176,Crow,10,52:00.0
+13,242,2407 WC Newbro Crucifier v2.0 - MWD,2161,Crucifier,20,52:00.0
+14,442,2405 WC-EN Cyclone Fleet Issue v2.5,72811,Cyclone Fleet Issue,100,52:00.0
+15,206,2301 WC TFI - Links Damnation v1.2,22474,Damnation,10,52:00.0
+16,334,2211 WC Retri-Logi Deacon v1.0,37457,Deacon,20,52:00.0
+17,202,WC AHACs-DPS Deimos v1.2,12023,Deimos,50,52:00.0
+18,330,2211 WCEN FC Deimos Deimos,12023,Deimos,5,52:00.0
+19,208,2211 WC Uprising Devoter v1.2,12017,Devoter,10,52:00.0
+20,452,2404 WC-EN Fast Tackle Eris - Interdictor v1.0,22460,Eris,20,52:00.0
+21,362,2211 WC TFI-Logi T1 Exequror,634,Exequror,20,52:00.0
+22,476,WC-EN Armor DPS ENI v1.0,29344,Exequror Navy Issue,50,52:00.0
+23,473,WC-EN Shield DPS FNI v1.0,72812,Ferox Navy Issue,250,52:00.0
+24,474,WC-EN Shield DPS FNI (N.E.) v1.0,72812,Ferox Navy Issue,25,52:00.0
+25,184,2307 WC Tackle-Dictor Flycatcher v1.3,22464,Flycatcher,20,52:00.0
+26,471,2407 WC Newbro Griffin v1.0 - MWD,584,Griffin,20,52:00.0
+27,205,WC AHACs-Logi Guardian v1.2/WC狂热-后勤守卫,11987,Guardian,25,52:00.0
+28,314,2211 WCEN Shield-DPS LR Harpy v1.0 MWD,11381,Harpy,100,52:00.0
+29,387,2307 WC Tackle Heretic v1.2,22452,Heretic,20,52:00.0
+30,447,2403 WC-EN Bombing Hound v3.0,12034,Hound,50,52:00.0
+31,361,2211 WCEN Shield Support - Huginn,11961,Huginn,20,52:00.0
+32,123,2202 WC Hurricane T2 - DPS,24702,Hurricane,100,52:00.0
+33,374,2302 WC Hurricane T1 - DPS,24702,Hurricane,50,52:00.0
+34,134,WC-EN - Shield Support Hyena (MWD) v1.3,11387,Hyena,20,52:00.0
+35,460,2407 WC-EN Shield Hyena v2.0 - AB Refit,11387,Hyena,20,52:00.0
+36,391,2307 WC-EN Inquisitor,590,Inquisitor,20,52:00.0
+37,120,2202 WC HD-Tackle Jaguar v5.0/WC本地防御抓人美洲虎,11400,Jaguar,20,52:00.0
+38,245,2211 WC Tackle-Tackle RamJag v1.1,11400,Jaguar,20,52:00.0
+39,36,2407 WC Shield Keres v2.0 - AB Refit,11174,Keres,20,52:00.0
+40,135,2407 WC Shield Keres v2.0 - MWD,11174,Keres,20,52:00.0
+41,313,2407 WC Kikistuka v2.0 - AB Kiki 加力奇奇莫拉,49710,Kikimora,50,52:00.0
+42,136,2211 WC Kikistuka-Logi Kirin v1.1 MWD/微曲后勤麒麟,37458,Kirin,25,52:00.0
+43,234,2407 WC Kirin v2.0 - AB Refit,37458,Kirin,25,52:00.0
+44,385,WCEN Harpy Kitsune,11194,Kitsune,15,52:00.0
+45,364,2404 WC-EN Lachesis v1.2,11971,Lachesis,10,52:00.0
+46,271,WC-EN - Shield Web Loki (AB refit) v1.0,29990,Loki,10,52:00.0
+47,443,WC-EN - Armor Support Loki v1.0,29990,Loki,10,52:00.0
+48,463,WC-EN - Shield Web Loki (MWD) v1.0,29990,Loki,10,52:00.0
+49,389,2307 WC-EN Retribution Fleet Magus v1.0,37483,Magus,20,52:00.0
+50,446,2403 WC-EN Bombing Manticore v1.0,12032,Manticore,50,52:00.0
+51,323,2407 WC Newbro Maulus v2.0 - MWD,609,Maulus,20,52:00.0
+52,445,2403 WC-EN Bombing Nemesis v1.0,11377,Nemesis,50,52:00.0
+53,461,WC-EN - Links Nighthawk (AB Refit) v1.0,22470,Nighthawk,10,52:00.0
+54,462,WC-EN - Links Nighthawk (MWD) v1.0,22470,Nighthawk,10,52:00.0
+55,262,WC-EN - DPS Nightmare v1.3,17736,Nightmare,50,52:00.0
+56,203,2202 WC AHACs-Logi Oneiros v1.0,11989,Oneiros,25,52:00.0
+57,359,2211 WC TFI - Logi Oneiros,11989,Oneiros,25,52:00.0
+58,351,2404 WC-EN Onyx v2.0,11995,Onyx,10,52:00.0
+59,129,2211 WC Hurricane - Osprey - Logi v1.1,620,Osprey,25,52:00.0
+60,368,2211 WCEN Phobos v1.1,12021,Phobos,10,52:00.0
+61,332,2307 WC Retri-Links Pontifex v1.1,37481,Pontifex,20,52:00.0
+62,336,2211 WC Punisher Meta,597,Punisher,15,52:00.0
+63,444,2403 WC-EN Bombing Purifier v3.0,12038,Purifier,50,52:00.0
+64,465,1406 WC-EN FC Bombing Purifier,12038,Purifier,50,52:00.0
+65,311,230801 WC-EN Racecar Raptor,11178,Raptor,20,52:00.0
+66,331,2307 WC-EN Retribution Fleet,11393,Retribution,50,52:00.0
+67,450,2404 WC-EN Fast Tackle Sabre v1.4,22456,Sabre,20,52:00.0
+68,137,2211 WC Kikistuka-Logi Scalp v1.1 MWD/微曲手术刀,37460,Scalpel,15,52:00.0
+69,411,2407 WC Scalpel v2.0 - AB Refit,37460,Scalpel,15,52:00.0
+70,273,WC-EN - Shield Logi Scimitar (AB Refit) 1.2,11978,Scimitar,40,52:00.0
+71,354,WC-EN - Shield Logi Scimitar (MWD) 1.3,11978,Scimitar,40,52:00.0
+72,440,2401 WC-EN Mainline Armor Jams v1.0,640,Scorpion,10,52:00.0
+73,133,WC kikistuka - neut Sentinel毁电哨兵,11190,Sentinel,20,52:00.0
+74,61,2407 WC Stork v2.0 - AB Refit,37482,Stork,20,52:00.0
+75,139,2202 WC Kikistuka-Links Stork v1.0 MWD/鹮鸟,37482,Stork,20,52:00.0
+76,333,WCEN Armor-Support Svipul v1.2,34562,Svipul,20,52:00.0
+77,356,2211 WCEN Shield Support - Svipul,34562,Svipul,20,52:00.0
+78,357,2404 WC TFI - DP Arty TFI v1.4,17732,Tempest Fleet Issue,50,52:00.0
+79,335,2211 WC Retri-Logi Thalia v1.0,37459,Thalia,15,52:00.0
+80,390,2307 WC Retribution FC Vengeance [No Probes],11365,Vengeance,15,52:00.0
+81,325,2407 WC Newbro Vigil v2.0 - MWD,3766,Vigil,15,52:00.0
+82,386,230711 WC-EN TFI Web Vindi,17740,Vindicator,5,52:00.0
+83,369,WC-EN Shield DPS Vulture v1.2,22446,Vulture,100,52:00.0
+84,475,WC-EN Shield Links Vulture v1.2,22446,Vulture,25,52:00.0
+85,204,2202 WC AHACs-Logi Zarmazd v1.0,49713,Zarmazd,10,52:00.0
+86,201,WC AHACs-DPS Zealot v1.2/WC狂热-火力狂热,12003,Zealot,50,52:00.0
+87,492,WC-EN Shield DPS Moa v1.0,623,Moa,50,52:00.0
+88,412,2310 WC-EN Windrunner Tornado,4310,Tornado,100,52:00.0
+89,395,2308 WC Rokh,24688,Rokh,250,52:00.0
+90,448, 2404 WC-EN Windrunner Tornado Links v1.0,3756,Gnosis,20,37:12.2
+91,39,zz pre2202 WC Hurricane - Drake - Links,24698,Drake,20,37:12.2
+92,326, 2211 WCEN Bomber-Torpedo Purifier v2.1/WC隐轰净化,12038,Purifier,50,37:12.2
+93,328, 2211 WCEN Bomber-Torpedo Manticore v2.1/WC隐轰蝎尾怪,12032,Manticore,50,37:12.2
+94,327, 2211 WCEN Bomber-Torpedo Nemesis v2.1/WC隐轰纳美西斯,11377,Nemesis,50,37:12.2
+95,329, 2211 WCEN Bomber-FC Bomber Purifier v1.0,12038,Purifier,50,37:12.2
+96,322,  2211 WCEN Bomber-Torpedo Hound v2.1/WC隐轰猎犬,12034,Hound,50,37:12.2

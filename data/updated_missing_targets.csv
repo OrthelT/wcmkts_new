@@ -1,8 +1,0 @@
-fit_id,ship_id,ship_name,fit,ship,fits,hulls,target,target_percentage,lowest_modules,daily_avg,ship_group
-448,3756,Gnosis, 2404 WC-EN Windrunner Tornado Links v1.0,Gnosis,24.0,56,20,100,"['Evasive Maneuvers Charge (24)', 'Electronic Superiority Charge (30)', ""'Vehemence' Compact Medium EMP Smartbomb (64)""]",827.0555555555555,Combat Battlecruiser
-39,24698,Drake,zz pre2202 WC Hurricane - Drake - Links,Drake,5.0,5,20,25,"['Medium EMP Smartbomb II (22)', 'Medium Command Processor I (76)', 'Shield Command Burst II (77)']",3903.5263157894738,Combat Battlecruiser
-326,12038,Purifier, 2211 WCEN Bomber-Torpedo Purifier v2.1/WC隐轰净化,Purifier,64.0,64,20,100,"['Torpedo Launcher II (135)', 'Small Shield Extender II (170)', 'Covert Ops Cloaking Device II (364)']",8186.923076923077,Stealth Bomber
-328,12032,Manticore, 2211 WCEN Bomber-Torpedo Manticore v2.1/WC隐轰蝎尾怪,Manticore,130.0,130,20,100,"['Torpedo Launcher II (135)', 'Crosslink Compact Ballistic Control System (312)', 'Covert Ops Cloaking Device II (364)']",9856.0,Stealth Bomber
-327,11377,Nemesis, 2211 WCEN Bomber-Torpedo Nemesis v2.1/WC隐轰纳美西斯,Nemesis,121.0,121,20,100,"['Torpedo Launcher II (135)', 'Target Painter II (196)', 'Inferno Rage Torpedo (229)']",5078.083333333333,Stealth Bomber
-329,12038,Purifier, 2211 WCEN Bomber-FC Bomber Purifier v1.0,Purifier,64.0,64,20,100,"['Combat Scanner Probe I (139)', 'Co-Processor II (167)', 'Small Shield Extender II (170)']",7593.285714285715,Stealth Bomber
-322,12034,Hound,  2211 WCEN Bomber-Torpedo Hound v2.1/WC隐轰猎犬,Hound,135.0,170,20,100,"['Torpedo Launcher II (135)', 'Small Shield Extender II (170)', 'Covert Ops Cloaking Device II (364)']",5111.846153846154,Stealth Bomber
