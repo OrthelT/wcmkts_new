@@ -1,5 +1,6 @@
 import sqlalchemy as sa
 from sqlalchemy import create_engine, inspect
+import json
 import pymysql
 import pandas as pd
 import sys
@@ -22,6 +23,19 @@ def get_doctrines_from_db():
         df = pd.read_sql_query("SELECT * FROM doctrines", conn)
     return df
 
+def get_doctrine_dict():
+    engine = get_local_mkt_engine()
+    with engine.connect() as conn:
+        df = pd.read_sql_query("SELECT * FROM doctrine_map", conn)
+
+    doctrine_ids = df['doctrine_id'].unique().tolist()
+    doctrine_dict = {}
+    for id in doctrine_ids:
+        df2 = df[df.doctrine_id == id]
+        fits = df2['fitting_id'].unique().tolist()
+        doctrine_dict[id] = fits
+    return doctrine_dict
+
 def main():
        # App title and logo
     # Handle path properly for WSL environment
@@ -35,7 +49,10 @@ def main():
     st.title("Doctrine Report")
     
     # Fetch the data
-    _, fit_summary = create_fit_df()
+    master_df, fit_summary = create_fit_df()
+
+    print(master_df.columns)
+    print(fit_summary.columns)
     
     if fit_summary.empty:
         st.warning("No doctrine fits found in the database.")
@@ -43,13 +60,8 @@ def main():
     
     st.dataframe(fit_summary)
     
-    # Display database tables
-    st.subheader("Database Tables")
-    engine = get_local_mkt_engine()
-    from sqlalchemy import inspect
-    inspector = inspect(engine)
-    tables = inspector.get_table_names()
-    st.write(tables)
+
 
 if __name__ == "__main__":
-    pass
+    main()
+ 
