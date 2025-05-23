@@ -1,5 +1,6 @@
 import sys
 import os
+import json
 # Add the parent directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -18,7 +19,7 @@ import libsql_experimental as libsql
 mktdb = "wcmkt.db"
 
 # Insert centralized logging configuration
-logger = setup_logging(__name__)
+logger = setup_logging(__name__, log_file="doctrine_status.log")
 
 @st.cache_resource(ttl=600, show_spinner="Loading libsql connection...")
 def get_libsql_connection():
@@ -31,7 +32,7 @@ def get_fit_summary():
     logger.info("Getting fit summary")
     
     # Get the raw data with all fit details
-    all_fits_data = create_fit_df()
+    all_fits_data, _ = create_fit_df()
     
     if all_fits_data.empty:
         return pd.DataFrame()
@@ -50,6 +51,7 @@ def get_fit_summary():
         # Filter data for this fit
         try:
             fit_data = all_fits_data[all_fits_data['fit_id'] == fit_id]
+            
         except Exception as e:
             errors[fit_id] = "Error getting fit data for fit_id: " + fit_id + " " + str(e)
             logger.error(f"Error: {e}")
@@ -67,7 +69,7 @@ def get_fit_summary():
         ship_id = first_row['ship_id']
         ship_name = first_row['ship_name']
         hulls = first_row['hulls']
-        
+      
         # Extract ship group from the data
         ship_group = "Ungrouped"  # Default
         
@@ -123,7 +125,6 @@ def get_fit_summary():
         # Get fit name from the ship_targets table if available
         fit_name = get_fit_name(fit_id)
 
-        
         # Add to summary list
         fit_summary.append({
             'fit_id': fit_id,
@@ -139,7 +140,7 @@ def get_fit_summary():
             'daily_avg': daily_avg,
             'ship_group': ship_group
         })
-    
+
     if errors:
         logger.error(f"Errors: {errors}")
     
@@ -164,7 +165,6 @@ def get_fit_name(fit_id: int) -> str:
         logger.error(f"Error: {e}")
         return "Unknown Fit"
 
-@st.cache_data(ttl=600, show_spinner="Loading cached module stock list...")
 def get_module_stock_list(module_names: list):
     """Get lists of modules with their stock quantities for display and CSV export."""
 
@@ -224,7 +224,7 @@ def get_ship_stock_list(ship_names: list):
                     where_clause = f"type_name = '{ship}'"
 
                 query = f"""
-                    SELECT type_name, type_id, total_stock, fits_on_mkt
+                    SELECT type_name, type_id, total_stock, fits_on_mkt, fit_id
                     FROM doctrines 
                     WHERE {where_clause}
                     LIMIT 1
@@ -236,6 +236,7 @@ def get_ship_stock_list(ship_names: list):
                     ship_id = row[1]
                     ship_stock = int(row[2])
                     ship_fits = int(row[3])
+                    fit_id = int(row[4])
                     ship_target = get_ship_target(ship_id, 0)
                     ship_info = f"{ship} (Qty: {ship_stock} | Fits: {ship_fits} | Target: {ship_target})"
                     csv_ship_info = f"{ship},{ship_id},{ship_stock},{ship_fits},{ship_target}\n"
@@ -687,5 +688,4 @@ def main():
 
 
 if __name__ == "__main__":
-     main()
-
+    main()

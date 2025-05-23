@@ -66,3 +66,6 @@ sde.db-wal
 misc_functions.py
 tests/
 misc_files/
+fit_summary_df.csv
+fit_summary.csv
+

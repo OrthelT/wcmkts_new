@@ -106,16 +106,16 @@ def create_fit_df()->pd.DataFrame:
         # Add to master dataframe
         master_df = pd.concat([master_df, df2])
         
-        #uncomment this to get the fit summary as its own dataframe
-        # fits.append(fit_df)
+        # uncomment this to get the fit summary as its own dataframe
+        fits.append(fit_df)
     
-    # summary_df = get_fit_summary(fits)
-    # return master_df, summary_df
+    summary_df = get_fit_summary(fits)  
+    return master_df, summary_df
 
-    return master_df
+    # return master_df
 
 
-def get_fit_summary(fits:list)->pd.DataFrame:
+def get_fit_summary(fits:list = None)->pd.DataFrame:
     """Get a summary of all doctrine fits"""
     # Add all the fit summary rows if needed (for a summary view)
     fit_summary_df = pd.DataFrame()

@@ -120,8 +120,8 @@ def create_days_remaining_chart(df):
     
     return fig
 
-if __name__ == "__main__":
-    # Title
+def main():
+       # Title
     st.title("Winter Coalition Market Low Stock Alert")
     st.markdown("""
     This page shows items that are running low on the market. The **Days Remaining** column shows how many days of sales 
@@ -272,3 +272,7 @@ if __name__ == "__main__":
     # Display last update timestamp
     st.sidebar.markdown("---")
     st.sidebar.write(f"Last ESI update: {get_update_time()}")
+
+if __name__ == "__main__":
+    main()
+ 
