@@ -573,14 +573,14 @@ def main():
             if module_name in st.session_state.csv_module_list_state:
                 csv_export += st.session_state.csv_module_list_state[module_name]
         
-    # Download button
-    st.sidebar.download_button(
-        label="📥 Download CSV",
-        data=csv_export,
-        file_name="low_stock_list.csv",
-        mime="text/csv",
-        use_container_width=True
-    )
+        # Download button
+        st.sidebar.download_button(
+            label="📥 Download CSV",
+            data=csv_export,
+            file_name="low_stock_list.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
     
     # Clear selection button
     if st.sidebar.button("🗑️ Clear Selection", use_container_width=True):
