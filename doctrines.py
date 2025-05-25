@@ -137,6 +137,4 @@ def get_fit_info()->pd.DataFrame:
 
 
 if __name__ == "__main__":
-    pd.set_option('display.max_columns', None)
-    df = create_fit_df()
-    print(df)
+    pass

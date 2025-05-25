@@ -291,6 +291,8 @@ def display_categorized_doctrine_data(selected_data):
                 hide_index=True
             )
 
+    
+
 def main():
        # App title and logo
     # Handle path properly for WSL environment
@@ -332,7 +334,7 @@ def main():
     lead_ship_image_url = f"https://images.evetech.net/types/{lead_ship_id}/render?size=256"
     
     # Create two-column layout for doctrine header
-    header_col1, header_col2 = st.columns([0.3, 0.7])
+    header_col1, header_col2 = st.columns([0.2, 0.8], gap="small", vertical_alignment="center")
     
     with header_col1:
         try:
@@ -345,6 +347,7 @@ def main():
         st.subheader(selected_doctrine, anchor=selected_doctrine, divider=True)
         st.markdown("&nbsp;")  # Add some spacing
     
+    st.write(f"Doctrine ID: {selected_doctrine_id}")
     # Display categorized doctrine data instead of simple dataframe
     display_categorized_doctrine_data(selected_data)
 
