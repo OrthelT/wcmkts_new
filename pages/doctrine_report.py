@@ -29,25 +29,6 @@ def get_libsql_connection():
     """Get a connection to the libsql database"""
     return libsql.connect(mktdb)
 
-# def get_doctrines_from_db():
-#     engine = get_local_mkt_engine()
-#     with engine.connect() as conn:
-#         df = pd.read_sql_query("SELECT * FROM doctrines", conn)
-#     return df
-
-# def get_doctrine_dict():
-#     engine = get_local_mkt_engine()
-#     with engine.connect() as conn:
-#         df = pd.read_sql_query("SELECT * FROM doctrine_map", conn)
-
-#     doctrine_ids = df['doctrine_id'].unique().tolist()
-#     doctrine_dict = {}
-#     for id in doctrine_ids:
-#         df2 = df[df.doctrine_id == id]
-#         fits = df2['fitting_id'].unique().tolist()
-#         doctrine_dict[id] = fits
-#     return doctrine_dict
-
 def get_module_stock_list(module_names: list):
     """Get lists of modules with their stock quantities for display and CSV export."""
     
@@ -303,25 +284,26 @@ def display_categorized_doctrine_data(selected_data):
                 st.metric("Avg Target %", f"{int(avg_target_pct)}%")
 
 
-            
             # Display the data table for this role (without the role column)
             display_columns = [col for col in role_data.columns if col != 'role']
+            
             df = role_data[display_columns]
-            df['price'] = df['price'].apply(lambda x: f"{x:,.0f}")
+            df['ship_target'] = df['ship_target'] * st.session_state.target_multiplier
+            df['target_percentage'] = round(df['fits'] / df['ship_target'], 2)
 
+            
             st.dataframe(
                 df,
                 column_config={
                     'target_percentage': st.column_config.ProgressColumn(
                         "Target %",
-                        format="%d%%",
+                        format="percent",
                         width="small",
                   
                     ),
                     'ship_target': st.column_config.Column(
                         "Target",
                         help="Number of fits required for stock",
-
 
                     ),
                     'daily_avg': st.column_config.Column(
@@ -340,91 +322,28 @@ def display_categorized_doctrine_data(selected_data):
                         help="Ship name"
                     ),
                     'ship_id': st.column_config.Column(
-                        "Type ID",
-     
+                        "Type ID",     
                         help="Ship ID"
                     ),
                     'fit_id': st.column_config.Column(
                         "Fit ID",
-      
                         help="Fit ID"
+                    ),
+                    'price': st.column_config.NumberColumn(
+                        "Price",
+                        format="localized",
+                        help="Price of the item"
                     )
+
                 },
                 use_container_width=True,
                 hide_index=True
             )
 
-    
+def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.DataFrame, selected_fit_ids: list, fit_summary: pd.DataFrame):
+    """Display low stock modules for the selected doctrine"""
+        # Get module data from master_df for the selected doctrine
 
-def main():
-       # App title and logo
-    # Handle path properly for WSL environment
-    image_path = pathlib.Path(__file__).parent.parent / "images" / "wclogo.png"
-
-    col1, col2 = st.columns([0.2, 0.8])
-    with col1:
-        if image_path.exists():
-            st.image(str(image_path), width=150)
-        else:
-            st.warning("Logo image not found")
-    with col2:
-        st.title("Doctrine Report")
-        st.text("Beta Version 0.1")
-    
-    
-    # Fetch the data
-    master_df, fit_summary = create_fit_df()
-
-    
-    if fit_summary.empty:
-        st.warning("No doctrine fits found in the database.")
-        return
-    
-    engine = get_local_mkt_engine()
-    with engine.connect() as conn:
-        df = pd.read_sql_query("SELECT * FROM doctrine_fits", conn)
-
-    doctrine_names = df.doctrine_name.unique()
-
-    selected_doctrine = st.sidebar.selectbox("Select a doctrine", doctrine_names)
-    selected_doctrine_id = df[df.doctrine_name == selected_doctrine].doctrine_id.unique()[0]
-
-    selected_data = fit_summary[fit_summary['fit_id'].isin(df[df.doctrine_name == selected_doctrine].fit_id.unique())]
-
-    # Get module data from master_df for the selected doctrine
-    selected_fit_ids = df[df.doctrine_name == selected_doctrine].fit_id.unique()
-    doctrine_modules = master_df[master_df['fit_id'].isin(selected_fit_ids)]
-    doctrine_fit_data = doctrine_modules.copy()
-
-
-    # Create enhanced header with lead ship image    
-    # Get lead ship image for this doctrine
-    lead_ship_id = get_doctrine_lead_ship(selected_doctrine_id)
-    lead_ship_image_url = f"https://images.evetech.net/types/{lead_ship_id}/render?size=256"
-    
-    # Create two-column layout for doctrine header
-    header_col1, header_col2 = st.columns([0.2, 0.8], gap="small", vertical_alignment="center")
-    
-    with header_col1:
-        try:
-            st.image(lead_ship_image_url, width=128)
-        except:
-            st.text("🚀 Ship Image Not Available")
-    
-    with header_col2:
-        st.markdown("&nbsp;")  # Add some spacing
-        st.subheader(selected_doctrine, anchor=selected_doctrine, divider=True)
-        st.markdown("&nbsp;")  # Add some spacing
-    
-    st.write(f"Doctrine ID: {selected_doctrine_id}")
-    # Display categorized doctrine data instead of simple dataframe
-    display_categorized_doctrine_data(selected_data)
-
-    # Initialize session state for selected modules
-    if 'selected_modules' not in st.session_state:
-        st.session_state.selected_modules = []
-
-    # Display lowest stock modules by ship with checkboxes
     if not doctrine_modules.empty:
         
         st.subheader("Stock Status",divider="blue")
@@ -477,14 +396,14 @@ def main():
                     fit_name = get_fit_name_from_db(fit_id)
 
                     ship_target = fit_summary[fit_summary['fit_id'] == fit_id]['ship_target'].iloc[0]
+                    try:
+                        ship_target = int(ship_target * st.session_state.target_multiplier)
+                    except:
+                        ship_target = ship_target
+
                     st.subheader(ship_name,divider="orange")
                     st.markdown(f"{fit_name}  (**Target: {ship_target}**)")
-                    
-                    # st.markdown(f"**{ship_name}** - *{fit_name}*")
-                    # st.markdown(f'<span style="color:orange">___________________________________</span>', unsafe_allow_html=True)
-                    # st.markdown(f"**Fit ID:** {fit_id} | **Type ID:** {ship_id} | **Target:** {ship_target}")
-
-                
+                                   
                 # Display the 3 lowest stock modules
                 for _, module_row in lowest_modules.iterrows():
                     # Get target for this fit from selected_data
@@ -546,8 +465,91 @@ def main():
                 
                 # Add spacing between ships
                 st.markdown("<br>", unsafe_allow_html=True)
+
+    
+def update_target_multiplier(target_multiplier: float, selected_data: pd.DataFrame):
+    st.session_state.target_multiplier = target_multiplier
+    display_categorized_doctrine_data(selected_data)
+
+def main():
+    # Initialize session state for target multiplier
+    if 'target_multiplier' not in st.session_state:
+        st.session_state.target_multiplier = 1.0
+
+       # Initialize session state for selected modules
+    if 'selected_modules' not in st.session_state:
+        st.session_state.selected_modules = []
+
+       # App title and logo
+    # Handle path properly for WSL environment
+    image_path = pathlib.Path(__file__).parent.parent / "images" / "wclogo.png"
+
+    col1, col2 = st.columns([0.2, 0.8])
+    with col1:
+        if image_path.exists():
+            st.image(str(image_path), width=150)
+        else:
+            st.warning("Logo image not found")
+    with col2:
+        st.title("Doctrine Report")
+        st.text("Beta Version 0.1")
     
     
+    # Fetch the data
+    master_df, fit_summary = create_fit_df()
+
+    
+    if fit_summary.empty:
+        st.warning("No doctrine fits found in the database.")
+        return
+    
+    engine = get_local_mkt_engine()
+    with engine.connect() as conn:
+        df = pd.read_sql_query("SELECT * FROM doctrine_fits", conn)
+
+    doctrine_names = df.doctrine_name.unique()
+
+    selected_doctrine = st.sidebar.selectbox("Select a doctrine", doctrine_names)
+    selected_doctrine_id = df[df.doctrine_name == selected_doctrine].doctrine_id.unique()[0]
+
+    selected_data = fit_summary[fit_summary['fit_id'].isin(df[df.doctrine_name == selected_doctrine].fit_id.unique())]
+    
+    # Get module data from master_df for the selected doctrine
+    selected_fit_ids = df[df.doctrine_name == selected_doctrine].fit_id.unique()
+    doctrine_modules = master_df[master_df['fit_id'].isin(selected_fit_ids)]
+
+
+    # Create enhanced header with lead ship image    
+    # Get lead ship image for this doctrine
+    lead_ship_id = get_doctrine_lead_ship(selected_doctrine_id)
+    lead_ship_image_url = f"https://images.evetech.net/types/{lead_ship_id}/render?size=256"
+    
+    # Create two-column layout for doctrine header
+    header_col1, header_col2 = st.columns([0.2, 0.8], gap="small", vertical_alignment="center")
+    
+    with header_col1:
+        try:
+            st.image(lead_ship_image_url, width=128)
+        except:
+            st.text("🚀 Ship Image Not Available")
+    
+    with header_col2:
+        st.markdown("&nbsp;")  # Add some spacing
+        st.subheader(selected_doctrine, anchor=selected_doctrine, divider=True)
+        st.markdown("&nbsp;")  # Add some spacing
+    
+    st.write(f"Doctrine ID: {selected_doctrine_id}")
+    # Display categorized doctrine data instead of simple dataframe
+    display_categorized_doctrine_data(selected_data)
+
+    # Display lowest stock modules by ship with checkboxes
+    display_low_stock_modules(selected_data, doctrine_modules, selected_fit_ids, fit_summary)
+    
+    st.markdown("---")
+    st.sidebar.header("Set Target Multiplier")
+    target_multiplier = st.sidebar.slider("Target Multiplier", min_value=0.5, max_value=2.0, value=1.0, step=0.1)
+    st.sidebar.markdown(f"Current Target Multiplier: {target_multiplier}")
+    st.sidebar.button("Update Target Multiplier", on_click=update_target_multiplier(target_multiplier, selected_data))
     
     # Display selected modules if any
     st.sidebar.markdown("---")

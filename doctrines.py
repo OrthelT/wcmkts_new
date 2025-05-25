@@ -112,8 +112,6 @@ def create_fit_df()->pd.DataFrame:
     summary_df = get_fit_summary(fits)  
     return master_df, summary_df
 
-    # return master_df
-
 
 def get_fit_summary(fits:list = None)->pd.DataFrame:
     """Get a summary of all doctrine fits"""
