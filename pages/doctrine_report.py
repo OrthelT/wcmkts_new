@@ -313,6 +313,45 @@ def display_categorized_doctrine_data(selected_data):
 
             st.dataframe(
                 df,
+                column_config={
+                    'target_percentage': st.column_config.ProgressColumn(
+                        "Target %",
+                        format="%d%%",
+                        width="small",
+                  
+                    ),
+                    'ship_target': st.column_config.Column(
+                        "Target",
+                        help="Number of fits required for stock",
+
+
+                    ),
+                    'daily_avg': st.column_config.Column(
+                        "Daily Sales",
+                        width="small",
+                        help="Average daily sa,les over the last 30 days"
+                    ),
+                    'ship_group': st.column_config.Column(
+                        "Group",
+                        width="small",
+                        help="Ship group"
+                    ),
+                    'ship_name': st.column_config.Column(
+                        "Ship",
+                        width="small",
+                        help="Ship name"
+                    ),
+                    'ship_id': st.column_config.Column(
+                        "Type ID",
+     
+                        help="Ship ID"
+                    ),
+                    'fit_id': st.column_config.Column(
+                        "Fit ID",
+      
+                        help="Fit ID"
+                    )
+                },
                 use_container_width=True,
                 hide_index=True
             )
