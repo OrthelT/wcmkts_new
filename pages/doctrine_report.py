@@ -11,7 +11,6 @@ import pathlib
 from logging_config import setup_logging
 import libsql_experimental as libsql
 
-
 from db_handler import get_local_mkt_engine
 from doctrines import create_fit_df, get_fit_summary
 logger = setup_logging(__name__, log_file="experiments.log")
@@ -64,54 +63,6 @@ def get_module_stock_list(module_names: list):
                 # Add the module to the session state list
                 st.session_state.module_list_state[module_name] = module_info
                 st.session_state.csv_module_list_state[module_name] = csv_module_info
-
-# def get_doctrine_lead_ship_id(doctrine_name: str, doctrine_modules: pd.DataFrame) -> int:
-#     """Get the type ID of the lead ship for a doctrine based on naming conventions."""
-    
-#     # Handle special cases first
-#     special_cases = {
-#         'AHAC': 'Zealot',
-#         'Bomber': 'Purifier', 
-#         'Tackle': 'Sabre',
-#         'Retribution': 'Retribution'
-#     }
-    
-#     # Check for special cases
-#     doctrine_upper = doctrine_name.upper()
-#     for key, ship_name in special_cases.items():
-#         if key in doctrine_upper:
-#             # Look up the ship ID in the doctrine modules
-#             ship_data = doctrine_modules[doctrine_modules['ship_name'] == ship_name]
-#             if not ship_data.empty:
-#                 return ship_data['ship_id'].iloc[0]
-    
-#     # For regular doctrines, extract ship name from doctrine name
-#     # Most follow pattern like "SUBS - WC Hurricane / WC飓风" where Hurricane is the ship
-#     if ' - WC ' in doctrine_name:
-#         # Extract the part after "WC " and before any "/"
-#         parts = doctrine_name.split(' - WC ')[1]
-#         if ' / ' in parts:
-#             ship_name = parts.split(' / ')[0].strip()
-#         else:
-#             ship_name = parts.strip()
-        
-#         # Look up the ship ID in the doctrine modules
-#         ship_data = doctrine_modules[doctrine_modules['ship_name'] == ship_name]
-#         if not ship_data.empty:
-#             return ship_data['ship_id'].iloc[0]
-    
-#     # Fallback: try to find any ship in the doctrine modules for this doctrine
-#     if not doctrine_modules.empty:
-#         # Get the first ship from this doctrine's modules
-#         ships_only = doctrine_modules[doctrine_modules['type_name'] == doctrine_modules['ship_name']]
-#         if not ships_only.empty:
-#             return ships_only['ship_id'].iloc[0]
-        
-#         # If that fails, just get the first ship_id available
-#         return doctrine_modules['ship_id'].iloc[0]
-    
-#     # Ultimate fallback - return a default ship ID (e.g., Rifter)
-#     return 587
 
 def get_doctrine_lead_ship(doctrine_id: int) -> int:
     """Get the type ID of the lead ship for a doctrine"""
@@ -343,7 +294,6 @@ def display_categorized_doctrine_data(selected_data):
 def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.DataFrame, selected_fit_ids: list, fit_summary: pd.DataFrame):
     """Display low stock modules for the selected doctrine"""
         # Get module data from master_df for the selected doctrine
-
     if not doctrine_modules.empty:
         
         st.subheader("Stock Status",divider="blue")
@@ -419,9 +369,7 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
                     stock = int(module_row['fits_on_mkt'])
                     module_target = int(target)
                     module_key = f"ship_module_{fit_id}_{module_name}_{stock}_{module_target}"
-                    
-             
-                    
+                
                     # Determine module status based on target comparison with new tier system
                     if stock > target * 0.9:
                         badge_status = "On Target"
@@ -465,11 +413,6 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
                 
                 # Add spacing between ships
                 st.markdown("<br>", unsafe_allow_html=True)
-
-    
-def update_target_multiplier(target_multiplier: float, selected_data: pd.DataFrame):
-    st.session_state.target_multiplier = target_multiplier
-    display_categorized_doctrine_data(selected_data)
 
 def main():
     # Initialize session state for target multiplier
@@ -539,17 +482,18 @@ def main():
         st.markdown("&nbsp;")  # Add some spacing
     
     st.write(f"Doctrine ID: {selected_doctrine_id}")
-    # Display categorized doctrine data instead of simple dataframe
+    st.markdown("---")
+    st.sidebar.header("Set Target Multiplier")
+    target_multiplier = st.sidebar.slider("Target Multiplier", min_value=0.5, max_value=2.0, value=1.0, step=0.1)
+    st.session_state.target_multiplier = target_multiplier
+    st.sidebar.markdown(f"Current Target Multiplier: {target_multiplier}")
+
+    # # Display categorized doctrine data instead of simple dataframe
     display_categorized_doctrine_data(selected_data)
 
     # Display lowest stock modules by ship with checkboxes
     display_low_stock_modules(selected_data, doctrine_modules, selected_fit_ids, fit_summary)
     
-    st.markdown("---")
-    st.sidebar.header("Set Target Multiplier")
-    target_multiplier = st.sidebar.slider("Target Multiplier", min_value=0.5, max_value=2.0, value=1.0, step=0.1)
-    st.sidebar.markdown(f"Current Target Multiplier: {target_multiplier}")
-    st.sidebar.button("Update Target Multiplier", on_click=update_target_multiplier(target_multiplier, selected_data))
     
     # Display selected modules if any
     st.sidebar.markdown("---")
