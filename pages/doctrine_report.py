@@ -1,8 +1,7 @@
 import sqlalchemy as sa
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session
-import json
-import pymysql
+
 import pandas as pd
 import sys
 import os
@@ -11,8 +10,7 @@ import streamlit as st
 import pathlib
 from logging_config import setup_logging
 import libsql_experimental as libsql
-import millify
-import pandas.io.formats.format
+
 
 from db_handler import get_local_mkt_engine
 from doctrines import create_fit_df, get_fit_summary
