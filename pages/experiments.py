@@ -197,7 +197,7 @@ def categorize_ship_by_role(ship_name: str) -> str:
     links_ships = {
         'Claymore', 'Devoter', 'Drake', 'Cyclone', 'Sleipnir', 'Nighthawk',
         'Damnation', 'Astarte', 'Command Destroyer', 'Bifrost', 'Pontifex',
-        'Stork', 'Magus', 'Hecate', 'Confessor', 'Jackdaw', 'Svipul'
+        'Stork', 'Magus', 'Hecate', 'Confessor', 'Jackdaw', 
     }
     
     # Support - EWAR, tackle, interdiction, etc.
@@ -207,7 +207,7 @@ def categorize_ship_by_role(ship_name: str) -> str:
         'Griffin', 'Maulus', 'Crucifier', 'Heretic', 'Flycatcher',
         'Eris', 'Dictor', 'Hictor', 'Broadsword', 'Phobos', 'Onyx',
         'Crow', 'Claw', 'Crusader', 'Taranis', 'Atron', 'Slasher',
-        'Executioner', 'Condor'
+        'Executioner', 'Condor', 'Svipul'
     }
     
     # Check each category
@@ -243,10 +243,10 @@ def display_categorized_doctrine_data(selected_data):
     
     # Define role colors and emojis for visual appeal
     role_styling = {
-        "DPS": {"color": "red", "emoji": "💥", "description": "Primary damage dealers"},
-        "Logi": {"color": "green", "emoji": "🏥", "description": "Logistics & healing ships"}, 
-        "Links": {"color": "blue", "emoji": "📡", "description": "Command & fleet boost ships"},
-        "Support": {"color": "orange", "emoji": "🛠️", "description": "EWAR, tackle & support ships"}
+        "DPS": {"color": "red", "emoji": "💥", "description": "Primary DPS Ships"},
+        "Logi": {"color": "green", "emoji": "🏥", "description": "Logistics Ships"}, 
+        "Links": {"color": "blue", "emoji": "📡", "description": "Command Ships"},
+        "Support": {"color": "orange", "emoji": "🛠️", "description": "EWAR, Tackle & Other Support Ships"}
     }
     
     # Group by role and display each category
