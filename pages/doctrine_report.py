@@ -184,7 +184,7 @@ def display_categorized_doctrine_data(selected_data):
         st.warning("No data to display")
         return
     
-    # Add role categorization to the dataframe
+    # Create a proper copy of the DataFrame to avoid SettingWithCopyWarning
     selected_data_with_roles = selected_data.copy()
     selected_data_with_roles['role'] = selected_data_with_roles['ship_name'].apply(categorize_ship_by_role)
     
@@ -194,7 +194,8 @@ def display_categorized_doctrine_data(selected_data):
         selected_data_with_roles.loc[vulture_mask & (selected_data_with_roles['fit_id'] == 369), 'role'] = 'DPS'
         selected_data_with_roles.loc[vulture_mask & (selected_data_with_roles['fit_id'] != 369), 'role'] = 'Links'
     
-    selected_data_with_roles = selected_data_with_roles[selected_data_with_roles['fit_id'] != 474]
+    # Remove fit_id 474 using loc
+    selected_data_with_roles = selected_data_with_roles.loc[selected_data_with_roles['fit_id'] != 474]
 
     # Define role colors and emojis for visual appeal
     role_styling = {
