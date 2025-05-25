@@ -7,7 +7,7 @@ pages = {
     "Analysis Tools": [
         st.Page("pages/low_stock.py", title="⚠️Low Stock"),
         st.Page("pages/doctrine_status.py", title="⚔️Doctrine Status"),
-        st.Page("pages/experiments.py", title="🧪Experiments")
+        st.Page("pages/doctrine_report.py", title="📝Doctrine Report")
     ]
 }
 pg = st.navigation(pages)

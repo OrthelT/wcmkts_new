@@ -323,13 +323,17 @@ def main():
        # App title and logo
     # Handle path properly for WSL environment
     image_path = pathlib.Path(__file__).parent.parent / "images" / "wclogo.png"
-    if image_path.exists():
-        st.image(str(image_path), width=150)
-    else:
-        st.warning("Logo image not found")
+
+    col1, col2 = st.columns([0.2, 0.8])
+    with col1:
+        if image_path.exists():
+            st.image(str(image_path), width=150)
+        else:
+            st.warning("Logo image not found")
+    with col2:
+        st.title("Doctrine Report")
+        st.text("Beta Version 0.1")
     
-    # Page title
-    st.title("Doctrine Report")
     
     # Fetch the data
     master_df, fit_summary = create_fit_df()
@@ -387,7 +391,7 @@ def main():
     if not doctrine_modules.empty:
         
         st.subheader("Stock Status",divider="blue")
-        st.markdown("*This summarizes the stock status of the three lowest stock modules for each ship in the selected doctrine*")
+        st.markdown("*Summary of the stock status of the three lowest stock modules for each ship in the selected doctrine. Numbers in parentheses represent the number of fits that can be supported with the current stock of the item. Use the checkboxes to select items for export to a CSV file.*")
         st.markdown("---")
         # Create two columns for display
         col1, col2 = st.columns(2)
@@ -510,9 +514,9 @@ def main():
     
     # Display selected modules if any
     st.sidebar.markdown("---")
-    
 
-    st.sidebar.subheader("Selected Items:", divider="blue")
+
+    st.sidebar.header("🔄 Selected Items:", divider="blue")
             
             # Display modules with their stock information
     for item_name in st.session_state.selected_modules:
