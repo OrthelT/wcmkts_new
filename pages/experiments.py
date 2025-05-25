@@ -11,6 +11,8 @@ import streamlit as st
 import pathlib
 from logging_config import setup_logging
 import libsql_experimental as libsql
+import millify
+import pandas.io.formats.format
 
 from db_handler import get_local_mkt_engine
 from doctrines import create_fit_df, get_fit_summary
@@ -138,7 +140,10 @@ def get_doctrine_lead_ship(doctrine_id: int) -> int:
     query = f"SELECT * FROM lead_ships WHERE doctrine_id = {doctrine_id}"
     with engine.connect() as conn:
         df = pd.read_sql_query(query, conn)
-    return df['lead_ship'].iloc[0]
+        if df.empty:
+            return None
+        else:
+            return df['lead_ship'].iloc[0]
 
 def get_fit_name_from_db(fit_id: int) -> str:
     """Get the fit name from the ship_targets table using fit_id."""
@@ -192,13 +197,14 @@ def categorize_ship_by_role(ship_name: str) -> str:
         'Megathron', 'Hyperion', 'Dominix', 'Raven', 'Scorpion Navy Issue',
         'Raven Navy Issue', 'Typhoon', 'Tempest', 'Maelstrom', 'Abaddon',
         'Apocalypse', 'Armageddon', 'Rifter', 'Punisher', 'Merlin', 'Incursus',
-        'Bellicose', 'Deimos', 'Nightmare', 'Retribution', 'Vengeance'
+        'Bellicose', 'Deimos', 'Nightmare', 'Retribution', 'Vengeance', 'Exequror Navy Issue', 
+        'Hound', 'Nemesis', 'Manticore', 'Vulture', 'Moa'
     }
     
     # Logi - Logistics/healing ships
     logi_ships = {
         'Osprey', 'Guardian', 'Basilisk', 'Scimitar', 'Oneiros',
-        'Burst', 'Bantam', 'Inquisitor', 'Navitas', 'Zarmazd', 'Deacon', 'Thalia'
+        'Burst', 'Bantam', 'Inquisitor', 'Navitas', 'Zarmazd', 'Deacon', 'Thalia', 'Kirin'
     }
     
     # Links - Command ships and fleet booster ships
@@ -220,7 +226,10 @@ def categorize_ship_by_role(ship_name: str) -> str:
     
     # Check each category
     if ship_name in dps_ships:
-        return "DPS"
+        if ship_name == 'Vulture':
+            return "DPS"
+        else:
+            return "DPS"
     elif ship_name in logi_ships:
         return "Logi"
     elif ship_name in links_ships:
@@ -249,6 +258,14 @@ def display_categorized_doctrine_data(selected_data):
     selected_data_with_roles = selected_data.copy()
     selected_data_with_roles['role'] = selected_data_with_roles['ship_name'].apply(categorize_ship_by_role)
     
+    # Handle special case for Vulture ships based on fit_id
+    vulture_mask = selected_data_with_roles['ship_name'] == 'Vulture'
+    if vulture_mask.any():
+        selected_data_with_roles.loc[vulture_mask & (selected_data_with_roles['fit_id'] == 369), 'role'] = 'DPS'
+        selected_data_with_roles.loc[vulture_mask & (selected_data_with_roles['fit_id'] != 369), 'role'] = 'Links'
+    
+    selected_data_with_roles = selected_data_with_roles[selected_data_with_roles['fit_id'] != 474]
+
     # Define role colors and emojis for visual appeal
     role_styling = {
         "DPS": {"color": "red", "emoji": "💥", "description": "Primary DPS Ships"},
@@ -273,7 +290,7 @@ def display_categorized_doctrine_data(selected_data):
             expanded=True
         ):
             # Create columns for metrics summary
-            col1, col2, col3, col4 = st.columns(4)
+            col1, col2, col3 = st.columns(3)
             
             with col1:
                 total_fits = role_data['fits'].sum() if 'fits' in role_data.columns else 0
@@ -286,15 +303,16 @@ def display_categorized_doctrine_data(selected_data):
             with col3:
                 avg_target_pct = role_data['target_percentage'].mean() if 'target_percentage' in role_data.columns else 0
                 st.metric("Avg Target %", f"{int(avg_target_pct)}%")
-            
-            with col4:
-                total_target = role_data['target'].sum() if 'target' in role_data.columns else 0
-                st.metric("Total Target", f"{int(total_target)}")
+
+
             
             # Display the data table for this role (without the role column)
             display_columns = [col for col in role_data.columns if col != 'role']
+            df = role_data[display_columns]
+            df['price'] = df['price'].apply(lambda x: f"{x:,.0f}")
+
             st.dataframe(
-                role_data[display_columns],
+                df,
                 use_container_width=True,
                 hide_index=True
             )
@@ -335,6 +353,8 @@ def main():
     # Get module data from master_df for the selected doctrine
     selected_fit_ids = df[df.doctrine_name == selected_doctrine].fit_id.unique()
     doctrine_modules = master_df[master_df['fit_id'].isin(selected_fit_ids)]
+    doctrine_fit_data = doctrine_modules.copy()
+
 
     # Create enhanced header with lead ship image    
     # Get lead ship image for this doctrine
@@ -365,9 +385,10 @@ def main():
 
     # Display lowest stock modules by ship with checkboxes
     if not doctrine_modules.empty:
-        st.markdown("---")
-        st.markdown("### :blue[Low-Stock Modules]")
         
+        st.subheader("Stock Status",divider="blue")
+        st.markdown("*This summarizes the stock status of the three lowest stock modules for each ship in the selected doctrine*")
+        st.markdown("---")
         # Create two columns for display
         col1, col2 = st.columns(2)
         
@@ -377,7 +398,7 @@ def main():
             
             if fit_data.empty:
                 continue
-                
+
             # Get ship information
             ship_data = fit_data.iloc[0]
             ship_name = ship_data['ship_name']
@@ -391,7 +412,8 @@ def main():
                 
             # Get the 3 lowest stock modules for this ship
             lowest_modules = module_data.sort_values('fits_on_mkt').head(3)
-            
+            lowest_modules = pd.concat([ship_data,lowest_modules])
+
             # Determine which column to use
             target_col = col1 if i % 2 == 0 else col2
             
@@ -407,14 +429,20 @@ def main():
                         st.image(ship_image_url, width=64)
                     except:
                         st.text("🚀")
+                    st.text(f"Fit ID: {fit_id}")
                 
                 with ship_col2:
                     # Get fit name from selected_data
                     fit_name = get_fit_name_from_db(fit_id)
+
+                    ship_target = fit_summary[fit_summary['fit_id'] == fit_id]['ship_target'].iloc[0]
+                    st.subheader(ship_name,divider="orange")
+                    st.markdown(f"{fit_name}  (**Target: {ship_target}**)")
                     
-                    st.markdown(f"**{ship_name}** - *{fit_name}*")
-                    st.markdown(f"**Fit ID:** {fit_id} | **Type ID:** {ship_id}")
-   
+                    # st.markdown(f"**{ship_name}** - *{fit_name}*")
+                    # st.markdown(f'<span style="color:orange">___________________________________</span>', unsafe_allow_html=True)
+                    # st.markdown(f"**Fit ID:** {fit_id} | **Type ID:** {ship_id} | **Target:** {ship_target}")
+
                 
                 # Display the 3 lowest stock modules
                 for _, module_row in lowest_modules.iterrows():
@@ -428,17 +456,17 @@ def main():
                         target = 20  # Default target
 
                     module_name = module_row['type_name']
-                    module_stock = int(module_row['fits_on_mkt'])
+                    stock = int(module_row['fits_on_mkt'])
                     module_target = int(target)
-                    module_key = f"ship_module_{fit_id}_{module_name}_{module_stock}_{module_target}"
+                    module_key = f"ship_module_{fit_id}_{module_name}_{stock}_{module_target}"
                     
              
                     
                     # Determine module status based on target comparison with new tier system
-                    if module_stock > target * 0.9:
+                    if stock > target * 0.9:
                         badge_status = "On Target"
                         badge_color = "green"
-                    elif module_stock > target * 0.2:
+                    elif stock > target * 0.2:
                         badge_status = "Needs Attention"
                         badge_color = "orange"
                     else:
@@ -469,26 +497,31 @@ def main():
                         st.badge(badge_status, color=badge_color)
                     
                     with text_col:
-                        st.text(f"{module_name} ({module_stock})")
+                        if module_row['type_id'] == ship_id:
+                            st.markdown(f'<span style="color:{badge_color}"> **{ship_name}** </span>  ({stock})', unsafe_allow_html=True)
+                            # st.markdown(f"**{ship_name}** ({stock})")
+                        else:
+                            st.text(f"{module_name} ({stock})")
                 
                 # Add spacing between ships
                 st.markdown("<br>", unsafe_allow_html=True)
-    st.dataframe(selected_data)
+    
+    
+    
     # Display selected modules if any
-
     st.sidebar.markdown("---")
-    st.sidebar.subheader("Low Stock Module List")
     
 
-    st.sidebar.markdown("### Selected Modules:")
+    st.sidebar.subheader("Selected Items:", divider="blue")
             
             # Display modules with their stock information
-    for module_name in st.session_state.selected_modules:
-        if module_name in st.session_state.get('module_list_state', {}):
-            module_info = st.session_state.module_list_state[module_name]
-            st.sidebar.text(module_info)
+    for item_name in st.session_state.selected_modules:
+        if item_name in st.session_state.get('module_list_state', {}):
+            item_info = st.session_state.module_list_state[item_name]
+            st.sidebar.text(f"🔹{item_name} ({item_info.split('(')[1].split(')')[0]})")
+            
         else:
-            st.text(f"{module_name} (Stock info not available)")
+            st.sidebar.text(f"🚩{item_name} (Stock info not available)")
     
     st.sidebar.markdown("### Export Options")
         
@@ -503,7 +536,7 @@ def main():
     st.sidebar.download_button(
         label="📥 Download CSV",
         data=csv_export,
-        file_name="low_stock_modules.csv",
+        file_name="low_stock_list.csv",
         mime="text/csv",
         use_container_width=True
     )
