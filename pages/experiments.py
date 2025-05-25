@@ -29,24 +29,24 @@ def get_libsql_connection():
     """Get a connection to the libsql database"""
     return libsql.connect(mktdb)
 
-def get_doctrines_from_db():
-    engine = get_local_mkt_engine()
-    with engine.connect() as conn:
-        df = pd.read_sql_query("SELECT * FROM doctrines", conn)
-    return df
+# def get_doctrines_from_db():
+#     engine = get_local_mkt_engine()
+#     with engine.connect() as conn:
+#         df = pd.read_sql_query("SELECT * FROM doctrines", conn)
+#     return df
 
-def get_doctrine_dict():
-    engine = get_local_mkt_engine()
-    with engine.connect() as conn:
-        df = pd.read_sql_query("SELECT * FROM doctrine_map", conn)
+# def get_doctrine_dict():
+#     engine = get_local_mkt_engine()
+#     with engine.connect() as conn:
+#         df = pd.read_sql_query("SELECT * FROM doctrine_map", conn)
 
-    doctrine_ids = df['doctrine_id'].unique().tolist()
-    doctrine_dict = {}
-    for id in doctrine_ids:
-        df2 = df[df.doctrine_id == id]
-        fits = df2['fitting_id'].unique().tolist()
-        doctrine_dict[id] = fits
-    return doctrine_dict
+#     doctrine_ids = df['doctrine_id'].unique().tolist()
+#     doctrine_dict = {}
+#     for id in doctrine_ids:
+#         df2 = df[df.doctrine_id == id]
+#         fits = df2['fitting_id'].unique().tolist()
+#         doctrine_dict[id] = fits
+#     return doctrine_dict
 
 def get_module_stock_list(module_names: list):
     """Get lists of modules with their stock quantities for display and CSV export."""
@@ -84,53 +84,61 @@ def get_module_stock_list(module_names: list):
                 st.session_state.module_list_state[module_name] = module_info
                 st.session_state.csv_module_list_state[module_name] = csv_module_info
 
-def get_doctrine_lead_ship_id(doctrine_name: str, doctrine_modules: pd.DataFrame) -> int:
-    """Get the type ID of the lead ship for a doctrine based on naming conventions."""
+# def get_doctrine_lead_ship_id(doctrine_name: str, doctrine_modules: pd.DataFrame) -> int:
+#     """Get the type ID of the lead ship for a doctrine based on naming conventions."""
     
-    # Handle special cases first
-    special_cases = {
-        'AHAC': 'Zealot',
-        'Bomber': 'Purifier', 
-        'Tackle': 'Sabre',
-        'Retribution': 'Retribution'
-    }
+#     # Handle special cases first
+#     special_cases = {
+#         'AHAC': 'Zealot',
+#         'Bomber': 'Purifier', 
+#         'Tackle': 'Sabre',
+#         'Retribution': 'Retribution'
+#     }
     
-    # Check for special cases
-    doctrine_upper = doctrine_name.upper()
-    for key, ship_name in special_cases.items():
-        if key in doctrine_upper:
-            # Look up the ship ID in the doctrine modules
-            ship_data = doctrine_modules[doctrine_modules['ship_name'] == ship_name]
-            if not ship_data.empty:
-                return ship_data['ship_id'].iloc[0]
+#     # Check for special cases
+#     doctrine_upper = doctrine_name.upper()
+#     for key, ship_name in special_cases.items():
+#         if key in doctrine_upper:
+#             # Look up the ship ID in the doctrine modules
+#             ship_data = doctrine_modules[doctrine_modules['ship_name'] == ship_name]
+#             if not ship_data.empty:
+#                 return ship_data['ship_id'].iloc[0]
     
-    # For regular doctrines, extract ship name from doctrine name
-    # Most follow pattern like "SUBS - WC Hurricane / WC飓风" where Hurricane is the ship
-    if ' - WC ' in doctrine_name:
-        # Extract the part after "WC " and before any "/"
-        parts = doctrine_name.split(' - WC ')[1]
-        if ' / ' in parts:
-            ship_name = parts.split(' / ')[0].strip()
-        else:
-            ship_name = parts.strip()
+#     # For regular doctrines, extract ship name from doctrine name
+#     # Most follow pattern like "SUBS - WC Hurricane / WC飓风" where Hurricane is the ship
+#     if ' - WC ' in doctrine_name:
+#         # Extract the part after "WC " and before any "/"
+#         parts = doctrine_name.split(' - WC ')[1]
+#         if ' / ' in parts:
+#             ship_name = parts.split(' / ')[0].strip()
+#         else:
+#             ship_name = parts.strip()
         
-        # Look up the ship ID in the doctrine modules
-        ship_data = doctrine_modules[doctrine_modules['ship_name'] == ship_name]
-        if not ship_data.empty:
-            return ship_data['ship_id'].iloc[0]
+#         # Look up the ship ID in the doctrine modules
+#         ship_data = doctrine_modules[doctrine_modules['ship_name'] == ship_name]
+#         if not ship_data.empty:
+#             return ship_data['ship_id'].iloc[0]
     
-    # Fallback: try to find any ship in the doctrine modules for this doctrine
-    if not doctrine_modules.empty:
-        # Get the first ship from this doctrine's modules
-        ships_only = doctrine_modules[doctrine_modules['type_name'] == doctrine_modules['ship_name']]
-        if not ships_only.empty:
-            return ships_only['ship_id'].iloc[0]
+#     # Fallback: try to find any ship in the doctrine modules for this doctrine
+#     if not doctrine_modules.empty:
+#         # Get the first ship from this doctrine's modules
+#         ships_only = doctrine_modules[doctrine_modules['type_name'] == doctrine_modules['ship_name']]
+#         if not ships_only.empty:
+#             return ships_only['ship_id'].iloc[0]
         
-        # If that fails, just get the first ship_id available
-        return doctrine_modules['ship_id'].iloc[0]
+#         # If that fails, just get the first ship_id available
+#         return doctrine_modules['ship_id'].iloc[0]
     
-    # Ultimate fallback - return a default ship ID (e.g., Rifter)
-    return 587
+#     # Ultimate fallback - return a default ship ID (e.g., Rifter)
+#     return 587
+
+def get_doctrine_lead_ship(doctrine_id: int) -> int:
+    """Get the type ID of the lead ship for a doctrine"""
+    engine = get_local_mkt_engine()
+    query = f"SELECT * FROM lead_ships WHERE doctrine_id = {doctrine_id}"
+    with engine.connect() as conn:
+        df = pd.read_sql_query(query, conn)
+    return df['lead_ship'].iloc[0]
 
 def get_fit_name_from_db(fit_id: int) -> str:
     """Get the fit name from the ship_targets table using fit_id."""
@@ -330,7 +338,7 @@ def main():
 
     # Create enhanced header with lead ship image    
     # Get lead ship image for this doctrine
-    lead_ship_id = get_doctrine_lead_ship_id(selected_doctrine, doctrine_modules)
+    lead_ship_id = get_doctrine_lead_ship(selected_doctrine_id)
     lead_ship_image_url = f"https://images.evetech.net/types/{lead_ship_id}/render?size=256"
     
     # Create two-column layout for doctrine header
@@ -374,9 +382,9 @@ def main():
             ship_data = fit_data.iloc[0]
             ship_name = ship_data['ship_name']
             ship_id = ship_data['ship_id']
-            
             # Get modules only (exclude the ship hull)
-            module_data = fit_data[fit_data['type_name'] != ship_name]
+            module_data = fit_data[fit_data['type_id'] != ship_id]
+            ship_data = fit_data[fit_data['type_id'] == ship_id]
             
             if module_data.empty:
                 continue
@@ -404,22 +412,27 @@ def main():
                     # Get fit name from selected_data
                     fit_name = get_fit_name_from_db(fit_id)
                     
-                    st.markdown(f"**{ship_name} | {fit_name}**")
-                    st.text(f"Fit ID: {fit_id}")
-                    st.text(f"Type ID: {ship_id}")
+                    st.markdown(f"**{ship_name}** - *{fit_name}*")
+                    st.markdown(f"**Fit ID:** {fit_id} | **Type ID:** {ship_id}")
+   
                 
                 # Display the 3 lowest stock modules
                 for _, module_row in lowest_modules.iterrows():
-                    module_name = module_row['type_name']
-                    module_stock = int(module_row['fits_on_mkt'])
-                    module_key = f"ship_module_{fit_id}_{module_name}_{module_stock}"
-                    
                     # Get target for this fit from selected_data
                     fit_target_row = selected_data[selected_data['fit_id'] == fit_id]
+                    
                     if not fit_target_row.empty and 'ship_target' in fit_target_row.columns:
                         target = fit_target_row['ship_target'].iloc[0]
                     else:
+                        st.write("No target found for this fit")
                         target = 20  # Default target
+
+                    module_name = module_row['type_name']
+                    module_stock = int(module_row['fits_on_mkt'])
+                    module_target = int(target)
+                    module_key = f"ship_module_{fit_id}_{module_name}_{module_stock}_{module_target}"
+                    
+             
                     
                     # Determine module status based on target comparison with new tier system
                     if module_stock > target * 0.9:
@@ -460,51 +473,47 @@ def main():
                 
                 # Add spacing between ships
                 st.markdown("<br>", unsafe_allow_html=True)
-
+    st.dataframe(selected_data)
     # Display selected modules if any
-    if st.session_state.selected_modules:
-        st.markdown("---")
-        st.subheader("Low Stock Module List")
-        
-        # Create columns for display and export
-        col1, col2 = st.columns([3, 1])
-        
-        with col1:
-            st.markdown("### Selected Modules:")
+
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Low Stock Module List")
+    
+
+    st.sidebar.markdown("### Selected Modules:")
             
             # Display modules with their stock information
-            for module_name in st.session_state.selected_modules:
-                if module_name in st.session_state.get('module_list_state', {}):
-                    module_info = st.session_state.module_list_state[module_name]
-                    st.text(module_info)
-                else:
-                    st.text(f"{module_name} (Stock info not available)")
+    for module_name in st.session_state.selected_modules:
+        if module_name in st.session_state.get('module_list_state', {}):
+            module_info = st.session_state.module_list_state[module_name]
+            st.sidebar.text(module_info)
+        else:
+            st.text(f"{module_name} (Stock info not available)")
+    
+    st.sidebar.markdown("### Export Options")
         
-        with col2:
-            st.markdown("### Export Options")
-            
-            # Prepare export data
-            if st.session_state.get('csv_module_list_state'):
-                csv_export = "Type,TypeID,Quantity,Fits\n"
-                for module_name in st.session_state.selected_modules:
-                    if module_name in st.session_state.csv_module_list_state:
-                        csv_export += st.session_state.csv_module_list_state[module_name]
-                
-                # Download button
-                st.download_button(
-                    label="📥 Download CSV",
-                    data=csv_export,
-                    file_name="low_stock_modules.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
-            
-            # Clear selection button
-            if st.button("🗑️ Clear Selection", use_container_width=True):
-                st.session_state.selected_modules = []
-                st.session_state.module_list_state = {}
-                st.session_state.csv_module_list_state = {}
-                st.rerun()
+        # Prepare export data
+    if st.session_state.get('csv_module_list_state'):
+        csv_export = "Type,TypeID,Quantity,Fits\n"
+        for module_name in st.session_state.selected_modules:
+            if module_name in st.session_state.csv_module_list_state:
+                csv_export += st.session_state.csv_module_list_state[module_name]
+        
+    # Download button
+    st.sidebar.download_button(
+        label="📥 Download CSV",
+        data=csv_export,
+        file_name="low_stock_modules.csv",
+        mime="text/csv",
+        use_container_width=True
+    )
+    
+    # Clear selection button
+    if st.sidebar.button("🗑️ Clear Selection", use_container_width=True):
+        st.session_state.selected_modules = []
+        st.session_state.module_list_state = {}
+        st.session_state.csv_module_list_state = {}
+        st.rerun()
 
 if __name__ == "__main__":
     main()
