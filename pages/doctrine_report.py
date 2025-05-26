@@ -11,7 +11,7 @@ import pathlib
 from logging_config import setup_logging
 import libsql_experimental as libsql
 
-from db_handler import get_local_mkt_engine
+from db_handler import get_local_mkt_engine, get_update_time
 from doctrines import create_fit_df, get_fit_summary
 logger = setup_logging(__name__, log_file="experiments.log")
 
@@ -433,12 +433,13 @@ def main():
     # Initialize session state for target multiplier
     if 'target_multiplier' not in st.session_state:
         st.session_state.target_multiplier = 1.0
+        target_multiplier = st.session_state.target_multiplier
 
-       # Initialize session state for selected modules
+    # Initialize session state for selected modules
     if 'selected_modules' not in st.session_state:
         st.session_state.selected_modules = []
 
-       # App title and logo
+    # App title and logo
     # Handle path properly for WSL environment
     image_path = pathlib.Path(__file__).parent.parent / "images" / "wclogo.png"
 
@@ -476,6 +477,18 @@ def main():
     selected_fit_ids = df[df.doctrine_name == selected_doctrine].fit_id.unique()
     doctrine_modules = master_df[master_df['fit_id'].isin(selected_fit_ids)]
 
+    # Add Target Multiplier expander to sidebar
+    st.sidebar.markdown("---")
+    with st.sidebar.expander("Target Multiplier", expanded=True):
+        target_multiplier = st.sidebar.slider(
+            "Target Multiplier",
+            min_value=0.5,
+            max_value=2.0,
+            value=st.session_state.target_multiplier,
+            step=0.1
+        )
+        st.session_state.target_multiplier = target_multiplier
+        st.sidebar.markdown(f"Current Target Multiplier: {target_multiplier}")
 
     # Create enhanced header with lead ship image    
     # Get lead ship image for this doctrine
@@ -498,10 +511,8 @@ def main():
     
     st.write(f"Doctrine ID: {selected_doctrine_id}")
     st.markdown("---")
-    st.sidebar.header("Set Target Multiplier")
-    target_multiplier = st.sidebar.slider("Target Multiplier", min_value=0.5, max_value=2.0, value=1.0, step=0.1)
-    st.session_state.target_multiplier = target_multiplier
-    st.sidebar.markdown(f"Current Target Multiplier: {target_multiplier}")
+
+
 
     # # Display categorized doctrine data instead of simple dataframe
     display_categorized_doctrine_data(selected_data)
@@ -550,5 +561,8 @@ def main():
         st.session_state.csv_module_list_state = {}
         st.rerun()
 
+    last_esi_update = get_update_time()
+    st.sidebar.markdown("---")
+    st.sidebar.write(f"Last ESI Update: {last_esi_update}")
 if __name__ == "__main__":
     main()

@@ -306,6 +306,7 @@ def main():
     # Page title
     st.title("Doctrine Status")
     
+
     # Fetch the data
     fit_summary = get_fit_summary()
     
@@ -316,6 +317,15 @@ def main():
     # Add filters in the sidebar
     st.sidebar.header("Filters")
     
+    # Target multiplier
+    ds_target_multiplier = 1.0
+    if 'ds_target_multiplier' not in st.session_state:
+        st.session_state.ds_target_multiplier = ds_target_multiplier
+    with st.sidebar.expander("Target Multiplier"):
+        ds_target_multiplier = st.slider("Target Multiplier", min_value=0.5, max_value=2.0, value=1.0, step=0.1)
+        st.session_state.ds_target_multiplier = ds_target_multiplier
+        st.sidebar.write(f"Target Multiplier: {ds_target_multiplier}")
+
     # Status filter
     status_options = ["All", "Critical", "Needs Attention", "All Low Stock", "Good"]
     selected_status = st.sidebar.selectbox("Doctrine Status:", status_options)
@@ -342,7 +352,8 @@ def main():
     
     # Apply filters
     filtered_df = fit_summary.copy()
-    
+    filtered_df['target'] = filtered_df['target'] * ds_target_multiplier
+
     # Apply status filter
     if selected_status != "All":
         if selected_status == "Good":

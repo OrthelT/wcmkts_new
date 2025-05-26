@@ -7,7 +7,7 @@ CONTRIBUTING: Contributors welcome. This project is fully open source under MIT 
 
 ## UPDATES: 
 *version 0.51(beta)*
-- added delectable target multiplier to "Doctrine Report" page.
+- added delectable target multiplier to "Doctrine Report" and "Doctrine Status" pages.
 *version 0.5(beta)*
 - implemented "Doctrine Report" page providing a view of market status by doctrine. 
 *version 0.42*
