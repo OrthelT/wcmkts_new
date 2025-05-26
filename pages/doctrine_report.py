@@ -128,7 +128,7 @@ def categorize_ship_by_role(ship_name: str) -> str:
         'Raven Navy Issue', 'Typhoon', 'Tempest', 'Maelstrom', 'Abaddon',
         'Apocalypse', 'Armageddon', 'Rifter', 'Punisher', 'Merlin', 'Incursus',
         'Bellicose', 'Deimos', 'Nightmare', 'Retribution', 'Vengeance', 'Exequror Navy Issue', 
-        'Hound', 'Nemesis', 'Manticore', 'Vulture', 'Moa'
+        'Hound', 'Nemesis', 'Manticore', 'Vulture', 'Moa', 'Harpy'
     }
     
     # Logi - Logistics/healing ships
@@ -239,7 +239,7 @@ def display_categorized_doctrine_data(selected_data):
             # Display the data table for this role (without the role column)
             display_columns = [col for col in role_data.columns if col != 'role']
             
-            df = role_data[display_columns]
+            df = role_data[display_columns].copy()
             df['ship_target'] = df['ship_target'] * st.session_state.target_multiplier
             df['target_percentage'] = round(df['fits'] / df['ship_target'], 2)
 
@@ -292,7 +292,7 @@ def display_categorized_doctrine_data(selected_data):
                 hide_index=True
             )
 
-def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.DataFrame, selected_fit_ids: list, fit_summary: pd.DataFrame):
+def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.DataFrame, selected_fit_ids: list, fit_summary: pd.DataFrame, lead_ship_id: int, selected_doctrine_id: int):
     """Display low stock modules for the selected doctrine"""
         # Get module data from master_df for the selected doctrine
     if not doctrine_modules.empty:
@@ -300,13 +300,27 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
         st.subheader("Stock Status",divider="blue")
         st.markdown("*Summary of the stock status of the three lowest stock modules for each ship in the selected doctrine. Numbers in parentheses represent the number of fits that can be supported with the current stock of the item. Use the checkboxes to select items for export to a CSV file.*")
         st.markdown("---")
+
+        exceptions = {21: 123, 75: 473}
+
+        if selected_doctrine_id in exceptions:
+            lead_fit_id = exceptions[selected_doctrine_id]
+        else: lead_fit_id = selected_data[selected_data['ship_id'] == lead_ship_id].fit_id.iloc[0]
+
         # Create two columns for display
         col1, col2 = st.columns(2)
-        
+             
         # Get unique fit_ids and process each ship
         for i, fit_id in enumerate(selected_fit_ids):
-            fit_data = doctrine_modules[doctrine_modules['fit_id'] == fit_id]
-            
+
+            if i == 0:
+                fit_id = lead_fit_id
+                fit_data = doctrine_modules[doctrine_modules['fit_id'] == fit_id]
+            elif i > 0 and fit_id != lead_fit_id:
+                fit_data = doctrine_modules[doctrine_modules['fit_id'] == fit_id]
+            else:
+                continue
+
             if fit_data.empty:
                 continue
 
@@ -493,7 +507,7 @@ def main():
     display_categorized_doctrine_data(selected_data)
 
     # Display lowest stock modules by ship with checkboxes
-    display_low_stock_modules(selected_data, doctrine_modules, selected_fit_ids, fit_summary)
+    display_low_stock_modules(selected_data, doctrine_modules, selected_fit_ids, fit_summary, lead_ship_id, selected_doctrine_id)
     
     
     # Display selected modules if any
