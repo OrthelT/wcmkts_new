@@ -6,6 +6,8 @@ SUPPORT: Join my Discord for support https://discord.gg/87Tb7YP5
 CONTRIBUTING: Contributors welcome. This project is fully open source under MIT License. Source code and full documentation available on GitHub: https://github.com/OrthelT/wcmkts_new
 
 ## UPDATES: 
+*version 0.51(beta)*
+- added delectable target multiplier to "Doctrine Report" page.
 *version 0.5(beta)*
 - implemented "Doctrine Report" page providing a view of market status by doctrine. 
 *version 0.42*
