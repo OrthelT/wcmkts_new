@@ -201,6 +201,7 @@ def get_stats(stats_query):
     return stats
 
 
+
 # Helper function to safely format numbers
 def safe_format(value, format_string):
     try:
@@ -270,6 +271,55 @@ def get_group_fits(group_id):
             SELECT * FROM doctrines WHERE group_id = {group_id}
             """
         return pd.read_sql_query(query, (get_local_mkt_engine()))
+
+def get_groups()->pd.DataFrame:
+    query = """
+        SELECT DISTINCT groupID, groupName FROM invGroups
+        """
+    return pd.read_sql_query(query, (get_local_sde_engine()))
+
+def get_categories()->pd.DataFrame:
+    query = """
+        SELECT DISTINCT categoryID, categoryName FROM invCategories
+        """
+    return pd.read_sql_query(query, (get_local_sde_engine()))
+
+def get_groups_for_category(category_id: int)->pd.DataFrame:
+    query = f"""
+        SELECT DISTINCT groupID, groupName FROM invGroups WHERE categoryID = {category_id}
+        """
+    return pd.read_sql_query(query, (get_local_sde_engine()))
+
+def get_types_for_group(group_id: int)->pd.DataFrame:
+    query = f"""
+        SELECT i.productTypeID, t.typeName, t.typeID
+        FROM industryActivityProducts as i
+        JOIN invTypes as t ON i.productTypeID = t.typeID
+        WHERE t.groupID = {group_id}
+        """
+    return pd.read_sql_query(query, (get_local_sde_engine()))
+
+def get_type_id(type_name: str)->int:
+    query = f"""
+        SELECT typeID FROM invTypes WHERE typeName = '{type_name}'
+        """
+    return pd.read_sql_query(query, (get_local_sde_engine()))
+
+def get_system_id(system_name: str)->int:
+    query = f"""
+        SELECT solarSystemID FROM mapSolarSystems WHERE solarSystemName = '{system_name}'
+        """
+    return pd.read_sql_query(query, (get_local_sde_engine()))
+
+def get_4H_price(type_id):
+    query = f"""
+        SELECT * FROM marketstats WHERE type_id = {type_id}
+        """
+    df = pd.read_sql_query(query, (get_local_mkt_engine()))
+    try:
+        return df.price.iloc[0]
+    except:
+        return None
 
 if __name__ == "__main__":
     pass
