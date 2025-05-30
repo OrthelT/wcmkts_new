@@ -292,12 +292,13 @@ def get_groups_for_category(category_id: int)->pd.DataFrame:
     return pd.read_sql_query(query, (get_local_sde_engine()))
 
 def get_types_for_group(group_id: int)->pd.DataFrame:
-    query = f"""
-        SELECT t.typeName, t.typeID
-        FROM invTypes as t
-        WHERE t.groupID = {group_id} AND t.typeID in (SELECT productTypeID FROM industryActivityProducts)
-        """
-    return pd.read_sql_query(query, (get_local_sde_engine()))
+    df = pd.read_csv("industry_types.csv")
+    df = df[df['groupID'] == group_id]
+    df = df.drop_duplicates(subset=['typeID'])
+    df.reset_index(drop=True, inplace=True) 
+    df2 = df.copy()
+    df = df2[['typeID', 'typeName']]
+    return df
 
 def get_type_id(type_name: str)->int:
     query = f"""
@@ -323,4 +324,5 @@ def get_4H_price(type_id):
     
 
 if __name__ == "__main__":
+
     pass
