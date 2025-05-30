@@ -12,6 +12,7 @@ import threading
 import datetime
 from db_utils import sync_db
 import json
+import libsql_experimental as libsql
 
 # Database URLs
 local_mkt_url = "sqlite:///wcmkt.db"  # Changed to standard SQLite format for local dev
@@ -320,6 +321,7 @@ def get_4H_price(type_id):
         return df.price.iloc[0]
     except:
         return None
+    
 
 if __name__ == "__main__":
-    pass
+   pass

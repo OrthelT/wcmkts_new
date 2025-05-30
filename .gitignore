@@ -10,6 +10,12 @@ backup/
 market_data.db
 market_data.db-shm
 market_data.db-wal
+wcmkt.db-shm
+wcmkt.db-wal
+market.db
+# Allow sde.db but ignore its associated files
+sde.db-shm
+sde.db-wal
 # Python
 __pycache__/
 images/
@@ -57,12 +63,6 @@ logs/
 *.log.*.*.*.*.*
 *.log.*.*.*.*.*.*
 .env2
-wcmkt.db-shm
-wcmkt.db-wal
-test*
-market.db
-sde.db-shm
-sde.db-wal
 misc_functions.py
 tests/
 misc_files/

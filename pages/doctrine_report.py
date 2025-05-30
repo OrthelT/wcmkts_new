@@ -514,7 +514,7 @@ def main():
 
 
 
-    # # Display categorized doctrine data instead of simple dataframe
+    # Display categorized doctrine data instead of simple dataframe
     display_categorized_doctrine_data(selected_data)
 
     # Display lowest stock modules by ship with checkboxes
