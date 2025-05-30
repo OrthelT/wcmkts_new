@@ -251,7 +251,7 @@ def main():
         st.title("Build Cost Tool")
         st.text("Experimental Beta Version 0.1")
 
-    df = pd.read_csv("/home/orthel/workspace/github.com/wc_mkts_streamlit/build_catagories.csv")
+    df = pd.read_csv("build_catagories.csv")
     df = df.sort_values(by='category')
     categories = df['category'].unique().tolist()
 
