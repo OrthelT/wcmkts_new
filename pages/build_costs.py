@@ -271,7 +271,6 @@ def main():
     selected_item = st.sidebar.selectbox("Select an item", type_names)
     type_id = types_df[types_df['typeName'] == selected_item]['typeID'].values[0]
 
-
     runs = st.sidebar.number_input("Runs", min_value=1, max_value=1000000, value=1)
     me = st.sidebar.number_input("ME", min_value=0, max_value=10, value=10)
     te = st.sidebar.number_input("TE", min_value=0, max_value=20, value=10)
@@ -343,9 +342,6 @@ def main():
             df['scc_surcharge'] = df['scc_surcharge'].apply(lambda x: millify(x, precision=2))
             df['total_job_cost'] = df['total_job_cost'].apply(lambda x: millify(x, precision=2))
             df['system_cost_index'] = df['system_cost_index'].apply(lambda x: millify(x, precision=2))
-            
-           
-
             st.dataframe(df)
         else:
             logger.error(f"No results found for {selected_item}")

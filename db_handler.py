@@ -324,5 +324,4 @@ def get_4H_price(type_id):
     
 
 if __name__ == "__main__":
-
     pass

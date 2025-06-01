@@ -68,4 +68,5 @@ tests/
 misc_files/
 fit_summary_df.csv
 fit_summary.csv
-data/focus_ships.csv
+data/
+
