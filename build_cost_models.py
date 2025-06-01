@@ -1,8 +1,12 @@
 from sqlalchemy import Column, Integer, String, Float
 from sqlalchemy.orm import declarative_base
+from sqlalchemy import create_engine
+from sqlalchemy import text
+import pandas as pd
 
 
 build_cost_db = "build_cost.db"
+build_cost_url = f"sqlite:///{build_cost_db}"
 
 Base = declarative_base()
 
@@ -16,9 +20,11 @@ class Structure(Base):
     rig_2 = Column(String)
     rig_3 = Column(String)
     structure_type = Column(String)
-    structure_type_id = Column(Integer) #new column
+    structure_type_id = Column(Integer)
+    tax = Column(Float)
+    
     def __repr__(self):
-        return f"<Structure(system={self.system}, structure={self.structure}, system_id={self.system_id}, structure_id={self.structure_id}, rig_1={self.rig_1}, rig_2={self.rig_2}, rig_3={self.rig_3}, structure_type={self.structure_type})>"
+        return f"<Structure(system={self.system}, structure={self.structure}, system_id={self.system_id}, structure_id={self.structure_id}, rig_1={self.rig_1}, rig_2={self.rig_2}, rig_3={self.rig_3}, structure_type={self.structure_type}, structure_type_id={self.structure_type_id}, tax={self.tax})>"
 
 class IndustryIndex(Base):
     __tablename__ = "industry_index"
@@ -43,3 +49,4 @@ class Rig(Base):
     
 if __name__ == "__main__":
     pass
+

@@ -9,12 +9,13 @@ import streamlit as st
 import pathlib
 import requests
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from build_cost_models import Structure, Rig, IndustryIndex
 from logging_config import setup_logging
 from millify import millify
 from db_handler import get_categories, get_groups_for_category, get_types_for_group, get_4H_price
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 build_cost_db = os.path.join("build_cost.db")
 build_cost_url = f"sqlite:///{build_cost_db}"
@@ -28,7 +29,6 @@ class JobQuery:
     runs: int
     me: int
     te: int
-    tax: float
     security: str = "NULL_SEC"
     system_cost_bonus: float = 0.0
     
@@ -42,6 +42,7 @@ class JobQuery:
         for structure in structure_generator:
             yield self.construct_url(structure), structure.structure
 
+
     def construct_url(self, structure):
         rigs = [structure.rig_1, structure.rig_2, structure.rig_3]
         clean_rigs = [rig for rig in rigs if rig != "0" and rig is not None]
@@ -52,10 +53,11 @@ class JobQuery:
     
         clean_rigs = [rig for rig in clean_rigs if rig in valid_rigs]
         clean_rig_ids = [valid_rigs[rig] for rig in clean_rigs]
+        tax = structure.tax
 
         formatted_rigs = [f"&rig_id={str(rig)}" for rig in clean_rig_ids]
         rigs = "".join(formatted_rigs)
-        url = f"https://api.everef.net/v1/industry/cost?product_id={self.item_id}&runs={self.runs}&me={self.me}&te={self.te}&structure_type_id={structure.structure_type_id}&security={self.security}{rigs}&system_cost_bonus={self.system_cost_bonus}&manufacturing_cost={system_cost_index}&facility_tax={self.tax}"
+        url = f"https://api.everef.net/v1/industry/cost?product_id={self.item_id}&runs={self.runs}&me={self.me}&te={self.te}&structure_type_id={structure.structure_type_id}&security={self.security}{rigs}&system_cost_bonus={self.system_cost_bonus}&manufacturing_cost={system_cost_index}&facility_tax={tax}"
         return url
 
 def get_structure_data():
@@ -235,6 +237,18 @@ def get_jita_price(type_id: int) -> float:
         logger.error(f"Error fetching price for {type_id}: {response.status_code}")
         raise Exception(f"Error fetching price for {type_id}: {response.status_code}")
 
+def filter_commodity_groups():
+    df = pd.read_csv("build_catagories.csv")
+
+def is_valid_image_url(url: str) -> bool:
+    """Check if the URL returns a valid image."""
+    try:
+        response = requests.head(url)
+        return response.status_code == 200 and 'image' in response.headers.get('content-type', '')
+    except Exception as e:
+        logger.error(f"Error checking image URL {url}: {e}")
+        return False
+
 def main():
 
       # App title and logo
@@ -274,9 +288,9 @@ def main():
     runs = st.sidebar.number_input("Runs", min_value=1, max_value=1000000, value=1)
     me = st.sidebar.number_input("ME", min_value=0, max_value=10, value=10)
     te = st.sidebar.number_input("TE", min_value=0, max_value=20, value=10)
-    tax = st.sidebar.number_input("Tax (%)", min_value=0.0, max_value=1.0, step=0.1, format="%.1f", value=0.5)
     
     url = f"https://images.evetech.net/types/{type_id}/render?size=256"
+    alt_url = f"https://images.evetech.net/types/{type_id}/icon"
 
     if st.button("Calculate"):
         vale_price = get_4H_price(type_id)
@@ -294,25 +308,26 @@ def main():
             vale_jita_price_ratio = ((vale_price-jita_price) / jita_price) * 100
         else:
             vale_jita_price_ratio = 0
-  
+
         col1, col2 = st.columns([0.2, 0.8])
         with col1:
-            st.image(url)
+            if is_valid_image_url(url):
+                st.image(url)
+            else:
+                st.image(alt_url, use_container_width=True)
         with col2:
             st.header(f"Calculating cost for {selected_item}", divider="violet")
-            st.write(f"Calculating cost for {selected_item} with {runs} runs, {me} ME, {te} TE, {tax}% tax (type_id: {type_id})")
+            st.write(f"Calculating cost for {selected_item} with {runs} runs, {me} ME, {te} TE (type_id: {type_id})")
 
             if vale_price:
                 st.write(f"4-HWWF price: {millify(vale_price, precision=2)} ISK ({vale_jita_price_ratio:.2f}% Jita)")
             if jita_price:
                 st.write(f"Jita price: {millify(jita_price, precision=2)} ISK")
-
-
+        
         job = JobQuery(item=selected_item, 
-                    runs=runs, 
-                    me=me, 
-                    te=te, 
-                    tax=tax/100)
+            runs=runs, 
+            me=me, 
+            te=te)
         
         results = get_costs(job)
 
@@ -334,7 +349,7 @@ def main():
                 st.metric(label="Profit per unit Jita", value=f"{millify(profit_per_unit_jita, precision=2)} ISK ({percent_profit_jita:.2f}%)")
             else:
                 st.write("No Jita price data found for this item")
-           
+            st.write(df.columns)
             df['total_cost'] = df['total_cost'].apply(lambda x: millify(x, precision=2))
             df['total_cost_per_unit'] = df['total_cost_per_unit'].apply(lambda x: millify(x, precision=2))
             df['total_material_cost'] = df['total_material_cost'].apply(lambda x: millify(x, precision=2))

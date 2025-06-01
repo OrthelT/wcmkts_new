@@ -17,7 +17,7 @@ import libsql_experimental as libsql
 # Database URLs
 local_mkt_url = "sqlite:///wcmkt.db"  # Changed to standard SQLite format for local dev
 local_sde_url = "sqlite:///sde.db"    # Changed to standard SQLite format for local dev
-
+build_cost_url = "sqlite:///build_costs.db"
 # Load environment variables
 logger = setup_logging(__name__)
 
@@ -286,10 +286,15 @@ def get_categories()->pd.DataFrame:
     return pd.read_sql_query(query, (get_local_sde_engine()))
 
 def get_groups_for_category(category_id: int)->pd.DataFrame:
-    query = f"""
-        SELECT DISTINCT groupID, groupName FROM invGroups WHERE categoryID = {category_id}
+    if category_id == 17:
+        df = pd.read_csv("build_commodity_groups.csv")
+        return df
+    else:
+        query = f"""
+            SELECT DISTINCT groupID, groupName FROM invGroups WHERE categoryID = {category_id}
         """
-    return pd.read_sql_query(query, (get_local_sde_engine()))
+    df = pd.read_sql_query(query, (get_local_sde_engine()))
+    return df
 
 def get_types_for_group(group_id: int)->pd.DataFrame:
     df = pd.read_csv("industry_types.csv")
