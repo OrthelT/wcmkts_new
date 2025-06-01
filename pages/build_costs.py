@@ -349,7 +349,7 @@ def main():
                 st.metric(label="Profit per unit Jita", value=f"{millify(profit_per_unit_jita, precision=2)} ISK ({percent_profit_jita:.2f}%)")
             else:
                 st.write("No Jita price data found for this item")
-            st.write(df.columns)
+            
             df['total_cost'] = df['total_cost'].apply(lambda x: millify(x, precision=2))
             df['total_cost_per_unit'] = df['total_cost_per_unit'].apply(lambda x: millify(x, precision=2))
             df['total_material_cost'] = df['total_material_cost'].apply(lambda x: millify(x, precision=2))
