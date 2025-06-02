@@ -16,6 +16,9 @@ market.db
 # Allow sde.db but ignore its associated files
 sde.db-shm
 sde.db-wal
+# Allow build_cost.db but ignore its associated files
+build_cost.db-shm
+build_cost.db-wal
 # Python
 __pycache__/
 images/
@@ -69,5 +72,3 @@ misc_files/
 fit_summary_df.csv
 fit_summary.csv
 data/
-build_cost.db-shm
-build_cost.db-wal
