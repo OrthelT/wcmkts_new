@@ -17,7 +17,7 @@ import libsql_experimental as libsql
 # Database URLs
 local_mkt_url = "sqlite:///wcmkt.db"  # Changed to standard SQLite format for local dev
 local_sde_url = "sqlite:///sde.db"    # Changed to standard SQLite format for local dev
-build_cost_url = "sqlite:///build_costs.db"
+build_cost_url = "sqlite:///build_cost.db"
 # Load environment variables
 logger = setup_logging(__name__)
 
@@ -327,6 +327,17 @@ def get_4H_price(type_id):
     except:
         return None
     
+def update_taxes(df):
+    updates = df.to_dict(orient='records')
+
+    engine = create_engine(build_cost_url)
+    with engine.connect() as conn:
+        for record in updates:
+            structure = record["structure"]
+            tax = record["tax"]
+            conn.execute(text(f"UPDATE structures SET tax = {tax} WHERE structure = '{structure}'"))
+        conn.commit()
+        print("Taxes updated successfully")
 
 if __name__ == "__main__":
     pass
