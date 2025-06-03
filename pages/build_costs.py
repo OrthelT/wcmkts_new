@@ -254,13 +254,11 @@ def display_data(df: pd.DataFrame, selected_structure: str | None = None):
         selected_structure_df = df[df.index == selected_structure]
         selected_total_cost = selected_structure_df['total_cost'].values[0]
         selected_total_cost_per_unit = selected_structure_df['total_cost_per_unit'].values[0]
-        st.write(f"Selected structure: {selected_structure}")
-        st.write(f"Selected total cost: {millify(selected_total_cost, precision=2)}")
+        st.markdown(f"**Selected structure:** <span style='color: orange;'>{selected_structure}</span> <br>    *Total cost:* <span style='color: orange;'>{millify(selected_total_cost, precision=2)}</span> <br>    *Cost per unit:* <span style='color: orange;'>{millify(selected_total_cost_per_unit, precision=2)}</span>", unsafe_allow_html=True )
         df['comparison_cost'] = df['total_cost'].apply(lambda x: x-selected_total_cost)
         df['comparison_cost_per_unit'] = df['total_cost_per_unit'].apply(lambda x: x-selected_total_cost_per_unit)
         df['comparison_cost'] = df['comparison_cost'].apply(lambda x: millify(x, precision=2))
         df['comparison_cost_per_unit'] = df['comparison_cost_per_unit'].apply(lambda x: millify(x, precision=2))
-
    
     df['total_cost'] = df['total_cost'].apply(lambda x: millify(x, precision=2))
     df['total_cost_per_unit'] = df['total_cost_per_unit'].apply(lambda x: millify(x, precision=2))
@@ -289,9 +287,13 @@ def display_data(df: pd.DataFrame, selected_structure: str | None = None):
             "comparison_cost": "comparison cost",
             "comparison_cost_per_unit": "(per unit)"
         })
-    
+    df = style_dataframe(df, selected_structure)
+
     return df, col_config, col_order
 
+def style_dataframe(df: pd.DataFrame, selected_structure: str | None = None):
+    df = df.style.apply(lambda x: ['background-color: lightgreen; color: blue' if x.name == selected_structure else '' for i in x.index], axis=1)
+    return df
 
 
 def main():
@@ -371,10 +373,13 @@ def main():
             st.write(f"Calculating cost for {selected_item} with {runs} runs, {me} ME, {te} TE (type_id: {type_id})")
 
             if vale_price:
-                st.write(f"4-HWWF price: {millify(vale_price, precision=2)} ISK ({vale_jita_price_ratio:.2f}% Jita)")
-            if jita_price:
-                st.write(f"Jita price: {millify(jita_price, precision=2)} ISK")
-        
+                st.markdown(f"**4-HWWF price:** <span style='color: orange;'>{millify(vale_price, precision=2)} ISK</span> ({vale_jita_price_ratio:.2f}% Jita) <br> \
+                **Jita price:** <span style='color: orange;'>{millify(jita_price, precision=2)} ISK</span>", unsafe_allow_html=True)
+            elif jita_price:
+                st.markdown(f"**Jita price:** <span style='color: orange;'>{millify(jita_price, precision=2)} ISK</span>", unsafe_allow_html=True)
+            else:
+                st.write("No price data found for this item")
+
         job = JobQuery(item=selected_item, 
             runs=runs, 
             me=me, 
