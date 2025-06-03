@@ -339,5 +339,34 @@ def update_taxes(df):
         conn.commit()
         print("Taxes updated successfully")
 
+def fix_duplicate_structures():
+    engine = create_engine("sqlite:///build_cost.db")
+    with engine.connect() as conn:
+        # First, get all duplicate structures
+        res = conn.execute(text("""
+            SELECT structure, COUNT(*) as count 
+            FROM structures 
+            GROUP BY structure 
+            HAVING COUNT(*) > 1
+        """))
+        duplicates = res.fetchall()
+        print(duplicates)
+        
+        for dup in duplicates:
+            structure_name = dup[0]
+            # Keep the first occurrence and delete the rest
+            conn.execute(text(f"""
+                DELETE FROM structures 
+                WHERE rowid NOT IN (
+                    SELECT MIN(rowid) 
+                    FROM structures 
+                    WHERE structure = '{structure_name}'
+                )
+                AND structure = '{structure_name}'
+            """))
+        conn.commit()
+        print("Duplicate structures have been fixed")
+
 if __name__ == "__main__":
     pass
+

@@ -249,6 +249,51 @@ def is_valid_image_url(url: str) -> bool:
         logger.error(f"Error checking image URL {url}: {e}")
         return False
 
+def display_data(df: pd.DataFrame, selected_structure: str | None = None):
+    if selected_structure:
+        selected_structure_df = df[df.index == selected_structure]
+        selected_total_cost = selected_structure_df['total_cost'].values[0]
+        selected_total_cost_per_unit = selected_structure_df['total_cost_per_unit'].values[0]
+        st.write(f"Selected structure: {selected_structure}")
+        st.write(f"Selected total cost: {millify(selected_total_cost, precision=2)}")
+        df['comparison_cost'] = df['total_cost'].apply(lambda x: x-selected_total_cost)
+        df['comparison_cost_per_unit'] = df['total_cost_per_unit'].apply(lambda x: x-selected_total_cost_per_unit)
+        df['comparison_cost'] = df['comparison_cost'].apply(lambda x: millify(x, precision=2))
+        df['comparison_cost_per_unit'] = df['comparison_cost_per_unit'].apply(lambda x: millify(x, precision=2))
+
+   
+    df['total_cost'] = df['total_cost'].apply(lambda x: millify(x, precision=2))
+    df['total_cost_per_unit'] = df['total_cost_per_unit'].apply(lambda x: millify(x, precision=2))
+    df['total_material_cost'] = df['total_material_cost'].apply(lambda x: millify(x, precision=2))
+    df['facility_tax'] = df['facility_tax'].apply(lambda x: millify(x, precision=2))
+    df['scc_surcharge'] = df['scc_surcharge'].apply(lambda x: millify(x, precision=2))
+    df['total_job_cost'] = df['total_job_cost'].apply(lambda x: millify(x, precision=2))
+    df['system_cost_index'] = df['system_cost_index'].apply(lambda x: millify(x, precision=2))
+   
+    col_order = ['total_cost', 'total_cost_per_unit', 'total_material_cost', 'total_job_cost','facility_tax', 'scc_surcharge', 'system_cost_index']
+    if selected_structure:
+        col_order.insert(2, 'comparison_cost')
+        col_order.insert(3, 'comparison_cost_per_unit')
+
+    col_config = {
+        "total_cost": "total cost",
+        "total_cost_per_unit": "cost per unit",
+        "total_material_cost": "material cost",
+        "facility_tax": "facility tax",
+        "scc_surcharge": "scc surcharge",
+        "total_job_cost": "total job cost",
+        "system_cost_index": "cost index"
+    }
+    if selected_structure:
+        col_config.update({
+            "comparison_cost": "comparison cost",
+            "comparison_cost_per_unit": "(per unit)"
+        })
+    
+    return df, col_config, col_order
+
+
+
 def main():
 
       # App title and logo
@@ -263,7 +308,6 @@ def main():
             st.warning("Logo image not found")
     with col2:
         st.title("Build Cost Tool")
-        st.text("Experimental Beta Version 0.1")
 
     df = pd.read_csv("build_catagories.csv")
     df = df.sort_values(by='category')
@@ -291,6 +335,13 @@ def main():
     
     url = f"https://images.evetech.net/types/{type_id}/render?size=256"
     alt_url = f"https://images.evetech.net/types/{type_id}/icon"
+
+
+    all_structures = get_all_structures()
+    structure_names = [structure.structure.split(" (")[0] for structure in all_structures]
+    
+    with st.sidebar.expander("Select a structure to compare (optional)"):
+        selected_structure = st.selectbox("Select a structure to compare", structure_names, index=None, placeholder="All Structures")
 
     if st.button("Calculate"):
         vale_price = get_4H_price(type_id)
@@ -332,11 +383,12 @@ def main():
         results = get_costs(job)
 
         if results is not None:
-
+            
             df = pd.DataFrame.from_dict(results, orient='index')
             df = df.sort_values(by='total_cost', ascending=True)
             low_cost = df['total_cost_per_unit'].min()
             low_cost = float(low_cost)
+
             if vale_price:
                 profit_per_unit_vale = vale_price - low_cost
                 percent_profit_vale = ((vale_price - low_cost) / vale_price) * 100
@@ -350,17 +402,15 @@ def main():
             else:
                 st.write("No Jita price data found for this item")
             
-            df['total_cost'] = df['total_cost'].apply(lambda x: millify(x, precision=2))
-            df['total_cost_per_unit'] = df['total_cost_per_unit'].apply(lambda x: millify(x, precision=2))
-            df['total_material_cost'] = df['total_material_cost'].apply(lambda x: millify(x, precision=2))
-            df['facility_tax'] = df['facility_tax'].apply(lambda x: millify(x, precision=2))
-            df['scc_surcharge'] = df['scc_surcharge'].apply(lambda x: millify(x, precision=2))
-            df['total_job_cost'] = df['total_job_cost'].apply(lambda x: millify(x, precision=2))
-            df['system_cost_index'] = df['system_cost_index'].apply(lambda x: millify(x, precision=2))
-            st.dataframe(df)
+            display_df, col_config, col_order = display_data(df, selected_structure)
+            st.dataframe(display_df, column_config=col_config, column_order=col_order)
+
         else:
             logger.error(f"No results found for {selected_item}")
             raise Exception(f"No results found for {selected_item}")
-
+        
+        
 if __name__ == "__main__":
     main()
+
+

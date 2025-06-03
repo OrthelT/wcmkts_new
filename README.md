@@ -6,6 +6,8 @@ SUPPORT: Join my Discord for support https://discord.gg/87Tb7YP5
 CONTRIBUTING: Contributors welcome. This project is fully open source under MIT License. Source code and full documentation available on GitHub: https://github.com/OrthelT/wcmkts_new
 
 ## UPDATES: 
+*version 0.52*
+- added comparison structure option to build cost tool, automatic calculation of structure tax based on stored data. 
 *version 0.51(beta)*
 - added delectable target multiplier to "Doctrine Report" and "Doctrine Status" pages.
 *version 0.5(beta)*
