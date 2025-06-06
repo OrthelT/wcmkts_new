@@ -360,7 +360,7 @@ def main():
 
 
     with st.sidebar.expander("Select a structure to compare (optional)"):
-        selected_structure = st.selectbox("Select a structure to compare", structure_names, index=None, placeholder="All Structures")
+        selected_structure = st.selectbox("Structures:", structure_names, index=None, placeholder="All Structures")
 
     if st.session_state.sci_last_modified:
         st.sidebar.markdown("---")
