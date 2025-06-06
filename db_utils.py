@@ -107,18 +107,57 @@ def update_targets(fit_id, target_value):
     
 def update_industry_index():
     indy_index = fetch_industry_system_cost_indices()
-    engine = create_engine(build_cost_url)
-    with engine.connect() as conn:
-        indy_index.to_sql("industry_index", conn, if_exists="replace", index=False)
-    indy_index.to_sql("industry_index", build_cost_url, if_exists="replace", index=False)
-    logger.info("Industry index updated")
+    if indy_index is None:
+        logger.info("Industry index current")
+        return None
+    else:
+        engine = create_engine(build_cost_url)
+        with engine.connect() as conn:
+            indy_index.to_sql("industry_index", conn, if_exists="replace", index=False)
+        current_time = datetime.datetime.now().astimezone(datetime.UTC)
+        logger.info(f"Industry index updated at {current_time}")
 
+@st.cache_data(ttl=1800)
 def fetch_industry_system_cost_indices():
     url = "https://esi.evetech.net/latest/industry/systems/?datasource=tranquility"
-    response = requests.get(url)
-    response.raise_for_status()
 
-    systems_data = response.json()
+    if "etag" in st.session_state:
+        print("etag found")
+        headers = {
+            "Accept": "application/json",
+            "User-Agent": "WC Markets v0.52 (admin contact: Orthel.Toralen@gmail.com; +https://github.com/OrthelT/wcmkts_new",
+            "If-None-Match": st.session_state.etag
+        }
+    else:   
+        
+        headers = {
+            "Accept": "application/json",
+            "User-Agent": "WC Markets v0.52 (admin contact: Orthel.Toralen@gmail.com; +https://github.com/OrthelT/wcmkts_new"
+        }
+    print(headers)
+    response = requests.get(url, headers=headers)
+
+    print(response.status_code)
+    print(response.headers)
+
+    etag = response.headers.get("ETag")
+    
+    if response.status_code == 304:
+        logger.info("Industry index current, skipping update with status code 304")
+        logger.info(f"last modified: {response.headers.get('Last-Modified')}")
+        logger.info(f"next_update: {response.headers.get('Expires')}")
+        return None
+
+    elif response.status_code == 200:
+        systems_data = response.json()
+        st.session_state.etag = etag
+        st.session_state.sci_last_modified = datetime.datetime.strptime(response.headers.get('Last-Modified'), "%a, %d %b %Y %H:%M:%S GMT").replace(tzinfo=datetime.timezone.utc)
+        st.session_state.sci_expires = datetime.datetime.strptime(response.headers.get('Expires'), "%a, %d %b %Y %H:%M:%S GMT").replace(tzinfo=datetime.timezone.utc)
+        print(f"last modified: {st.session_state.sci_last_modified}")
+        print(f"expires: {st.session_state.sci_expires}")
+
+    else:
+        response.raise_for_status()
 
     # Flatten data into rows of: system_id, activity, cost_index
     flat_records = []

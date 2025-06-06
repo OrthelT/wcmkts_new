@@ -1,7 +1,7 @@
 import os
 import sys
 from dataclasses import dataclass
-from typing import Optional, Sequence, Tuple
+from typing import Sequence, Tuple
 import pandas as pd
 import sqlalchemy as sa
 import sqlalchemy.orm as orm
@@ -14,8 +14,9 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from build_cost_models import Structure, Rig, IndustryIndex
 from logging_config import setup_logging
 from millify import millify
-from db_handler import get_categories, get_groups_for_category, get_types_for_group, get_4H_price
-
+from db_handler import get_groups_for_category, get_types_for_group, get_4H_price
+from db_utils import update_industry_index
+import datetime
 
 build_cost_db = os.path.join("build_cost.db")
 build_cost_url = f"sqlite:///{build_cost_db}"
@@ -80,7 +81,6 @@ def get_valid_rigs():
     return valid_rigs
 
 
-
 def fetch_rigs():
     engine = sa.create_engine(build_cost_url)
     with engine.connect() as conn:
@@ -98,7 +98,7 @@ def fetch_rig_id(rig_name: str | None):
     if rig_name is None:
         return None
     elif rig_name == str(0):
-        logger.info(f"Rig name is 0")
+        logger.info("Rig name is 0")
         return None
     else:
         try:
@@ -273,14 +273,52 @@ def style_dataframe(df: pd.DataFrame, selected_structure: str | None = None):
     df = df.style.apply(lambda x: ['background-color: lightgreen; color: blue' if x.name == selected_structure else '' for i in x.index], axis=1)
     return df
 
+def check_industry_index_expiry():
+    
+    now = datetime.datetime.now().astimezone(datetime.UTC)
+    if st.session_state.sci_expires:
+        expires = st.session_state.sci_expires
+        logger.info(f"Industry index expires: {expires}")
+        logger.info(f"Current time: {now}")
+        if expires < now:
+            logger.info("Industry index expired, updating")
+            try:
+                update_industry_index()
+            except Exception as e:
+                logger.error(f"Error updating industry index: {e}")
+                raise Exception(f"Error updating industry index: {e}")
+        else:
+            logger.info("Industry index not expired, skipping update")
+    else:
+        logger.info("Industry index not in session state, updating")
+        try:
+            update_industry_index()
+        except Exception as e:
+            logger.error(f"Error updating industry index: {e}")
+            raise Exception(f"Error updating industry index: {e}")
+        
+def initialise_session_state():
+    logger.info("initialising build cost tool")
+    if "sci_expires" not in st.session_state:
+        st.session_state.sci_expires = None
+    if "sci_last_modified" not in st.session_state:
+        st.session_state.sci_last_modified = None
+    if "etag" not in st.session_state:
+        st.session_state.etag = None
+    try:
+        check_industry_index_expiry()
+    except Exception as e:
+        logger.error(f"Error checking industry index expiry: {e}")
 
 def main():
-
-      # App title and logo
+    initialise_session_state()
+    
     # Handle path properly for WSL environment
     image_path = pathlib.Path(__file__).parent.parent / "images" / "wclogo.png"
 
+    # App title and logo
     col1, col2 = st.columns([0.2, 0.8])
+
     with col1:
         if image_path.exists():
             st.image(str(image_path), width=150)
@@ -322,6 +360,12 @@ def main():
     
     with st.sidebar.expander("Select a structure to compare (optional)"):
         selected_structure = st.selectbox("Select a structure to compare", structure_names, index=None, placeholder="All Structures")
+
+    if st.session_state.sci_last_modified:
+        st.sidebar.markdown("---")
+        st.sidebar.markdown(f"*Industry indexes last updated: {st.session_state.sci_last_modified.strftime('%Y-%m-%d %H:%M:%S UTC')}*")
+    else:
+        st.rerun()
 
     if st.button("Calculate"):
         vale_price = get_4H_price(type_id)
@@ -386,7 +430,9 @@ def main():
                 st.write("No Jita price data found for this item")
             
             display_df, col_config, col_order = display_data(df, selected_structure)
+
             st.dataframe(display_df, column_config=col_config, column_order=col_order)
+
 
         else:
             logger.error(f"No results found for {selected_item}")
