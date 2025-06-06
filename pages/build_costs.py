@@ -79,29 +79,7 @@ def get_valid_rigs():
             valid_rigs[k] = v
     return valid_rigs
 
-def fetch_industry_system_cost_indices():
-    url = "https://esi.evetech.net/latest/industry/systems/?datasource=tranquility"
-    response = requests.get(url)
-    response.raise_for_status()
 
-    systems_data = response.json()
-
-    # Flatten data into rows of: system_id, activity, cost_index
-    flat_records = []
-    for system in systems_data:
-        system_id = system['solar_system_id']
-        for activity_info in system['cost_indices']:
-            flat_records.append({
-                'system_id': system_id,
-                'activity': activity_info['activity'],
-                'cost_index': activity_info['cost_index']
-            })
-
-    # Create DataFrame and set MultiIndex for fast lookup
-    df = pd.DataFrame(flat_records)
-    df.set_index(['system_id', 'activity'], inplace=True)
-
-    return df
 
 def fetch_rigs():
     engine = sa.create_engine(build_cost_url)

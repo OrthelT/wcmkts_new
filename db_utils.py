@@ -7,12 +7,15 @@ from logging_config import setup_logging
 import json
 import time
 from sync_scheduler import schedule_next_sync
+import requests
 
 logger = setup_logging(__name__)
 
 # Database URLs
 local_mkt_url = "sqlite:///wcmkt.db"  # Changed to standard SQLite format for local dev
 local_sde_url = "sqlite:///sde.db"    # Changed to standard SQLite format for local dev
+build_cost_url = "sqlite:///build_cost.db"
+
 
 # Use environment variables for production
 mkt_url = st.secrets["TURSO_DATABASE_URL"]
@@ -102,5 +105,40 @@ def update_targets(fit_id, target_value):
     conn.commit()
     logger.info(f"Updated target for fit_id {fit_id} to {target_value}")
     
+def update_industry_index():
+    indy_index = fetch_industry_system_cost_indices()
+    engine = create_engine(build_cost_url)
+    with engine.connect() as conn:
+        indy_index.to_sql("industry_index", conn, if_exists="replace", index=False)
+    indy_index.to_sql("industry_index", build_cost_url, if_exists="replace", index=False)
+    logger.info("Industry index updated")
+
+def fetch_industry_system_cost_indices():
+    url = "https://esi.evetech.net/latest/industry/systems/?datasource=tranquility"
+    response = requests.get(url)
+    response.raise_for_status()
+
+    systems_data = response.json()
+
+    # Flatten data into rows of: system_id, activity, cost_index
+    flat_records = []
+    for system in systems_data:
+        system_id = system['solar_system_id']
+        for activity_info in system['cost_indices']:
+            flat_records.append({
+                'system_id': system_id,
+                'activity': activity_info['activity'],
+                'cost_index': activity_info['cost_index']
+            })
+
+    # Create DataFrame and set MultiIndex for fast lookup
+    df = pd.DataFrame(flat_records)
+    df = df.pivot(index='system_id', columns='activity', values='cost_index')
+    df.reset_index(inplace=True)
+    df.rename(columns={'system_id': 'solar_system_id'}, inplace=True)
+
+    return df
+
+
 if __name__ == "__main__":
     pass
