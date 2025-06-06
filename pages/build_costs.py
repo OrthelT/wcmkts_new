@@ -278,8 +278,7 @@ def check_industry_index_expiry():
     now = datetime.datetime.now().astimezone(datetime.UTC)
     if st.session_state.sci_expires:
         expires = st.session_state.sci_expires
-        logger.info(f"Industry index expires: {expires}")
-        logger.info(f"Current time: {now}")
+
         if expires < now:
             logger.info("Industry index expired, updating")
             try:
@@ -287,8 +286,7 @@ def check_industry_index_expiry():
             except Exception as e:
                 logger.error(f"Error updating industry index: {e}")
                 raise Exception(f"Error updating industry index: {e}")
-        else:
-            logger.info("Industry index not expired, skipping update")
+       
     else:
         logger.info("Industry index not in session state, updating")
         try:
@@ -312,7 +310,8 @@ def initialise_session_state():
 
 def main():
     initialise_session_state()
-    
+    logger.info("build cost tool initialised and awaiting user input")
+
     # Handle path properly for WSL environment
     image_path = pathlib.Path(__file__).parent.parent / "images" / "wclogo.png"
 
@@ -356,8 +355,10 @@ def main():
 
 
     all_structures = get_all_structures()
-    structure_names = [structure.structure.split(" (")[0] for structure in all_structures]
-    
+    structure_names = [structure.structure for structure in all_structures]
+    structure_names = sorted(structure_names)
+
+
     with st.sidebar.expander("Select a structure to compare (optional)"):
         selected_structure = st.selectbox("Select a structure to compare", structure_names, index=None, placeholder="All Structures")
 
