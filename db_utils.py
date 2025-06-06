@@ -117,7 +117,7 @@ def update_industry_index():
         current_time = datetime.datetime.now().astimezone(datetime.UTC)
         logger.info(f"Industry index updated at {current_time}")
 
-@st.cache_data(ttl=1800)
+
 def fetch_industry_system_cost_indices():
     url = "https://esi.evetech.net/latest/industry/systems/?datasource=tranquility"
 
