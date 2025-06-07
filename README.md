@@ -1,4 +1,4 @@
-# Winter Coalition Market Stats Viewer (v.0.42)
+# Winter Coalition Market Stats Viewer (v.0.52)
 
 A Streamlit application for viewing EVE Online market statistics for Winter Coalition. This tool provides real-time market data analysis, historical price tracking, and fitting information for various items in the EVE Online market.
 

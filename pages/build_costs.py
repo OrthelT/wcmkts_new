@@ -41,7 +41,7 @@ class JobQuery:
         """Generator that yields URLs for each structure."""
         structure_generator = yield_structure()
         for structure in structure_generator:
-            yield self.construct_url(structure), structure.structure
+            yield self.construct_url(structure), structure.structure, structure.structure_type
 
 
     def construct_url(self, structure):
@@ -157,11 +157,12 @@ def get_costs(job: JobQuery):
     results = {}
     structures = get_all_structures()
     progress_bar = st.progress(0, text=f"Fetching data from {len(structures)} structures...")
-    # Get the longest structure name for padding
-    max_length = max(len(str(s.structure)) for s in structures)
+
+    # Pretty sure this doesn't do anything...
+    # max_length = max(len(str(s.structure)) for s in structures)
     
     for i in range(len(structures)):
-        url, structure_name = next(url_generator)
+        url, structure_name, structure_type = next(url_generator)
         # Pad the line with spaces to ensure it's at least as long as the previous line
         status = f"\rFetching {i+1} of {len(structures)} structures: {structure_name}"
         progress_bar.progress(i/len(structures), text=status)
@@ -182,6 +183,7 @@ def get_costs(job: JobQuery):
             continue
 
         results[structure_name] = {
+            "structure_type": structure_type,
             "total_cost": data2['total_cost'],
             "total_cost_per_unit": data2['total_cost_per_unit'],
             "total_material_cost": data2['total_material_cost'],
@@ -246,12 +248,13 @@ def display_data(df: pd.DataFrame, selected_structure: str | None = None):
     df['total_job_cost'] = df['total_job_cost'].apply(lambda x: millify(x, precision=2))
     df['system_cost_index'] = df['system_cost_index'].apply(lambda x: millify(x, precision=2))
    
-    col_order = ['total_cost', 'total_cost_per_unit', 'total_material_cost', 'total_job_cost','facility_tax', 'scc_surcharge', 'system_cost_index']
+    col_order = ['structure_type', 'total_cost', 'total_cost_per_unit', 'total_material_cost', 'total_job_cost','facility_tax', 'scc_surcharge', 'system_cost_index']
     if selected_structure:
         col_order.insert(2, 'comparison_cost')
         col_order.insert(3, 'comparison_cost_per_unit')
 
     col_config = {
+        "structure_type": " type",
         "total_cost": "total cost",
         "total_cost_per_unit": "cost per unit",
         "total_material_cost": "material cost",
@@ -442,5 +445,4 @@ def main():
         
 if __name__ == "__main__":
     main()
-
 
