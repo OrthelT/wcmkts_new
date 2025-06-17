@@ -128,7 +128,7 @@ def categorize_ship_by_role(ship_name: str) -> str:
         'Raven Navy Issue', 'Typhoon', 'Tempest', 'Maelstrom', 'Abaddon',
         'Apocalypse', 'Armageddon', 'Rifter', 'Punisher', 'Merlin', 'Incursus',
         'Bellicose', 'Deimos', 'Nightmare', 'Retribution', 'Vengeance', 'Exequror Navy Issue', 
-        'Hound', 'Nemesis', 'Manticore', 'Vulture', 'Moa', 'Harpy'
+        'Hound', 'Nemesis', 'Manticore', 'Vulture', 'Moa', 'Harpy', 'Tempest Fleet Issue'
     }
     
     # Logi - Logistics/healing ships
