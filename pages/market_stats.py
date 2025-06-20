@@ -345,7 +345,7 @@ def display_sync_status():
     
     last_update = get_update_time()
     time_since_update = get_time_since_esi_update()
-    st.sidebar.markdown(f"**Last ESI update:** {last_update} UTC ({time_since_update})")
+    st.sidebar.markdown(f"**Last ESI update:** {last_update} UTC {time_since_update}")
     time_until_update = get_time_until_next_update()
     st.sidebar.markdown(f"*Next ESI update in {time_until_update}*")
     
