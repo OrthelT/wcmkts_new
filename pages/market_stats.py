@@ -342,11 +342,22 @@ def create_history_chart(type_id):
 
 def display_sync_status():
     """Display sync status in the sidebar."""
-    st.sidebar.write(f"Last ESI update: {get_update_time()}")
+    
+    last_update = get_update_time()
+    time_since_update = get_time_since_esi_update()
+    st.sidebar.markdown(f"**Last ESI update:** {last_update} UTC ({time_since_update})")
+    time_until_update = get_time_until_next_update()
+    st.sidebar.markdown(f"*Next ESI update in {time_until_update}*")
+    
     st.sidebar.markdown("---")
     st.sidebar.subheader("Database Sync Status")
     status_color = "green" if st.session_state.sync_status == "Success" else "red"
+
+    if st.session_state.sync_available:
+        status_color = "orange"
+        st.session_state.sync_status = "Update available"
     
+
     if st.session_state.last_sync:
         last_sync_time = st.session_state.last_sync.strftime("%Y-%m-%d %H:%M UTC")
         st.sidebar.markdown(f"**Last sync:** {last_sync_time}")
@@ -370,6 +381,8 @@ def display_sync_status():
     
     if st.session_state.sync_status == "Success":
         st.sidebar.success("Database sync completed successfully!")
+    if st.session_state.sync_status == "Update available":
+        st.sidebar.warning("Update available, use sync now to refresh data")
 
 def main():
     logger.info("Starting main function")
@@ -685,5 +698,4 @@ def main():
 
 
 if __name__ == "__main__":
-    
     main()
