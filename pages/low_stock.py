@@ -196,31 +196,22 @@ def main():
         display_df = display_df[columns_to_show]
         
         numeric_formats = {
-            'total_volume_remain': '{:,.0f}',
-            'price': '{:,.2f}',
-            'days_remaining': '{:.1f}',
-            'avg_volume': '{:,.0f}',
+            'total_volume_remain': st.column_config.NumberColumn('Volume Remaining',  format='localized'),
+            'price': st.column_config.NumberColumn('Price', format='localized'),
+            'days_remaining': st.column_config.NumberColumn('Days Remaining', format='localized'),
+            'avg_volume': st.column_config.NumberColumn('Avg Vol', format='localized'), 
         }
-
-        for col, format_str in numeric_formats.items():
-            if col in display_df.columns:  # Only format if column exists
-                display_df[col] = display_df[col].apply(lambda x: safe_format(x, format_str))
-        
         # Rename columns
         column_renames = {
             'type_name': 'Item', 
-            'days_remaining': 'Days Remaining', 
-            'total_volume_remain': 'Volume Remaining', 
-            'price': 'Price', 
             'group_name': 'Group', 
             'category_name': 'Category',
-            'avg_volume': 'Avg Volume',
             'ships': 'Used In Fits'
         }
         display_df = display_df.rename(columns=column_renames)
         
         # Reorder columns
-        column_order = ['Item', 'Days Remaining', 'Price', 'Volume Remaining', 'Avg Volume', 'Used In Fits', 'Category', 'Group']
+        column_order = ['Item', 'days_remaining', 'price', 'total_volume_remain', 'avg_volume', 'Used In Fits', 'Category', 'Group']
         display_df = display_df[column_order]
         
         # Add a color indicator for critical items
@@ -252,14 +243,14 @@ def main():
             return [''] * len(row)
         
         # Apply the styling - updated from applymap to map
-        styled_df = display_df.style.map(highlight_critical, subset=['Days Remaining'])
+        styled_df = display_df.style.map(highlight_critical, subset=['days_remaining'])
         
         # Add doctrine highlighting
         styled_df = styled_df.apply(highlight_doctrine, axis=1)
         
         # Display the dataframe
         st.subheader("Low Stock Items")
-        st.dataframe(styled_df, hide_index=True)
+        st.dataframe(styled_df, hide_index=True, column_config=numeric_formats)
         
         # Display charts
         st.subheader("Days Remaining by Item")
