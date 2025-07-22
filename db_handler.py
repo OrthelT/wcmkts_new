@@ -15,9 +15,9 @@ import json
 import libsql_experimental as libsql
 
 # Database URLs
-local_mkt_url = "sqlite:///wcmkt.db"  # Changed to standard SQLite format for local dev
-local_sde_url = "sqlite:///sde.db"    # Changed to standard SQLite format for local dev
-build_cost_url = "sqlite:///build_cost.db"
+local_mkt_url = "sqlite+libsql:///wcmkt.db"  # Changed to standard SQLite format for local dev
+local_sde_url = "sqlite+libsql:///sde.db"    # Changed to standard SQLite format for local dev
+build_cost_url = "sqlite+libsql:///build_cost.db"
 # Load environment variables
 logger = setup_logging(__name__)
 

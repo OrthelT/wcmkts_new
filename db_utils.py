@@ -2,7 +2,7 @@ import pandas as pd
 import datetime
 from sqlalchemy import create_engine
 import streamlit as st
-import libsql_experimental as libsql
+import libsql
 from logging_config import setup_logging
 import json
 import time

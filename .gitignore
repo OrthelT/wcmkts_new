@@ -69,7 +69,4 @@ misc_files/
 fit_summary_df.csv
 fit_summary.csv
 data/
-.python-version
-pyproject.toml
-uv.lock
 helpers.py
