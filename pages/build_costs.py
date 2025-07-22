@@ -315,14 +315,8 @@ def initialise_session_state():
 def main():
     initialise_session_state()
     logger.info("build cost tool initialised and awaiting user input")
-    price_source = st.sidebar.selectbox("Select a material price source", ["ESI Average", "Jita Sell", "Jita Buy"],help="This is the source of the material prices used in the calculations. ESI Average is the CCP average price used in the in-game industry window, Jita Sell is the minimum price of sale orders in Jita, and Jita Buy is the maximum price of buy orders in Jita.")
-    price_source_dict = {
-        "ESI Average": "ESI_AVG",
-        "Jita Sell": "FUZZWORK_JITA_SELL_MIN",
-        "Jita Buy": "FUZZWORK_JITA_BUY_MAX"
-    }
-    price_source_id = price_source_dict[price_source]
-    st.session_state.price_source = price_source_id
+    
+
     
     # Handle path properly for WSL environment
     image_path = pathlib.Path(__file__).parent.parent / "images" / "wclogo.png"
@@ -337,6 +331,8 @@ def main():
             st.warning("Logo image not found")
     with col2:
         st.title("Build Cost Tool")
+
+
 
     df = pd.read_csv("build_catagories.csv")
     df = df.sort_values(by='category')
@@ -361,6 +357,18 @@ def main():
     runs = st.sidebar.number_input("Runs", min_value=1, max_value=1000000, value=1)
     me = st.sidebar.number_input("ME", min_value=0, max_value=10, value=10)
     te = st.sidebar.number_input("TE", min_value=0, max_value=20, value=10)
+
+    st.sidebar.divider()
+
+    price_source = st.sidebar.selectbox("Select a material price source", ["ESI Average", "Jita Sell", "Jita Buy"],help="This is the source of the material prices used in the calculations. ESI Average is the CCP average price used in the in-game industry window, Jita Sell is the maximum price of sale orders in Jita, and Jita Buy is the maximum price of buy orders in Jita. This is optional and will default to ESI Average.")
+    price_source_dict = {
+    "ESI Average": "ESI_AVG",
+    "Jita Sell": "FUZZWORK_JITA_SELL_MAX",
+    "Jita Buy": "FUZZWORK_JITA_BUY_MAX"
+    }
+    price_source_id = price_source_dict[price_source]
+    st.session_state.price_source = price_source_id
+
     
     url = f"https://images.evetech.net/types/{type_id}/render?size=256"
     alt_url = f"https://images.evetech.net/types/{type_id}/icon"
@@ -372,7 +380,7 @@ def main():
 
 
     with st.sidebar.expander("Select a structure to compare (optional)"):
-        selected_structure = st.selectbox("Structures:", structure_names, index=None, placeholder="All Structures")
+        selected_structure = st.selectbox("Structures:", structure_names, index=None, placeholder="All Structures", help="Select a structure to compare the cost to build versus this structure. This is optional and will default to all structures.")
 
     if st.session_state.sci_last_modified:
         st.sidebar.markdown("---")
