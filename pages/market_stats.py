@@ -1,3 +1,5 @@
+import os
+import sys
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -5,16 +7,13 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from dotenv import load_dotenv
 from db_handler import  *
 from sync_scheduler import initialize_sync_state, check_sync_status
-import datetime
-import json
-import datetime
-import millify
 from logging_config import setup_logging
 from db_utils import sync_db
+import millify
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Insert centralized logging configuration
 logger = setup_logging(__name__)
