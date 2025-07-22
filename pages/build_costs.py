@@ -360,10 +360,11 @@ def main():
 
     st.sidebar.divider()
 
-    price_source = st.sidebar.selectbox("Select a material price source", ["ESI Average", "Jita Sell", "Jita Buy"],help="This is the source of the material prices used in the calculations. ESI Average is the CCP average price used in the in-game industry window, Jita Sell is the maximum price of sale orders in Jita, and Jita Buy is the maximum price of buy orders in Jita. This is optional and will default to ESI Average.")
+    price_source = st.sidebar.selectbox("Select a material price source", ["ESI Average", "Jita Sell", "Jita Buy"],help="This is the source of the material prices used in the calculations. ESI Average is the CCP average price used in the in-game industry window, Jita Sell is the minimum price of sale orders in Jita, and Jita Buy is the maximum price of buy orders in Jita. This is optional and will default to ESI Average.")
+   
     price_source_dict = {
     "ESI Average": "ESI_AVG",
-    "Jita Sell": "FUZZWORK_JITA_SELL_MAX",
+    "Jita Sell": "FUZZWORK_JITA_SELL_MIN",
     "Jita Buy": "FUZZWORK_JITA_BUY_MAX"
     }
     price_source_id = price_source_dict[price_source]
@@ -411,7 +412,7 @@ def main():
                 st.image(alt_url, use_container_width=True)
         with col2:
             st.header(f"Calculating cost for {selected_item}", divider="violet")
-            st.write(f"Calculating cost for {selected_item} with {runs} runs, {me} ME, {te} TE (type_id: {type_id})")
+            st.write(f"Calculating cost for {selected_item} with {runs} runs, {me} ME, {te} TE, {price_source} material price (type_id: {type_id})")
 
             if vale_price:
                 st.markdown(f"**4-HWWF price:** <span style='color: orange;'>{millify(vale_price, precision=2)} ISK</span> ({vale_jita_price_ratio:.2f}% Jita) <br> \
