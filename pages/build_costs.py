@@ -32,6 +32,7 @@ class JobQuery:
     te: int
     security: str = "NULL_SEC"
     system_cost_bonus: float = 0.0
+    material_prices: str = "ESI_AVG"
     
 
     def __post_init__(self):
@@ -58,7 +59,7 @@ class JobQuery:
 
         formatted_rigs = [f"&rig_id={str(rig)}" for rig in clean_rig_ids]
         rigs = "".join(formatted_rigs)
-        url = f"https://api.everef.net/v1/industry/cost?product_id={self.item_id}&runs={self.runs}&me={self.me}&te={self.te}&structure_type_id={structure.structure_type_id}&security={self.security}{rigs}&system_cost_bonus={self.system_cost_bonus}&manufacturing_cost={system_cost_index}&facility_tax={tax}"
+        url = f"https://api.everef.net/v1/industry/cost?product_id={self.item_id}&runs={self.runs}&me={self.me}&te={self.te}&structure_type_id={structure.structure_type_id}&security={self.security}{rigs}&system_cost_bonus={self.system_cost_bonus}&manufacturing_cost={system_cost_index}&facility_tax={tax}&material_prices={self.material_prices}"
         return url
 
 def get_structure_data():
@@ -314,7 +315,15 @@ def initialise_session_state():
 def main():
     initialise_session_state()
     logger.info("build cost tool initialised and awaiting user input")
-
+    price_source = st.sidebar.selectbox("Select a material price source", ["ESI Average", "Jita Sell", "Jita Buy"],help="This is the source of the material prices used in the calculations. ESI Average is the CCP average price used in the in-game industry window, Jita Sell is the minimum price of sale orders in Jita, and Jita Buy is the maximum price of buy orders in Jita.")
+    price_source_dict = {
+        "ESI Average": "ESI_AVG",
+        "Jita Sell": "FUZZWORK_JITA_SELL_MIN",
+        "Jita Buy": "FUZZWORK_JITA_BUY_MAX"
+    }
+    price_source_id = price_source_dict[price_source]
+    st.session_state.price_source = price_source_id
+    
     # Handle path properly for WSL environment
     image_path = pathlib.Path(__file__).parent.parent / "images" / "wclogo.png"
 
@@ -376,13 +385,11 @@ def main():
         jita_price = get_jita_price(type_id)
         if jita_price:
             jita_price = float(jita_price)
-        else:
-            st.write("No Jita price data found for this item")
+
             
         if vale_price:
             vale_price = float(vale_price)
-        else:
-            st.write("No Vale price data found for this item")
+
         if jita_price and vale_price:
             vale_jita_price_ratio = ((vale_price-jita_price) / jita_price) * 100
         else:
@@ -409,7 +416,8 @@ def main():
         job = JobQuery(item=selected_item, 
             runs=runs, 
             me=me, 
-            te=te)
+            te=te,
+            material_prices=st.session_state.price_source)
         
         results = get_costs(job)
 
