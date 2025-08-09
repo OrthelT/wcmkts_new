@@ -515,17 +515,38 @@ def main():
     }
     
     # Check if parameters have changed (but don't auto-calculate)
-    params_changed = st.session_state.current_job_params != current_job_params
+    params_changed = (
+        st.session_state.current_job_params is not None and 
+        st.session_state.current_job_params != current_job_params
+    )
     
     calculate_clicked = st.button("Calculate")
 
     if calculate_clicked:
+        job = JobQuery(item=selected_item, 
+            runs=runs, 
+            me=me, 
+            te=te,
+            material_prices=st.session_state.price_source)
+        
+        # Always fetch new results when Calculate is clicked
+        results = get_costs(job)
+        # Cache the results and parameters
+        st.session_state.cost_results = results
+        st.session_state.current_job_params = current_job_params
+        st.session_state.selected_item_for_display = selected_item
+
+        if results is None:
+            logger.error(f"No results found for {selected_item}")
+            raise Exception(f"No results found for {selected_item}")
+
+    # Display results if available (either fresh or cached)
+    if st.session_state.cost_results is not None and st.session_state.selected_item_for_display == selected_item:
+        # Get prices for display
         vale_price = get_4H_price(type_id)
         jita_price = get_jita_price(type_id)
         if jita_price:
             jita_price = float(jita_price)
-
-            
         if vale_price:
             vale_price = float(vale_price)
 
@@ -533,6 +554,10 @@ def main():
             vale_jita_price_ratio = ((vale_price-jita_price) / jita_price) * 100
         else:
             vale_jita_price_ratio = 0
+
+        # Show parameter change warning if needed
+        if not calculate_clicked and params_changed:
+            st.warning("⚠️ Parameters have changed. Click 'Calculate' to get updated results.")
 
         col1, col2 = st.columns([0.2, 0.8])
         with col1:
@@ -552,26 +577,15 @@ def main():
             else:
                 st.write("No price data found for this item")
 
-        job = JobQuery(item=selected_item, 
-            runs=runs, 
-            me=me, 
-            te=te,
-            material_prices=st.session_state.price_source)
+        results = st.session_state.cost_results
         
-        # Always fetch new results when Calculate is clicked
-        results = get_costs(job)
-        # Cache the results and parameters
-        st.session_state.cost_results = results
-        st.session_state.current_job_params = current_job_params
-        st.session_state.selected_item_for_display = selected_item
-
-        if results is not None:
-            
+        # Only show cost table if no parameter changes or just calculated
+        if calculate_clicked or not params_changed:
             df = pd.DataFrame.from_dict(results, orient='index')
             df = df.sort_values(by='total_cost', ascending=True)
             low_cost = df['total_cost_per_unit'].min()
             low_cost = float(low_cost)
-
+            
             if vale_price:
                 profit_per_unit_vale = vale_price - low_cost
                 percent_profit_vale = ((vale_price - low_cost) / vale_price) * 100
@@ -586,52 +600,12 @@ def main():
                 st.write("No Jita price data found for this item")
             
             display_df, col_config, col_order = display_data(df, selected_structure)
-
             st.dataframe(display_df, column_config=col_config, column_order=col_order)
 
-            # Add material breakdown section
-            st.divider()
-            st.subheader("Material Breakdown")
-            
-            # Structure selector for material breakdown
-            structure_names_for_materials = list(results.keys())
-            
-            # Default to the structure selected in sidebar if available
-            default_index = 0
-            if selected_structure and selected_structure in structure_names_for_materials:
-                default_index = structure_names_for_materials.index(selected_structure)
-            
-            selected_structure_for_materials = st.selectbox(
-                "Select a structure to view material breakdown:",
-                structure_names_for_materials,
-                index=default_index,
-                key="material_structure_selector",
-                help="Choose a structure to see detailed material costs and quantities"
-            )
-            
-            if selected_structure_for_materials:
-                display_material_costs(results, selected_structure_for_materials, str(job.item_id))
-
-    # Display cached results even if Calculate button wasn't pressed
-    elif st.session_state.cost_results is not None and st.session_state.selected_item_for_display == selected_item:
-        # Show notification if parameters have changed
-        if params_changed:
-            st.warning("⚠️ Parameters have changed. Click 'Calculate' to get updated results.")
-        else:
-            st.info("📋 Showing cached results. Click 'Calculate' to refresh.")
-        
-        results = st.session_state.cost_results
-        df = pd.DataFrame.from_dict(results, orient='index')
-        df = df.sort_values(by='total_cost', ascending=True)
-        
-        display_df, col_config, col_order = display_data(df, selected_structure)
-        st.dataframe(display_df, column_config=col_config, column_order=col_order)
-        
-        # Material breakdown for cached results
-        st.divider()
+        # Material breakdown section - always show if we have results
         st.subheader("Material Breakdown")
         
-        structure_names_for_materials = list(results.keys())
+        structure_names_for_materials = sorted(list(results.keys()))  # Sort alphabetically
         
         # Default to the structure selected in sidebar if available
         default_index = 0
@@ -642,24 +616,28 @@ def main():
             "Select a structure to view material breakdown:",
             structure_names_for_materials,
             index=default_index,
-            key="cached_material_structure_selector",
+            key="material_structure_selector",
             help="Choose a structure to see detailed material costs and quantities"
         )
         
         if selected_structure_for_materials:
-            # Get the job from cached parameters for item_id
-            cached_job = JobQuery(
-                item=st.session_state.current_job_params['item'],
-                runs=st.session_state.current_job_params['runs'],
-                me=st.session_state.current_job_params['me'],
-                te=st.session_state.current_job_params['te'],
-                material_prices=st.session_state.current_job_params['price_source']
-            )
-            display_material_costs(results, selected_structure_for_materials, str(cached_job.item_id))
+            # Get the job item_id from current or cached parameters
+            if calculate_clicked:
+                job = JobQuery(item=selected_item, runs=runs, me=me, te=te, material_prices=st.session_state.price_source)
+                current_item_id = str(job.item_id)
+            else:
+                cached_job = JobQuery(
+                    item=st.session_state.current_job_params['item'],
+                    runs=st.session_state.current_job_params['runs'],
+                    me=st.session_state.current_job_params['me'],
+                    te=st.session_state.current_job_params['te'],
+                    material_prices=st.session_state.current_job_params['price_source']
+                )
+                current_item_id = str(cached_job.item_id)
+            
+            display_material_costs(results, selected_structure_for_materials, current_item_id)
 
-        else:
-            logger.error(f"No results found for {selected_item}")
-            raise Exception(f"No results found for {selected_item}")
+
         
         
 if __name__ == "__main__":
