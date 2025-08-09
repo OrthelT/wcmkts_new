@@ -11,7 +11,7 @@ from logging_config import setup_logging
 logger = setup_logging(__name__)
 
 # Import from the root directory
-from db_handler import get_local_mkt_engine, get_update_time, safe_format
+from db_handler import get_local_mkt_engine, get_update_time
 
 def get_filter_options(selected_categories=None):
     try:

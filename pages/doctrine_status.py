@@ -6,25 +6,17 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
 import pandas as pd
-import datetime
 import pathlib
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from logging_config import setup_logging
-from db_handler import get_local_mkt_engine, get_update_time
+from db_handler import get_local_mkt_engine, get_libsql_connection, get_update_time
 from doctrines import create_fit_df
-import libsql
-
-mktdb = "wcmkt.db"
 
 # Insert centralized logging configuration
 logger = setup_logging(__name__, log_file="doctrine_status.log")
 
-@st.cache_resource(ttl=600, show_spinner="Loading libsql connection...")
-def get_libsql_connection():
-    """Get a connection to the libsql database"""
-    return libsql.connect(mktdb)
 
 @st.cache_data(ttl=600, show_spinner="Loading cacheddoctrine fits...")
 def get_fit_summary():
@@ -184,7 +176,7 @@ def get_module_stock_list(module_names: list):
                 query = f"""
                     SELECT type_name, type_id, total_stock, fits_on_mkt
                     FROM doctrines 
-                    WHERE type_name = "{module_name}"
+                    WHERE type_name = '{module_name}'
                     LIMIT 1
             """
                 result = session.execute(text(query))

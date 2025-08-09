@@ -15,8 +15,10 @@ import json
 import libsql
 from build_cost_models import Structure, Base
 
+local_mktdb = "wcmkt.db"
+
 # Database URLs
-local_mkt_url = "sqlite+libsql:///wcmkt.db"  # Changed to standard SQLite format for local dev
+local_mkt_url = f"sqlite+libsql:///{local_mktdb}"  # Changed to standard SQLite format for local dev
 local_sde_url = "sqlite+libsql:///sde.db"    # Changed to standard SQLite format for local dev
 build_cost_url = "sqlite+libsql:///build_cost.db"
 # Load environment variables
@@ -177,12 +179,12 @@ def get_fitting_data(type_id):
 def get_local_mkt_engine():
     return create_engine(local_mkt_url, echo=False)  # Set echo=False to reduce console output
 
-@st.cache_resource(ttl=600)
-def get_local_mkt_db(query: str) -> pd.DataFrame:
-    engine = create_engine(local_mkt_url, echo=False)
-    with engine.connect() as conn:
-        df = pd.read_sql_query(query, conn)
-    return df
+
+
+@st.cache_resource(ttl=600, show_spinner="Loading libsql connection...")
+def get_libsql_connection():
+    """Get a connection to the libsql database"""
+    return libsql.connect(local_mktdb)
 
 @st.cache_resource(ttl=600)
 def get_local_sde_engine():
@@ -201,6 +203,12 @@ def get_stats(stats_query):
     with engine.connect() as conn:
         stats = pd.read_sql_query(stats_query, conn)
     return stats
+
+def query_local_mkt_db(query: str) -> pd.DataFrame:
+    engine = create_engine(local_mkt_url, echo=False)
+    with engine.connect() as conn:
+        df = pd.read_sql_query(query, conn)
+    return df
 
 # Helper function to safely format numbers
 def safe_format(value, format_string):
@@ -226,7 +234,7 @@ def get_update_time()->str:
         SELECT last_update FROM marketstats LIMIT 1
     """
     try:
-        df = get_local_mkt_db(query)
+        df = query_local_mkt_db(query)
         data_update = df.iloc[0]['last_update']
         data_update = pd.to_datetime(data_update, utc=True)
         data_update = data_update.strftime('%Y-%m-%d %H:%M:%S')
@@ -241,7 +249,7 @@ def get_time_since_esi_update()->str:
     query = """
         SELECT last_update FROM marketstats LIMIT 1
     """
-    df = get_local_mkt_db(query)
+    df = query_local_mkt_db(query)
     dt_last_update = datetime.datetime.strptime(df.iloc[0]['last_update'], '%Y-%m-%d %H:%M:%S.%f')
     dt_now = datetime.datetime.utcnow()
     time_since_update = dt_now - dt_last_update
