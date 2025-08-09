@@ -13,7 +13,7 @@ import datetime
 from db_utils import sync_db
 import json
 import libsql
-from build_cost_models import Structure
+from build_cost_models import Structure, Base
 
 # Database URLs
 local_mkt_url = "sqlite+libsql:///wcmkt.db"  # Changed to standard SQLite format for local dev
@@ -431,32 +431,81 @@ def fix_duplicate_structures():
         conn.commit()
         print("Duplicate structures have been fixed")
 
-if __name__ == "__main__":
-    new_structure = Structure(
+def create_build_cost_tables():
+    """Create all tables defined in build_cost_models if they don't exist."""
+    try:
+        engine = create_engine(build_cost_url)
+        Base.metadata.create_all(engine)
+        logger.info("Build cost database tables created/verified successfully")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to create build cost tables: {str(e)}")
+        return False
+
+def add_structure(structure: 'Structure') -> bool:
+    """
+    Add a Structure object to the build_cost database.
+    
+    Args:
+        structure: A Structure model instance to insert into the database
+        
+    Returns:
+        bool: True if successful, False if failed
+
+    Example:
+        new_structure = Structure(
         system="Nakah",
-        structure="Nakah - The Prize",
+        structure="Nakah - The Grind",
         system_id=30000072,
-        structure_id=1049929540029,
-        rig_1="Standup M-Set Basic Medium Ship Manufacturing Material Efficiency I",
-        rig_2=None,
+        structure_id=1049929502230,
+        rig_1="Standup M-Set Asteroid Ore Grading Processor II",
+        rig_2="Standup M-Set Composite Reactor Material Efficiency I",
         rig_3=None,
-        structure_type="Raitaru",
-        structure_type_id=35825,
+        structure_type="Athanor",
+        structure_type_id=35835,
         tax=0.0000,
     )
-    engine = create_engine(build_cost_url)
-    with engine.connect() as conn:
-        conn.execute(text("INSERT INTO structures (system, structure, system_id, structure_id, rig_1, rig_2, rig_3, structure_type, structure_type_id, tax) VALUES (:system, :structure, :system_id, :structure_id, :rig_1, :rig_2, :rig_3, :structure_type, :structure_type_id, :tax)"), {
-            'system': new_structure.system,
-            'structure': new_structure.structure,
-            'system_id': new_structure.system_id,
-            'structure_id': new_structure.structure_id,
-            'rig_1': new_structure.rig_1,
-            'rig_2': new_structure.rig_2,
-            'rig_3': new_structure.rig_3,
-            'structure_type': new_structure.structure_type,
-            'structure_type_id': new_structure.structure_type_id,
-            'tax': new_structure.tax
-        })
-        conn.commit()
+    
+    success = add_structure(new_structure)
+    if success:
         print("Structure added successfully")
+    else:
+        print("Failed to add structure")
+    """
+    try:
+        # Ensure tables exist before trying to insert
+        create_build_cost_tables()
+        
+        engine = create_engine(build_cost_url)
+        with engine.connect() as conn:
+            conn.execute(text("""
+                INSERT INTO structures (
+                    system, structure, system_id, structure_id, 
+                    rig_1, rig_2, rig_3, structure_type, 
+                    structure_type_id, tax
+                ) VALUES (
+                    :system, :structure, :system_id, :structure_id, 
+                    :rig_1, :rig_2, :rig_3, :structure_type, 
+                    :structure_type_id, :tax
+                )
+            """), {
+                'system': structure.system,
+                'structure': structure.structure,
+                'system_id': structure.system_id,
+                'structure_id': structure.structure_id,
+                'rig_1': structure.rig_1,
+                'rig_2': structure.rig_2,
+                'rig_3': structure.rig_3,
+                'structure_type': structure.structure_type,
+                'structure_type_id': structure.structure_type_id,
+                'tax': structure.tax
+            })
+            conn.commit()
+            logger.info(f"Structure '{structure.structure}' added successfully to database")
+            return True
+    except Exception as e:
+        logger.error(f"Failed to add structure '{structure.structure}': {str(e)}")
+        return False
+
+if __name__ == "__main__":
+    pass
