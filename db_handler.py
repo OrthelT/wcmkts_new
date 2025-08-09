@@ -12,7 +12,8 @@ import threading
 import datetime
 from db_utils import sync_db
 import json
-import libsql_experimental as libsql
+import libsql
+from build_cost_models import Structure
 
 # Database URLs
 local_mkt_url = "sqlite+libsql:///wcmkt.db"  # Changed to standard SQLite format for local dev
@@ -431,4 +432,31 @@ def fix_duplicate_structures():
         print("Duplicate structures have been fixed")
 
 if __name__ == "__main__":
-    print(get_time_until_next_update())
+    new_structure = Structure(
+        system="Nakah",
+        structure="Nakah - The Prize",
+        system_id=30000072,
+        structure_id=1049929540029,
+        rig_1="Standup M-Set Basic Medium Ship Manufacturing Material Efficiency I",
+        rig_2=None,
+        rig_3=None,
+        structure_type="Raitaru",
+        structure_type_id=35825,
+        tax=0.0000,
+    )
+    engine = create_engine(build_cost_url)
+    with engine.connect() as conn:
+        conn.execute(text("INSERT INTO structures (system, structure, system_id, structure_id, rig_1, rig_2, rig_3, structure_type, structure_type_id, tax) VALUES (:system, :structure, :system_id, :structure_id, :rig_1, :rig_2, :rig_3, :structure_type, :structure_type_id, :tax)"), {
+            'system': new_structure.system,
+            'structure': new_structure.structure,
+            'system_id': new_structure.system_id,
+            'structure_id': new_structure.structure_id,
+            'rig_1': new_structure.rig_1,
+            'rig_2': new_structure.rig_2,
+            'rig_3': new_structure.rig_3,
+            'structure_type': new_structure.structure_type,
+            'structure_type_id': new_structure.structure_type_id,
+            'tax': new_structure.tax
+        })
+        conn.commit()
+        print("Structure added successfully")

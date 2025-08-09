@@ -9,7 +9,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 import pathlib
 from logging_config import setup_logging
-import libsql_experimental as libsql
+import libsql
 
 from db_handler import get_local_mkt_engine, get_update_time
 from doctrines import create_fit_df, get_fit_summary

@@ -7,15 +7,11 @@ ENV/
 backup/
 .vscode/
 # Database files
-market_data.db
-market_data.db-shm
-market_data.db-wal
-wcmkt.db-shm
-wcmkt.db-wal
+market_data.*
+wcmkt2.db-*
 market.db
-# Allow sde.db but ignore its associated files
-sde.db-shm
-sde.db-wal
+sde2.db-*
+
 # Python
 __pycache__/
 images/
@@ -35,8 +31,7 @@ parts/
 sdist/
 var/
 wheels/
-*.egg-info/
-.installed.cfg
+.alled.cfg
 *.egg
 
 # Local files
@@ -62,7 +57,6 @@ logs/
 *.log.*.*.*.*
 *.log.*.*.*.*.*
 *.log.*.*.*.*.*.*
-.env2
 misc_functions.py
 tests/
 misc_files/

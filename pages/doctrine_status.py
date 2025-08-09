@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from logging_config import setup_logging
 from db_handler import get_local_mkt_engine, get_update_time
 from doctrines import create_fit_df
-import libsql_experimental as libsql
+import libsql
 
 mktdb = "wcmkt.db"
 

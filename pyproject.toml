@@ -6,15 +6,15 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "libsql>=0.1.5",
-    "libsql-experimental==0.0.41",
     "millify==0.1.1",
     "pandas==2.2.0",
     "plotly==6.0.0",
     "python-dotenv==1.0.1",
     "pytz==2024.1",
     "requests==2.31.0",
+    "sql>=2022.4.0",
     "sqlalchemy==2.0.25",
-    "sqlalchemy-libsql==0.1.0",
+    "sqlalchemy-libsql>=0.2.0",
     "streamlit==1.44.1",
     "tenacity==8.2.3",
 ]
