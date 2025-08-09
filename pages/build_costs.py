@@ -8,13 +8,14 @@ import sqlalchemy.orm as orm
 import streamlit as st
 import pathlib
 import requests
+import json
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from build_cost_models import Structure, Rig, IndustryIndex
 from logging_config import setup_logging
 from millify import millify
-from db_handler import get_groups_for_category, get_types_for_group, get_4H_price
+from db_handler import get_groups_for_category, get_types_for_group, get_4H_price, request_type_names
 from db_utils import update_industry_index
 import datetime
 
@@ -191,7 +192,8 @@ def get_costs(job: JobQuery):
             "facility_tax": data2['facility_tax'],
             "scc_surcharge": data2['scc_surcharge'],
             "system_cost_index": data2['system_cost_index'],
-            "total_job_cost": data2['total_job_cost']
+            "total_job_cost": data2['total_job_cost'],
+            "materials": data2['materials']  # Include materials data
         }
     return results
 
@@ -307,11 +309,125 @@ def initialise_session_state():
         st.session_state.sci_last_modified = None
     if "etag" not in st.session_state:
         st.session_state.etag = None
+    if "cost_results" not in st.session_state:
+        st.session_state.cost_results = None
+    if "current_job_params" not in st.session_state:
+        st.session_state.current_job_params = None
+    if "selected_item_for_display" not in st.session_state:
+        st.session_state.selected_item_for_display = None
     try:
         check_industry_index_expiry()
     except Exception as e:
         logger.error(f"Error checking industry index expiry: {e}")
 
+def display_material_costs(results: dict, selected_structure: str, item_id: str):
+    """
+    Display material costs for a selected structure with proper formatting.
+    
+    Args:
+        results: Dictionary containing cost calculation results from get_costs
+        selected_structure: Name of the selected structure
+        item_id: The type_id of the item being manufactured
+    """
+    if selected_structure not in results:
+        st.error(f"No data found for structure: {selected_structure}")
+        return
+    
+    # Get materials data from results
+    materials_data = results[selected_structure]['materials']
+    
+    # Get type names for materials
+    type_ids = [int(k) for k in materials_data.keys()]
+    type_names = request_type_names(type_ids)
+    type_names_dict = {item['id']: item['name'] for item in type_names}
+
+    # Build materials list
+    materials_list = []
+    for type_id_str, material_info in materials_data.items():
+        type_id = int(type_id_str)
+        type_name = type_names_dict.get(type_id, f"Unknown ({type_id})")
+        
+        materials_list.append({
+            'type_id': type_id,
+            'type_name': type_name,
+            'quantity': material_info['quantity'],
+            'volume_per_unit': material_info['volume_per_unit'],
+            'volume': material_info['volume'],
+            'cost_per_unit': material_info['cost_per_unit'],
+            'cost': material_info['cost']
+        })
+    
+    # Create DataFrame
+    df = pd.DataFrame(materials_list)
+    df = df.sort_values(by='cost', ascending=False)
+    
+    # Calculate cost percentage
+    total_material_cost = df['cost'].sum()
+    df['cost_percentage'] = (df['cost'] / total_material_cost) * 100
+    
+    # Display header
+    st.subheader(f"Material Breakdown - {selected_structure}")
+    st.markdown(f"**Total Material Cost:** {millify(total_material_cost, precision=2)} ISK")
+    
+    # Configure columns with proper formatting
+    column_config = {
+        "type_name": st.column_config.TextColumn(
+            "Material",
+            help="The name of the material required",
+            width="medium"
+        ),
+        "quantity": st.column_config.NumberColumn(
+            "Quantity",
+            help="Amount of material needed",
+            format="localized",
+            width="small"
+        ),
+        "volume_per_unit": st.column_config.NumberColumn(
+            "Volume/Unit",
+            help="Volume per unit of material (m³)",
+            format="localized",
+            width="small"
+        ),
+        "volume": st.column_config.NumberColumn(
+            "Total Volume",
+            help="Total volume of this material (m³)",
+            format="localized",
+            width="small"
+        ),
+        "cost_per_unit": st.column_config.NumberColumn(
+            "Unit Price",
+            help="Cost per unit of material (ISK)",
+            format="localized",
+            width="medium"
+        ),
+        "cost": st.column_config.NumberColumn(
+            "Total Cost",
+            help="Total cost for this material (ISK)",
+            format="localized",
+            width="medium"
+        ),
+        "cost_percentage": st.column_config.NumberColumn(
+            "% of Total",
+            help="Percentage of total material cost",
+            format="%.1f%%",
+            width="small"
+        )
+    }
+    
+    # Display the dataframe with custom configuration
+    st.dataframe(
+        df,
+        column_config=column_config,
+        column_order=["type_name", "quantity", "volume_per_unit", "volume", "cost_per_unit", "cost", "cost_percentage"],
+        hide_index=True,
+        use_container_width=True
+    )
+    
+    # Add download tip below the table
+    st.info("💡 **Tip:** You can download this data as CSV using the download icon (⬇️) in the top-right corner of the table above.")
+
+
+    
 def main():
     initialise_session_state()
     logger.info("build cost tool initialised and awaiting user input")
@@ -389,7 +505,21 @@ def main():
     else:
         st.rerun()
 
-    if st.button("Calculate"):
+    # Create job parameters for comparison
+    current_job_params = {
+        'item': selected_item,
+        'runs': runs,
+        'me': me,
+        'te': te,
+        'price_source': st.session_state.price_source
+    }
+    
+    # Check if parameters have changed (but don't auto-calculate)
+    params_changed = st.session_state.current_job_params != current_job_params
+    
+    calculate_clicked = st.button("Calculate")
+
+    if calculate_clicked:
         vale_price = get_4H_price(type_id)
         jita_price = get_jita_price(type_id)
         if jita_price:
@@ -428,7 +558,12 @@ def main():
             te=te,
             material_prices=st.session_state.price_source)
         
+        # Always fetch new results when Calculate is clicked
         results = get_costs(job)
+        # Cache the results and parameters
+        st.session_state.cost_results = results
+        st.session_state.current_job_params = current_job_params
+        st.session_state.selected_item_for_display = selected_item
 
         if results is not None:
             
@@ -454,6 +589,73 @@ def main():
 
             st.dataframe(display_df, column_config=col_config, column_order=col_order)
 
+            # Add material breakdown section
+            st.divider()
+            st.subheader("Material Breakdown")
+            
+            # Structure selector for material breakdown
+            structure_names_for_materials = list(results.keys())
+            
+            # Default to the structure selected in sidebar if available
+            default_index = 0
+            if selected_structure and selected_structure in structure_names_for_materials:
+                default_index = structure_names_for_materials.index(selected_structure)
+            
+            selected_structure_for_materials = st.selectbox(
+                "Select a structure to view material breakdown:",
+                structure_names_for_materials,
+                index=default_index,
+                key="material_structure_selector",
+                help="Choose a structure to see detailed material costs and quantities"
+            )
+            
+            if selected_structure_for_materials:
+                display_material_costs(results, selected_structure_for_materials, str(job.item_id))
+
+    # Display cached results even if Calculate button wasn't pressed
+    elif st.session_state.cost_results is not None and st.session_state.selected_item_for_display == selected_item:
+        # Show notification if parameters have changed
+        if params_changed:
+            st.warning("⚠️ Parameters have changed. Click 'Calculate' to get updated results.")
+        else:
+            st.info("📋 Showing cached results. Click 'Calculate' to refresh.")
+        
+        results = st.session_state.cost_results
+        df = pd.DataFrame.from_dict(results, orient='index')
+        df = df.sort_values(by='total_cost', ascending=True)
+        
+        display_df, col_config, col_order = display_data(df, selected_structure)
+        st.dataframe(display_df, column_config=col_config, column_order=col_order)
+        
+        # Material breakdown for cached results
+        st.divider()
+        st.subheader("Material Breakdown")
+        
+        structure_names_for_materials = list(results.keys())
+        
+        # Default to the structure selected in sidebar if available
+        default_index = 0
+        if selected_structure and selected_structure in structure_names_for_materials:
+            default_index = structure_names_for_materials.index(selected_structure)
+        
+        selected_structure_for_materials = st.selectbox(
+            "Select a structure to view material breakdown:",
+            structure_names_for_materials,
+            index=default_index,
+            key="cached_material_structure_selector",
+            help="Choose a structure to see detailed material costs and quantities"
+        )
+        
+        if selected_structure_for_materials:
+            # Get the job from cached parameters for item_id
+            cached_job = JobQuery(
+                item=st.session_state.current_job_params['item'],
+                runs=st.session_state.current_job_params['runs'],
+                me=st.session_state.current_job_params['me'],
+                te=st.session_state.current_job_params['te'],
+                material_prices=st.session_state.current_job_params['price_source']
+            )
+            display_material_costs(results, selected_structure_for_materials, str(cached_job.item_id))
 
         else:
             logger.error(f"No results found for {selected_item}")
