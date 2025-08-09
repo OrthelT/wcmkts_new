@@ -337,11 +337,6 @@ def get_group_fits(group_id):
             """
         return pd.read_sql_query(query, (get_local_mkt_engine()))
 
-def get_groups()->pd.DataFrame:
-    query = """
-        SELECT DISTINCT groupID, groupName FROM invGroups
-        """
-    return pd.read_sql_query(query, (get_local_sde_engine()))
 
 def get_groups_for_category(category_id: int)->pd.DataFrame:
     if category_id == 17:
@@ -396,34 +391,6 @@ def update_taxes(df):
             conn.execute(text(f"UPDATE structures SET tax = {tax} WHERE structure = '{structure}'"))
         conn.commit()
         print("Taxes updated successfully")
-
-def fix_duplicate_structures():
-    engine = create_engine("sqlite:///build_cost.db")
-    with engine.connect() as conn:
-        # First, get all duplicate structures
-        res = conn.execute(text("""
-            SELECT structure, COUNT(*) as count 
-            FROM structures 
-            GROUP BY structure 
-            HAVING COUNT(*) > 1
-        """))
-        duplicates = res.fetchall()
-        print(duplicates)
-        
-        for dup in duplicates:
-            structure_name = dup[0]
-            # Keep the first occurrence and delete the rest
-            conn.execute(text(f"""
-                DELETE FROM structures 
-                WHERE rowid NOT IN (
-                    SELECT MIN(rowid) 
-                    FROM structures 
-                    WHERE structure = '{structure_name}'
-                )
-                AND structure = '{structure_name}'
-            """))
-        conn.commit()
-        print("Duplicate structures have been fixed")
 
 def create_build_cost_tables():
     """Create all tables defined in build_cost_models if they don't exist."""
