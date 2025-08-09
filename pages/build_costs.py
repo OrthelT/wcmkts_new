@@ -460,6 +460,7 @@ def main():
     category_id = category_df['id'].values[0]
     groups = get_groups_for_category(category_id)
     groups = groups.sort_values(by='groupName')
+    groups = groups.drop(groups[groups['groupName'] == "Abyssal Modules"].index)
     group_names = groups['groupName'].unique()
     selected_group = st.sidebar.selectbox("Select a group", group_names)
     group_id = groups[groups['groupName'] == selected_group]['groupID'].values[0]
