@@ -343,12 +343,6 @@ def get_groups()->pd.DataFrame:
         """
     return pd.read_sql_query(query, (get_local_sde_engine()))
 
-def get_categories()->pd.DataFrame:
-    query = """
-        SELECT DISTINCT categoryID, categoryName FROM invCategories
-        """
-    return pd.read_sql_query(query, (get_local_sde_engine()))
-
 def get_groups_for_category(category_id: int)->pd.DataFrame:
     if category_id == 17:
         df = pd.read_csv("build_commodity_groups.csv")
