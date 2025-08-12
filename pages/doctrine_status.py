@@ -1,15 +1,13 @@
 import sys
 import os
-import json
+import pathlib
+
 # Add the parent directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 import streamlit as st
 import pandas as pd
-import pathlib
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-
 from logging_config import setup_logging
 from db_handler import get_local_mkt_engine, get_libsql_connection, get_update_time
 from doctrines import create_fit_df

@@ -179,8 +179,6 @@ def get_fitting_data(type_id):
 def get_local_mkt_engine():
     return create_engine(local_mkt_url, echo=False)  # Set echo=False to reduce console output
 
-
-
 @st.cache_resource(ttl=600, show_spinner="Loading libsql connection...")
 def get_libsql_connection():
     """Get a connection to the libsql database"""
