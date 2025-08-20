@@ -289,37 +289,36 @@ def display_data(df: pd.DataFrame, selected_structure: str | None = None):
         ),
         "total_material_cost": st.column_config.NumberColumn(
             "material cost",
-            help="Total material cost of the units",
+            help="Total material cost",
             format="compact",
             width="small"
         ),
         "total_job_cost": st.column_config.NumberColumn(
             "total job cost",
-            help="Total job cost of the units",
+            help="Total job cost, which includes the facility tax, SCC surcharge, and system cost index",
             format="compact",
             width="small"
         ),
         "facility_tax": st.column_config.NumberColumn(
             "facility tax",
-            help="Facility tax of the structure",
+            help="Facility tax cost",
             format="compact",
             width="small"
         ),
         "scc_surcharge": st.column_config.NumberColumn(
             "scc surcharge",
-            help="SCC surcharge of the structure",
+            help="SCC surcharge cost",
             format="compact",
             width="small"
         ),
         "system_cost_index": st.column_config.NumberColumn(
             "cost index",
-            help="System cost index of the structure",
             format="compact",
             width="small"
         ),
         "structure_rigs": st.column_config.ListColumn(
             "rigs",
-            help="Rigs used in the structure",
+            help="Rigs fitted to the structure",
       
         )
     }
@@ -491,7 +490,7 @@ def display_material_costs(results: dict, selected_structure: str, item_id: str)
             column_config=column_config,
             column_order=["type_name", "quantity", "volume_per_unit", "volume", "cost_per_unit", "cost", "cost_percentage"],
             hide_index=True,
-            use_container_width=False
+            use_container_width=True
         )
     with col2:
         #material cost chart
@@ -712,7 +711,7 @@ def main():
             st.write("No price data found for this item")
 
         display_df, col_config, col_order = display_data(build_cost_df, selected_structure)
-        st.dataframe(display_df, column_config=col_config, column_order=col_order,use_container_width=False)
+        st.dataframe(display_df, column_config=col_config, column_order=col_order,use_container_width=True)
 
 
         # Material breakdown section - always show if we have results
