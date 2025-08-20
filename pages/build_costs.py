@@ -159,10 +159,7 @@ def get_costs(job: JobQuery):
     results = {}
     structures = get_all_structures()
     progress_bar = st.progress(0, text=f"Fetching data from {len(structures)} structures...")
-
-    # Pretty sure this doesn't do anything...
-    # max_length = max(len(str(s.structure)) for s in structures)
-    
+ 
     for i in range(len(structures)):
         url, structure_name, structure_type = next(url_generator)
         # Pad the line with spaces to ensure it's at least as long as the previous line
@@ -183,9 +180,11 @@ def get_costs(job: JobQuery):
             logger.error(f"Error fetching data for {structure_name}: {response.status_code}")
             logger.error(f"Error: {response.text}")
             continue
+        units = data2['units']
 
         results[structure_name] = {
             "structure_type": structure_type,
+            "units": units,
             "total_cost": data2['total_cost'],
             "total_cost_per_unit": data2['total_cost_per_unit'],
             "total_material_cost": data2['total_material_cost'],
@@ -242,7 +241,7 @@ def display_data(df: pd.DataFrame, selected_structure: str | None = None):
         df['comparison_cost_per_unit'] = df['total_cost_per_unit'].apply(lambda x: x-selected_total_cost_per_unit)
         df['comparison_cost'] = df['comparison_cost'].apply(lambda x: millify(x, precision=2))
         df['comparison_cost_per_unit'] = df['comparison_cost_per_unit'].apply(lambda x: millify(x, precision=2))
-   
+    df['units'] = df['units'].apply(lambda x: millify(x, precision=2))
     df['total_cost'] = df['total_cost'].apply(lambda x: millify(x, precision=2))
     df['total_cost_per_unit'] = df['total_cost_per_unit'].apply(lambda x: millify(x, precision=2))
     df['total_material_cost'] = df['total_material_cost'].apply(lambda x: millify(x, precision=2))
@@ -251,13 +250,14 @@ def display_data(df: pd.DataFrame, selected_structure: str | None = None):
     df['total_job_cost'] = df['total_job_cost'].apply(lambda x: millify(x, precision=2))
     df['system_cost_index'] = df['system_cost_index'].apply(lambda x: millify(x, precision=2))
    
-    col_order = ['structure_type', 'total_cost', 'total_cost_per_unit', 'total_material_cost', 'total_job_cost','facility_tax', 'scc_surcharge', 'system_cost_index']
+    col_order = ['structure_type', 'units', 'total_cost', 'total_cost_per_unit', 'total_material_cost', 'total_job_cost','facility_tax', 'scc_surcharge', 'system_cost_index']
     if selected_structure:
         col_order.insert(2, 'comparison_cost')
         col_order.insert(3, 'comparison_cost_per_unit')
 
     col_config = {
         "structure_type": " type",
+        "units": "units",
         "total_cost": "total cost",
         "total_cost_per_unit": "cost per unit",
         "total_material_cost": "material cost",
@@ -455,9 +455,12 @@ def main():
     categories = df['category'].unique().tolist()
 
     selected_category = st.sidebar.selectbox("Select a category", categories)
+    if selected_category:
+        category_df = df[df['category'] == selected_category]
+        category_id = category_df['id'].values[0]
+    else:
+        category_id = None
 
-    category_df = df[df['category'] == selected_category]
-    category_id = category_df['id'].values[0]
     groups = get_groups_for_category(category_id)
     groups = groups.sort_values(by='groupName')
     groups = groups.drop(groups[groups['groupName'] == "Abyssal Modules"].index)
@@ -532,6 +535,7 @@ def main():
         
         # Always fetch new results when Calculate is clicked
         results = get_costs(job)
+
         # Cache the results and parameters
         st.session_state.cost_results = results
         st.session_state.current_job_params = current_job_params
@@ -556,56 +560,75 @@ def main():
         else:
             vale_jita_price_ratio = 0
 
-        # Show parameter change warning if needed
+
+        # Only show cost table if no parameter changes or just calculated
+                # Show parameter change warning if needed
         if not calculate_clicked and params_changed:
             st.warning("⚠️ Parameters have changed. Click 'Calculate' to get updated results.")
 
-        col1, col2 = st.columns([0.2, 0.8])
-        with col1:
-            if is_valid_image_url(url):
-                st.image(url)
-            else:
-                st.image(alt_url, use_container_width=True)
-        with col2:
-            st.header(f"Calculating cost for {selected_item}", divider="violet")
-            st.write(f"Calculating cost for {selected_item} with {runs} runs, {me} ME, {te} TE, {price_source} material price (type_id: {type_id})")
 
-            if vale_price:
-                st.markdown(f"**4-HWWF price:** <span style='color: orange;'>{millify(vale_price, precision=2)} ISK</span> ({vale_jita_price_ratio:.2f}% Jita) <br> \
-                **Jita price:** <span style='color: orange;'>{millify(jita_price, precision=2)} ISK</span>", unsafe_allow_html=True)
-            elif jita_price:
-                st.markdown(f"**Jita price:** <span style='color: orange;'>{millify(jita_price, precision=2)} ISK</span>", unsafe_allow_html=True)
-            else:
-                st.write("No price data found for this item")
-
-        results = st.session_state.cost_results
         
-        # Only show cost table if no parameter changes or just calculated
         if calculate_clicked or not params_changed:
-            df = pd.DataFrame.from_dict(results, orient='index')
-            df = df.sort_values(by='total_cost', ascending=True)
-            low_cost = df['total_cost_per_unit'].min()
+            results = st.session_state.cost_results
+            logger.info(f"Results: {results}")
+
+            build_cost_df = pd.DataFrame.from_dict(results, orient='index')
+            build_cost_df = build_cost_df.sort_values(by='total_cost', ascending=True)
+            total_cost = build_cost_df['total_cost'].min()
+            low_cost = build_cost_df['total_cost_per_unit'].min()
+            low_cost_structure = build_cost_df['total_cost_per_unit'].idxmin()
             low_cost = float(low_cost)
+            material_cost = float(build_cost_df.loc[low_cost_structure, 'total_material_cost'])
+            job_cost = float(build_cost_df.loc[low_cost_structure, 'total_job_cost'])
+            units = build_cost_df.loc[low_cost_structure, 'units']
+            material_cost_per_unit = material_cost / build_cost_df.loc[low_cost_structure, 'units']
+            job_cost_per_unit = job_cost / build_cost_df.loc[low_cost_structure, 'units']
             
+        
+            col1, col2 = st.columns([0.2, 0.8])
+            with col1:
+                if is_valid_image_url(url):
+                    st.image(url)
+                else:
+                    st.image(alt_url, use_container_width=True)
+            with col2:
+                st.header(f"Build cost for {selected_item}", divider="violet")
+                st.write(f"Build cost for {selected_item} with {runs} runs, {me} ME, {te} TE, {price_source} material price (type_id: {type_id})")
+
+                col1, col2 = st.columns([0.5, 0.5])
+                with col1:
+                    st.metric(label="Build cost per unit", value=f"{millify(low_cost, precision=2)} ISK", help=f"Based on the lowest cost structure: {low_cost_structure}")
+                    st.markdown(f"**Materials:** {millify(material_cost_per_unit, precision=2)} ISK | **Job cost:** {millify(job_cost_per_unit, precision=2)} ISK")
+                with col2:
+                    st.metric(label="Total Build Cost", value=f"{millify(total_cost, precision=2)} ISK")
+                    st.markdown(f"**Materials:** {millify(material_cost, precision=2)} ISK | **Job cost:** {millify(job_cost, precision=2)} ISK")
+
             if vale_price:
                 profit_per_unit_vale = vale_price - low_cost
                 percent_profit_vale = ((vale_price - low_cost) / vale_price) * 100
-                st.metric(label="Profit per unit Vale", value=f"{millify(profit_per_unit_vale, precision=2)} ISK ({percent_profit_vale:.2f}%)")
+
+                st.markdown(f"**4-HWWF price:** <span style='color: orange;'>{millify(vale_price, precision=2)} ISK</span> ({percent_profit_vale:.2f}% Jita | profit: {millify(profit_per_unit_vale, precision=2)} ISK)", unsafe_allow_html=True)
+            
             else:
                 st.write("No Vale price data found for this item")
+
             if jita_price:
                 profit_per_unit_jita = jita_price - low_cost
                 percent_profit_jita = ((jita_price - low_cost) / jita_price) * 100
-                st.metric(label="Profit per unit Jita", value=f"{millify(profit_per_unit_jita, precision=2)} ISK ({percent_profit_jita:.2f}%)")
+                st.markdown(f"**Jita price:** <span style='color: orange;'>{millify(jita_price, precision=2)} ISK</span> ({percent_profit_jita:.2f}% Jita | profit: {millify(profit_per_unit_jita, precision=2)} ISK)", unsafe_allow_html=True)
             else:
-                st.write("No Jita price data found for this item")
+                st.write("No price data found for this item")
+
+                
             
-            display_df, col_config, col_order = display_data(df, selected_structure)
+            display_df, col_config, col_order = display_data(build_cost_df, selected_structure)
             st.dataframe(display_df, column_config=col_config, column_order=col_order)
+
 
         # Material breakdown section - always show if we have results
         st.subheader("Material Breakdown")
-        
+        results = st.session_state.cost_results
+
         structure_names_for_materials = sorted(list(results.keys()))  # Sort alphabetically
         
         # Default to the structure selected in sidebar if available
@@ -639,6 +662,18 @@ def main():
             display_material_costs(results, selected_structure_for_materials, current_item_id)
 
 
+    else:
+        st.write("Find a build cost for an item by selecting a category, group, and item in the sidebar. The build cost will be calculated for all structures in the database, ordered by cost (lowest to highest) along with a table of materials required and their costs for a selected structure. You can also select a structure to compare the cost to build versus this structure. When you're ready, click the 'Calculate' button.")
+
+        st.markdown("""
+                    **Parameters:**
+                    - **Runs:** The number of runs to calculate the cost for.
+                    - **ME:** The material efficiency of the blueprint. (default 10)
+                    - **TE:** The time efficiency of the blueprint. (default 10)
+                    - **Material price source:** The source of the material prices used in the calculations. (default ESI Average, you can also select Jita Sell or Jita Buy)
+                    - **Structure:** The structure to compare the cost to build versus. (optional)
+                    """)
+        
         
         
 if __name__ == "__main__":
