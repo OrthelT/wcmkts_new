@@ -359,9 +359,13 @@ def get_types_for_group(group_id: int)->pd.DataFrame:
     df = pd.read_csv("industry_types.csv")
     df = df[df['groupID'] == group_id]
     df = df.drop_duplicates(subset=['typeID'])
-    df.reset_index(drop=True, inplace=True) 
     df2 = df.copy()
-    df = df2[['typeID', 'typeName']]
+    df2 = df2.sort_values(by='typeName')
+    if group_id == 332:
+        df2 = df2[df2['typeName'].str.contains("R.A.M.") | df2['typeName'].str.contains("R.Db")]
+    df2 = df2[['typeID', 'typeName']]
+    df2.reset_index(drop=True, inplace=True) 
+    df = df2
     return df
 
 def get_type_id(type_name: str)->int:
@@ -475,4 +479,7 @@ def add_structure(structure: 'Structure') -> bool:
         return False
 
 if __name__ == "__main__":
-    pass
+    from build_cost_models import Structure
+    from pages.build_costs import get_structure_rigs
+
+    print(get_structure_rigs())
