@@ -368,6 +368,15 @@ def get_types_for_group(group_id: int)->pd.DataFrame:
     df = df2
     return df
 
+def get_group_id_for_type(type_id: int)->int:
+    df = pd.read_csv("industry_types.csv")
+    df = df[df['typeID'] == type_id]
+    group_id = df.iloc[0]['groupID']
+    query = f"""
+        SELECT groupID FROM invTypes WHERE typeID = {type_id}
+        """
+    return group_id
+
 def get_type_id(type_name: str)->int:
     query = f"""
         SELECT typeID FROM invTypes WHERE typeName = '{type_name}'
@@ -479,7 +488,4 @@ def add_structure(structure: 'Structure') -> bool:
         return False
 
 if __name__ == "__main__":
-    from build_cost_models import Structure
-    from pages.build_costs import get_structure_rigs
-
-    print(get_structure_rigs())
+    pass
