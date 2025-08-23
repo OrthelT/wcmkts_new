@@ -5,17 +5,21 @@ A Streamlit application for viewing EVE Online market statistics for Winter Coal
 SUPPORT: Join my Discord for support https://discord.gg/BxatJE572Y
 CONTRIBUTING: Contributors welcome. This project is fully open source under MIT License. Source code and full documentation available on GitHub: https://github.com/OrthelT/wcmkts_new
 
-## UPDATES: 
+## UPDATES:
 *version 0.52*
-- added comparison structure option to build cost tool, automatic calculation of structure tax based on stored data. 
+- introduced experimental async API calls for builds and several other refactors for performance improvement and maintainability. Helpers.py added with useful functions for development and debugging.
+- added comparison structure option to build cost tool, automatic calculation of structure tax based on stored data.
+- implemented rate limiting and proper user agent headers for API calls
+- added support for supercapital construction based on sovreignty upgrades.
+- enhanced build cost analysis with profit margin calculations
 *version 0.51(beta)*
 - added delectable target multiplier to "Doctrine Report" and "Doctrine Status" pages.
 *version 0.5(beta)*
-- implemented "Doctrine Report" page providing a view of market status by doctrine. 
+- implemented "Doctrine Report" page providing a view of market status by doctrine.
 *version 0.42*
-- added display of buy orders on market stats page. 
+- added display of buy orders on market stats page.
 *version 0.41*
-- simplified sync scheduling with periodic syncs every three hours. 
+- simplified sync scheduling with periodic syncs every three hours.
 
 *version 0.4*
 - Enhanced doctrine status page with:
@@ -58,12 +62,23 @@ CONTRIBUTING: Contributors welcome. This project is fully open source under MIT 
   - Doctrine fit details
   - Market availability of fit components
   - Last update timestamps
-  - Advanced filtering by status, group, and stock levels 
+  - Advanced filtering by status, group, and stock levels
   - Export functionality for modules and ships
+
+- **Build Cost Analysis**
+  - Real-time build cost calculations across multiple structures
+  - Material efficiency (ME) and time efficiency (TE) optimization
+  - Multiple material price sources (ESI Average, Jita Sell, Jita Buy)
+  - Structure comparison and cost optimization
+  - Profit margin analysis against market prices
+  - Async API calls for improved performance
+  - Support for supercapital construction (Sovereignty Hub)
+  - Automatic structure tax calculations
+  - Rig effects integration
 
 ## Data Updates
 
-The app uses Turso's embedded-replica feature to allow a local SQLlite-libsql database that allows extremely fast data fetches. The application automatically syncs with EVE Online market stored on the parent database daily at 13:00 UTC. Users can also trigger manual updates using the sync button in the sidebar to obtain new data, if it is available. 
+The app uses Turso's embedded-replica feature to allow a local SQLlite-libsql database that allows extremely fast data fetches. The application automatically syncs with EVE Online market stored on the parent database daily at 13:00 UTC. Users can also trigger manual updates using the sync button in the sidebar to obtain new data, if it is available.
 
 ## Setup
 
@@ -107,11 +122,20 @@ streamlit run app.py
    - Select a specific item to view available fits
    - Check market availability of fit components
 
+4. **Build Cost Calculations**
+   - Select item category, group, and specific item
+   - Configure build parameters (runs, ME, TE)
+   - Choose material price source (ESI Average, Jita Sell, Jita Buy)
+   - Compare costs across different structures
+   - Analyze profit margins against market prices
+   - Enable async mode for faster calculations
+
 ## Database Structure
 
-The application uses two databases:
+The application uses three databases:
 - Market Database: Contains current market orders and historical data
 - SDE Database: Contains EVE Online static data (items, categories, etc.)
+- Build Cost Database: Contains structure information, rigs, and industry indexes for build cost calculations
 
 ## Maintenance
 

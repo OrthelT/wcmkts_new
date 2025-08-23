@@ -46,7 +46,6 @@ super_shipyard_id = 1046452498926
 
 logger = setup_logging(__name__)
 
-
 @dataclass
 class JobQuery:
     item: str
@@ -310,17 +309,34 @@ async def get_costs_async(job: JobQuery) -> dict:
 
     results = {}
     errors = []
+    # Reduce connection limits to be more gentle on the server
+    limits = httpx.Limits(max_connections=MAX_CONCURRENCY, max_keepalive_connections=MAX_CONCURRENCY)
+    # Limit concurrent requests to 4 at a time
+    semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
 
-    limits = httpx.Limits(max_connections=8, max_keepalive_connections=8)
-    async with httpx.AsyncClient(http2=True, limits=limits) as client:
+    async def fetch_with_semaphore(client, url, structure_name, structure_type, job):
+        async with semaphore:
+            return await fetch_one(client, url, structure_name, structure_type, job)
+
+    # Add headers to identify your application
+    headers = {
+        "User-Agent": "WCMKTS-BuildCosts/1.0 (https://github.com/OrthelT/wcmkts_production; orthel.toralen@gmail.com)"
+    }
+
+    async with httpx.AsyncClient(http2=True, limits=limits, headers=headers) as client:
+
+        progress_bar = st.progress(0, text=f"Fetching data from {len(structures)} structures...")
         tasks = []
         for _ in structures:
             url, structure_name, structure_type = next(url_generator)
-            tasks.append(fetch_one(client, url, structure_name, structure_type, job))
+            tasks.append(fetch_with_semaphore(client, url, structure_name, structure_type, job))
 
         for i, coro in enumerate(asyncio.as_completed(tasks), start=1):
+            status = f"\rFetching {i} of {len(structures)} structures: {structure_name}"
+            progress_bar.progress(i / len(structures), text=status)
             structure_name, result, error = await coro
-            st.progress(i / len(tasks), text=f"Fetching {i} of {len(tasks)} structures: {structure_name}")
+
+
 
             if result:
                 results[structure_name] = result
@@ -337,12 +353,18 @@ async def get_costs_async(job: JobQuery) -> dict:
 @st.cache_data(ttl=3600)
 def get_all_structures(*, unwrap: bool = False) -> Sequence[sa.Row[Tuple[Structure]]] | list[dict[str, Any]]:
     engine = sa.create_engine(build_cost_url)
+    logger.info(f"Getting all structures")
+    if st.session_state.super:
+        logger.info(f"Super mode enabled")
+        stmt = sa.select(Structure).where(Structure.structure_id == super_shipyard_id)
+    else:
+        logger.info(f"Super mode disabled")
 
-    stmt = (
-        sa.select(Structure)
-        .where(Structure.structure_id != super_shipyard_id)
-        .filter(Structure.structure_type_id.in_(valid_structures))
-    )
+        stmt = (
+            sa.select(Structure)
+            .where(Structure.structure_id != super_shipyard_id)
+            .filter(Structure.structure_type_id.in_(valid_structures))
+        )
 
     with engine.connect() as conn:
         res = conn.execute(stmt)
@@ -718,7 +740,8 @@ def main():
 
     index = categories.index("Ship")
 
-    async_mode = st.sidebar.checkbox("Async Mode", value=False)
+    #This is an experimental feature, that significantly speeds up the calculation time.
+    async_mode = st.sidebar.checkbox("Async Mode", value=False, help="This is an experimental feature, that significantly speeds up the calculation time.")
     if async_mode:
         st.session_state.async_mode = True
         logger.info("Async mode enabled")
