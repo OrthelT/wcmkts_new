@@ -33,8 +33,8 @@ sde_auth_token = st.secrets["SDE_AUTH_TOKEN"]
 
 
 mkt_query = """
-    SELECT * FROM marketorders 
-    WHERE is_buy_order = 1 
+    SELECT * FROM marketorders
+    WHERE is_buy_order = 1
     ORDER BY order_id
 """
 
@@ -49,11 +49,10 @@ def execute_query_with_retry(session, query):
 
 @st.cache_data(ttl=600)
 def get_mkt_data(base_query):
-    mkt_start = time.time()
+    mkt_start = time.perf_counter()
     logger.info("\n")
     logger.info(f"="*80)
-    logger.info(f"getting market data with cache, start time: {mkt_start}")
-    
+
     with Session(get_local_mkt_engine()) as session:
         try:
             result, columns = execute_query_with_retry(session, base_query)
@@ -62,9 +61,9 @@ def get_mkt_data(base_query):
             logger.error(f"Failed to get market data: {str(e)}")
             raise
 
-    mkt_end = time.time()
-    logger.info(f"getting market data, end time: {mkt_end}")
-    logger.info(f"getting market data, total time: {mkt_end - mkt_start} seconds")
+    mkt_end = time.perf_counter()
+
+    logger.info(f"getting market data, total time: {round(( mkt_end - mkt_start)*1000, 2)} ms")
     logger.info(f"="*80)
     logger.info("\n")
     return df
@@ -74,7 +73,7 @@ def request_type_names(type_ids):
     # Process in chunks of 1000
     chunk_size = 1000
     all_results = []
-    
+
     for i in range(0, len(type_ids), chunk_size):
         chunk = type_ids[i:i + chunk_size]
         url = "https://esi.evetech.net/latest/universe/names/?datasource=tranquility"
@@ -84,17 +83,10 @@ def request_type_names(type_ids):
         }
         response = requests.post(url, headers=headers, json=chunk)
         all_results.extend(response.json())
-    
+
     return all_results
 
-def insert_type_names(df):
-    type_names = request_type_names(df.type_id.unique().tolist())
-    df_names = pd.DataFrame(type_names)
-    df_names = df_names.drop(columns=['category'])
-    df_names = df_names.rename(columns={'id': 'type_id', 'name': 'type_name'})
-    df_names.set_index('type_id')
-    df = df.merge(df_names, on='type_id', how='left')
-    return df
+
 
 def clean_mkt_data(df):
     # Create a copy first
@@ -102,24 +94,24 @@ def clean_mkt_data(df):
     df = df.reset_index(drop=True)
 
     df.rename(columns={'typeID': 'type_id', 'typeName': 'type_name'}, inplace=True)
-    
+
     new_cols = ['order_id', 'is_buy_order', 'type_id', 'type_name', 'price',
         'volume_remain', 'duration', 'issued']
     df = df[new_cols]
-    
+
     # Make sure issued is datetime before using dt accessor
     if not pd.api.types.is_datetime64_any_dtype(df['issued']):
         df['issued'] = pd.to_datetime(df['issued'])
-    
+
     df['expiry'] = df.apply(lambda row: row['issued'] + pd.Timedelta(days=row['duration']), axis=1)
     df['days_remaining'] = (df['expiry'] - pd.Timestamp.now()).dt.days
     df['days_remaining'] = df['days_remaining'].apply(lambda x: x if x > 0 else 0)
     df['days_remaining'] = df['days_remaining'].astype(int)
-    
+
     # Format dates after calculations are done
     df['issued'] = df['issued'].dt.date
     df['expiry'] = df['expiry'].dt.date
-    
+
     return df
 
 @st.cache_data(ttl=600)
@@ -127,9 +119,9 @@ def get_fitting_data(type_id):
     logger.info(f"getting fitting data with cache")
     with Session(get_local_mkt_engine()) as session:
         query = f"""
-            SELECT * FROM doctrines 
+            SELECT * FROM doctrines
             """
-        
+
         try:
             fit = session.execute(text(query))
             fit = fit.fetchall()
@@ -150,7 +142,7 @@ def get_fitting_data(type_id):
         df3 = df.copy()
         df3 = df3[df3['fit_id'] == fit_id]
         df3.reset_index(drop=True, inplace=True)
-        
+
         cols = ['fit_id', 'ship_id', 'ship_name', 'hulls', 'type_id', 'type_name',
        'fit_qty', 'fits_on_mkt', 'total_stock', '4H_price', 'avg_vol', 'days',
        'group_id', 'group_name', 'category_id', 'category_name', 'timestamp',
@@ -242,7 +234,7 @@ def get_update_time()->str:
     except Exception as e:
         logger.error(f"Failed to get update time: {str(e)}")
         return None
-    
+
 def get_time_since_esi_update()->str:
     query = """
         SELECT last_update FROM marketstats LIMIT 1
@@ -289,7 +281,7 @@ def get_time_until_next_update()->str:
         return "update available, use sync now to refresh data"
     else:
         st.session_state.sync_available = False
-        
+
     hours = time_until_update.total_seconds() // 3600
     minutes = (time_until_update.total_seconds() % 3600) // 60
 
@@ -312,7 +304,7 @@ def get_time_until_next_update()->str:
 
 
 def get_module_fits(type_id):
-    
+
     with Session(get_local_mkt_engine()) as session:
         query = f"""
             SELECT * FROM doctrines WHERE type_id = {type_id}
@@ -364,7 +356,7 @@ def get_types_for_group(group_id: int)->pd.DataFrame:
     if group_id == 332:
         df2 = df2[df2['typeName'].str.contains("R.A.M.") | df2['typeName'].str.contains("R.Db")]
     df2 = df2[['typeID', 'typeName']]
-    df2.reset_index(drop=True, inplace=True) 
+    df2.reset_index(drop=True, inplace=True)
     df = df2
     return df
 
@@ -398,94 +390,173 @@ def get_4H_price(type_id):
         return df.price.iloc[0]
     except:
         return None
-    
-def update_taxes(df):
-    updates = df.to_dict(orient='records')
 
-    engine = create_engine(build_cost_url)
-    with engine.connect() as conn:
-        for record in updates:
-            structure = record["structure"]
-            tax = record["tax"]
-            conn.execute(text(f"UPDATE structures SET tax = {tax} WHERE structure = '{structure}'"))
-        conn.commit()
-        print("Taxes updated successfully")
-
-def create_build_cost_tables():
-    """Create all tables defined in build_cost_models if they don't exist."""
-    try:
-        engine = create_engine(build_cost_url)
-        Base.metadata.create_all(engine)
-        logger.info("Build cost database tables created/verified successfully")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to create build cost tables: {str(e)}")
-        return False
-
-def add_structure(structure: 'Structure') -> bool:
-    """
-    Add a Structure object to the build_cost database.
-    
-    Args:
-        structure: A Structure model instance to insert into the database
-        
-    Returns:
-        bool: True if successful, False if failed
-
-    Example:
-        new_structure = Structure(
-        system="Nakah",
-        structure="Nakah - The Grind",
-        system_id=30000072,
-        structure_id=1049929502230,
-        rig_1="Standup M-Set Asteroid Ore Grading Processor II",
-        rig_2="Standup M-Set Composite Reactor Material Efficiency I",
-        rig_3=None,
-        structure_type="Athanor",
-        structure_type_id=35835,
-        tax=0.0000,
-    )
-    
-    success = add_structure(new_structure)
-    if success:
-        print("Structure added successfully")
-    else:
-        print("Failed to add structure")
-    """
-    try:
-        # Ensure tables exist before trying to insert
-        create_build_cost_tables()
-        
-        engine = create_engine(build_cost_url)
-        with engine.connect() as conn:
-            conn.execute(text("""
-                INSERT INTO structures (
-                    system, structure, system_id, structure_id, 
-                    rig_1, rig_2, rig_3, structure_type, 
-                    structure_type_id, tax
-                ) VALUES (
-                    :system, :structure, :system_id, :structure_id, 
-                    :rig_1, :rig_2, :rig_3, :structure_type, 
-                    :structure_type_id, :tax
-                )
-            """), {
-                'system': structure.system,
-                'structure': structure.structure,
-                'system_id': structure.system_id,
-                'structure_id': structure.structure_id,
-                'rig_1': structure.rig_1,
-                'rig_2': structure.rig_2,
-                'rig_3': structure.rig_3,
-                'structure_type': structure.structure_type,
-                'structure_type_id': structure.structure_type_id,
-                'tax': structure.tax
-            })
-            conn.commit()
-            logger.info(f"Structure '{structure.structure}' added successfully to database")
-            return True
-    except Exception as e:
-        logger.error(f"Failed to add structure '{structure.structure}': {str(e)}")
-        return False
 
 if __name__ == "__main__":
     pass
+
+
+def get_market_data(show_all, selected_categories, selected_items):
+    # Get filtered_type_ids based on selected categories and items
+    filtered_type_ids = None
+
+    if not show_all:
+        # Get type_ids for the selected categories from SDE first
+        sde_conditions = []
+        if selected_categories:
+            logger.info(f"selected_categories: {selected_categories}")
+            categories_str = ', '.join(f"'{cat}'" for cat in selected_categories)
+            sde_conditions.append(f"ic.categoryName IN ({categories_str})")
+
+        if selected_items:
+            logger.info(f"selected_items: {selected_items}")
+            items_str = ', '.join(f'"{item}"' for item in selected_items)
+            sde_conditions.append(f"it.typeName IN ({items_str})")
+
+        if sde_conditions:
+            logger.info(f"sde_conditions: {sde_conditions}")
+            sde_where = " AND ".join(sde_conditions)
+            sde_query = f"""
+                SELECT DISTINCT it.typeID
+                FROM invTypes it
+                JOIN invGroups ig ON it.groupID = ig.groupID
+                JOIN invCategories ic ON ig.categoryID = ic.categoryID
+                WHERE {sde_where}
+            """
+
+            # with Session(get_local_sde_engine()) as session:
+            #     try:
+            #         logger.info(f"executing SDE query")
+            #         result = session.execute(text(sde_query))
+            #         filtered_type_ids = [str(row[0]) for row in result.fetchall()]
+            #         logger.info(f"filtered_type_ids: {filtered_type_ids}")
+            #         session.close()
+            #     except Exception as e:
+            #         logger.error(f"Error executing SDE query: {e}")
+
+            # try:
+            #     logger.info(f"filtered_type_ids: {len(filtered_type_ids)}")
+            #     if not filtered_type_ids:
+            #         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()  # Return empty DataFrames for both values
+            # except Exception as e:
+            #     logger.error(f"Error executing SDE query: {e}")
+
+    # Get sell orders
+    sell_conditions = ["is_buy_order = 0"]
+    if filtered_type_ids:
+        logger.info(f"filtered_type_ids: {filtered_type_ids}")
+        type_ids_str = ','.join(filtered_type_ids)
+        sell_conditions.append(f"type_id IN ({type_ids_str})")
+
+    # Build market query for sell orders
+    sell_where_clause = " AND ".join(sell_conditions)
+    sell_query = f"""
+        SELECT mo.*
+        FROM marketorders mo
+        WHERE {sell_where_clause}
+        ORDER BY type_id
+    """
+
+    # Get buy orders
+    buy_conditions = ["is_buy_order = 1"]
+    if filtered_type_ids:
+        type_ids_str = ','.join(filtered_type_ids)
+        buy_conditions.append(f"type_id IN ({type_ids_str})")
+
+    # Build market query for buy orders
+    buy_where_clause = " AND ".join(buy_conditions)
+    buy_query = f"""
+        SELECT mo.*
+        FROM marketorders mo
+        WHERE {buy_where_clause}
+        ORDER BY type_id
+    """
+
+    stats_query = f"""
+        SELECT * FROM marketstats
+    """
+
+    # Get market data
+    t1 = time.perf_counter()
+
+    sell_df = get_mkt_data(sell_query)
+
+    t2 = time.perf_counter()
+    elapsed_time = round((t2-t1)*1000, 2)
+    logger.info(f"TIME get_mkt_data() sell_df = {elapsed_time} ms")
+
+    buy_df = get_mkt_data(buy_query)
+
+    t3 = time.perf_counter()
+    elapsed_time = round((t3-t2)*1000, 2)
+    logger.info(f"TIME get_mkt_data() buy_df = {elapsed_time} ms")
+
+    if sell_df.empty and buy_df.empty:
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()  # Return empty DataFrames
+
+    t4 = time.perf_counter()
+    elapsed_time = round((t4-t3)*1000, 2)
+    logger.info(f"TIME get_mkt_data() stats = {elapsed_time} ms")
+    print("-"*100)
+
+    stats = get_stats(stats_query)
+
+    t5 = time.perf_counter()
+    elapsed_time = round((t5-t4)*1000, 2)
+    logger.info(f"TIME get_stats() stats = {elapsed_time} ms")
+    print("-"*100)
+    # Get all unique type_ids from both dataframes
+    all_type_ids = set()
+    if not sell_df.empty:
+        all_type_ids.update(sell_df['type_id'].unique())
+    if not buy_df.empty:
+        all_type_ids.update(buy_df['type_id'].unique())
+
+    # Get SDE data for all type_ids in the result
+    type_ids_str = ','.join(map(str, all_type_ids))
+    sde_query = f"""
+        SELECT it.typeID as type_id, ig.groupName as group_name, ic.categoryName as category_name
+        FROM invTypes it
+        JOIN invGroups ig ON it.groupID = ig.groupID
+        JOIN invCategories ic ON ig.categoryID = ic.categoryID
+        WHERE it.typeID IN ({type_ids_str})
+    """
+
+    with Session(get_local_sde_engine()) as session:
+        logger.info(f"executing SDE query")
+        result = session.execute(text(sde_query))
+        sde_df = pd.DataFrame(result.fetchall(), columns=['type_id', 'group_name', 'category_name'])
+        session.close()
+
+    t6 = time.perf_counter()
+    elapsed_time = round((t6-t5)*1000, 2)
+    logger.info(f"TIME get_stats() sde_df = {elapsed_time} ms")
+    print("-"*100)
+
+    # Merge market data with SDE data for sell orders
+    if not sell_df.empty:
+        sell_df = sell_df.merge(sde_df, on='type_id', how='left')
+        sell_df = sell_df.reset_index(drop=True)
+        # Clean up the DataFrame
+        sell_df = clean_mkt_data(sell_df)
+
+    # Merge market data with SDE data for buy orders
+    if not buy_df.empty:
+        buy_df = buy_df.merge(sde_df, on='type_id', how='left')
+        buy_df = buy_df.reset_index(drop=True)
+        # Clean up the DataFrame
+        buy_df = clean_mkt_data(buy_df)
+
+    t7 = time.perf_counter()
+    elapsed_time = round((t7-t6)*1000, 2)
+    logger.info(f"TIME get_stats() clean_mkt_data() = {elapsed_time} ms")
+    print("-"*100)
+
+    logger.info(f"returning market data")
+
+    t8 = time.perf_counter()
+    elapsed_time = round((t8-t7)*1000, 2)
+    logger.info(f"TIME get_stats() returning market data = {elapsed_time} ms")
+    print("-"*100)
+
+    return sell_df, buy_df, stats

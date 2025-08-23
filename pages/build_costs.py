@@ -1,7 +1,7 @@
 import os
 import sys
 from dataclasses import dataclass
-from typing import Sequence, Tuple
+from typing import Sequence, Tuple, Any, Dict, List
 import pandas as pd
 import sqlalchemy as sa
 import sqlalchemy.orm as orm
@@ -9,6 +9,19 @@ import streamlit as st
 import pathlib
 import requests
 import json
+import warnings
+
+#ASYNC LIBRARIES
+import asyncio
+import httpx
+
+
+API_TIMEOUT = 20.0
+MAX_CONCURRENCY = 8        # tune for the API's rate limits
+RETRIES = 2                # light retry; scale if API is flaky
+
+# Suppress the ScriptRunContext warning
+warnings.filterwarnings("ignore", message="missing ScriptRunContext")
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -23,6 +36,8 @@ from db_handler import (
 )
 from db_utils import update_industry_index
 import datetime
+import time
+from time import perf_counter, process_time
 
 build_cost_db = os.path.join("build_cost.db")
 build_cost_url = f"sqlite:///{build_cost_db}"
@@ -42,7 +57,7 @@ class JobQuery:
     te: int
     security: str = "NULL_SEC"
     system_cost_bonus: float = 0.0
-    material_prices: str = "ESI_AVG"
+    material_prices: str = "ESI_AVG" #default to ESI_AVG, other valid options: "Jita Sell", "Jita Buy"
 
     def __post_init__(self):
         if self.group_id in [30, 659]:
@@ -58,7 +73,6 @@ class JobQuery:
 
     def yield_urls(self):
         logger.info(f"Super: {st.session_state.super}")
-        """Generator that yields URLs for each structure."""
         structure_generator = yield_structure()
 
         for structure in structure_generator:
@@ -209,8 +223,14 @@ def get_system_id(system_name: str) -> int:
         else:
             raise Exception(f"No system id found for {system_name}")
 
+def get_costs(job: JobQuery, *, async_mode: bool = False) -> dict:
+    if async_mode:
+        return asyncio.run(get_costs_async(job))
+    else:
+        return get_costs_syncronous(job)
 
-def get_costs(job: JobQuery) -> dict:
+def get_costs_syncronous(job: JobQuery) -> dict:
+
     url_generator = job.yield_urls()
     results = {}
 
@@ -255,30 +275,83 @@ def get_costs(job: JobQuery) -> dict:
             "scc_surcharge": data2["scc_surcharge"],
             "system_cost_index": data2["system_cost_index"],
             "total_job_cost": data2["total_job_cost"],
-            "materials": data2["materials"],  # Include materials data
+            "materials": data2["materials"],
         }
     return results
 
 
+async def fetch_one(client: httpx.AsyncClient, url: str, structure_name: str, structure_type: str, job: JobQuery):
+    try:
+        r = await client.get(url, timeout=20)
+        r.raise_for_status()
+        data = r.json()
+        try:
+            data2 = data["manufacturing"][str(job.item_id)]
+        except KeyError:
+            return structure_name, None, f"No data found for {job.item_id}"
+        return structure_name, {
+            "structure_type": structure_type,
+            "units": data2["units"],
+            "total_cost": data2["total_cost"],
+            "total_cost_per_unit": data2["total_cost_per_unit"],
+            "total_material_cost": data2["total_material_cost"],
+            "facility_tax": data2["facility_tax"],
+            "scc_surcharge": data2["scc_surcharge"],
+            "system_cost_index": data2["system_cost_index"],
+            "total_job_cost": data2["total_job_cost"],
+            "materials": data2["materials"],
+        }, None
+    except Exception as e:
+        return structure_name, None, str(e)
+
+async def get_costs_async(job: JobQuery) -> dict:
+    structures = get_all_structures(unwrap=True)   # list[dict]
+    url_generator = job.yield_urls()
+
+    results = {}
+    errors = []
+
+    limits = httpx.Limits(max_connections=8, max_keepalive_connections=8)
+    async with httpx.AsyncClient(http2=True, limits=limits) as client:
+        tasks = []
+        for _ in structures:
+            url, structure_name, structure_type = next(url_generator)
+            tasks.append(fetch_one(client, url, structure_name, structure_type, job))
+
+        for i, coro in enumerate(asyncio.as_completed(tasks), start=1):
+            structure_name, result, error = await coro
+            st.progress(i / len(tasks), text=f"Fetching {i} of {len(tasks)} structures: {structure_name}")
+
+            if result:
+                results[structure_name] = result
+            if error:
+                errors.append((structure_name, error))
+
+    # Log errors if needed
+    if errors:
+        for s, e in errors:
+            print(f"Error fetching {s}: {e}")
+
+    return results
+
 @st.cache_data(ttl=3600)
-def get_all_structures() -> Sequence[sa.Row[Tuple[Structure]]]:
+def get_all_structures(*, unwrap: bool = False) -> Sequence[sa.Row[Tuple[Structure]]] | list[dict[str, Any]]:
     engine = sa.create_engine(build_cost_url)
-    # handle structure for building supers:
-    if st.session_state.super:
-        stmt = sa.select(Structure).where(Structure.structure_id == super_shipyard_id)
-    else:
-        logger.info("not super")
-        stmt = (
-            sa.select(Structure)
-            .where(Structure.structure_id != super_shipyard_id)
-            .filter(Structure.structure_type_id.in_(valid_structures))
-        )
+
+    stmt = (
+        sa.select(Structure)
+        .where(Structure.structure_id != super_shipyard_id)
+        .filter(Structure.structure_type_id.in_(valid_structures))
+    )
 
     with engine.connect() as conn:
         res = conn.execute(stmt)
-        structures = res.fetchall()
-        return structures
+        rows = res.fetchall()
 
+        if unwrap:
+            return [r._mapping for r in rows]
+        else:
+            return rows
 
 def yield_structure():
     structures = get_all_structures()
@@ -471,6 +544,8 @@ def initialise_session_state():
         st.session_state.selected_structure = None
     if "super" not in st.session_state:
         st.session_state.super = False
+    if "async_mode" not in st.session_state:
+        st.session_state.async_mode = False
     st.session_state.initialised = True
 
     try:
@@ -615,6 +690,7 @@ def display_material_costs(results: dict, selected_structure: str, item_id: str)
 
 
 def main():
+
     if "initialised" not in st.session_state:
         initialise_session_state()
     else:
@@ -641,6 +717,14 @@ def main():
     categories = df["category"].unique().tolist()
 
     index = categories.index("Ship")
+
+    async_mode = st.sidebar.checkbox("Async Mode", value=False)
+    if async_mode:
+        st.session_state.async_mode = True
+        logger.info("Async mode enabled")
+    else:
+        st.session_state.async_mode = False
+        logger.info("Async mode disabled")
 
     selected_category = st.sidebar.selectbox(
         "Select a category",
@@ -751,11 +835,9 @@ def main():
         help="Click to calculate the cost for the selected item.",
     )
 
-    logger.info(f"just passed the click button, calculate_clicked: {calculate_clicked}")
 
     if calculate_clicked:
         st.session_state.calculate_clicked = True
-        logger.info("Calculate button clicked, calculating")
         st.session_state.selected_item_for_display = selected_item
 
     if st.session_state.sci_last_modified:
@@ -777,9 +859,26 @@ def main():
             te=te,
             material_prices=st.session_state.price_source,
         )
+        logger.info(f"="*80)
+        logger.info(f"="*80)
+        logger.info("\n")
+        logger.info(f"get_costs()")
+        logger.info(f"="*80)
+        logger.info(f"="*80)
+        logger.info("\n")
+        t1 = time.perf_counter()
 
-        # Always fetch new results when Calculate is clicked
-        results = get_costs(job)
+        if st.session_state.async_mode:
+            results = get_costs(job,async_mode=True)
+        else:
+            results = get_costs(job,async_mode=False)
+
+        t2= time.perf_counter()
+        elapsed_time = round((t2-t1)*1000, 2)
+        logger.info(f"="*80)
+        logger.info(f"TIME get_costs() = {elapsed_time} ms")
+        logger.info(f"="*80)
+        logger.info("\n")
 
         # Cache the results and parameters
         st.session_state.cost_results = results
@@ -790,8 +889,6 @@ def main():
             logger.error(f"No results found for {selected_item}")
             raise Exception(f"No results found for {selected_item}")
 
-    else:
-        logger.info("No calculate clicked, not calculating")
 
     # Display results if available (either fresh or cached)
     if (
@@ -966,8 +1063,7 @@ def main():
         )
 
 
-if __name__ == "__main__":
-    # job = JobQuery(item="11567", item_id=11567, group_id=30, runs=1, me=0, te=0, material_prices="ESI Average")
-    # results = get_costs(job)
 
+
+if __name__ == "__main__":
     main()

@@ -31,7 +31,7 @@ def sync_db(db_url="wcmkt.db", sync_url=mkt_url, auth_token=mkt_auth_token):
     st.cache_data.clear()
     st.cache_resource.clear()
     logger.info("cache cleared")
-    
+
     sleep_time = 0.5
     time.sleep(sleep_time)
     logger.info(f"cache cleared for sync; sleeping {sleep_time} seconds")
@@ -39,20 +39,24 @@ def sync_db(db_url="wcmkt.db", sync_url=mkt_url, auth_token=mkt_auth_token):
     # Skip sync in development mode or when sync_url/auth_token are not provided
     if not sync_url or not auth_token:
         logger.info("Skipping database sync in development mode or missing sync credentials")
-        
-        
+
     try:
-        sync_start = time.time()
         conn = libsql.connect(db_url, sync_url=sync_url, auth_token=auth_token)
         logger.info("\n")
         logger.info(f"="*80)
-        logger.info(f"Database sync started at {sync_start}")
+        t1 = time.perf_counter()
+
         conn.sync()
-        logger.info(f"Database synced in {1000*(time.time() - sync_start)} milliseconds")
+
+        t2 = time.perf_counter()
+        elapsed_time = round((t2-t1)*1000, 2)
+        logger.info(f"Database synced in {elapsed_time} ms")
+        logger.info(f"="*80)
+        logger.info("\n")
 
         last_sync = datetime.datetime.now().astimezone(datetime.UTC)
         logger.info(f"updated Last sync: {last_sync.strftime('%Y-%m-%d %H:%M %Z')}")
-        
+
         # Use schedule_next_sync to determine the next sync time
         next_sync = schedule_next_sync(last_sync)
         logger.info(f"updated Next sync: {next_sync.strftime('%Y-%m-%d %H:%M %Z')}")
@@ -60,26 +64,26 @@ def sync_db(db_url="wcmkt.db", sync_url=mkt_url, auth_token=mkt_auth_token):
         # Save sync state with sync_times preserved
         with open("last_sync_state.json", "r") as f:
             current_state = json.load(f)
-        
+
         current_state.update({
             "last_sync": last_sync.strftime("%Y-%m-%d %H:%M %Z"),
             "next_sync": next_sync.strftime("%Y-%m-%d %H:%M %Z")
         })
-        
+
         with open("last_sync_state.json", "w") as f:
             json.dump(current_state, f)
-            
+
         logger.info(f"Last sync state updated to: {last_sync.strftime('%Y-%m-%d %H:%M %Z')}")
         logger.info(f"Next sync state updated to: {next_sync.strftime('%Y-%m-%d %H:%M %Z')}")
-     
+
 
         #update session state
         st.session_state.last_sync = last_sync
         st.session_state.next_sync = next_sync
-        
+
         logger.info(f"="*80)
         logger.info("\n")
-        
+
     except Exception as e:
         if "Sync is not supported" in str(e):
             logger.info("Skipping sync: This appears to be a local file database that doesn't support sync")
@@ -104,7 +108,7 @@ def update_targets(fit_id, target_value):
     WHERE fit_id = {fit_id};""")
     conn.commit()
     logger.info(f"Updated target for fit_id {fit_id} to {target_value}")
-    
+
 def update_industry_index():
     indy_index = fetch_industry_system_cost_indices()
     if indy_index is None:
@@ -128,8 +132,8 @@ def fetch_industry_system_cost_indices():
             "User-Agent": "WC Markets v0.52 (admin contact: Orthel.Toralen@gmail.com; +https://github.com/OrthelT/wcmkts_new",
             "If-None-Match": st.session_state.etag
         }
-    else:   
-        
+    else:
+
         headers = {
             "Accept": "application/json",
             "User-Agent": "WC Markets v0.52 (admin contact: Orthel.Toralen@gmail.com; +https://github.com/OrthelT/wcmkts_new"
@@ -141,7 +145,7 @@ def fetch_industry_system_cost_indices():
     print(response.headers)
 
     etag = response.headers.get("ETag")
-    
+
     if response.status_code == 304:
         logger.info("Industry index current, skipping update with status code 304")
         logger.info(f"last modified: {response.headers.get('Last-Modified')}")

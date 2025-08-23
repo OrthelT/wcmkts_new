@@ -5,6 +5,8 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "asyncio>=4.0.0",
+    "httpx[http2]>=0.28.1",
     "libsql>=0.1.5",
     "millify==0.1.1",
     "pandas==2.2.0",
@@ -17,4 +19,5 @@ dependencies = [
     "sqlalchemy-libsql>=0.2.0",
     "streamlit==1.44.1",
     "tenacity==8.2.3",
+    "typing>=3.10.0.0",
 ]

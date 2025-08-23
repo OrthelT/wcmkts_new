@@ -1,5 +1,9 @@
 import os
 import sys
+import time
+
+from db_handler import get_market_data
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -13,13 +17,15 @@ from logging_config import setup_logging
 from db_utils import sync_db
 import millify
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 # Insert centralized logging configuration
 logger = setup_logging(__name__)
 
 # Log application start
 logger.info("Application started")
+logger.info(f"streamlit version: {st.__version__}")
+logger.info("-"*100)
 
 mkt_url = st.secrets["TURSO_DATABASE_URL"]
 mkt_auth_token = st.secrets["TURSO_AUTH_TOKEN"]
@@ -34,176 +40,51 @@ def get_filter_options(selected_categories=None):
     try:
         # First get type_ids from market orders
         mkt_query = """
-        SELECT DISTINCT type_id 
-        FROM marketorders 
+        SELECT DISTINCT type_id
+        FROM marketorders
         WHERE is_buy_order = 0
         """
         logger.info("getting filter options")
         with Session(get_local_mkt_engine()) as session:
             result = session.execute(text(mkt_query))
             type_ids = [row[0] for row in result.fetchall()]
-       
+
             if not type_ids:
                 return [], []
             type_ids_str = ','.join(map(str, type_ids))
-        
+
         logger.info(f"type_ids: {len(type_ids)}")
 
         # Then get category info from SDE database
         sde_query = f"""
-        SELECT DISTINCT it.typeName as type_name, it.typeID as type_id, it.groupID as group_id, ig.groupName as group_name, 
+        SELECT DISTINCT it.typeName as type_name, it.typeID as type_id, it.groupID as group_id, ig.groupName as group_name,
                ic.categoryID as category_id, ic.categoryName as category_name
-        FROM invTypes it 
+        FROM invTypes it
         JOIN invGroups ig ON it.groupID = ig.groupID
         JOIN invCategories ic ON ig.categoryID = ic.categoryID
         WHERE it.typeID IN ({type_ids_str})
         """
         with Session(get_local_sde_engine()) as session:
             result = session.execute(text(sde_query))
-            df = pd.DataFrame(result.fetchall(), 
+            df = pd.DataFrame(result.fetchall(),
                               columns=['type_name', 'type_id', 'group_id', 'group_name', 'category_id', 'category_name'])
 
             categories = sorted(df['category_name'].unique())
-            
+
             if selected_categories:
-                df = df[df['category_name'].isin(selected_categories)]   
-        
+                df = df[df['category_name'].isin(selected_categories)]
+
         items = sorted(df['type_name'].unique())
-      
-        
+
+
         return categories, items
-        
+
 
     except Exception as e:
         st.error(f"Database error: {str(e)}")
         return [], []
 
 # Query function
-def get_market_data(show_all, selected_categories, selected_items):
-    # Get filtered_type_ids based on selected categories and items
-    filtered_type_ids = None
-    
-    if not show_all:
-        # Get type_ids for the selected categories from SDE first
-        sde_conditions = []
-        if selected_categories:
-            categories_str = ', '.join(f"'{cat}'" for cat in selected_categories)
-            sde_conditions.append(f"ic.categoryName IN ({categories_str})")
-        
-        if selected_items:
-            items_str = ', '.join(f'"{item}"' for item in selected_items)
-            sde_conditions.append(f"it.typeName IN ({items_str})")
-            
-        if sde_conditions:
-            sde_where = " AND ".join(sde_conditions)
-            sde_query = f"""
-                SELECT DISTINCT it.typeID
-                FROM invTypes it 
-                JOIN invGroups ig ON it.groupID = ig.groupID
-                JOIN invCategories ic ON ig.categoryID = ic.categoryID
-                WHERE {sde_where}
-            """
-            
-            with Session(get_local_sde_engine()) as session:
-                try:
-                    result = session.execute(text(sde_query))
-                    filtered_type_ids = [str(row[0]) for row in result.fetchall()]
-                    session.commit()
-                    session.close()
-                except Exception as e:
-                    logger.error(f"Error executing SDE query: {e}")
-
-            try:
-                logger.info(f"filtered_type_ids: {len(filtered_type_ids)}")
-                if not filtered_type_ids:
-                    return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()  # Return empty DataFrames for both values
-            except Exception as e:
-                logger.error(f"Error executing SDE query: {e}")
-    
-    # Get sell orders
-    sell_conditions = ["is_buy_order = 0"]
-    if filtered_type_ids:
-        type_ids_str = ','.join(filtered_type_ids)
-        sell_conditions.append(f"type_id IN ({type_ids_str})")
-    
-    # Build market query for sell orders
-    sell_where_clause = " AND ".join(sell_conditions)
-    sell_query = f"""
-        SELECT mo.* 
-        FROM marketorders mo
-        WHERE {sell_where_clause}
-        ORDER BY type_id
-    """
-    
-    # Get buy orders
-    buy_conditions = ["is_buy_order = 1"]
-    if filtered_type_ids:
-        type_ids_str = ','.join(filtered_type_ids)
-        buy_conditions.append(f"type_id IN ({type_ids_str})")
-    
-    # Build market query for buy orders
-    buy_where_clause = " AND ".join(buy_conditions)
-    buy_query = f"""
-        SELECT mo.* 
-        FROM marketorders mo
-        WHERE {buy_where_clause}
-        ORDER BY type_id
-    """
-    
-    stats_query = f"""
-        SELECT * FROM marketstats
-    """
-    
-    # Get market data
-    sell_df = get_mkt_data(sell_query)
-    buy_df = get_mkt_data(buy_query)
-    
-    if sell_df.empty and buy_df.empty:
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()  # Return empty DataFrames
-    
-    stats = get_stats(stats_query)
-
-    # Get all unique type_ids from both dataframes
-    all_type_ids = set()
-    if not sell_df.empty:
-        all_type_ids.update(sell_df['type_id'].unique())
-    if not buy_df.empty:
-        all_type_ids.update(buy_df['type_id'].unique())
-    
-    # Get SDE data for all type_ids in the result
-    type_ids_str = ','.join(map(str, all_type_ids))
-    sde_query = f"""
-        SELECT it.typeID as type_id, ig.groupName as group_name, ic.categoryName as category_name
-        FROM invTypes it 
-        JOIN invGroups ig ON it.groupID = ig.groupID
-        JOIN invCategories ic ON ig.categoryID = ic.categoryID
-        WHERE it.typeID IN ({type_ids_str})
-    """
-    
-    with Session(get_local_sde_engine()) as session:
-        result = session.execute(text(sde_query))
-        sde_df = pd.DataFrame(result.fetchall(), columns=['type_id', 'group_name', 'category_name'])
-        session.close()
-
-    # Merge market data with SDE data for sell orders
-    if not sell_df.empty:
-        sell_df = sell_df.merge(sde_df, on='type_id', how='left')
-        sell_df = sell_df.reset_index(drop=True)
-        # Clean up the DataFrame
-        sell_df = clean_mkt_data(sell_df)
-    
-    # Merge market data with SDE data for buy orders
-    if not buy_df.empty:
-        buy_df = buy_df.merge(sde_df, on='type_id', how='left')
-        buy_df = buy_df.reset_index(drop=True)
-        # Clean up the DataFrame
-        buy_df = clean_mkt_data(buy_df)
-    
-    logger.info(f"returning market data")
-
-    return sell_df, buy_df, stats
-
-
 def create_price_volume_chart(df):
     # Create histogram with price bins
     fig = px.histogram(
@@ -218,7 +99,7 @@ def create_price_volume_chart(df):
             'volume_remain': 'Volume Available'
         }
     )
-    
+
     # Update layout for better readability
     fig.update_layout(
         bargap=0.1,  # Add small gaps between bars
@@ -226,10 +107,10 @@ def create_price_volume_chart(df):
         yaxis_title="Volume Available",
         showlegend=False
     )
-    
+
     # Format price labels with commas for thousands
     fig.update_xaxes(tickformat=",")
-    
+
     return fig
 
 def create_history_chart(type_id):
@@ -239,14 +120,14 @@ def create_history_chart(type_id):
     fig = go.Figure()
     # Create subplots: 2 rows, 1 column, shared x-axis
     fig = make_subplots(
-        rows=2, 
-        cols=1, 
+        rows=2,
+        cols=1,
         shared_xaxes=True,
         vertical_spacing=0.05,
         row_heights=[0.7, 0.3],  # Price gets more space than volume
-        
+
     )
-    
+
     # Add price line to the top subplot (row 1)
     fig.add_trace(
         go.Scatter(
@@ -257,30 +138,30 @@ def create_history_chart(type_id):
         ),
         row=1, col=1
     )
-    
+
     # Add volume bars to the bottom subplot (row 2)
     fig.add_trace(
         go.Bar(
             x=df['date'],
             y=df['volume'],
             name='Volume',
-            opacity=0.5,            
-            marker_color='#00B5F7', 
+            opacity=0.5,
+            marker_color='#00B5F7',
             base=0,
-            
-         
+
+
               # Bright blue bars
         ),
         row=2, col=1
     )
-    
+
     # Calculate ranges with padding
     min_price = df['average'].min()
     max_price = df['average'].max()
     price_padding = (max_price - min_price) * 0.05  # 5% padding
     min_volume = df['volume'].min()
     max_volume = df['volume'].max()
-    
+
     # Update layout for both subplots
     fig.update_layout(
         title='Market History',
@@ -301,8 +182,8 @@ def create_history_chart(type_id):
         hovermode='x unified',  # Show all data on hover
         autosize=True,
     )
-    
-    
+
+
     fig.update_yaxes(
         title=dict(text='Price (ISK)', font=dict(color='white', size=10), standoff=5),
         gridcolor='rgba(128,128,128,0.2)',
@@ -311,9 +192,9 @@ def create_history_chart(type_id):
         row=1, col=1,
         automargin = True
 
-        
+
     )
-    
+
     # Update axes for the volume subplot (bottom)
     fig.update_yaxes(
         title=dict(text='Volume', font=dict(color='white', size=10), standoff=5),
@@ -323,31 +204,31 @@ def create_history_chart(type_id):
         row=2, col=1,
         automargin = True
     )
-    
+
     # Update shared x-axis
     fig.update_xaxes(
         gridcolor='rgba(128,128,128,0.2)',
         tickfont=dict(color='white'),
         row=2, col=1  # Apply to the bottom subplot's x-axis
     )
-    
+
     # Hide x-axis labels for top subplot
     fig.update_xaxes(
         showticklabels=False,
         row=1, col=1
     )
-    
+
     return fig
 
 def display_sync_status():
     """Display sync status in the sidebar."""
-    
+
     last_update = get_update_time()
     time_since_update = get_time_since_esi_update()
     st.sidebar.markdown(f"**Last ESI update:** {last_update} UTC {time_since_update}")
     time_until_update = get_time_until_next_update()
     st.sidebar.markdown(f"*Next ESI update in {time_until_update}*")
-    
+
     st.sidebar.markdown("---")
     st.sidebar.subheader("Database Sync Status")
     status_color = "green" if st.session_state.sync_status == "Success" else "red"
@@ -355,7 +236,7 @@ def display_sync_status():
     if st.session_state.sync_available:
         status_color = "orange"
         st.session_state.sync_status = "Update available"
-    
+
 
     if st.session_state.last_sync:
         last_sync_time = st.session_state.last_sync.strftime("%Y-%m-%d %H:%M UTC")
@@ -365,9 +246,9 @@ def display_sync_status():
             st.sidebar.markdown(f"**Next scheduled sync:** {next_sync_time}")
     else:
         st.sidebar.markdown("**Last sync:** Not yet run")
-        
+
     st.sidebar.markdown(f"**Status:** <span style='color:{status_color}'>{st.session_state.sync_status}</span>", unsafe_allow_html=True)
-    
+
     # Manual sync button
     if st.sidebar.button("Sync Now"):
         try:
@@ -377,7 +258,7 @@ def display_sync_status():
         except Exception as e:
             logger.error(f"st.session_state.sync_status: {st.session_state.sync_status}")
             st.sidebar.error(f"Sync failed: {str(e)}")
-    
+
     if st.session_state.sync_status == "Success":
         st.sidebar.success("Database sync completed successfully!")
     if st.session_state.sync_status == "Update available":
@@ -395,7 +276,11 @@ def main():
 
     if check_sync_status():
         logger.info("Sync needed, syncing now")
+        t1 = time.perf_counter()
         sync_db()
+        t2 = time.perf_counter()
+        elapsed_time = (t2-t1)*1000
+        logger.info(f"TIME sync_db() = {elapsed_time} ms")
         st.session_state.sync_status = "Success"
         st.session_state.update_time = get_update_time()
         logger.info(f"Sync status updated to: {st.session_state.sync_status}\n, last sync: {st.session_state.last_sync}\n, next sync: {st.session_state.next_sync}\n")
@@ -408,7 +293,7 @@ def main():
 
     # Title
     st.title("Winter Coalition Market Stats")
-    
+
     # Sidebar filters
     st.sidebar.header("Filters")
 
@@ -426,16 +311,16 @@ def main():
         index=0,
         format_func=lambda x: "All Categories" if x == "" else x
     )
-    
+
     # Convert to list format for compatibility with existing code
     selected_categories = [selected_category] if selected_category else []
 
     logger.info(f"Selected category: {selected_category}")
-    
+
     # Debug info
     if selected_category:
         st.sidebar.text(f"Category: {selected_category}")
-    
+
     # Get filtered items based on selected category
     _, available_items = get_filter_options(selected_categories if not show_all and selected_category else None)
 
@@ -446,18 +331,28 @@ def main():
         index=0,
         format_func=lambda x: "All Items" if x == "" else x
     )
-    
+
     # Convert to list format for compatibility with existing code
     selected_items = [selected_item] if selected_item else []
-    
+
     # Debug info
     if selected_item:
         st.sidebar.text(f"Item: {selected_item}")
-    
+
     logger.info(f"Selected item: {selected_item}")
-    # Main content
+
+
+    t1 = time.perf_counter()
+
     sell_data, buy_data, stats = get_market_data(show_all, selected_categories, selected_items)
-    
+
+    # Main content
+    t2 = time.perf_counter()
+    elapsed_time = (t2-t1)*1000
+    print("-"*100)
+    logger.info(f"TIME get_market_data() = {round(elapsed_time, 2)} ms")
+    print("-"*100)
+
     # Process sell orders
     sell_order_count = 0
     sell_total_value = 0
@@ -479,7 +374,7 @@ def main():
 
     fit_df = pd.DataFrame()
     timestamp = None
-    
+
     if not sell_data.empty:
         if len(selected_items) == 1:
             sell_data = sell_data[sell_data['type_name'] == selected_items[0]]
@@ -487,17 +382,17 @@ def main():
                 buy_data = buy_data[buy_data['type_name'] == selected_items[0]]
             stats = stats[stats['type_name'] == selected_items[0]]
             type_id = sell_data['type_id'].iloc[0]
-            if type_id: 
+            if type_id:
                 fit_df, timestamp = get_fitting_data(type_id)
             else:
                 fit_df = pd.DataFrame()
                 timestamp = None
         elif len(selected_categories) == 1:
             stats = stats[stats['category_name'] == selected_categories[0]]
-        
+
         # Display metrics
         col1, col2, col3, col4 = st.columns(4)
-        
+
         with col1:
             if not sell_data.empty:
                 min_price = stats['min_price'].min()
@@ -521,7 +416,7 @@ def main():
                     st.metric("Market Stock (sell orders)", f"{display_volume}")
             else:
                 st.metric("Market Stock (sell orders)", "0")
-        
+
         with col3:
             days_remaining = stats['days_remaining'].min()
             if pd.notna(days_remaining) and selected_items:
@@ -543,11 +438,11 @@ def main():
                     display_fits_on_mkt = f"{fits_on_mkt:,.0f}"
                     st.metric("Fits on Market", f"{display_fits_on_mkt}")
                     isship = True
-                
+
             except:
                 pass
-        
-        
+
+
         st.divider()
         # Display detailed data
 
@@ -601,7 +496,7 @@ def main():
                 display_df[col] = display_df[col].apply(lambda x: safe_format(x, format_str))
 
         st.dataframe(display_df, hide_index=True)
-        
+
         # Display buy orders if they exist
         if not buy_data.empty:
             # Display buy orders header
@@ -616,7 +511,7 @@ def main():
                 st.subheader(f"Buy Orders for {cat_label}", divider="orange")
             else:
                 st.subheader("All Buy Orders", divider="orange")
-            
+
             # Display buy orders metrics
             col1, col2 = st.columns(2)
             with col1:
@@ -624,38 +519,38 @@ def main():
                     st.metric("Market Value (buy orders)", f"{millify.millify(buy_total_value, precision=2)} ISK")
                 else:
                     st.metric("Market Value (buy orders)", "0 ISK")
-            
+
             with col2:
                 if buy_order_count > 0:
                     st.metric("Total Buy Orders", f"{buy_order_count:,.0f}")
                 else:
                     st.metric("Total Buy Orders", "0")
-            
+
             # Format buy orders for display
             buy_display_df = buy_data.copy()
             buy_display_df.type_id = buy_display_df.type_id.astype(str)
             buy_display_df.order_id = buy_display_df.order_id.astype(str)
             buy_display_df.drop(columns='is_buy_order', inplace=True)
-            
+
             # Format numeric columns safely
             for col, format_str in numeric_formats.items():
                 if col in buy_display_df.columns:  # Only format if column exists
                     buy_display_df[col] = buy_display_df[col].apply(lambda x: safe_format(x, format_str))
-            
+
             st.dataframe(buy_display_df, hide_index=True)
 
         # Display charts
         st.subheader("Market Order Distribution")
         price_vol_chart = create_price_volume_chart(sell_data)
         st.plotly_chart(price_vol_chart, use_container_width=True)
-        
+
         st.divider()
 
         st.subheader("Price History")
         history_chart = create_history_chart(sell_data['type_id'].iloc[0])
         if history_chart:
             st.plotly_chart(history_chart, use_container_width=False)
-        
+
             colh1, colh2 = st.columns(2)
             with colh1:
                 # Display history data
@@ -689,7 +584,7 @@ def main():
 
     else:
         st.warning("No data found for the selected filters.")
-    
+
 
     # Display sync status in sidebar
     with st.sidebar:
