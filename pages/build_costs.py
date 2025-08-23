@@ -11,14 +11,14 @@ import requests
 import json
 import warnings
 
-#ASYNC LIBRARIES
+# ASYNC LIBRARIES
 import asyncio
 import httpx
 
 
 API_TIMEOUT = 20.0
-MAX_CONCURRENCY = 8        # tune for the API's rate limits
-RETRIES = 2                # light retry; scale if API is flaky
+MAX_CONCURRENCY = 6  # tune for the API's rate limits
+RETRIES = 2  # light retry; scale if API is flaky
 
 # Suppress the ScriptRunContext warning
 warnings.filterwarnings("ignore", message="missing ScriptRunContext")
@@ -46,6 +46,7 @@ super_shipyard_id = 1046452498926
 
 logger = setup_logging(__name__)
 
+
 @dataclass
 class JobQuery:
     item: str
@@ -56,7 +57,9 @@ class JobQuery:
     te: int
     security: str = "NULL_SEC"
     system_cost_bonus: float = 0.0
-    material_prices: str = "ESI_AVG" #default to ESI_AVG, other valid options: "Jita Sell", "Jita Buy"
+    material_prices: str = (
+        "ESI_AVG"  # default to ESI_AVG, other valid options: "Jita Sell", "Jita Buy"
+    )
 
     def __post_init__(self):
         if self.group_id in [30, 659]:
@@ -222,11 +225,13 @@ def get_system_id(system_name: str) -> int:
         else:
             raise Exception(f"No system id found for {system_name}")
 
+
 def get_costs(job: JobQuery, *, async_mode: bool = False) -> dict:
     if async_mode:
         return asyncio.run(get_costs_async(job))
     else:
         return get_costs_syncronous(job)
+
 
 def get_costs_syncronous(job: JobQuery) -> dict:
 
@@ -279,7 +284,13 @@ def get_costs_syncronous(job: JobQuery) -> dict:
     return results
 
 
-async def fetch_one(client: httpx.AsyncClient, url: str, structure_name: str, structure_type: str, job: JobQuery):
+async def fetch_one(
+    client: httpx.AsyncClient,
+    url: str,
+    structure_name: str,
+    structure_type: str,
+    job: JobQuery,
+):
     try:
         r = await client.get(url, timeout=20)
         r.raise_for_status()
@@ -288,29 +299,36 @@ async def fetch_one(client: httpx.AsyncClient, url: str, structure_name: str, st
             data2 = data["manufacturing"][str(job.item_id)]
         except KeyError:
             return structure_name, None, f"No data found for {job.item_id}"
-        return structure_name, {
-            "structure_type": structure_type,
-            "units": data2["units"],
-            "total_cost": data2["total_cost"],
-            "total_cost_per_unit": data2["total_cost_per_unit"],
-            "total_material_cost": data2["total_material_cost"],
-            "facility_tax": data2["facility_tax"],
-            "scc_surcharge": data2["scc_surcharge"],
-            "system_cost_index": data2["system_cost_index"],
-            "total_job_cost": data2["total_job_cost"],
-            "materials": data2["materials"],
-        }, None
+        return (
+            structure_name,
+            {
+                "structure_type": structure_type,
+                "units": data2["units"],
+                "total_cost": data2["total_cost"],
+                "total_cost_per_unit": data2["total_cost_per_unit"],
+                "total_material_cost": data2["total_material_cost"],
+                "facility_tax": data2["facility_tax"],
+                "scc_surcharge": data2["scc_surcharge"],
+                "system_cost_index": data2["system_cost_index"],
+                "total_job_cost": data2["total_job_cost"],
+                "materials": data2["materials"],
+            },
+            None,
+        )
     except Exception as e:
         return structure_name, None, str(e)
 
+
 async def get_costs_async(job: JobQuery) -> dict:
-    structures = get_all_structures(unwrap=True)   # list[dict]
+    structures = get_all_structures(unwrap=True)  # list[dict]
     url_generator = job.yield_urls()
 
     results = {}
     errors = []
     # Reduce connection limits to be more gentle on the server
-    limits = httpx.Limits(max_connections=MAX_CONCURRENCY, max_keepalive_connections=MAX_CONCURRENCY)
+    limits = httpx.Limits(
+        max_connections=MAX_CONCURRENCY, max_keepalive_connections=MAX_CONCURRENCY
+    )
     # Limit concurrent requests to 4 at a time
     semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
 
@@ -325,18 +343,20 @@ async def get_costs_async(job: JobQuery) -> dict:
 
     async with httpx.AsyncClient(http2=True, limits=limits, headers=headers) as client:
 
-        progress_bar = st.progress(0, text=f"Fetching data from {len(structures)} structures...")
+        progress_bar = st.progress(
+            0, text=f"Fetching data from {len(structures)} structures..."
+        )
         tasks = []
         for _ in structures:
             url, structure_name, structure_type = next(url_generator)
-            tasks.append(fetch_with_semaphore(client, url, structure_name, structure_type, job))
+            tasks.append(
+                fetch_with_semaphore(client, url, structure_name, structure_type, job)
+            )
 
         for i, coro in enumerate(asyncio.as_completed(tasks), start=1):
             status = f"\rFetching {i} of {len(structures)} structures: {structure_name}"
             progress_bar.progress(i / len(structures), text=status)
             structure_name, result, error = await coro
-
-
 
             if result:
                 results[structure_name] = result
@@ -350,8 +370,11 @@ async def get_costs_async(job: JobQuery) -> dict:
 
     return results
 
+
 @st.cache_data(ttl=3600)
-def get_all_structures(*, unwrap: bool = False) -> Sequence[sa.Row[Tuple[Structure]]] | list[dict[str, Any]]:
+def get_all_structures(
+    *, unwrap: bool = False
+) -> Sequence[sa.Row[Tuple[Structure]]] | list[dict[str, Any]]:
     engine = sa.create_engine(build_cost_url)
     logger.info(f"Getting all structures")
     if st.session_state.super:
@@ -374,6 +397,7 @@ def get_all_structures(*, unwrap: bool = False) -> Sequence[sa.Row[Tuple[Structu
             return [r._mapping for r in rows]
         else:
             return rows
+
 
 def yield_structure():
     structures = get_all_structures()
@@ -419,17 +443,12 @@ def display_data(df: pd.DataFrame, selected_structure: str | None = None):
             f"**Selected structure:** <span style='color: orange;'>{selected_structure}</span> <br>    *Total cost:* <span style='color: orange;'>{millify(selected_total_cost, precision=2)}</span> <br>    *Cost per unit:* <span style='color: orange;'>{millify(selected_total_cost_per_unit, precision=2)}</span>",
             unsafe_allow_html=True,
         )
+
         df["comparison_cost"] = df["total_cost"].apply(
             lambda x: x - selected_total_cost
         )
         df["comparison_cost_per_unit"] = df["total_cost_per_unit"].apply(
             lambda x: x - selected_total_cost_per_unit
-        )
-        df["comparison_cost"] = df["comparison_cost"].apply(
-            lambda x: millify(x, precision=2)
-        )
-        df["comparison_cost_per_unit"] = df["comparison_cost_per_unit"].apply(
-            lambda x: millify(x, precision=2)
         )
 
     col_order = [
@@ -451,7 +470,7 @@ def display_data(df: pd.DataFrame, selected_structure: str | None = None):
     col_config = {
         "structure_type": " type",
         "units": st.column_config.NumberColumn(
-            "units", help="Number of units built", format="compact", width=60
+            "units", help="Number of units built", width=60
         ),
         "total_cost": st.column_config.NumberColumn(
             "total cost",
@@ -488,11 +507,22 @@ def display_data(df: pd.DataFrame, selected_structure: str | None = None):
             help="Rigs fitted to the structure",
         ),
     }
+
     if selected_structure:
         col_config.update(
             {
-                "comparison_cost": "comparison cost",
-                "comparison_cost_per_unit": "(per unit)",
+                "comparison_cost": st.column_config.NumberColumn(
+                    "comparison cost",
+                    help="Comparison cost",
+                    format="compact",
+                    width="small",
+                ),
+                "comparison_cost_per_unit": st.column_config.NumberColumn(
+                    "comparison cost per unit",
+                    help="Comparison cost per unit",
+                    format="compact",
+                    width="small",
+                ),
             }
         )
     df = style_dataframe(df, selected_structure)
@@ -740,8 +770,12 @@ def main():
 
     index = categories.index("Ship")
 
-    #This is an experimental feature, that significantly speeds up the calculation time.
-    async_mode = st.sidebar.checkbox("Async Mode", value=False, help="This is an experimental feature, that significantly speeds up the calculation time.")
+    # This is an experimental feature, that significantly speeds up the calculation time.
+    async_mode = st.sidebar.checkbox(
+        "Async Mode",
+        value=False,
+        help="This is an experimental feature, that significantly speeds up the calculation time.",
+    )
     if async_mode:
         st.session_state.async_mode = True
         logger.info("Async mode enabled")
@@ -844,6 +878,16 @@ def main():
     logger.info(f"Params changed: {params_changed}")
     if params_changed:
         st.session_state.button_label = "Recalculate"
+        if current_job_params["group_id"] in [30, 659]:
+            st.session_state.super = True
+        else:
+            if st.session_state.super == True:
+                get_all_structures.clear()
+                st.session_state.super = False
+                structure_names = get_all_structures()
+                structure_names = [structure.structure for structure in structure_names]
+                structure_names = sorted(structure_names)
+        logger.info(f"Params changed, Super: {st.session_state.super}")
         st.warning(
             "⚠️ Parameters have changed. Click 'Recalculate' to get updated results."
         )
@@ -857,7 +901,6 @@ def main():
         type="primary",
         help="Click to calculate the cost for the selected item.",
     )
-
 
     if calculate_clicked:
         st.session_state.calculate_clicked = True
@@ -882,25 +925,25 @@ def main():
             te=te,
             material_prices=st.session_state.price_source,
         )
-        logger.info(f"="*80)
-        logger.info(f"="*80)
+        logger.info(f"=" * 80)
+        logger.info(f"=" * 80)
         logger.info("\n")
         logger.info(f"get_costs()")
-        logger.info(f"="*80)
-        logger.info(f"="*80)
+        logger.info(f"=" * 80)
+        logger.info(f"=" * 80)
         logger.info("\n")
         t1 = time.perf_counter()
 
         if st.session_state.async_mode:
-            results = get_costs(job,async_mode=True)
+            results = get_costs(job, async_mode=True)
         else:
-            results = get_costs(job,async_mode=False)
+            results = get_costs(job, async_mode=False)
 
-        t2= time.perf_counter()
-        elapsed_time = round((t2-t1)*1000, 2)
-        logger.info(f"="*80)
+        t2 = time.perf_counter()
+        elapsed_time = round((t2 - t1) * 1000, 2)
+        logger.info(f"=" * 80)
         logger.info(f"TIME get_costs() = {elapsed_time} ms")
-        logger.info(f"="*80)
+        logger.info(f"=" * 80)
         logger.info("\n")
 
         # Cache the results and parameters
@@ -911,7 +954,6 @@ def main():
         if results is None:
             logger.error(f"No results found for {selected_item}")
             raise Exception(f"No results found for {selected_item}")
-
 
     # Display results if available (either fresh or cached)
     if (
@@ -1013,6 +1055,14 @@ def main():
             column_order=col_order,
             use_container_width=True,
         )
+        if st.session_state.super:
+            st.markdown(
+                """
+            <span style="font-weight: bold;">Note:</span> <span style="color: orange;"> Only structures in systems with the supercapital upgrade and configured for supercapital construction are displayed.
+            </span>
+            """,
+                unsafe_allow_html=True,
+            )
 
         # Material breakdown section - always show if we have results
         st.subheader("Material Breakdown")
@@ -1086,7 +1136,6 @@ def main():
         )
 
 
-
-
 if __name__ == "__main__":
+
     main()
