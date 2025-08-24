@@ -398,7 +398,6 @@ def get_all_structures(
         else:
             return rows
 
-
 def yield_structure():
     structures = get_all_structures()
     for structure in structures:
@@ -452,6 +451,7 @@ def display_data(df: pd.DataFrame, selected_structure: str | None = None):
         )
 
     col_order = [
+
         "structure_type",
         "units",
         "total_cost",
@@ -468,39 +468,42 @@ def display_data(df: pd.DataFrame, selected_structure: str | None = None):
         col_order.insert(3, "comparison_cost_per_unit")
 
     col_config = {
+
+        "_index": st.column_config.TextColumn(
+            "structure",
+            help="Structure name, click the box to the left of the structure name to display materials required for this structure",
+            width="medium",
+        ),
         "structure_type": " type",
         "units": st.column_config.NumberColumn(
-            "units", help="Number of units built", width=60
+            "units", help="Number of units built",
         ),
         "total_cost": st.column_config.NumberColumn(
             "total cost",
             help="Total cost of building the units",
-            format="compact",
             width="small",
         ),
         "total_cost_per_unit": st.column_config.NumberColumn(
             "cost per unit",
             help="Cost per unit of the item",
-            format="compact",
             width="small",
         ),
         "total_material_cost": st.column_config.NumberColumn(
-            "material cost", help="Total material cost", format="compact", width="small"
+            "material cost", help="Total material cost", width="small"
         ),
         "total_job_cost": st.column_config.NumberColumn(
             "total job cost",
             help="Total job cost, which includes the facility tax, SCC surcharge, and system cost index",
-            format="compact",
             width="small",
         ),
         "facility_tax": st.column_config.NumberColumn(
-            "facility tax", help="Facility tax cost", format="compact", width="small"
+            "facility tax", help="Facility tax cost", width="small"
         ),
         "scc_surcharge": st.column_config.NumberColumn(
-            "scc surcharge", help="SCC surcharge cost", format="compact", width="small"
+            "scc surcharge", help="SCC surcharge cost", width="small"
         ),
         "system_cost_index": st.column_config.NumberColumn(
-            "cost index", format="compact", width="small"
+            "cost index", width="small"
         ),
         "structure_rigs": st.column_config.ListColumn(
             "rigs",
@@ -525,12 +528,12 @@ def display_data(df: pd.DataFrame, selected_structure: str | None = None):
                 ),
             }
         )
-    df = style_dataframe(df, selected_structure)
+
 
     return df, col_config, col_order
 
 
-def style_dataframe(df: pd.DataFrame, selected_structure: str | None = None):
+def highlight_selected_structure(df: pd.DataFrame, selected_structure: str | None = None):
     df = df.style.apply(
         lambda x: [
             (
@@ -544,6 +547,30 @@ def style_dataframe(df: pd.DataFrame, selected_structure: str | None = None):
     )
     return df
 
+def human_readable_number(num: int | float):
+    if abs(num) >= 1_000_000_000_000:
+        return f"{num/1_000_000_000_000:.2f}T"
+
+    elif abs(num) >= 1_000_000_000:
+        return f"{num/1_000_000_000:.2f}B"
+
+    elif abs(num) >= 1_000_000:
+        return f"{num/1_000_000:.1f}M"
+
+    elif abs(num) >= 1_000:
+        return f"{num/1_000:.1f}K"
+    else:
+        return f"{num:.0f}"
+
+def style_df(df: pd.DataFrame, selected_structure: str | None = None):
+    styler = df.style.format({"total_cost": human_readable_number, "total_cost_per_unit": human_readable_number, "total_material_cost": human_readable_number, "total_job_cost": human_readable_number, "facility_tax": human_readable_number, "scc_surcharge": human_readable_number, "system_cost_index": human_readable_number})
+    if selected_structure and selected_structure in df.index:
+        def _hl_row(row: pd.Series):
+            on = row.name == selected_structure
+            css = "background-color: lightgreen; color: blue"
+            return [css if on else "" for _ in row]
+        styler = styler.apply(_hl_row, axis=1)
+    return styler
 
 def check_industry_index_expiry():
 
@@ -586,8 +613,6 @@ def initialise_session_state():
         st.session_state.price_source = None
     if "price_source_name" not in st.session_state:
         st.session_state.price_source_name = None
-    if "calculate_clicked" not in st.session_state:
-        st.session_state.calculate_clicked = False
     if "button_label" not in st.session_state:
         st.session_state.button_label = "Calculate"
     if "current_job_params" not in st.session_state:
@@ -598,6 +623,14 @@ def initialise_session_state():
         st.session_state.super = False
     if "async_mode" not in st.session_state:
         st.session_state.async_mode = False
+    if "build_cost_display_df" not in st.session_state:
+        st.session_state.build_cost_display_df = None
+    if "selected_row" not in st.session_state:
+        st.session_state.selected_row = None
+    if "params_changed" not in st.session_state:
+        st.session_state.params_changed = False
+    if "last_selected_row" not in st.session_state:
+        st.session_state.last_selected_row = None
     st.session_state.initialised = True
 
     try:
@@ -740,6 +773,27 @@ def display_material_costs(results: dict, selected_structure: str, item_id: str)
         "💡 **Tip:** You can download this data as CSV using the download icon (⬇️) in the top-right corner of the table above."
     )
 
+def handle_select_structure():
+    # Called before UI rendering
+    if st.session_state.cost_display_df.selection.rows:
+        logger.info(f"Selected structure: {st.session_state.cost_display_df}")
+        try:
+            selected_row = st.session_state.cost_display_df.selection.rows[0]
+            st.session_state.selected_row = selected_row
+            st.session_state.last_selected_row = selected_row
+        except Exception as e:
+            logger.error(f"Error selecting structure: {e}")
+            st.session_state.selected_row = None
+            st.session_state.last_selected_row = None
+    else:
+        logger.info("No cost display dataframe found")
+        st.session_state.selected_row = None
+
+
+def handle_calculate_button():
+    if st.session_state.calculate_button:
+        st.session_state.button_label = "Calculate"
+
 
 def main():
 
@@ -762,6 +816,11 @@ def main():
             st.warning("Logo image not found")
     with col2:
         st.title("Build Cost Tool")
+
+    #########################################################
+
+    # SIDEBAR SETUP
+    #########################################################
 
     df = pd.read_csv("build_catagories.csv")
     df = df.sort_values(by="category")
@@ -866,16 +925,14 @@ def main():
         "price_source": st.session_state.price_source,
     }
     logger.info(f"Current job params: {current_job_params}")
-    logger.info(
-        f"st.session_state.calculate_clicked: {st.session_state.calculate_clicked}"
-    )
+
 
     # Check if parameters have changed (but don't auto-calculate)
     params_changed = (
         st.session_state.current_job_params is not None
         and st.session_state.current_job_params != current_job_params
     )
-    logger.info(f"Params changed: {params_changed}")
+
     if params_changed:
         st.session_state.button_label = "Recalculate"
         if current_job_params["group_id"] in [30, 659]:
@@ -888,10 +945,7 @@ def main():
                 structure_names = [structure.structure for structure in structure_names]
                 structure_names = sorted(structure_names)
         logger.info(f"Params changed, Super: {st.session_state.super}")
-        st.warning(
-            "⚠️ Parameters have changed. Click 'Recalculate' to get updated results."
-        )
-        logger.info("Parameters changed")
+
     else:
         st.session_state.button_label = "Calculate"
         logger.info("Parameters not changed")
@@ -900,11 +954,23 @@ def main():
         st.session_state.button_label,
         type="primary",
         help="Click to calculate the cost for the selected item.",
+        key="calculate_button",
+        on_click=handle_calculate_button,
     )
+    logger.info(f"calculate_clicked: {calculate_clicked}. button_label: {st.session_state.button_label}, params_changed: {params_changed}, st.session_state.calculate_button: {st.session_state.calculate_button}")
+
+    #########################################################
+
+    # MAIN CALCULATION LOGIC
+    #########################################################
+
 
     if calculate_clicked:
-        st.session_state.calculate_clicked = True
         st.session_state.selected_item_for_display = selected_item
+        params_changed = False
+        st.session_state.params_changed = False
+        st.session_state.current_job_params = current_job_params
+
 
     if st.session_state.sci_last_modified:
         st.sidebar.markdown("---")
@@ -912,9 +978,10 @@ def main():
             f"*Industry indexes last updated: {st.session_state.sci_last_modified.strftime('%Y-%m-%d %H:%M:%S UTC')}*"
         )
 
-    if st.session_state.calculate_clicked:
+    if calculate_clicked:
         logger.info("Calculate button clicked, calculating")
-        st.session_state.calculate_clicked = False
+        st.session_state.params_changed = False
+        params_changed = False
 
         job = JobQuery(
             item=st.session_state.selected_item_for_display,
@@ -940,9 +1007,10 @@ def main():
             results = get_costs(job, async_mode=False)
 
         t2 = time.perf_counter()
-        elapsed_time = round((t2 - t1) * 1000, 2)
+        elapsed_seconds = round((t2 - t1), 2)
+        elapsed_milliseconds = round((t2 - t1) * 1000, 2)
         logger.info(f"=" * 80)
-        logger.info(f"TIME get_costs() = {elapsed_time} ms")
+        logger.info(f"TIME get_costs() = {elapsed_milliseconds} ms ({elapsed_seconds} s)")
         logger.info(f"=" * 80)
         logger.info("\n")
 
@@ -950,10 +1018,16 @@ def main():
         st.session_state.cost_results = results
         st.session_state.current_job_params = current_job_params
         st.session_state.selected_item_for_display = selected_item
+        params_changed = False
 
         if results is None:
             logger.error(f"No results found for {selected_item}")
             raise Exception(f"No results found for {selected_item}")
+
+    #########################################################
+
+    # DISPLAY RESULTS
+    #########################################################
 
     # Display results if available (either fresh or cached)
     if (
@@ -988,6 +1062,7 @@ def main():
         )
         job_cost = float(build_cost_df.loc[low_cost_structure, "total_job_cost"])
         units = build_cost_df.loc[low_cost_structure, "units"]
+
         material_cost_per_unit = (
             material_cost / build_cost_df.loc[low_cost_structure, "units"]
         )
@@ -1046,15 +1121,30 @@ def main():
         else:
             st.write("No price data found for this item")
 
+
+        if params_changed:
+            st.warning(
+                "⚠️ Parameters have changed. Click 'Recalculate' to get updated results."
+            )
+            logger.info("Parameters changed")
+
         display_df, col_config, col_order = display_data(
             build_cost_df, selected_structure
         )
+
+        styled_df = style_df(display_df, selected_structure)
+
+
         st.dataframe(
-            display_df,
-            column_config=col_config,
-            column_order=col_order,
-            use_container_width=True,
-        )
+                styled_df,
+                column_config=col_config,
+                column_order=col_order,
+                key="cost_display_df",
+                selection_mode="single-row",
+                on_select=handle_select_structure,
+            )
+
+
         if st.session_state.super:
             st.markdown(
                 """
@@ -1072,17 +1162,28 @@ def main():
             list(results.keys())
         )  # Sort alphabetically
 
-        # Default to the structure selected in sidebar if available
-        default_index = 0
-        if selected_structure and selected_structure in structure_names_for_materials:
+        if st.session_state.super:
+            st.session_state.last_selected_row = None
+            st.session_state.selected_row = None
+
+
+        if st.session_state.selected_row:
+            structure_name = display_df.index[st.session_state.selected_row]
+            default_index = structure_names_for_materials.index(structure_name)
+        elif st.session_state.last_selected_row:
+            structure_name = display_df.index[st.session_state.last_selected_row]
+            default_index = structure_names_for_materials.index(structure_name)
+        elif selected_structure and selected_structure in structure_names_for_materials:
             default_index = structure_names_for_materials.index(selected_structure)
+        else:
+            default_index = 0
 
         selected_structure_for_materials = st.selectbox(
             "Select a structure to view material breakdown:",
             structure_names_for_materials,
             index=default_index,
             key="material_structure_selector",
-            help="Choose a structure to see detailed material costs and quantities",
+            help="Choose a structure here or click the box to the left of the structure name in the table to see detailed material costs and quantities",
         )
 
         if selected_structure_for_materials:
@@ -1117,7 +1218,7 @@ def main():
     else:
         st.subheader("WC Markets Build Cost Tool", divider="violet")
         st.write(
-            "Find a build cost for an item by selecting a category, group, and item in the sidebar. The build cost will be calculated for all structures in the database, ordered by cost (lowest to highest) along with a table of materials required and their costs for a selected structure. You can also select a structure to compare the cost to build versus this structure. When you're ready, click the 'Calculate' button."
+            "Find a build cost for an item by selecting a category, group, and item in the sidebar. The build cost will be calculated for all structures in the database, ordered by cost (lowest to highest) along with a table of materials required and their costs for a selected structure, either through the select box or by clicking on the select box in the table. You can also select a structure to compare the cost to build versus this structure. When you're ready, click the 'Calculate' button."
         )
 
         st.markdown(
