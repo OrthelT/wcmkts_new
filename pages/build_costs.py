@@ -10,7 +10,7 @@ import pathlib
 import requests
 import json
 import warnings
-
+import logging
 # ASYNC LIBRARIES
 import asyncio
 import httpx
@@ -234,6 +234,13 @@ def get_costs(job: JobQuery, *, async_mode: bool = False) -> dict:
 
 
 def get_costs_syncronous(job: JobQuery) -> dict:
+    status_log = {
+        "req_count": 0,
+        "success_count": 0,
+        "error_count": 0,
+        "success_log": {},
+        "error_log": {},
+    }
 
     url_generator = job.yield_urls()
     results = {}
@@ -253,7 +260,10 @@ def get_costs_syncronous(job: JobQuery) -> dict:
         progress_bar.progress(i / len(structures), text=status)
 
         response = requests.get(url)
+        status_log["req_count"] += 1
         if response.status_code == 200:
+            status_log["success_count"] += 1
+            status_log["success_log"][structure_name] = (response.status_code, response.text)
             data = response.json()
             try:
                 data2 = data["manufacturing"][str(job.item_id)]
@@ -262,6 +272,8 @@ def get_costs_syncronous(job: JobQuery) -> dict:
                 logger.error(f"Error: {e} No data found for {job.item_id}")
                 return None
         else:
+            status_log["error_count"] += 1
+            status_log["error_log"][structure_name] = (response.status_code, response.text)
             logger.error(
                 f"Error fetching data for {structure_name}: {response.status_code}"
             )
@@ -281,6 +293,8 @@ def get_costs_syncronous(job: JobQuery) -> dict:
             "total_job_cost": data2["total_job_cost"],
             "materials": data2["materials"],
         }
+    display_log_status(status_log)
+
     return results
 
 
@@ -325,6 +339,8 @@ async def get_costs_async(job: JobQuery) -> dict:
 
     results = {}
     errors = []
+    results_count = 0
+    errors_count = 0
     # Reduce connection limits to be more gentle on the server
     limits = httpx.Limits(
         max_connections=MAX_CONCURRENCY, max_keepalive_connections=MAX_CONCURRENCY
@@ -360,15 +376,34 @@ async def get_costs_async(job: JobQuery) -> dict:
 
             if result:
                 results[structure_name] = result
+                results_count += 1
             if error:
                 errors.append((structure_name, error))
+                errors_count += 1
 
     # Log errors if needed
     if errors:
         for s, e in errors:
-            print(f"Error fetching {s}: {e}")
+            logger.error(f"Error fetching {s}: {e}")
+    print("="*80)
+    logger.info(f"Results of {len(structures)} structures:")
+    logger.info(f"Results count: {results_count}")
+    logger.info(f"Errors count: {errors_count}")
+    print("="*80)
 
     return results
+
+def display_log_status(status: dict):
+
+    logger.info(f"Status Report:")
+    logger.info(f"Requests: {status['req_count']}")
+    logger.info(f"Successes: {status['success_count']}")
+    logger.info(f"Errors: {status['error_count']}")
+    if status["error_count"] > 0:
+        logger.error(f"Error Log: {status['error_log']}")
+
+    with open("status.log", "w") as f:
+        f.write(json.dumps(status, indent=4))
 
 
 @st.cache_data(ttl=3600)
