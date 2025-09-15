@@ -1,7 +1,4 @@
 from sqlalchemy import Column, Integer, String, Date, Float, Boolean, create_engine, DateTime, text
-from datetime import date, datetime, timedelta
-import pandas as pd
-import json
 
 from sqlalchemy.orm import declarative_base, sessionmaker
 

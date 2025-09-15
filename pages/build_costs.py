@@ -14,7 +14,7 @@ import logging
 # ASYNC LIBRARIES
 import asyncio
 import httpx
-
+from config import DatabaseConfig
 
 API_TIMEOUT = 20.0
 MAX_CONCURRENCY = 6  # tune for the API's rate limits
@@ -34,18 +34,18 @@ from db_handler import (
     get_4H_price,
     request_type_names,
 )
-from db_utils import update_industry_index
+from utils import update_industry_index
 import datetime
 import time
 from time import perf_counter, process_time
 
-build_cost_db = os.path.join("build_cost.db")
-build_cost_url = f"sqlite:///{build_cost_db}"
+build_cost_db = DatabaseConfig("build_cost")
+build_cost_url = build_cost_db.url
+
 valid_structures = [35827, 35825, 35826]
 super_shipyard_id = 1046452498926
 
 logger = setup_logging(__name__)
-
 
 @dataclass
 class JobQuery:
@@ -100,7 +100,6 @@ class JobQuery:
         url = f"https://api.everef.net/v1/industry/cost?product_id={self.item_id}&runs={self.runs}&me={self.me}&te={self.te}&structure_type_id={structure.structure_type_id}&security={self.security}{rigs}&system_cost_bonus={self.system_cost_bonus}&manufacturing_cost={system_cost_index}&facility_tax={tax}&material_prices={self.material_prices}"
         return url
 
-
 @st.cache_data(ttl=3600)
 def get_valid_rigs():
     rigs = fetch_rigs()
@@ -110,7 +109,6 @@ def get_valid_rigs():
         if v not in invalid_rigs:
             valid_rigs[k] = v
     return valid_rigs
-
 
 @st.cache_data(ttl=3600)
 def fetch_rigs():
@@ -125,7 +123,6 @@ def fetch_rigs():
         for name, id in zip(type_names, type_ids):
             types_dict[name] = id
         return types_dict
-
 
 def fetch_rig_id(rig_name: str | None):
     if rig_name is None:
@@ -143,7 +140,6 @@ def fetch_rig_id(rig_name: str | None):
             logger.error(f"Error fetching rig id for {rig_name}: {e}")
             return None
 
-
 def fetch_structure_by_name(structure_name: str):
     engine = sa.create_engine(build_cost_url)
     with engine.connect() as conn:
@@ -155,7 +151,6 @@ def fetch_structure_by_name(structure_name: str):
             return structure[0]
         else:
             raise Exception(f"No structure found for {structure_name}")
-
 
 @st.cache_data(ttl=3600)
 def get_structure_rigs() -> dict[int, list[int]]:
@@ -183,7 +178,6 @@ def get_structure_rigs() -> dict[int, list[int]]:
             rig_dict[structure] = clean_rig_ids
         return rig_dict
 
-
 @st.cache_data(ttl=3600)
 def get_manufacturing_cost_index(system_id: int) -> float | None:
 
@@ -200,7 +194,6 @@ def get_manufacturing_cost_index(system_id: int) -> float | None:
         else:
             raise Exception(f"No manufacturing cost index found for {system_id}")
 
-
 def get_type_id(type_name: str) -> int:
     url = f"https://www.fuzzwork.co.uk/api/typeid.php?typename={type_name}"
     response = requests.get(url)
@@ -213,7 +206,6 @@ def get_type_id(type_name: str) -> int:
             f"Error fetching type id for {type_name}: {response.status_code}"
         )
 
-
 def get_system_id(system_name: str) -> int:
     engine = sa.create_engine(build_cost_url)
     stmt = sa.select(Structure.system_id).where(Structure.system == system_name)
@@ -225,15 +217,15 @@ def get_system_id(system_name: str) -> int:
         else:
             raise Exception(f"No system id found for {system_name}")
 
-
-def get_costs(job: JobQuery, *, async_mode: bool = False) -> dict:
+def get_costs(job: JobQuery, async_mode: bool = False) -> dict:
     if async_mode:
-        return asyncio.run(get_costs_async(job))
+        results, status_log = asyncio.run(get_costs_async(job))
     else:
-        return get_costs_syncronous(job)
+        results, status_log = get_costs_syncronous(job)
 
+    return results, status_log
 
-def get_costs_syncronous(job: JobQuery) -> dict:
+def get_costs_syncronous(job: JobQuery) -> tuple[dict, dict]:
     status_log = {
         "req_count": 0,
         "success_count": 0,
@@ -254,6 +246,7 @@ def get_costs_syncronous(job: JobQuery) -> dict:
     for i in range(len(structures)):
 
         url, structure_name, structure_type = next(url_generator)
+        logger.info(structure_name)
 
         # Pad the line with spaces to ensure it's at least as long as the previous line
         status = f"\rFetching {i+1} of {len(structures)} structures: {structure_name}"
@@ -293,10 +286,8 @@ def get_costs_syncronous(job: JobQuery) -> dict:
             "total_job_cost": data2["total_job_cost"],
             "materials": data2["materials"],
         }
-    display_log_status(status_log)
 
-    return results
-
+    return results, status_log
 
 async def fetch_one(
     client: httpx.AsyncClient,
@@ -332,8 +323,7 @@ async def fetch_one(
     except Exception as e:
         return structure_name, None, str(e)
 
-
-async def get_costs_async(job: JobQuery) -> dict:
+async def get_costs_async(job: JobQuery) -> tuple[dict, dict]:
     structures = get_all_structures(unwrap=True)  # list[dict]
     url_generator = job.yield_urls()
 
@@ -341,6 +331,13 @@ async def get_costs_async(job: JobQuery) -> dict:
     errors = []
     results_count = 0
     errors_count = 0
+    status_log = {
+        "req_count": 0,
+        "success_count": 0,
+        "error_count": 0,
+        "success_log": {},
+        "error_log": {},
+    }
     # Reduce connection limits to be more gentle on the server
     limits = httpx.Limits(
         max_connections=MAX_CONCURRENCY, max_keepalive_connections=MAX_CONCURRENCY
@@ -373,25 +370,28 @@ async def get_costs_async(job: JobQuery) -> dict:
             status = f"\rFetching {i} of {len(structures)} structures: {structure_name}"
             progress_bar.progress(i / len(structures), text=status)
             structure_name, result, error = await coro
+            status_log["req_count"] += 1
 
             if result:
                 results[structure_name] = result
-                results_count += 1
+                status_log["success_count"] += 1
+                status_log["success_log"][structure_name] = (result, None)
             if error:
-                errors.append((structure_name, error))
-                errors_count += 1
+                status_log["error_count"] += 1
+                status_log["error_log"][structure_name] = (None, error)
 
     # Log errors if needed
-    if errors:
-        for s, e in errors:
+    if status_log["error_count"] > 0:
+        for s, e in status_log["error_log"].items():
             logger.error(f"Error fetching {s}: {e}")
-    print("="*80)
-    logger.info(f"Results of {len(structures)} structures:")
-    logger.info(f"Results count: {results_count}")
-    logger.info(f"Errors count: {errors_count}")
-    print("="*80)
 
-    return results
+    logger.info("="*80)
+    logger.info(f"Results of {len(structures)} structures:")
+    logger.info(f"Results count: {status_log['success_count']}")
+    logger.info(f"Errors count: {status_log['error_count']}")
+    logger.info("="*80)
+
+    return results, status_log
 
 def display_log_status(status: dict):
 
@@ -401,10 +401,12 @@ def display_log_status(status: dict):
     logger.info(f"Errors: {status['error_count']}")
     if status["error_count"] > 0:
         logger.error(f"Error Log: {status['error_log']}")
+        st.toast(f"Errors returned for {status['error_count']}. This is likely due to problems with the external industry data API. Please try again later.", icon="⚠️")
+    else:
+        st.toast(f"Returned results for {status['success_count']} structures.", icon="✅")
 
     with open("status.log", "w") as f:
         f.write(json.dumps(status, indent=4))
-
 
 @st.cache_data(ttl=3600)
 def get_all_structures(
@@ -487,6 +489,7 @@ def display_data(df: pd.DataFrame, selected_structure: str | None = None):
         )
 
     col_order = [
+        "_index",
         "structure_type",
         "units",
         "total_cost",
@@ -503,6 +506,10 @@ def display_data(df: pd.DataFrame, selected_structure: str | None = None):
         col_order.insert(3, "comparison_cost_per_unit")
 
     col_config = {
+        "_index": st.column_config.TextColumn(
+            label="structure", help="Structure Name"
+        ),
+
         "structure_type": " type",
         "units": st.column_config.NumberColumn(
             "units", help="Number of units built", width=60
@@ -510,23 +517,25 @@ def display_data(df: pd.DataFrame, selected_structure: str | None = None):
         "total_cost": st.column_config.NumberColumn(
             "total cost",
             help="Total cost of building the units",
-            format="compact",
-            width="small",
+            format="localized",
+            step=1
         ),
         "total_cost_per_unit": st.column_config.NumberColumn(
             "cost per unit",
             help="Cost per unit of the item",
-            format="compact",
-            width="small",
+            format="localized",
+            step=1,
         ),
         "total_material_cost": st.column_config.NumberColumn(
-            "material cost", help="Total material cost", format="compact", width="small"
+            "material cost",
+            help="Total material cost",
+            format="localized",
+            step=1
         ),
         "total_job_cost": st.column_config.NumberColumn(
             "total job cost",
             help="Total job cost, which includes the facility tax, SCC surcharge, and system cost index",
             format="compact",
-            width="small",
         ),
         "facility_tax": st.column_config.NumberColumn(
             "facility tax", help="Facility tax cost", format="compact", width="small"
@@ -640,22 +649,37 @@ def initialise_session_state():
     except Exception as e:
         logger.error(f"Error checking industry index expiry: {e}")
 
-
-def display_material_costs(results: dict, selected_structure: str, item_id: str):
+@st.fragment()
+def display_material_costs(results: dict, selected_structure: str, structure_names_for_materials: list):
     """
     Display material costs for a selected structure with proper formatting.
 
     Args:
         results: Dictionary containing cost calculation results from get_costs
         selected_structure: Name of the selected structure
-        item_id: The type_id of the item being manufactured
+        structure_names_for_materials: List of structure names for materials
     """
-    if selected_structure not in results:
+            # Default to the structure selected in sidebar if available
+    default_index = 0
+    if selected_structure and selected_structure in structure_names_for_materials:
+        default_index = structure_names_for_materials.index(selected_structure)
+
+    selected_structure_for_materials = st.selectbox(
+        "Select a structure to view material breakdown:",
+        structure_names_for_materials,
+        index=default_index,
+        key="material_structure_selector",
+        help="Choose a structure to see detailed material costs and quantities",
+    )
+    if st.session_state.material_structure_selector:
+        st.toast(f"Selected structure: {selected_structure_for_materials}", icon="✅")
+
+    if selected_structure_for_materials not in results:
         st.error(f"No data found for structure: {selected_structure}")
         return
 
     # Get materials data from results
-    materials_data = results[selected_structure]["materials"]
+    materials_data = results[selected_structure_for_materials]["materials"]
 
     # Get type names for materials
     type_ids = [int(k) for k in materials_data.keys()]
@@ -692,9 +716,9 @@ def display_material_costs(results: dict, selected_structure: str, item_id: str)
     df["cost_percentage"] = df["cost"] / total_material_cost
 
     # Display header
-    st.subheader(f"Material Breakdown - {selected_structure}")
+    st.subheader(f"Material Breakdown {selected_structure_for_materials}")
     st.markdown(
-        f"**Total Material Cost:** {millify(total_material_cost, precision=2)} ISK ({millify(total_material_volume, precision=2)} m³) - {material_price_source}"
+        f"{st.session_state.selected_item_for_display} Material Cost: <span style='color: orange;'>**{millify(total_material_cost, precision=2)} ISK**</span> (*{millify(total_material_volume, precision=2)} m³*) - {material_price_source}",unsafe_allow_html=True
     )
 
     # Configure columns with proper formatting
@@ -777,7 +801,9 @@ def display_material_costs(results: dict, selected_structure: str, item_id: str)
 
 
 def main():
-
+    logger.info("="*80)
+    logger.info("Starting build cost tool")
+    logger.info("="*80)
     if "initialised" not in st.session_state:
         initialise_session_state()
     else:
@@ -805,11 +831,11 @@ def main():
 
     index = categories.index("Ship")
 
-    # This is an experimental feature, that significantly speeds up the calculation time.
+    # This turns on asynchronous mode, an experimental feature that significantly speeds up the calculation time. This is now enabled by default. Set to False and use synchronous mode if you experience issues.
     async_mode = st.sidebar.checkbox(
         "Async Mode",
-        value=False,
-        help="This is an experimental feature, that significantly speeds up the calculation time.",
+        value=True,
+        help="This turns on asynchronous mode, an experimental feature that significantly speeds up the calculation time. This is now enabled by default. Set to False and use synchronous mode if you experience issues.",
     )
     if async_mode:
         st.session_state.async_mode = True
@@ -848,7 +874,7 @@ def main():
     selected_item = st.sidebar.selectbox("Select an item", type_names)
     type_id = types_df[types_df["typeName"] == selected_item]["typeID"].values[0]
 
-    runs = st.sidebar.number_input("Runs", min_value=1, max_value=1000000, value=1)
+    runs = st.sidebar.number_input("Runs", min_value=1, max_value=100000, value=1)
     me = st.sidebar.number_input("ME", min_value=0, max_value=10, value=0)
     te = st.sidebar.number_input("TE", min_value=0, max_value=20, value=0)
 
@@ -923,7 +949,7 @@ def main():
                 structure_names = [structure.structure for structure in structure_names]
                 structure_names = sorted(structure_names)
         logger.info(f"Params changed, Super: {st.session_state.super}")
-        st.warning(
+        st.toast(
             "⚠️ Parameters have changed. Click 'Recalculate' to get updated results."
         )
         logger.info("Parameters changed")
@@ -969,10 +995,14 @@ def main():
         logger.info("\n")
         t1 = time.perf_counter()
 
-        if st.session_state.async_mode:
-            results = get_costs(job, async_mode=True)
-        else:
-            results = get_costs(job, async_mode=False)
+        results, status_log = get_costs(job, async_mode)
+        logger.info(f"Status log: {status_log['success_count']} success, {status_log['error_count']} errors")
+
+        display_log_status(status_log)
+
+        if not results:
+            st.error("No results returned. This is likely due to problems with the external industry data API. Please try again later.")
+            return
 
         t2 = time.perf_counter()
         elapsed_time = round((t2 - t1) * 1000, 2)
@@ -985,10 +1015,7 @@ def main():
         st.session_state.cost_results = results
         st.session_state.current_job_params = current_job_params
         st.session_state.selected_item_for_display = selected_item
-
-        if results is None:
-            logger.error(f"No results found for {selected_item}")
-            raise Exception(f"No results found for {selected_item}")
+        st.rerun()
 
     # Display results if available (either fresh or cached)
     if (
@@ -1081,6 +1108,7 @@ def main():
         else:
             st.write("No price data found for this item")
 
+
         display_df, col_config, col_order = display_data(
             build_cost_df, selected_structure
         )
@@ -1107,46 +1135,8 @@ def main():
             list(results.keys())
         )  # Sort alphabetically
 
-        # Default to the structure selected in sidebar if available
-        default_index = 0
-        if selected_structure and selected_structure in structure_names_for_materials:
-            default_index = structure_names_for_materials.index(selected_structure)
-
-        selected_structure_for_materials = st.selectbox(
-            "Select a structure to view material breakdown:",
-            structure_names_for_materials,
-            index=default_index,
-            key="material_structure_selector",
-            help="Choose a structure to see detailed material costs and quantities",
-        )
-
-        if selected_structure_for_materials:
-            # Get the job item_id from current or cached parameters
-            if calculate_clicked:
-                job = JobQuery(
-                    item=selected_item,
-                    item_id=type_id,
-                    group_id=group_id,
-                    runs=runs,
-                    me=me,
-                    te=te,
-                    material_prices=st.session_state.price_source,
-                )
-                current_item_id = str(job.item_id)
-            else:
-                cached_job = JobQuery(
-                    item=st.session_state.current_job_params["item"],
-                    item_id=st.session_state.current_job_params["item_id"],
-                    group_id=st.session_state.current_job_params["group_id"],
-                    runs=st.session_state.current_job_params["runs"],
-                    me=st.session_state.current_job_params["me"],
-                    te=st.session_state.current_job_params["te"],
-                    material_prices=st.session_state.current_job_params["price_source"],
-                )
-                current_item_id = str(cached_job.item_id)
-
-            display_material_costs(
-                results, selected_structure_for_materials, current_item_id
+        display_material_costs(
+                results, selected_structure, structure_names_for_materials
             )
 
     else:

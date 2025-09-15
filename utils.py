@@ -1,99 +1,19 @@
 import pandas as pd
 import datetime
-from sqlalchemy import create_engine
 import streamlit as st
-import libsql
 from logging_config import setup_logging
-import json
-import time
-from sync_scheduler import schedule_next_sync
+from sqlalchemy import text
 import requests
+from config import DatabaseConfig
+
+mkt_db = DatabaseConfig("wcmkt")
+sde_db = DatabaseConfig("sde")
+build_cost_db = DatabaseConfig("build_cost")
 
 logger = setup_logging(__name__)
 
-# Database URLs
-local_mkt_url = "sqlite:///wcmkt.db"  # Changed to standard SQLite format for local dev
-local_sde_url = "sqlite:///sde.db"    # Changed to standard SQLite format for local dev
-build_cost_url = "sqlite:///build_cost.db"
-
-
-# Use environment variables for production
-mkt_url = st.secrets["TURSO_DATABASE_URL"]
-mkt_auth_token = st.secrets["TURSO_AUTH_TOKEN"]
-
-sde_url = st.secrets["SDE_URL"]
-sde_auth_token = st.secrets["SDE_AUTH_TOKEN"]
-
-def sync_db(db_url="wcmkt.db", sync_url=mkt_url, auth_token=mkt_auth_token):
-    logger.info("database sync started")
-
-    # Clear cache of all data before syncing
-    st.cache_data.clear()
-    st.cache_resource.clear()
-    logger.info("cache cleared")
-
-    sleep_time = 0.5
-    time.sleep(sleep_time)
-    logger.info(f"cache cleared for sync; sleeping {sleep_time} seconds")
-    # Give connections time to fully close
-    # Skip sync in development mode or when sync_url/auth_token are not provided
-    if not sync_url or not auth_token:
-        logger.info("Skipping database sync in development mode or missing sync credentials")
-
-    try:
-        conn = libsql.connect(db_url, sync_url=sync_url, auth_token=auth_token)
-        logger.info("\n")
-        logger.info(f"="*80)
-        t1 = time.perf_counter()
-
-        conn.sync()
-
-        t2 = time.perf_counter()
-        elapsed_time = round((t2-t1)*1000, 2)
-        logger.info(f"Database synced in {elapsed_time} ms")
-        logger.info(f"="*80)
-        logger.info("\n")
-
-        last_sync = datetime.datetime.now().astimezone(datetime.UTC)
-        logger.info(f"updated Last sync: {last_sync.strftime('%Y-%m-%d %H:%M %Z')}")
-
-        # Use schedule_next_sync to determine the next sync time
-        next_sync = schedule_next_sync(last_sync)
-        logger.info(f"updated Next sync: {next_sync.strftime('%Y-%m-%d %H:%M %Z')}")
-
-        # Save sync state with sync_times preserved
-        with open("last_sync_state.json", "r") as f:
-            current_state = json.load(f)
-
-        current_state.update({
-            "last_sync": last_sync.strftime("%Y-%m-%d %H:%M %Z"),
-            "next_sync": next_sync.strftime("%Y-%m-%d %H:%M %Z")
-        })
-
-        with open("last_sync_state.json", "w") as f:
-            json.dump(current_state, f)
-
-        logger.info(f"Last sync state updated to: {last_sync.strftime('%Y-%m-%d %H:%M %Z')}")
-        logger.info(f"Next sync state updated to: {next_sync.strftime('%Y-%m-%d %H:%M %Z')}")
-
-
-        #update session state
-        st.session_state.last_sync = last_sync
-        st.session_state.next_sync = next_sync
-
-        logger.info(f"="*80)
-        logger.info("\n")
-
-    except Exception as e:
-        if "Sync is not supported" in str(e):
-            logger.info("Skipping sync: This appears to be a local file database that doesn't support sync")
-            st.session_state.sync_status = "Skipping sync: This appears to be a local file database that doesn't support sync"
-        else:
-            logger.error(f"Sync failed: {str(e)}")
-            st.session_state.sync_status = f"Failed: {str(e)}"
-
 def get_type_name(type_ids):
-    engine = create_engine(local_sde_url)
+    engine = sde_db.engine
     with engine.connect() as conn:
         df = pd.read_sql_query(f"SELECT * FROM invtypes WHERE typeID IN ({','.join(map(str, type_ids))})", conn)
     df = df[['typeID', 'typeName']]
@@ -101,12 +21,13 @@ def get_type_name(type_ids):
     return df
 
 def update_targets(fit_id, target_value):
-    conn = libsql.connect("wcmkt.db", sync_url=mkt_url, auth_token=mkt_auth_token)
+    conn = mkt_db.libsql_sync_connect
     cursor = conn.cursor()
     cursor.execute(f"""UPDATE ship_targets
     SET ship_target = {target_value}
     WHERE fit_id = {fit_id};""")
     conn.commit()
+    conn.close()
     logger.info(f"Updated target for fit_id {fit_id} to {target_value}")
 
 def update_industry_index():
@@ -115,12 +36,11 @@ def update_industry_index():
         logger.info("Industry index current")
         return None
     else:
-        engine = create_engine(build_cost_url)
+        engine = build_cost_db.engine
         with engine.connect() as conn:
             indy_index.to_sql("industry_index", conn, if_exists="replace", index=False)
         current_time = datetime.datetime.now().astimezone(datetime.UTC)
         logger.info(f"Industry index updated at {current_time}")
-
 
 def fetch_industry_system_cost_indices():
     url = "https://esi.evetech.net/latest/industry/systems/?datasource=tranquility"
@@ -138,7 +58,7 @@ def fetch_industry_system_cost_indices():
             "Accept": "application/json",
             "User-Agent": "WC Markets v0.52 (admin contact: Orthel.Toralen@gmail.com; +https://github.com/OrthelT/wcmkts_new"
         }
-    print(headers)
+
     response = requests.get(url, headers=headers)
 
     print(response.status_code)
