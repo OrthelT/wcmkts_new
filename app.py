@@ -1,4 +1,7 @@
 import streamlit as st
+from db_handler import init_db
+
+init_db()
 
 pages = {
     "Market Stats": [
@@ -21,4 +24,3 @@ st.set_page_config(
 
 
 pg.run()
-
