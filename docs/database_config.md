@@ -40,7 +40,6 @@ class DatabaseConfig:
 | Alias | Description | Local File | Purpose |
 |-------|-------------|------------|---------|
 | `wcmkt2` | Production market database | `wcmkt2.db` | Main market data and orders |
-| `wcmkt3` | Testing market database | `wcmkt3.db` | Development and testing |
 | `sde` | Static Data Export | `sde.db` | EVE Online static data |
 | `build_cost` | Build cost calculations | `buildcost.db` | Structure data and industry indexes |
 
@@ -66,7 +65,6 @@ def __init__(self, alias: str, dialect: str = "sqlite+libsql")
 ```python
 # Valid initializations
 mkt_db = DatabaseConfig("wcmkt2")      # Production market database
-test_db = DatabaseConfig("wcmkt3")     # Testing database
 sde_db = DatabaseConfig("sde")         # Static data export
 build_db = DatabaseConfig("build_cost") # Build cost database
 
@@ -173,7 +171,7 @@ mkt_db.sync()
 - `sync_check`: Set to False
 
 **Validation:**
-- Only performed for market databases (`wcmkt2`, `wcmkt3`)
+- Only performed for market databases (`wcmkt2`)
 - Compares `last_update` timestamps between local and remote databases
 
 ### `validate_sync() -> bool`
@@ -262,10 +260,6 @@ The class requires specific secrets to be configured in `.streamlit/secrets.toml
 url = "libsql://your-database.turso.io"
 token = "your-auth-token"
 
-[wcmkt3_turso]
-url = "libsql://your-test-database.turso.io"
-token = "your-auth-token"
-
 [sde_aws_turso]
 url = "libsql://your-sde-database.turso.io"
 token = "your-auth-token"
@@ -290,7 +284,7 @@ try:
     db = DatabaseConfig("invalid_alias")
 except ValueError as e:
     print(f"Error: {e}")
-    # Output: Error: Unknown database alias 'invalid_alias'. Available: ['wcmkt3', 'wcmkt2', 'sde', 'build_cost']
+    # Output: Error: Unknown database alias 'invalid_alias'. Available: ['wcmkt2', 'sde', 'build_cost']
 ```
 
 ### Missing Secrets

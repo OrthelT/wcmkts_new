@@ -17,21 +17,18 @@ class DatabaseConfig:
     wcdbmap = "wcmkt2" #master config variable for the database to use
 
     _db_paths = {
-        "wcmkt3": "wcmkt3.db", #testing database
         "wcmkt2": "wcmkt2.db", #production database
         "sde": "sde.db",
         "build_cost": "buildcost.db",
     }
 
     _db_turso_urls = {
-        "wcmkt3_turso": st.secrets.wcmkt3_turso.url,
         "wcmkt2_turso": st.secrets.wcmkt2_turso.url,
         "sde_turso": st.secrets.sde_aws_turso.url,
         "build_cost_turso": st.secrets.buildcost_turso.url,
     }
 
     _db_turso_auth_tokens = {
-        "wcmkt3_turso": st.secrets.wcmkt3_turso.token,
         "wcmkt2_turso": st.secrets.wcmkt2_turso.token,
         "sde_turso": st.secrets.sde_aws_turso.token,
         "build_cost_turso": st.secrets.buildcost_turso.token,
@@ -102,7 +99,7 @@ class DatabaseConfig:
         st.session_state.next_sync = sync_info['next_sync']
         logger.info(f"Database synced at {update_time}")
 
-        if self.alias == "wcmkt2" or self.alias == "wcmkt3":
+        if self.alias == "wcmkt2":
             validation_test = self.validate_sync()
             st.session_state.sync_status = "Success" if validation_test else "Failed"
         st.session_state.sync_check = False

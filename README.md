@@ -158,7 +158,6 @@ The class supports the following database aliases:
 | Alias | Description | Local File | Purpose |
 |-------|-------------|------------|---------|
 | `wcmkt2` | Production market database | `wcmkt2.db` | Main market data and orders |
-| `wcmkt3` | Testing market database | `wcmkt3.db` | Development and testing |
 | `sde` | Static Data Export | `sde.db` | EVE Online static data (items, categories) |
 | `build_cost` | Build cost calculations | `buildcost.db` | Structure data and industry indexes |
 
@@ -276,10 +275,6 @@ The class uses Streamlit secrets for Turso configuration:
 ```python
 # Required secrets in .streamlit/secrets.toml
 [wcmkt2_turso]
-url = "your_turso_url"
-token = "your_auth_token"
-
-[wcmkt3_turso]
 url = "your_turso_url"
 token = "your_auth_token"
 
