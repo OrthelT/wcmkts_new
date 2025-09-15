@@ -24,12 +24,12 @@ SHIP_TARGETS = {
 def create_targets_table():
     """Create a targets table in the database if it doesn't exist"""
     engine = get_local_mkt_engine()
-    
+
     # Check if the table exists
     with engine.connect() as conn:
         result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='ship_targets'"))
         table_exists = result.fetchone() is not None
-    
+
     # Create the table if it doesn't exist
     if not table_exists:
         print("ship_targets table does not exist")
@@ -49,33 +49,33 @@ def create_targets_table():
 
 def set_targets():
     """Utility function to initialize or update ship targets in the database.
-    
+
     This function is a standalone utility that:
     1. Creates the ship_targets table if it doesn't exist
     2. Populates/updates the table with default target values from SHIP_TARGETS dictionary
     3. Skips the 'default' entry as it's used as a fallback value only
-    
+
     Usage:
     - Run this function manually when you need to:
         * Initialize the ship_targets table for the first time
         * Reset targets to default values
         * Update targets after modifying the SHIP_TARGETS dictionary
-    
+
     The targets set by this function are used by the doctrine status page
     to calculate whether ship and module stocks meet target levels.
-    
+
     Note: This function is not called automatically by the application.
     It should be run manually when target values need to be initialized or reset.
     """
     create_targets_table()
-    
+
     engine = get_local_mkt_engine()
-    
+
     # Insert or update target values
     for ship_name, target in SHIP_TARGETS.items():
         if ship_name == 'default':
             continue  # Skip the default value
-            
+
         with engine.connect() as conn:
             # Using SQLite's "INSERT OR REPLACE" to update if the ship already exists
             conn.execute(text("""
@@ -83,19 +83,19 @@ def set_targets():
                 VALUES (:ship_name, :target)
             """), {"ship_name": ship_name, "target": target})
             conn.commit()
-    
+
     print("Target values set in database")
 
 def get_target_from_db(ship_name):
     """Get the target value for a ship from the database"""
     engine = get_local_mkt_engine()
-    
+
     with engine.connect() as conn:
         result = conn.execute(text("""
             SELECT ship_target FROM ship_targets WHERE ship_name = :ship_name
         """), {"ship_name": ship_name})
         row = result.fetchone()
-        
+
     if row:
         return row[0]
     else:
@@ -105,19 +105,19 @@ def get_target_from_db(ship_name):
                 SELECT ship_target FROM ship_targets WHERE ship_name = 'default'
             """))
             row = result.fetchone()
-            
+
         return row[0] if row else 20  # Default to 20 if nothing in database
 
 def list_targets():
     """List all targets in the database"""
     engine = get_local_mkt_engine()
-    
+
     with engine.connect() as conn:
         result = conn.execute(text("""
             SELECT ship_name, ship_target FROM ship_targets ORDER BY ship_name
         """))
         targets = result.fetchall()
-    
+
     if targets:
         print("\nCurrent ship targets in database:")
         for ship_name, target in targets:
@@ -127,14 +127,14 @@ def list_targets():
 
 def update_target(fit_id: int, new_target: int) -> bool:
     """Update the target value for a specific fit ID in the ship_targets table.
-    
+
     Args:
         fit_id (int): The ID of the fit to update
         new_target (int): The new target value to set
-        
+
     Returns:
         bool: True if update was successful, False otherwise
-        
+
     Example:
         >>> update_target(123, 50)  # Sets target to 50 for fit ID 123
     """
@@ -143,29 +143,29 @@ def update_target(fit_id: int, new_target: int) -> bool:
         with engine.connect() as conn:
             # First check if the fit_id exists
             result = conn.execute(text("""
-                SELECT fit_id FROM ship_targets 
+                SELECT fit_id FROM ship_targets
                 WHERE fit_id = :fit_id
             """), {"fit_id": fit_id})
-            
+
             if result.fetchone() is None:
                 logger.warning(f"No target found for fit ID {fit_id}")
                 return False
-            
+
             # Update the target value
             conn.execute(text("""
-                UPDATE ship_targets 
-                SET ship_target = :new_target 
+                UPDATE ship_targets
+                SET ship_target = :new_target
                 WHERE fit_id = :fit_id
             """), {"fit_id": fit_id, "new_target": new_target})
-            
+
             conn.commit()
             logger.info(f"Successfully updated target for fit ID {fit_id} to {new_target}")
             return True
-            
+
     except Exception as e:
         logger.error(f"Error updating target: {str(e)}")
         return False
-    
+
 def get_full_ship_targets():
     """Get all ship targets from the database"""
     engine = get_local_mkt_engine()
@@ -177,11 +177,11 @@ def get_full_ship_targets():
 
 def update_ship_targets(old_ship_targets: pd.DataFrame, updated_targets: pd.DataFrame):
     """Update the ship targets with the new targets from a csv file
-    Example usage:     
+    Example usage:
     ship_targets = pd.read_csv("data/ship_targets.csv")
     updated_targets = pd.read_csv("data/new_targets.csv")
     update_ship_targets(ship_targets, updated_targets)"""
-    
+
     old_length = len(old_ship_targets)
     new_ship_targets = pd.concat([old_ship_targets, updated_targets])
     new_ship_targets=new_ship_targets.reset_index(drop=True)
@@ -204,7 +204,7 @@ def update_ship_targets(old_ship_targets: pd.DataFrame, updated_targets: pd.Data
             new_ship_targets = new_ship_targets[~new_ship_targets['fit_id'].isin(ship_targets['fit_id'])]
             print(f"New ships: {len(new_ship_targets)}")
             print(new_ship_targets)
-            
+
             confirm_update = input("Confirm update? (y/n)")
         else:
             print("No new ships found")
@@ -221,14 +221,14 @@ def update_ship_targets(old_ship_targets: pd.DataFrame, updated_targets: pd.Data
 
 
         if confirm_update == "y" and confirm_update_values == "y":
-            
-            
+
+
             new_ship_targets.to_csv("data/ship_targets.csv", index=False)
         else:
             print("Update cancelled")
     else:
         print("No update needed")
-    
+
     return new_ship_targets
 
 def compare_ship_targets(old_df: pd.DataFrame, new_df: pd.DataFrame):
@@ -274,10 +274,5 @@ def load_ship_targets(new_targets: pd.DataFrame):
     logger.info("Ship targets loaded")
 
 if __name__ == "__main__":
-    
-    new_targets = pd.read_csv("data/ship_targets.csv")
-    load_ship_targets(new_targets)
 
-    targets = get_full_ship_targets()
-    print(targets)
-
+    pass

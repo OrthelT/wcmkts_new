@@ -1,3 +1,5 @@
+import os
+import pathlib
 import pandas as pd
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
@@ -5,38 +7,30 @@ import streamlit as st
 
 import requests
 from tenacity import retry, stop_after_attempt, wait_exponential
-import pytz
 from logging_config import setup_logging
 import time
-import threading
 import datetime
-from db_utils import sync_db
 import json
-import libsql
-from build_cost_models import Structure, Base
+from config import DatabaseConfig
 
-local_mktdb = "wcmkt.db"
+mkt_db = DatabaseConfig("wcmkt")
+sde_db = DatabaseConfig("sde")
+build_cost_db = DatabaseConfig("build_cost")
 
-# Database URLs
-local_mkt_url = f"sqlite+libsql:///{local_mktdb}"  # Changed to standard SQLite format for local dev
-local_sde_url = "sqlite+libsql:///sde.db"    # Changed to standard SQLite format for local dev
-build_cost_url = "sqlite+libsql:///build_cost.db"
-# Load environment variables
+local_mkt_url = mkt_db.url
+local_sde_url = sde_db.url
+build_cost_url = build_cost_db.url
+local_mkt_db = mkt_db.path
+
 logger = setup_logging(__name__)
 
 # Use environment variables for production
-mkt_url = st.secrets["TURSO_DATABASE_URL"]
-mkt_auth_token = st.secrets["TURSO_AUTH_TOKEN"]
+mkt_url = mkt_db.turso_url
+mkt_auth_token = mkt_db.token
 
-sde_url = st.secrets["SDE_URL"]
-sde_auth_token = st.secrets["SDE_AUTH_TOKEN"]
+sde_url = sde_db.turso_url
+sde_auth_token = sde_db.token
 
-
-mkt_query = """
-    SELECT * FROM marketorders
-    WHERE is_buy_order = 1
-    ORDER BY order_id
-"""
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
 def execute_query_with_retry(session, query):
@@ -53,7 +47,7 @@ def get_mkt_data(base_query):
     logger.info("\n")
     logger.info(f"="*80)
 
-    with Session(get_local_mkt_engine()) as session:
+    with Session(mkt_db.engine) as session:
         try:
             result, columns = execute_query_with_retry(session, base_query)
             df = pd.DataFrame(result, columns=columns)
@@ -86,8 +80,6 @@ def request_type_names(type_ids):
 
     return all_results
 
-
-
 def clean_mkt_data(df):
     # Create a copy first
     df = df.copy()
@@ -117,7 +109,7 @@ def clean_mkt_data(df):
 @st.cache_data(ttl=600)
 def get_fitting_data(type_id):
     logger.info(f"getting fitting data with cache")
-    with Session(get_local_mkt_engine()) as session:
+    with Session(mkt_db.engine) as session:
         query = f"""
             SELECT * FROM doctrines
             """
@@ -167,35 +159,16 @@ def get_fitting_data(type_id):
         df3.reset_index(drop=True, inplace=True)
     return df3, timestamp
 
-@st.cache_resource(ttl=600)
-def get_local_mkt_engine():
-    return create_engine(local_mkt_url, echo=False)  # Set echo=False to reduce console output
-
-@st.cache_resource(ttl=600, show_spinner="Loading libsql connection...")
-def get_libsql_connection():
-    """Get a connection to the libsql database"""
-    return libsql.connect(local_mktdb)
-
-@st.cache_resource(ttl=600)
-def get_local_sde_engine():
-    return create_engine(local_sde_url, echo=False)
-
-@st.cache_resource(ttl=600)
-def get_local_sde_db(query: str) -> pd.DataFrame:
-    engine = create_engine(local_sde_url, echo=False)
-    with engine.connect() as conn:
-        df = pd.read_sql_query(query, conn)
-    return df
 
 @st.cache_resource(ttl=600)
 def get_stats(stats_query):
-    engine = get_local_mkt_engine()
+    engine = mkt_db.engine
     with engine.connect() as conn:
         stats = pd.read_sql_query(stats_query, conn)
     return stats
 
 def query_local_mkt_db(query: str) -> pd.DataFrame:
-    engine = create_engine(local_mkt_url, echo=False)
+    engine = mkt_db.engine
     with engine.connect() as conn:
         df = pd.read_sql_query(query, conn)
     return df
@@ -217,7 +190,7 @@ def get_market_history(type_id):
         WHERE type_id = {type_id}
         ORDER BY date
     """
-    return pd.read_sql_query(query, (get_local_mkt_engine()))
+    return pd.read_sql_query(query, (mkt_db.engine))
 
 def get_update_time()->str:
     query = """
@@ -240,9 +213,14 @@ def get_time_since_esi_update()->str:
         SELECT last_update FROM marketstats LIMIT 1
     """
     df = query_local_mkt_db(query)
-    dt_last_update = datetime.datetime.strptime(df.iloc[0]['last_update'], '%Y-%m-%d %H:%M:%S.%f')
-    dt_now = datetime.datetime.utcnow()
+
+    dt_last_update = datetime.datetime.strptime(df.iloc[0]['last_update'], '%Y-%m-%d %H:%M:%S.%f').replace(tzinfo=datetime.UTC)
+    logger.info(f"dt_last_update: {dt_last_update}")
+    dt_now = datetime.datetime.now(datetime.UTC)
+    logger.info(f"dt_now: {dt_now}")
     time_since_update = dt_now - dt_last_update
+
+    logger.info(f"time_since_update: {time_since_update}")
 
     # Calculate hours and minutes from total seconds
     total_seconds = int(time_since_update.total_seconds())
@@ -261,10 +239,9 @@ def get_time_since_esi_update()->str:
 
     #avoid returning 0 hours, because we have the OCD
     if hours == 0:
-        result = f"({int(minutes)} {min} ago)"
+        return f"({int(minutes)} {min} ago)"
     else:
-        result = f"{int(hours)} {hour}, {int(minutes)} {min} ago"
-    return result
+        return f"{int(hours)} {hour}, {int(minutes)} {min} ago"
 
 def get_time_until_next_update()->str:
 
@@ -272,9 +249,11 @@ def get_time_until_next_update()->str:
     with open("last_sync_state.json", "r") as f:
         last_sync_state = json.load(f)
     next_sync = last_sync_state['next_sync']
+    logger.info(f"next_sync: {next_sync}")
+    logger.info(f"session state next_sync: {st.session_state.next_sync}")
 
-    next_sync = datetime.datetime.strptime(next_sync, '%Y-%m-%d %H:%M UTC')
-    dt_now = datetime.datetime.utcnow()
+    next_sync = datetime.datetime.strptime(next_sync, '%Y-%m-%d %H:%M UTC').replace(tzinfo=datetime.UTC)
+    dt_now = datetime.datetime.now(datetime.UTC)
     time_until_update = next_sync - dt_now
     if time_until_update.total_seconds() < 0:
         st.session_state.sync_available = True
@@ -302,15 +281,14 @@ def get_time_until_next_update()->str:
         result = f"{int(hours)} {hour}, {int(minutes)} {min}"
     return result
 
-
 def get_module_fits(type_id):
 
-    with Session(get_local_mkt_engine()) as session:
+    with Session(mkt_db.engine) as session:
         query = f"""
-            SELECT * FROM doctrines WHERE type_id = {type_id}
+            SELECT * FROM doctrines WHERE type_id = :type_id
             """
         try:
-            fit = session.execute(text(query))
+            fit = session.execute(text(query), {'type_id': type_id})
             fit = fit.fetchall()
             df = pd.DataFrame(fit)
         except Exception as e:
@@ -329,12 +307,11 @@ def get_module_fits(type_id):
             return None
 
 def get_group_fits(group_id):
-    with Session(get_local_mkt_engine()) as session:
+    with Session(mkt_db.engine) as session:
         query = f"""
             SELECT * FROM doctrines WHERE group_id = {group_id}
             """
-        return pd.read_sql_query(query, (get_local_mkt_engine()))
-
+        return pd.read_sql_query(query, (mkt_db.engine))
 
 def get_groups_for_category(category_id: int)->pd.DataFrame:
     if category_id == 17:
@@ -344,7 +321,7 @@ def get_groups_for_category(category_id: int)->pd.DataFrame:
         query = f"""
             SELECT DISTINCT groupID, groupName FROM invGroups WHERE categoryID = {category_id}
         """
-    df = pd.read_sql_query(query, (get_local_sde_engine()))
+    df = pd.read_sql_query(query, (sde_db.engine))
     return df
 
 def get_types_for_group(group_id: int)->pd.DataFrame:
@@ -373,28 +350,23 @@ def get_type_id(type_name: str)->int:
     query = f"""
         SELECT typeID FROM invTypes WHERE typeName = '{type_name}'
         """
-    return pd.read_sql_query(query, (get_local_sde_engine()))
+    return pd.read_sql_query(query, (sde_db.engine))
 
 def get_system_id(system_name: str)->int:
     query = f"""
         SELECT solarSystemID FROM mapSolarSystems WHERE solarSystemName = '{system_name}'
         """
-    return pd.read_sql_query(query, (get_local_sde_engine()))
+    return pd.read_sql_query(query, (sde_db.engine))
 
 def get_4H_price(type_id):
     query = f"""
         SELECT * FROM marketstats WHERE type_id = {type_id}
         """
-    df = pd.read_sql_query(query, (get_local_mkt_engine()))
+    df = pd.read_sql_query(query, (mkt_db.engine))
     try:
         return df.price.iloc[0]
     except:
         return None
-
-
-if __name__ == "__main__":
-    pass
-
 
 def get_market_data(show_all, selected_categories, selected_items):
     # Get filtered_type_ids based on selected categories and items
@@ -423,23 +395,6 @@ def get_market_data(show_all, selected_categories, selected_items):
                 JOIN invCategories ic ON ig.categoryID = ic.categoryID
                 WHERE {sde_where}
             """
-
-            # with Session(get_local_sde_engine()) as session:
-            #     try:
-            #         logger.info(f"executing SDE query")
-            #         result = session.execute(text(sde_query))
-            #         filtered_type_ids = [str(row[0]) for row in result.fetchall()]
-            #         logger.info(f"filtered_type_ids: {filtered_type_ids}")
-            #         session.close()
-            #     except Exception as e:
-            #         logger.error(f"Error executing SDE query: {e}")
-
-            # try:
-            #     logger.info(f"filtered_type_ids: {len(filtered_type_ids)}")
-            #     if not filtered_type_ids:
-            #         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()  # Return empty DataFrames for both values
-            # except Exception as e:
-            #     logger.error(f"Error executing SDE query: {e}")
 
     # Get sell orders
     sell_conditions = ["is_buy_order = 0"]
@@ -522,7 +477,7 @@ def get_market_data(show_all, selected_categories, selected_items):
         WHERE it.typeID IN ({type_ids_str})
     """
 
-    with Session(get_local_sde_engine()) as session:
+    with Session(sde_db.engine) as session:
         logger.info(f"executing SDE query")
         result = session.execute(text(sde_query))
         sde_df = pd.DataFrame(result.fetchall(), columns=['type_id', 'group_name', 'category_name'])
@@ -560,3 +515,47 @@ def get_market_data(show_all, selected_categories, selected_items):
     print("-"*100)
 
     return sell_df, buy_df, stats
+
+def verify_db_path(path):
+    if not os.path.exists(path):
+        logger.warning(f"DB path does not exist: {path}")
+        return False
+    return True
+
+
+def init_db():
+    """ This function checks to see if the databases are available locally. If not, it will sync the databases from the remote server using the configuration in given in the config.py file, using credentials stored in the .streamlit/secrets.toml (for local development) or st.secrets (for production). This code was designed to be used with sqlite embedded-replica databases hosted on Turso Cloud.
+    """
+
+    mkt_db = DatabaseConfig("wcmkt")
+    sde_db = DatabaseConfig("sde")
+    build_cost_db = DatabaseConfig("build_cost")
+    db_paths = {
+        mkt_db.alias: mkt_db.path,
+        sde_db.alias: sde_db.path,
+        build_cost_db.alias: build_cost_db.path,
+    }
+
+    for key, value in db_paths.items():
+        alias = key
+        db_path = value
+        db = DatabaseConfig(alias)
+        try:
+            if verify_db_path(db.path):
+                logger.info(f"DB path exists: {db.path}")
+                status = {key: "success" if verify_db_path(db.path) else "failed"}
+            else:
+                logger.warning(f"DB path does not exist: {db.path}")
+                logger.info("syncing db")
+                logger.info(f"syncing db: {db.path}")
+                db.sync()
+        except Exception as e:
+                logger.error(f"Error syncing db: {e}")
+                raise e
+        status = {key: "success" if verify_db_path(db.path) else "failed"}
+    for key, value in status.items():
+        logger.info(f"init_db() status: {key}: {value}")
+    return True
+
+if __name__ == "__main__":
+    pass

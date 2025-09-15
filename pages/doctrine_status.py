@@ -9,15 +9,15 @@ import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from logging_config import setup_logging
-from db_handler import get_local_mkt_engine, get_libsql_connection, get_update_time
+from db_handler import get_update_time
 from doctrines import create_fit_df
-
+from config import DatabaseConfig
 # Insert centralized logging configuration
 logger = setup_logging(__name__, log_file="doctrine_status.log")
-
+mkt_db = DatabaseConfig("wcmkt")
 
 @st.cache_data(ttl=600, show_spinner="Loading cacheddoctrine fits...")
-def get_fit_summary():
+def get_fit_summary()->pd.DataFrame:
     """Get a summary of all doctrine fits"""
     logger.info("Getting fit summary")
 
@@ -145,7 +145,7 @@ def format_module_list(modules_list):
 def get_fit_name(fit_id: int) -> str:
     """Get the fit name for a given fit id"""
     try:
-        conn = get_libsql_connection()
+        conn = mkt_db.libsql_local_connect
         cursor = conn.cursor()
         cursor.execute("SELECT fit_name FROM ship_targets WHERE fit_id = ?", (fit_id,))
         result = cursor.fetchone()
@@ -164,20 +164,20 @@ def get_module_stock_list(module_names: list):
     if not st.session_state.get('csv_module_list_state'):
         st.session_state.csv_module_list_state = {}
 
-    with Session(get_local_mkt_engine()) as session:
+    with Session(mkt_db.engine) as session:
         for module_name in module_names:
 
             #check if the module is already in the list, if not, we will get the data from the database and add it to the list
             if module_name not in st.session_state.module_list_state:
                 logger.info(f"Querying database for {module_name}")
 
-                query = """
+                query = f"""
                     SELECT type_name, type_id, total_stock, fits_on_mkt
                     FROM doctrines
                     WHERE type_name = :module_name
                     LIMIT 1
             """
-                result = session.execute(text(query), {'module_name': f"{module_name}"})
+                result = session.execute(text(query), {'module_name': module_name})
                 row = result.fetchone()
                 if row and row[2] is not None:  # total_stock is now at index 2
                     # Use market stock (total_stock)
@@ -203,13 +203,15 @@ def get_ship_stock_list(ship_names: list):
         st.session_state.csv_ship_list_state = {}
 
     logger.info(f"Ship names: {ship_names}")
-    with Session(get_local_mkt_engine()) as session:
+    with Session(mkt_db.engine) as session:
         for ship in ship_names:
             #check if the ship is already in the list, if not, we will get the data from the database and add it to the list
             if ship not in st.session_state.ship_list_state:
                 logger.info(f"Querying database for {ship}")
                 if ship == "Ferox Navy Issue":
                     where_clause = "type_name = 'Ferox Navy Issue' AND fit_id = 473"
+                elif ship == "Hurricane Fleet Issue":
+                    where_clause = "type_name = 'Hurricane Fleet Issue' AND fit_id = 494"
                 else:
                     where_clause = f"type_name = '{ship}'"
 
@@ -249,7 +251,7 @@ def get_ship_target(ship_id: int, fit_id: int) -> int:
 
     elif ship_id == 0:
         try:
-            conn = get_libsql_connection()
+            conn = mkt_db.libsql_local_connect
             cursor = conn.cursor()
             cursor.execute("SELECT ship_target FROM ship_targets WHERE fit_id = ?", (fit_id,))
             result = cursor.fetchone()
@@ -265,7 +267,7 @@ def get_ship_target(ship_id: int, fit_id: int) -> int:
             return 20
     else:
         try:
-            conn = get_libsql_connection()
+            conn = mkt_db.libsql_local_connect
             cursor = conn.cursor()
             cursor.execute("SELECT ship_target FROM ship_targets WHERE ship_id = ?", (ship_id,))
             result = cursor.fetchone()

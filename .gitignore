@@ -8,9 +8,7 @@ backup/
 .vscode/
 # Database files
 market_data.*
-wcmkt2.db-*
-market.db
-sde2.db-*
+*.db*
 
 # Python
 __pycache__/
@@ -68,3 +66,7 @@ nakah_hfi.json
 dev_files/
 proj_config.py
 tests.py
+archive/
+*.db*
+todos_hurricane_fleet_issue.txt
+AGENTS.md

@@ -1,8 +1,10 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 import pandas as pd
 from sqlalchemy import text
-from db_handler import  get_local_mkt_engine
-
+from config import DatabaseConfig
 from logging_config import setup_logging
 
 # Insert centralized logging configuration
@@ -30,6 +32,8 @@ SHIP_TARGETS = {
     'default': 20  # Default target if ship not found
 }
 
+mktdb = DatabaseConfig("wcmkt")
+
 def get_target_value(ship_name):
     """Get the target value for a ship type"""
     # First try to get from database if available
@@ -42,7 +46,7 @@ def get_target_value(ship_name):
 
     # Convert to title case for standardized lookup in dictionary
     ship_name = ship_name.title() if isinstance(ship_name, str) else ''
-    
+
     # Look up in the targets dictionary, default to 20 if not found
     return SHIP_TARGETS.get(ship_name, SHIP_TARGETS['default'])
 
@@ -53,10 +57,10 @@ def create_fit_df()->pd.DataFrame:
 
     if df.empty:
         return pd.DataFrame()
-    
+
     fit_ids = df['fit_id'].unique()
     master_df = pd.DataFrame()
-    
+
     #note: only used if you want the fit summary as its own dataframe
     fits = []
 
@@ -64,7 +68,7 @@ def create_fit_df()->pd.DataFrame:
     for fit_id in fit_ids:
         # Filter data for this fit
         df2 = df[df['fit_id'] == fit_id]
-        
+
         if df2.empty:
             continue
         # Create a dataframe for this fit
@@ -85,33 +89,32 @@ def create_fit_df()->pd.DataFrame:
             fit_df["price"] = [df3['price'].iloc[0] if not df3.empty else 0]
         except (IndexError, KeyError):
             fit_df["price"] = [0]
-        
+
         # Get target value based on ship name
         target_value = get_target_value(df2['ship_name'].iloc[0])
         fit_df["ship_target"] = [target_value]
-        
+
         # Calculate target percentage - using scalar values to avoid Series comparison
         fits_value = df2["fits_on_mkt"].min()
         if target_value > 0:
             target_percentage = min(100, int((fits_value / target_value) * 100))
         else:
             target_percentage = 0
-            
+
         fit_df["target_percentage"] = [target_percentage]
-        
+
         # Get daily average volume if available
         avg_vol = ship_row['avg_vol'].iloc[0] if 'avg_vol' in ship_row.columns else 0
         fit_df["daily_avg"] = avg_vol
-        
+
         # Add to master dataframe
         master_df = pd.concat([master_df, df2])
-        
+
         # uncomment this to get the fit summary as its own dataframe
         fits.append(fit_df)
-    
-    summary_df = get_fit_summary(fits)  
-    return master_df, summary_df
 
+    summary_df = get_fit_summary(fits)
+    return master_df, summary_df
 
 def get_fit_summary(fits:list = None)->pd.DataFrame:
     """Get a summary of all doctrine fits"""
@@ -127,7 +130,7 @@ def get_fit_summary(fits:list = None)->pd.DataFrame:
 def get_fit_info()->pd.DataFrame:
     """Create a dataframe with all fit information"""
     logger.info(f"Getting fit info from doctrines table")
-    engine = get_local_mkt_engine()
+    engine = mktdb.engine
     with engine.connect() as conn:
         df = pd.read_sql_query("SELECT * FROM doctrines", conn)
     return df
