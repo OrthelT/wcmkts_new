@@ -1,7 +1,7 @@
 import streamlit as st
 from db_handler import init_db
 
-init_db()
+
 
 pages = {
     "Market Stats": [
@@ -21,6 +21,16 @@ st.set_page_config(
         page_icon="🐼",
         layout="wide"
     )
+
+if not st.session_state.get('db_initialized'):
+    result = init_db()
+    if result:
+        st.toast("Database initialized successfully", icon="✅")
+        st.session_state.db_initialized = True
+    else:
+        st.toast("Database initialization failed", icon="❌")
+        st.session_state.db_initialized = False
+
 
 
 pg.run()

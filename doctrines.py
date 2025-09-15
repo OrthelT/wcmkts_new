@@ -58,7 +58,7 @@ def create_fit_df()->pd.DataFrame:
     if df.empty:
         return pd.DataFrame()
 
-    fit_ids = df['fit_id'].unique()
+    fit_ids = df['fit_id'].unique().tolist()
     master_df = pd.DataFrame()
 
     #note: only used if you want the fit summary as its own dataframe

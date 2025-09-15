@@ -17,6 +17,9 @@ import millify
 from config import DatabaseConfig
 from sync_state import sync_state
 
+mkt_db = DatabaseConfig("wcmkt")
+sde_db = DatabaseConfig("sde")
+build_cost_db = DatabaseConfig("build_cost")
 
 # Insert centralized logging configuration
 logger = setup_logging(__name__)
@@ -25,9 +28,6 @@ logger = setup_logging(__name__)
 logger.info("Application started")
 logger.info(f"streamlit version: {st.__version__}")
 logger.info("-"*100)
-
-mkt_db = DatabaseConfig("wcmkt")
-sde_db = DatabaseConfig("sde")
 
 # Function to get unique categories and item names
 def get_filter_options(selected_categories=None):
@@ -251,17 +251,6 @@ def display_sync_status():
 
 def main():
 
-    result = init_db()
-    if result:
-        logger.info("DB initialized successfully")
-    else:
-        logger.error("DB initialization failed")
-        st.error("DB initialization failed")
-        st.stop()
-        return
-
-    sde_db = DatabaseConfig("sde")
-    build_cost_db = DatabaseConfig("build_cost")
     logger.info("Starting main function")
     logger.info(mkt_db.path)
 

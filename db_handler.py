@@ -551,7 +551,7 @@ def init_db():
                 db.sync()
         except Exception as e:
                 logger.error(f"Error syncing db: {e}")
-                raise e
+
         status = {key: "success" if verify_db_path(db.path) else "failed"}
     for key, value in status.items():
         logger.info(f"init_db() status: {key}: {value}")
