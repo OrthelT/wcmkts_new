@@ -193,34 +193,10 @@ def get_market_history(type_id):
     return pd.read_sql_query(query, (mkt_db.engine))
 
 def get_update_time()->str:
-    query = """
-        SELECT last_update FROM marketstats LIMIT 1
-    """
-    try:
-        df = query_local_mkt_db(query)
-        data_update = df.iloc[0]['last_update']
-        data_update = pd.to_datetime(data_update, utc=True)
-        data_update = data_update.strftime('%Y-%m-%d %H:%M:%S')
-        logger.info(f"Last ESI update: {data_update}")
-        st.session_state['update_time'] = data_update
-        return data_update
-    except Exception as e:
-        logger.error(f"Failed to get update time: {str(e)}")
-        return None
+    return st.session_state.local_update_status["marketstats"]["updated"]
 
 def get_time_since_esi_update()->str:
-    query = """
-        SELECT last_update FROM marketstats LIMIT 1
-    """
-    df = query_local_mkt_db(query)
-
-    dt_last_update = datetime.datetime.strptime(df.iloc[0]['last_update'], '%Y-%m-%d %H:%M:%S.%f').replace(tzinfo=datetime.UTC)
-    logger.info(f"dt_last_update: {dt_last_update}")
-    dt_now = datetime.datetime.now(datetime.UTC)
-    logger.info(f"dt_now: {dt_now}")
-    time_since_update = dt_now - dt_last_update
-
-    logger.info(f"time_since_update: {time_since_update}")
+    time_since_update = st.session_state.local_update_status["marketstats"]["time_since"]
 
     # Calculate hours and minutes from total seconds
     total_seconds = int(time_since_update.total_seconds())
@@ -243,43 +219,6 @@ def get_time_since_esi_update()->str:
     else:
         return f"{int(hours)} {hour}, {int(minutes)} {min} ago"
 
-def get_time_until_next_update()->str:
-
-    #get the next sync time from the last_sync_state.json file
-    with open("last_sync_state.json", "r") as f:
-        last_sync_state = json.load(f)
-    next_sync = last_sync_state['next_sync']
-    logger.info(f"next_sync: {next_sync}")
-    logger.info(f"session state next_sync: {st.session_state.next_sync}")
-
-    next_sync = datetime.datetime.strptime(next_sync, '%Y-%m-%d %H:%M UTC').replace(tzinfo=datetime.UTC)
-    dt_now = datetime.datetime.now(datetime.UTC)
-    time_until_update = next_sync - dt_now
-    if time_until_update.total_seconds() < 0:
-        st.session_state.sync_available = True
-        return "update available, use sync now to refresh data"
-    else:
-        st.session_state.sync_available = False
-
-    hours = time_until_update.total_seconds() // 3600
-    minutes = (time_until_update.total_seconds() % 3600) // 60
-
-    #get the grammer right by using correct singular/plural for minutes and hours
-    if minutes == 1:
-        min = "minute"
-    else:
-        min = "minutes"
-    if hours == 1:
-        hour = "hour"
-    else:
-        hour = "hours"
-
-    #avoid returning 0 hours, because we have the OCD
-    if hours == 0:
-        result = f"{int(minutes)} {min}"
-    else:
-        result = f"{int(hours)} {hour}, {int(minutes)} {min}"
-    return result
 
 def get_module_fits(type_id):
 

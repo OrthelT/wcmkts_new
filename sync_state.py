@@ -1,8 +1,14 @@
+from ast import Dict
 import streamlit as st
 import datetime as dt
 import json
 import os
 from logging_config import setup_logging
+from models import UpdateLog
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+from config import DatabaseConfig
+from datetime import timezone, datetime, timedelta
 
 logger = setup_logging(__name__)
 
@@ -129,5 +135,63 @@ def next_sync_time(last_sync: dt.datetime | str):
     return next_sync
 
 
+def get_update_status(table_names: list[str] | str = "all", remote: bool = False)-> dict:
+    """
+    Check the updates for the tables in the database
+    if all is selected or no table is selected marketstats, market_history, doctrines, marketorders are returned
+    if a specific table is selected: only that table is returned
+    Args:
+        table_names: list[str] - The tables to check the updates for
+        remote: bool - If True, check the remote database, if False, check the local database
+
+    Returns:
+        update_status[table_name]["updated"] - The timestamp of the last update
+        update_status[table_name]["needs_update"] - If the update is needed
+        update_status[table_name]["time_since"] - The time since the last update
+    """
+
+    db = DatabaseConfig("wcmkt")
+
+    update_status = {'marketstats': {'updated': None, 'needs_update': False, 'time_since': None}, 'market_history': {'updated': None, 'needs_update': False, 'time_since': None}, 'doctrines': {'updated': None, 'needs_update': False, 'time_since': None}, 'marketorders': {'updated': None, 'needs_update': False, 'time_since': None}}
+
+    if table_names == "all":
+        table_names = ["marketstats", "market_history", "doctrines", "marketorders"]
+    else:
+        table_names = table_names
+
+    now = datetime.now(timezone.utc)
+
+    for table in table_names:
+        update = db.get_most_recent_update(table,remote=remote)
+        update = update[0].replace(tzinfo=timezone.utc) if update is not None else None
+        update_status[table]["updated"] = update if update is not None else None
+        update_status[table]["time_since"] = now - update if update is not None else None
+        update_status[table]["needs_update"] = update_status[table]["time_since"] > timedelta(hours=2)
+
+    return update_status
+
+def check_updates_and_sync():
+    local_update_status = get_update_status(table_names=['all'], remote=False)
+    st.session_state.local_update_status = local_update_status
+    for key in local_update_status.keys():
+        if local_update_status[key]["updated"] is None:
+            db = DatabaseConfig("wcmkt")
+            db.sync()
+            st.toast(f"{key} updated", icon="✅")
+        elif local_update_status[key]["updated"] is not None:
+            if local_update_status[key]["updated"] > st.session_state.local_update_status[key]["updated"]:
+                db = DatabaseConfig("wcmkt")
+                db.sync()
+                st.toast(f"{key} updated", icon="✅")
+        else:
+            if local_update_status[key]["updated"] > st.session_state.local_update_status[key]["updated"]:
+                db = DatabaseConfig("wcmkt")
+                db.sync()
+                st.toast(f"{key} updated", icon="✅")
+
+
+
+
 if __name__ == "__main__":
-    pass
+
+    print(DatabaseConfig("wcmkt").get_most_recent_update("marketstats", remote=False))

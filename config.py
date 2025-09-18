@@ -1,14 +1,13 @@
-import os
-import sys
 from sqlalchemy import create_engine, text
 import streamlit as st
 import libsql
 from logging_config import setup_logging
 import sqlite3 as sql
-import datetime as dt
-from sync_state import sync_state
-import json
-from sync_state import update_saved_sync
+from datetime import datetime, timezone, timedelta
+from sqlalchemy.orm import Session
+from sqlalchemy import select
+from models import UpdateLog
+
 
 logger = setup_logging(__name__)
 
@@ -94,16 +93,12 @@ class DatabaseConfig:
             conn.sync()
         conn.close()
         update_time = dt.datetime.now(dt.UTC)
-        sync_info = sync_state(update_time)
-        st.session_state.last_sync = sync_info['last_sync']
-        st.session_state.next_sync = sync_info['next_sync']
         logger.info(f"Database synced at {update_time}")
 
         if self.alias == "wcmkt2":
             validation_test = self.validate_sync()
             st.session_state.sync_status = "Success" if validation_test else "Failed"
         st.session_state.sync_check = False
-        update_saved_sync()
 
     def validate_sync(self)-> bool:
         alias = self.alias
@@ -173,6 +168,41 @@ class DatabaseConfig:
                 column_info = [col.name for col in columns]
             return column_info
 
+    def get_most_recent_update(self, table_name: str, remote: bool = False):
+        """
+        Get the most recent update time for a specific table
+        Args:
+            table_name: str - The name of the table to get the most recent update time for
+            remote: bool - If True, get the most recent update time from the remote database, if False, get the most recent update time from the local database
+
+        Returns:
+            The most recent update time for the table
+        """
+        logger.info(f"Getting most recent updates for {table_name} from {remote}")
+        engine = self.remote_engine if remote else self.engine
+        session = Session(bind=engine)
+        with session.begin():
+            updates = select(UpdateLog.timestamp).where(UpdateLog.table_name == table_name).order_by(UpdateLog.timestamp.desc())
+            result = session.execute(updates).fetchone()
+        session.close()
+        print(f"result: {result}")
+        return result
+
+    def get_time_since_update(self, table_name: str = "marketstats", remote: bool = False):
+        status = self.get_most_recent_update(table_name, remote=remote)
+        logger.info(f"status: {status}")
+        return status[0] if status is not None else None
+
+def fill_type_name(type_id: int) -> str:
+    sde_db = DatabaseConfig("sde")
+    engine = sde_db.engine
+    with engine.connect() as conn:
+        stmt = text("SELECT typeName FROM inv_info WHERE typeID = :type_id")
+        res = conn.execute(stmt, {"type_id": type_id})
+        type_name = res.fetchone()[0] if res.fetchone() is not None else None
+    conn.close()
+    return type_name
 
 if __name__ == "__main__":
-    pass
+    db = DatabaseConfig("wcmkt")
+    print(db.get_most_recent_update("marketstats", remote=False))

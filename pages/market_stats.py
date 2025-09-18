@@ -15,7 +15,8 @@ from db_handler import  *
 from logging_config import setup_logging
 import millify
 from config import DatabaseConfig
-from sync_state import sync_state
+from datetime import datetime, timezone, timedelta
+from sync_state import get_update_status
 
 mkt_db = DatabaseConfig("wcmkt")
 sde_db = DatabaseConfig("sde")
@@ -215,65 +216,46 @@ def create_history_chart(type_id):
     return fig
 
 def display_sync_status():
+
     """Display sync status in the sidebar."""
-    time_since_esi_update = get_time_since_esi_update()
-    st.sidebar.markdown(f"**Last ESI update:** {time_since_esi_update}")
-    time_until_update = get_time_until_next_update()
-    st.sidebar.markdown(f"*Next ESI update in {time_until_update}*")
-
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Database Sync Status")
-    status_color = "green" if st.session_state.sync_status == "Success" else "red"
-
-    if st.session_state.last_sync:
-        last_sync_time = st.session_state.last_sync
-        st.sidebar.markdown(f"**Last sync:** {last_sync_time}")
-        if st.session_state.next_sync:
-            next_sync_time = st.session_state.next_sync
-            st.sidebar.markdown(f"**Next scheduled sync:** {next_sync_time}")
-    else:
-        st.sidebar.markdown("**Last sync:** Not yet run")
-
-    st.sidebar.markdown(f"**Status:** <span style='color:{status_color}'>{st.session_state.sync_status}</span>", unsafe_allow_html=True)
+    update_time = st.session_state.local_update_status["marketstats"]["updated"]
+    update_time = update_time.strftime("%Y-%m-%d %H:%M:%S UTC")
+    st.sidebar.markdown(f"**Last ESI update:** {update_time}")
+    time_since_update = st.session_state.local_update_status["marketstats"]["time_since"]
+    time_since_update = time_since_update.total_seconds()
+    hours = time_since_update // 3600
+    minutes = (time_since_update % 3600) // 60
+    time_since_update = f"{hours}h {minutes}m"
+    st.sidebar.markdown(f"*Time since last ESI update: {time_since_update}*")
 
     # Manual sync button
-    if st.sidebar.button("Sync Now"):
-        try:
-            mkt_db.sync()
-            st.session_state.sync_status = "Success"
-            st.rerun()
-        except Exception as e:
-            logger.error(f"st.session_state.sync_status: {st.session_state.sync_status}")
-            st.sidebar.error(f"Sync failed: {str(e)}")
-
-    if st.session_state.sync_status == "Success":
-        st.sidebar.success("Database sync completed successfully!")
+    # if st.sidebar.button("Sync Now"):
+    #     try:
+    #         mkt_db.sync()
+    #         st.session_state.local_update_status = get_update_status(remote=False)
+    #         st.rerun()
+    #     except Exception as e:
+    #         logger.error(f"Sync failed: {str(e)}")
+    #         st.sidebar.error(f"Sync failed: {str(e)}")
 
 def main():
 
     logger.info("Starting main function")
-    logger.info(mkt_db.path)
-
-    logger.info("Checking sync status and initiating sync state")
-    sync_info = sync_state()
-    sync_needed = sync_info['sync_needed']
-    last_sync = sync_info['last_sync']
-    next_sync = sync_info['next_sync']
-
-    logger.info(f"sync_needed: {sync_needed}")
-    logger.info(f"last_sync: {last_sync}")
-    logger.info(f"next_sync: {next_sync}")
-
-    if sync_needed:
-        logger.info("Sync needed, syncing now")
-        mkt_db.sync()
-        st.session_state.sync_status = "Success"
-        st.rerun()
-    else:
-        logger.info(f"No sync needed: last sync: {last_sync}, next sync: {next_sync}\n")
-
     wclogo = "images/wclogo.png"
     st.image(wclogo, width=150)
+
+    now = datetime.now(timezone.utc)
+    local_update_status = get_update_status(remote=False)
+    st.session_state.local_update_status = local_update_status
+    print(f"local_update_status: {local_update_status}")
+    time_since_stats_update = now - st.session_state.local_update_status["marketstats"]["updated"]
+    if time_since_stats_update > timedelta(hours=2):
+        st.session_state.remote_update_status = get_update_status(remote=True)
+        if st.session_state.remote_update_status["marketstats"]["updated"] > st.session_state.local_update_status["marketstats"]["updated"]:
+            db = DatabaseConfig("wcmkt")
+            db.sync()
+            st.session_state.local_update_status = get_update_status(remote=False)
+            st.rerun()
 
     # Title
     st.title("Winter Coalition Market Stats")
@@ -324,7 +306,6 @@ def main():
         st.sidebar.text(f"Item: {selected_item}")
 
     logger.info(f"Selected item: {selected_item}")
-
 
     t1 = time.perf_counter()
 

@@ -1,7 +1,11 @@
 import streamlit as st
 from db_handler import init_db
+from sync_state import check_updates_and_sync
+import os
+import pathlib
+from logging_config import setup_logging
 
-
+logger = setup_logging(__name__)
 
 pages = {
     "Market Stats": [
@@ -22,6 +26,8 @@ st.set_page_config(
         layout="wide"
     )
 
+wcmkt_path = pathlib.Path("wcmkt*.db*")
+
 if not st.session_state.get('db_initialized'):
     result = init_db()
     if result:
@@ -31,6 +37,8 @@ if not st.session_state.get('db_initialized'):
         st.toast("Database initialization failed", icon="❌")
         st.session_state.db_initialized = False
 
-
+if wcmkt_path.exists():
+    logger.info(f"wcmkt_path exists: {wcmkt_path} ✅")
+    check_updates_and_sync()
 
 pg.run()

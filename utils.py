@@ -5,6 +5,9 @@ from logging_config import setup_logging
 from sqlalchemy import text
 import requests
 from config import DatabaseConfig
+from email.utils import parsedate_to_datetime as _parsedate_tz
+import datetime
+from datetime import timezone
 
 mkt_db = DatabaseConfig("wcmkt")
 sde_db = DatabaseConfig("sde")
@@ -12,13 +15,24 @@ build_cost_db = DatabaseConfig("build_cost")
 
 logger = setup_logging(__name__)
 
-def get_type_name(type_ids):
+def parsedate_to_datetime(data):
+    parsed_date_tz = _parsedate_tz(data)
+    if parsed_date_tz is None:
+        raise ValueError('Invalid date value or format "%s"' % str(data))
+    *dtuple, tz = parsed_date_tz
+    if tz is None:
+        return datetime.datetime(*dtuple[:6])
+    return datetime.datetime(*dtuple[:6],
+            tzinfo=datetime.timezone(datetime.timedelta(seconds=tz)))
+
+def get_type_name(type_id: int) -> str:
     engine = sde_db.engine
     with engine.connect() as conn:
-        df = pd.read_sql_query(f"SELECT * FROM invtypes WHERE typeID IN ({','.join(map(str, type_ids))})", conn)
-    df = df[['typeID', 'typeName']]
-    df.rename(columns={'typeID': 'type_id', 'typeName': 'type_name'}, inplace=True)
-    return df
+        stmt = text("SELECT typeName FROM inv_info WHERE typeID = :type_id")
+        res = conn.execute(stmt, {"type_id": type_id})
+        type_name = res.fetchone()[0] if res.fetchone() is not None else None
+    engine.dispose()
+    return type_name
 
 def update_targets(fit_id, target_value):
     conn = mkt_db.libsql_sync_connect
@@ -101,7 +115,6 @@ def fetch_industry_system_cost_indices():
     df.rename(columns={'system_id': 'solar_system_id'}, inplace=True)
 
     return df
-
 
 if __name__ == "__main__":
     pass
