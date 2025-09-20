@@ -39,24 +39,35 @@ def execute_query_with_retry(session, query):
         raise
 
 @st.cache_data(ttl=600)
-def get_mkt_data(base_query):
-    mkt_start = time.perf_counter()
-    logger.info("\n")
-    logger.info("="*80)
+def get_all_mkt_data()->pd.DataFrame:
+    logger.info("-"*40)
+    logger.info("getting all market data")
+    logger.info("-"*40)
+    all_mkt_start = time.perf_counter()
+    query = """
+    SELECT * FROM marketorders
+    """
+    with Session(mkt_db.engine) as session:
+        result = session.execute(text(query))
+        columns = result.keys()
+        df = pd.DataFrame(result.fetchall(), columns=columns)
 
+        all_mkt_end = time.perf_counter()
+        elapsed_time = round((all_mkt_end - all_mkt_start)*1000, 2)
+        logger.info(f"TIME get_all_mkt_data() = {elapsed_time} ms")
+        print("-"*100)
+        return df
+
+@st.cache_data(ttl=600)
+def get_mkt_data(base_query:str)->pd.DataFrame:
     with Session(mkt_db.engine) as session:
         try:
             result, columns = execute_query_with_retry(session, base_query)
             df = pd.DataFrame(result, columns=columns)
+            df = df.reset_index(drop=True)
         except Exception as e:
             logger.error(f"Failed to get market data: {str(e)}")
             raise
-
-    mkt_end = time.perf_counter()
-
-    logger.info(f"getting market data, total time: {round(( mkt_end - mkt_start)*1000, 2)} ms")
-    logger.info("="*80)
-    logger.info("\n")
     return df
 
 def request_type_names(type_ids):
@@ -291,6 +302,18 @@ def get_4H_price(type_id):
     except:
         return None
 
+def new_get_market_data(show_all):
+    df = get_all_mkt_data()
+
+    if 'selected_categories_type_ids' in st.session_state:
+        df2 = df[df['type_id'].isin(st.session_state.selected_categories_type_ids)]
+    elif 'selected_items_type_ids' in st.session_state:
+        df2 = df[df['type_id'].isin(st.session_state.selected_items_type_ids)]
+    else:
+        df2 = df
+
+
+
 def get_market_data(show_all, selected_categories, selected_items):
     # Get filtered_type_ids based on selected categories and items
     filtered_type_ids = None
@@ -356,33 +379,25 @@ def get_market_data(show_all, selected_categories, selected_items):
 
     # Get market data
     t1 = time.perf_counter()
+    mkt_df = get_all_mkt_data()
+    sell_df = mkt_df[mkt_df['is_buy_order'] == 0]
+    buy_df = mkt_df[mkt_df['is_buy_order'] == 1]
+    t2 = time.perf_counter()
+
+    elapsed_time = round((t2-t1)*1000, 2)
+    logger.info(f"TIME get_mkt_data() mkt_df and filter for sell_df and buy_df = {elapsed_time} ms")
+    print("-"*100)
 
     sell_df = get_mkt_data(sell_query)
-
-    t2 = time.perf_counter()
-    elapsed_time = round((t2-t1)*1000, 2)
-    logger.info(f"TIME get_mkt_data() sell_df = {elapsed_time} ms")
-
     buy_df = get_mkt_data(buy_query)
 
-    t3 = time.perf_counter()
-    elapsed_time = round((t3-t2)*1000, 2)
-    logger.info(f"TIME get_mkt_data() buy_df = {elapsed_time} ms")
 
     if sell_df.empty and buy_df.empty:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()  # Return empty DataFrames
 
-    t4 = time.perf_counter()
-    elapsed_time = round((t4-t3)*1000, 2)
-    logger.info(f"TIME get_mkt_data() stats = {elapsed_time} ms")
-    print("-"*100)
-
     stats = get_stats(stats_query)
 
-    t5 = time.perf_counter()
-    elapsed_time = round((t5-t4)*1000, 2)
-    logger.info(f"TIME get_stats() stats = {elapsed_time} ms")
-    print("-"*100)
+
     # Get all unique type_ids from both dataframes
     all_type_ids = set()
     if not sell_df.empty:
@@ -406,11 +421,6 @@ def get_market_data(show_all, selected_categories, selected_items):
         sde_df = pd.DataFrame(result.fetchall(), columns=['type_id', 'group_name', 'category_name'])
         session.close()
 
-    t6 = time.perf_counter()
-    elapsed_time = round((t6-t5)*1000, 2)
-    logger.info(f"TIME get_stats() sde_df = {elapsed_time} ms")
-    print("-"*100)
-
     # Merge market data with SDE data for sell orders
     if not sell_df.empty:
         sell_df = sell_df.merge(sde_df, on='type_id', how='left')
@@ -425,17 +435,7 @@ def get_market_data(show_all, selected_categories, selected_items):
         # Clean up the DataFrame
         buy_df = clean_mkt_data(buy_df)
 
-    t7 = time.perf_counter()
-    elapsed_time = round((t7-t6)*1000, 2)
-    logger.info(f"TIME get_stats() clean_mkt_data() = {elapsed_time} ms")
-    print("-"*100)
-
     logger.info("returning market data")
-
-    t8 = time.perf_counter()
-    elapsed_time = round((t8-t7)*1000, 2)
-    logger.info(f"TIME get_stats() returning market data = {elapsed_time} ms")
-    print("-"*100)
 
     return sell_df, buy_df, stats
 

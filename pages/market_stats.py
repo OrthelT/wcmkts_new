@@ -31,9 +31,43 @@ logger.info("Application started")
 logger.info(f"streamlit version: {st.__version__}")
 logger.info("-"*100)
 
+@st.cache_data(ttl=600)
+def get_market_type_ids()->list:
+    # Get all type_ids from market orders
+    mkt_query = """
+    SELECT DISTINCT type_id
+    FROM marketorders
+    """
+    with Session(mkt_db.engine) as session:
+        result = session.execute(text(mkt_query))
+        type_ids = [row[0] for row in result.fetchall()]
+        return type_ids
+
 # Function to get unique categories and item names
+@st.cache_data(ttl=600)
+def all_sde_info(type_ids: list = None)->pd.DataFrame:
+    if not type_ids:
+        type_ids = get_market_type_ids()
+    type_ids_str = ','.join(map(str, type_ids))
+
+    sde_query = f"""
+    SELECT DISTINCT it.typeName as type_name, it.typeID as type_id, it.groupID as group_id, ig.groupName as group_name,
+           ic.categoryID as category_id, ic.categoryName as category_name
+    FROM invTypes it
+    JOIN invGroups ig ON it.groupID = ig.groupID
+    JOIN invCategories ic ON ig.categoryID = ic.categoryID
+    WHERE it.typeID IN (:type_ids_str)
+    """
+    with Session(sde_db.engine) as session:
+        result = session.execute(text(sde_query), {'type_ids_str': type_ids_str})
+        df = pd.DataFrame(result.fetchall(),
+            columns=['type_name', 'type_id', 'group_id', 'group_name', 'category_id', 'category_name'])
+        df = df.reset_index(drop=True)
+        return df
+
 def get_filter_options(selected_categories=None):
     try:
+
         # First get type_ids from market orders
         mkt_query = """
         SELECT DISTINCT type_id
@@ -49,8 +83,6 @@ def get_filter_options(selected_categories=None):
                 return [], []
             type_ids_str = ','.join(map(str, type_ids))
 
-        logger.info(f"type_ids: {len(type_ids)}")
-
         # Then get category info from SDE database
         sde_query = f"""
         SELECT DISTINCT it.typeName as type_name, it.typeID as type_id, it.groupID as group_id, ig.groupName as group_name,
@@ -63,15 +95,21 @@ def get_filter_options(selected_categories=None):
         with Session(sde_db.engine) as session:
             result = session.execute(text(sde_query))
             df = pd.DataFrame(result.fetchall(),
-                              columns=['type_name', 'type_id', 'group_id', 'group_name', 'category_id', 'category_name'])
+                columns=['type_name', 'type_id', 'group_id', 'group_name', 'category_id', 'category_name'])
+            df = df.reset_index(drop=True)
 
             categories = sorted(df['category_name'].unique())
 
             if selected_categories:
                 df = df[df['category_name'].isin(selected_categories)]
+                selected_categories_type_ids = df['type_id'].unique().tolist()
+                st.session_state.selected_categories_type_ids = selected_categories_type_ids
+
+        session.close()
+
+        session.close()
 
         items = sorted(df['type_name'].unique())
-
 
         return categories, items
 
@@ -228,6 +266,23 @@ def display_sync_status():
     st.markdown("&nbsp;"*5)
     st.sidebar.markdown(f"<span style='font-size: 14px; color: lightgrey;'>*Last ESI update: {update_time}*</span>", unsafe_allow_html=True)
 
+@st.fragment
+def dump_session_state():
+    logger.info("*"*40)
+    logger.info("Dumping session state")
+    logger.info("*"*40)
+    for k,v in st.session_state.items():
+        if isinstance(v, dict):
+            logger.info(f"{k}")
+            logger.info("+++++")
+            for k2,v2 in v.items():
+                logger.info(f"{k2}: {v2}")
+        else:
+            logger.info(f"{k}: {v}")
+        logger.info("-"*40)
+    logger.info("*"*40)
+    logger.info("="*40)
+
 def main():
     logger.info("*****************************************************")
     logger.info("Starting main function")
@@ -298,7 +353,7 @@ def main():
     logger.info(f"TIME get_market_data() = {round(elapsed_time, 2)} ms")
     print("-"*100)
 
-    # Process sell orders
+    # # Process sell orders
     sell_order_count = 0
     sell_total_value = 0
     if not sell_data.empty:
@@ -318,6 +373,9 @@ def main():
     logger.info(f"buy_total_value: {millify.millify(buy_total_value, precision=2)} ISK")
 
     if not sell_data.empty:
+
+        logger.info(f"selected_items: {selected_items}, type: {type(selected_items)}, len: {len(selected_items)}")
+        logger.info(f"selected_categories: {selected_categories}, type: {type(selected_categories)}, len: {len(selected_categories)}")
         if len(selected_items) == 1:
             sell_data = sell_data[sell_data['type_name'] == selected_items[0]]
             if not buy_data.empty:
@@ -330,6 +388,15 @@ def main():
                 fit_df = pd.DataFrame()
         elif len(selected_categories) == 1:
             stats = stats[stats['category_name'] == selected_categories[0]]
+            stats = stats.reset_index(drop=True)
+            stats_type_ids = st.session_state.selected_categories_type_ids
+
+            if not buy_data.empty:
+                buy_data = buy_data[buy_data['type_id'].isin(stats_type_ids)]
+                buy_data = buy_data.reset_index(drop=True)
+            if not sell_data.empty:
+                sell_data = sell_data[sell_data['type_id'].isin(stats_type_ids)]
+                sell_data = sell_data.reset_index(drop=True)
 
         # Display metrics
         col1, col2, col3, col4 = st.columns(4)
@@ -530,6 +597,11 @@ def main():
     # Display sync status in sidebar
     with st.sidebar:
         display_sync_status()
+        dump = st.sidebar.button("Dump Session State", use_container_width=True)
+        if dump:
+            dump_session_state()
+            st.toast("Session state dumped", icon="✅")
+
 
 if __name__ == "__main__":
     main()
