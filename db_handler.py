@@ -310,19 +310,21 @@ def get_4H_price(type_id):
 def new_get_market_data(show_all):
     df = get_all_mkt_data()
 
-    if 'selected_category_info' in st.session_state:
+    if 'selected_category_info' in st.session_state and st.session_state.selected_category_info is not None:
         orders_df = df[df['type_id'].isin(st.session_state.selected_category_info['type_ids'])]
-    elif 'selected_item' in st.session_state:
+    elif 'selected_item' in st.session_state and st.session_state.selected_item is not None:
         orders_df = df[df['type_id'].isin(st.session_state.selected_items_type_ids)]
-    elif show_all:
+    else:
         orders_df = df
 
     stats_df = get_stats()
     stats_df = stats_df[stats_df['type_id'].isin(orders_df['type_id'].unique())]
+    stats_df = stats_df.reset_index(drop=True)
 
+    sell_orders_df = orders_df[orders_df['is_buy_order'] == 0]
+    buy_orders_df = orders_df[orders_df['is_buy_order'] == 1]
 
-
-    return orders_df
+    return sell_orders_df, buy_orders_df, stats_df
 
 @st.cache_data(ttl=600)
 def get_market_data(show_all, selected_category, selected_item):

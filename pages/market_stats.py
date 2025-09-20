@@ -10,7 +10,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from sqlalchemy import text,select,join
+from sqlalchemy import text,bindparam
 from sqlalchemy.orm import Session
 from db_handler import check_db_state,safe_format,get_market_history,get_fitting_data,get_module_fits
 from logging_config import setup_logging
@@ -51,29 +51,22 @@ def all_sde_info(type_ids: list = None)->pd.DataFrame:
         type_ids = get_market_type_ids()
     logger.info(f"type_ids: {len(type_ids)}")
 
-    # Create placeholders for the IN clause using named parameters
-    placeholders = ','.join([f':type_id_{i}' for i in range(len(type_ids))])
-
-    sde_query = f"""
+    # Use SQLAlchemy's proper IN clause with parameter binding
+    sde_query = text("""
     SELECT DISTINCT it.typeName as type_name, it.typeID as type_id, it.groupID as group_id, ig.groupName as group_name,
            ic.categoryID as category_id, ic.categoryName as category_name
     FROM invTypes it
     JOIN invGroups ig ON it.groupID = ig.groupID
     JOIN invCategories ic ON ig.categoryID = ic.categoryID
-    WHERE it.typeID in ({placeholders})
-    """
+    WHERE it.typeID IN :type_ids
+    """).bindparams(bindparam('type_ids', expanding=True))
 
-    # Create parameter dictionary
-    params = {f'type_id_{i}': type_id for i, type_id in enumerate(type_ids)}
-
-    engine = sde_db.engine
-    with engine.connect() as conn:
-        result = conn.execute(text(sde_query), params)
+    with Session(sde_db.engine) as session:
+        result = session.execute(sde_query, {'type_ids': type_ids})
         df = pd.DataFrame(result.fetchall(),
             columns=['type_name', 'type_id', 'group_id', 'group_name', 'category_id', 'category_name'])
         logger.info(f"df: {len(df)}")
-        logger.info(f"df: {df.head()}")
-    conn.close()
+        session.close()
 
     return df
 
@@ -96,11 +89,10 @@ def get_filter_options(selected_category: str=None)->tuple[list, list]:
             'type_ids': selected_categories_type_ids,
             'type_names': selected_type_names}
         items = selected_type_names
+        categories = [selected_category]
     else:
         categories = sorted(sde_df['category_name'].unique().tolist())
         items = sorted(sde_df['type_name'].unique().tolist())
-    logger.info(f"categories: {len(categories)}")
-    logger.info(f"items: {len(items)}")
     return categories, items
 
 # Query function
@@ -295,17 +287,27 @@ def main():
         "Select Category",
         options=[""] + categories,  # Add empty option to allow no selection
         index=0,
+        key="selected_category_choice",
         format_func=lambda x: "All Categories" if x == "" else x
     )
+    if selected_category == "":
+        st.session_state.selected_category = None
+        st.session_state.selected_category_info = None
+        st.session_state.selected_items_type_ids = []
+        st.session_state.selected_item = None
 
-    if selected_category:
+    if selected_category and selected_category != None:
         st.sidebar.text(f"Category: {selected_category}")
         st.session_state.selected_category = selected_category
+        logger.info(f"selected_category: {selected_category}")
         # Get filtered items based on selected category
         _, available_items = get_filter_options(selected_category if not show_all and selected_category else None)
 
     else:
         _, available_items = get_filter_options()
+        st.session_state.selected_items_type_ids = available_items
+        st.session_state.selected_category = None
+        st.session_state.selected_category_info = None
 
         # Item name filter - changed to selectbox for single selection
     selected_item = st.sidebar.selectbox(
@@ -319,15 +321,15 @@ def main():
         st.sidebar.text(f"Item: {selected_item}")
         st.session_state.selected_item = selected_item
         logger.info(f"Selected item: {selected_item}")
-        selected_items = [selected_item]
+        st.session_state.selected_items_type_ids = [selected_item]
     else:
         selected_item = None
-        selected_items = available_items
+        st.session_state.selected_items_type_ids = available_items
 
     t1 = time.perf_counter()
 
-    sell_data, buy_data, stats = get_market_data(show_all, selected_category, selected_items)
-
+    # sell_data, buy_data, stats = get_market_data(show_all, selected_category, selected_items)
+    sell_data, buy_data, stats = new_get_market_data(show_all)
     # Main content
     t2 = time.perf_counter()
     elapsed_time = (t2-t1)*1000
@@ -356,18 +358,23 @@ def main():
 
     if not sell_data.empty:
 
-        if 'selected_item' in st.session_state:
+        if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
             selected_item = st.session_state.selected_item
             sell_data = sell_data[sell_data['type_name'] == selected_item]
             if not buy_data.empty:
                 buy_data = buy_data[buy_data['type_name'] == selected_item]
             stats = stats[stats['type_name'] == selected_item]
-            type_id = sell_data['type_id'].iloc[0]
+            try:
+                type_id = sell_data['type_id'].iloc[0]
+            except:
+                logger.info(f"No type_id found for {selected_item}")
+                type_id = None
             if type_id:
                 fit_df = get_fitting_data(type_id)
             else:
                 fit_df = pd.DataFrame()
-        elif 'selected_category' in st.session_state:
+
+        elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
             selected_category = st.session_state.selected_category
             stats = stats[stats['category_name'] == selected_category]
             stats = stats.reset_index(drop=True)
@@ -440,17 +447,24 @@ def main():
         display_df = sell_data.copy()
 
         #create a header for the item
-        if 'selected_item' in st.session_state:
+        if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
             selected_item = st.session_state.selected_item
-            image_id = display_df.iloc[0]['type_id']
-            type_name = display_df.iloc[0]['type_name']
+            try:
+                image_id = display_df.iloc[0]['type_id']
+                type_name = display_df.iloc[0]['type_name']
+            except:
+                logger.info(f"No type_id or type_name found for {selected_item}")
+                image_id = None
+                type_name = None
             st.subheader(f"{type_name}", divider="blue")
             col1, col2 = st.columns(2)
             with col1:
-                if isship:
-                    st.image(f'https://images.evetech.net/types/{image_id}/render?size=64')
-                else:
-                    st.image(f'https://images.evetech.net/types/{image_id}/icon')
+                if image_id:
+                    if isship:
+                        st.image(f'https://images.evetech.net/types/{image_id}/render?size=64')
+                    else:
+                        st.image(f'https://images.evetech.net/types/{image_id}/icon')
+
             with col2:
                 try:
                     if fits_on_mkt:
@@ -461,7 +475,7 @@ def main():
                             st.write(fit_df[fit_df['type_id'] == type_id]['group_name'].iloc[0])
                 except:
                     pass
-        elif 'selected_category' in st.session_state:
+        elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
             selected_category = st.session_state.selected_category
             cat_label = selected_category
             if cat_label.endswith("s"):
@@ -492,11 +506,11 @@ def main():
         # Display buy orders if they exist
         if not buy_data.empty:
             # Display buy orders header
-            if 'selected_item' in st.session_state:
+            if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
                 selected_item = st.session_state.selected_item
                 type_name = selected_item
                 st.subheader(f"Buy Orders for {type_name}", divider="orange")
-            elif 'selected_category' in st.session_state:
+            elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
                 selected_category = st.session_state.selected_category
                 cat_label = selected_category
                 if cat_label.endswith("s"):
