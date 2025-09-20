@@ -13,34 +13,6 @@ build_cost_db = DatabaseConfig("build_cost")
 
 logger = setup_logging(__name__)
 
-def parsedate_to_datetime(data):
-    parsed_date_tz = _parsedate_tz(data)
-    if parsed_date_tz is None:
-        raise ValueError('Invalid date value or format "%s"' % str(data))
-    *dtuple, tz = parsed_date_tz
-    if tz is None:
-        return datetime.datetime(*dtuple[:6])
-    return datetime.datetime(*dtuple[:6],
-            tzinfo=datetime.timezone(datetime.timedelta(seconds=tz)))
-
-def get_type_name(type_id: int) -> str:
-    engine = sde_db.engine
-    with engine.connect() as conn:
-        stmt = text("SELECT typeName FROM inv_info WHERE typeID = :type_id")
-        res = conn.execute(stmt, {"type_id": type_id})
-        type_name = res.fetchone()[0] if res.fetchone() is not None else None
-    engine.dispose()
-    return type_name
-
-def update_targets(fit_id, target_value):
-    conn = mkt_db.libsql_sync_connect
-    cursor = conn.cursor()
-    cursor.execute(f"""UPDATE ship_targets
-    SET ship_target = {target_value}
-    WHERE fit_id = {fit_id};""")
-    conn.commit()
-    conn.close()
-    logger.info(f"Updated target for fit_id {fit_id} to {target_value}")
 
 def update_industry_index():
     indy_index = fetch_industry_system_cost_indices()

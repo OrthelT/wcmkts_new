@@ -193,15 +193,6 @@ class DatabaseConfig:
         logger.info(f"status: {status}")
         return status[0] if status is not None else None
 
-def fill_type_name(type_id: int) -> str:
-    sde_db = DatabaseConfig("sde")
-    engine = sde_db.engine
-    with engine.connect() as conn:
-        stmt = text("SELECT typeName FROM inv_info WHERE typeID = :type_id")
-        res = conn.execute(stmt, {"type_id": type_id})
-        type_name = res.fetchone()[0] if res.fetchone() is not None else None
-    conn.close()
-    return type_name
 
 if __name__ == "__main__":
     pass
