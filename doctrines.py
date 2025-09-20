@@ -53,7 +53,7 @@ def get_target_value(ship_name):
 @st.cache_data(ttl=600, show_spinner="Loading cached doctrine fits...")
 def create_fit_df()->pd.DataFrame:
     logger.info(f"Creating fit dataframe")
-    df = get_fit_info()
+    df = get_all_fit_data()
 
     if df.empty:
         return pd.DataFrame()
@@ -127,7 +127,7 @@ def get_fit_summary(fits:list = None)->pd.DataFrame:
     return fit_summary_df
 
 @st.cache_data(ttl=600)
-def get_fit_info()->pd.DataFrame:
+def get_all_fit_data()->pd.DataFrame:
     """Create a dataframe with all fit information"""
     logger.info(f"Getting fit info from doctrines table")
     engine = mktdb.engine

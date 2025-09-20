@@ -1,7 +1,6 @@
 import os
-import pathlib
 import pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 import streamlit as st
 
@@ -9,9 +8,9 @@ import requests
 from tenacity import retry, stop_after_attempt, wait_exponential
 from logging_config import setup_logging
 import time
-import datetime
-import json
+from datetime import timedelta
 from config import DatabaseConfig
+from sync_state import update_wcmkt_state
 
 mkt_db = DatabaseConfig("wcmkt")
 sde_db = DatabaseConfig("sde")
@@ -106,7 +105,6 @@ def clean_mkt_data(df):
 
     return df
 
-@st.cache_data(ttl=600)
 def get_fitting_data(type_id):
     logger.info(f"getting fitting data with cache")
     with Session(mkt_db.engine) as session:
@@ -157,8 +155,7 @@ def get_fitting_data(type_id):
         df3.rename(columns={'fits_on_mkt': 'Fits on Market'}, inplace=True)
         df3 = df3.sort_values(by='Fits on Market', ascending=True)
         df3.reset_index(drop=True, inplace=True)
-    return df3, timestamp
-
+    return df3
 
 @st.cache_resource(ttl=600)
 def get_stats(stats_query):
@@ -193,32 +190,21 @@ def get_market_history(type_id):
     return pd.read_sql_query(query, (mkt_db.engine))
 
 def get_update_time()->str:
-    return st.session_state.local_update_status["marketstats"]["updated"]
+    if "local_update_status" in st.session_state:
+        update_time = st.session_state.local_update_status["updated"]
+        update_time = update_time.strftime("%Y-%m-%d | %H:%M UTC")
+    else:
+        update_time = None
+    return update_time
 
 def get_time_since_esi_update()->str:
-    time_since_update = st.session_state.local_update_status["marketstats"]["time_since"]
-
-    # Calculate hours and minutes from total seconds
-    total_seconds = int(time_since_update.total_seconds())
-    hours = total_seconds // 3600
-    minutes = (total_seconds % 3600) // 60
-
-    #get the grammer right by using correct singular/plural for minutes and hours
-    if minutes == 1:
-        min = "minute"
+    if "local_update_status" in st.session_state:
+        time_since = st.session_state.local_update_status["time_since"]
+        time_since = time_since.total_seconds()
+        time_since = f"{round((time_since / 3600),1)} hours"
     else:
-        min = "minutes"
-    if hours == 1:
-        hour = "hour"
-    else:
-        hour = "hours"
-
-    #avoid returning 0 hours, because we have the OCD
-    if hours == 0:
-        return f"({int(minutes)} {min} ago)"
-    else:
-        return f"{int(hours)} {hour}, {int(minutes)} {min} ago"
-
+        time_since = None
+    return time_since
 
 def get_module_fits(type_id):
 
@@ -455,46 +441,52 @@ def get_market_data(show_all, selected_categories, selected_items):
 
     return sell_df, buy_df, stats
 
-def verify_db_path(path):
-    if not os.path.exists(path):
-        logger.warning(f"DB path does not exist: {path}")
-        return False
-    return True
+def check_if_db_not_in_session_state(remote: bool = False):
+    if remote:
+        if "remote_update_status" not in st.session_state:
+            logger.info(f"Remote database is not in session state")
+            return True
+        else:
+            return False
+    else:
+        if "local_update_status" not in st.session_state:
+            logger.info(f"Local database is not in session state")
+            return True
+        else:
+            return False
 
-
-def init_db():
-    """ This function checks to see if the databases are available locally. If not, it will sync the databases from the remote server using the configuration in given in the config.py file, using credentials stored in the .streamlit/secrets.toml (for local development) or st.secrets (for production). This code was designed to be used with sqlite embedded-replica databases hosted on Turso Cloud.
+def check_db_state():
     """
+    Check the update state of the databases. If the remote database is more recent than the local database, sync the local database.
+    Args:
+        table_names: list[str] | str - The tables to check the updates for
 
-    mkt_db = DatabaseConfig("wcmkt")
-    sde_db = DatabaseConfig("sde")
-    build_cost_db = DatabaseConfig("build_cost")
-    db_paths = {
-        mkt_db.alias: mkt_db.path,
-        sde_db.alias: sde_db.path,
-        build_cost_db.alias: build_cost_db.path,
-    }
+    """
+    db = DatabaseConfig("wcmkt")
+    update_wcmkt_state()
+    update_wcmkt_state()
 
-    for key, value in db_paths.items():
-        alias = key
-        db_path = value
-        db = DatabaseConfig(alias)
-        try:
-            if verify_db_path(db.path):
-                logger.info(f"DB path exists: {db.path}")
-                status = {key: "success" if verify_db_path(db.path) else "failed"}
-            else:
-                logger.warning(f"DB path does not exist: {db.path}")
-                logger.info("syncing db")
-                logger.info(f"syncing db: {db.path}")
-                db.sync()
-        except Exception as e:
-                logger.error(f"Error syncing db: {e}")
+    try:
+        local_update_time = st.session_state.local_update_status['updated']
+        remote_update_time = st.session_state.remote_update_status['updated']
+    except:
+        raise ValueError("Local or remote database is None")
 
-        status = {key: "success" if verify_db_path(db.path) else "failed"}
-    for key, value in status.items():
-        logger.info(f"init_db() status: {key}: {value}")
-    return True
+    if remote_update_time > local_update_time:
+        logger.info(f"Remote database has been updated since last check, syncing local database⏰🛜⚠️")
+        db.sync()
+        logger.info(f"Local database synced✅🏠")
+        logger.info(f"Updating wcmkt state")
+        update_wcmkt_state()
+        if db.validate_sync():
+            logger.info(f"Local database synced and validated✅🏠")
+        else:
+            logger.info(f"Local database synced but validation failed❌🏠")
+    else:
+        logger.info(f"Local database is up to date✅🏠")
+
+
+
 
 if __name__ == "__main__":
     pass

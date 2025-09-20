@@ -36,7 +36,6 @@ class DatabaseConfig:
     def __init__(self, alias: str, dialect: str = "sqlite+libsql"):
         if alias == "wcmkt":
             alias = self.wcdbmap
-            logger.info(f'using wcmkt alias: {alias}')
         elif alias == "wcmkt2" or alias == "wcmkt3":
             logger.warning(f"Alias {alias} is deprecated, using {self.wcdbmap} instead")
             alias = self.wcdbmap
@@ -92,8 +91,8 @@ class DatabaseConfig:
             logger.info("Syncing database...")
             conn.sync()
         conn.close()
-        update_time = dt.datetime.now(dt.UTC)
-        logger.info(f"Database synced at {update_time}")
+        update_time = datetime.now(timezone.utc)
+        logger.info(f"Database synced at {update_time} UTC")
 
         if self.alias == "wcmkt2":
             validation_test = self.validate_sync()
@@ -168,7 +167,7 @@ class DatabaseConfig:
                 column_info = [col.name for col in columns]
             return column_info
 
-    def get_most_recent_update(self, table_name: str, remote: bool = False):
+    def get_most_recent_update(self, table_name: str, remote: bool = False)-> datetime:
         """
         Get the most recent update time for a specific table
         Args:
@@ -178,15 +177,16 @@ class DatabaseConfig:
         Returns:
             The most recent update time for the table
         """
-        logger.info(f"Getting most recent updates for {table_name} from {remote}")
         engine = self.remote_engine if remote else self.engine
         session = Session(bind=engine)
         with session.begin():
             updates = select(UpdateLog.timestamp).where(UpdateLog.table_name == table_name).order_by(UpdateLog.timestamp.desc())
             result = session.execute(updates).fetchone()
         session.close()
-        print(f"result: {result}")
-        return result
+        update_time = result[0] if result is not None else None
+        update_time = update_time.replace(tzinfo=timezone.utc) if update_time is not None else None
+        print(f"update_time: {update_time}")
+        return update_time
 
     def get_time_since_update(self, table_name: str = "marketstats", remote: bool = False):
         status = self.get_most_recent_update(table_name, remote=remote)
@@ -204,5 +204,4 @@ def fill_type_name(type_id: int) -> str:
     return type_name
 
 if __name__ == "__main__":
-    db = DatabaseConfig("wcmkt")
-    print(db.get_most_recent_update("marketstats", remote=False))
+    pass

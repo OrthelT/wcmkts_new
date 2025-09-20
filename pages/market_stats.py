@@ -2,7 +2,7 @@ import os
 import sys
 import time
 
-from db_handler import get_market_data
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 import pandas as pd
@@ -11,12 +11,13 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from db_handler import  *
+from db_handler import check_db_state,safe_format,get_market_history,get_fitting_data,get_module_fits
 from logging_config import setup_logging
 import millify
 from config import DatabaseConfig
-from datetime import datetime, timezone, timedelta
-from sync_state import get_update_status
+from db_handler import get_market_data
+from init_db import init_db
+
 
 mkt_db = DatabaseConfig("wcmkt")
 sde_db = DatabaseConfig("sde")
@@ -216,46 +217,25 @@ def create_history_chart(type_id):
     return fig
 
 def display_sync_status():
-
     """Display sync status in the sidebar."""
-    update_time = st.session_state.local_update_status["marketstats"]["updated"]
-    update_time = update_time.strftime("%Y-%m-%d %H:%M:%S UTC")
-    st.sidebar.markdown(f"**Last ESI update:** {update_time}")
-    time_since_update = st.session_state.local_update_status["marketstats"]["time_since"]
+    if "local_update_status" not in st.session_state:
+        init_db()
+    update_time = st.session_state.local_update_status["updated"]
+    update_time = update_time.strftime("%Y-%m-%d | %H:%M UTC")
+    time_since_update = st.session_state.local_update_status["time_since"]
     time_since_update = time_since_update.total_seconds()
-    hours = time_since_update // 3600
-    minutes = (time_since_update % 3600) // 60
-    time_since_update = f"{hours}h {minutes}m"
-    st.sidebar.markdown(f"*Time since last ESI update: {time_since_update}*")
-
-    # Manual sync button
-    # if st.sidebar.button("Sync Now"):
-    #     try:
-    #         mkt_db.sync()
-    #         st.session_state.local_update_status = get_update_status(remote=False)
-    #         st.rerun()
-    #     except Exception as e:
-    #         logger.error(f"Sync failed: {str(e)}")
-    #         st.sidebar.error(f"Sync failed: {str(e)}")
+    time_since_update = f"{round((time_since_update / 3600),1)} hours"
+    st.markdown("&nbsp;"*5)
+    st.sidebar.markdown(f"<span style='font-size: 14px; color: lightgrey;'>*Last ESI update: {update_time}*</span>", unsafe_allow_html=True)
 
 def main():
-
+    logger.info("*****************************************************")
     logger.info("Starting main function")
+    logger.info("*****************************************************")
+
     wclogo = "images/wclogo.png"
     st.image(wclogo, width=150)
-
-    now = datetime.now(timezone.utc)
-    local_update_status = get_update_status(remote=False)
-    st.session_state.local_update_status = local_update_status
-    print(f"local_update_status: {local_update_status}")
-    time_since_stats_update = now - st.session_state.local_update_status["marketstats"]["updated"]
-    if time_since_stats_update > timedelta(hours=2):
-        st.session_state.remote_update_status = get_update_status(remote=True)
-        if st.session_state.remote_update_status["marketstats"]["updated"] > st.session_state.local_update_status["marketstats"]["updated"]:
-            db = DatabaseConfig("wcmkt")
-            db.sync()
-            st.session_state.local_update_status = get_update_status(remote=False)
-            st.rerun()
+    check_db_state()
 
     # Title
     st.title("Winter Coalition Market Stats")
@@ -332,13 +312,10 @@ def main():
         buy_order_count = buy_data['order_id'].nunique()
         buy_total_value = (buy_data['price'] * buy_data['volume_remain']).sum()
 
-    logger.info(f"sell_order_count: {sell_order_count}")
-    logger.info(f"sell_total_value: {sell_total_value}")
-    logger.info(f"buy_order_count: {buy_order_count}")
-    logger.info(f"buy_total_value: {buy_total_value}")
-
-    fit_df = pd.DataFrame()
-    timestamp = None
+    logger.info(f"sell_order_count: {sell_order_count:,}")
+    logger.info(f"sell_total_value: {millify.millify(sell_total_value, precision=2) } ISK")
+    logger.info(f"buy_order_count: {buy_order_count:,}")
+    logger.info(f"buy_total_value: {millify.millify(buy_total_value, precision=2)} ISK")
 
     if not sell_data.empty:
         if len(selected_items) == 1:
@@ -348,10 +325,9 @@ def main():
             stats = stats[stats['type_name'] == selected_items[0]]
             type_id = sell_data['type_id'].iloc[0]
             if type_id:
-                fit_df, timestamp = get_fitting_data(type_id)
+                fit_df = get_fitting_data(type_id)
             else:
                 fit_df = pd.DataFrame()
-                timestamp = None
         elif len(selected_categories) == 1:
             stats = stats[stats['category_name'] == selected_categories[0]]
 
@@ -554,8 +530,6 @@ def main():
     # Display sync status in sidebar
     with st.sidebar:
         display_sync_status()
-        st.sidebar.text(f"Database: {mkt_db.alias}")
-
 
 if __name__ == "__main__":
     main()
