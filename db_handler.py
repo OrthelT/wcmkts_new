@@ -1,7 +1,5 @@
-import os
-import pathlib
 import pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 import streamlit as st
 
@@ -9,9 +7,8 @@ import requests
 from tenacity import retry, stop_after_attempt, wait_exponential
 from logging_config import setup_logging
 import time
-import datetime
-import json
 from config import DatabaseConfig
+from sync_state import update_wcmkt_state
 
 mkt_db = DatabaseConfig("wcmkt")
 sde_db = DatabaseConfig("sde")
@@ -45,7 +42,7 @@ def execute_query_with_retry(session, query):
 def get_mkt_data(base_query):
     mkt_start = time.perf_counter()
     logger.info("\n")
-    logger.info(f"="*80)
+    logger.info("="*80)
 
     with Session(mkt_db.engine) as session:
         try:
@@ -58,12 +55,12 @@ def get_mkt_data(base_query):
     mkt_end = time.perf_counter()
 
     logger.info(f"getting market data, total time: {round(( mkt_end - mkt_start)*1000, 2)} ms")
-    logger.info(f"="*80)
+    logger.info("="*80)
     logger.info("\n")
     return df
 
 def request_type_names(type_ids):
-    logger.info(f"requesting type names with cache")
+    logger.info("requesting type names with cache")
     # Process in chunks of 1000
     chunk_size = 1000
     all_results = []
@@ -106,11 +103,10 @@ def clean_mkt_data(df):
 
     return df
 
-@st.cache_data(ttl=600)
 def get_fitting_data(type_id):
-    logger.info(f"getting fitting data with cache")
+    logger.info("getting fitting data with cache")
     with Session(mkt_db.engine) as session:
-        query = f"""
+        query = """
             SELECT * FROM doctrines
             """
 
@@ -157,8 +153,7 @@ def get_fitting_data(type_id):
         df3.rename(columns={'fits_on_mkt': 'Fits on Market'}, inplace=True)
         df3 = df3.sort_values(by='Fits on Market', ascending=True)
         df3.reset_index(drop=True, inplace=True)
-    return df3, timestamp
-
+    return df3
 
 @st.cache_resource(ttl=600)
 def get_stats(stats_query):
@@ -193,98 +188,26 @@ def get_market_history(type_id):
     return pd.read_sql_query(query, (mkt_db.engine))
 
 def get_update_time()->str:
-    query = """
-        SELECT last_update FROM marketstats LIMIT 1
-    """
-    try:
-        df = query_local_mkt_db(query)
-        data_update = df.iloc[0]['last_update']
-        data_update = pd.to_datetime(data_update, utc=True)
-        data_update = data_update.strftime('%Y-%m-%d %H:%M:%S')
-        logger.info(f"Last ESI update: {data_update}")
-        st.session_state['update_time'] = data_update
-        return data_update
-    except Exception as e:
-        logger.error(f"Failed to get update time: {str(e)}")
-        return None
+    if "local_update_status" in st.session_state:
+        update_time = st.session_state.local_update_status["updated"]
+        update_time = update_time.strftime("%Y-%m-%d | %H:%M UTC")
+    else:
+        update_time = None
+    return update_time
 
 def get_time_since_esi_update()->str:
-    query = """
-        SELECT last_update FROM marketstats LIMIT 1
-    """
-    df = query_local_mkt_db(query)
-
-    dt_last_update = datetime.datetime.strptime(df.iloc[0]['last_update'], '%Y-%m-%d %H:%M:%S.%f').replace(tzinfo=datetime.UTC)
-    logger.info(f"dt_last_update: {dt_last_update}")
-    dt_now = datetime.datetime.now(datetime.UTC)
-    logger.info(f"dt_now: {dt_now}")
-    time_since_update = dt_now - dt_last_update
-
-    logger.info(f"time_since_update: {time_since_update}")
-
-    # Calculate hours and minutes from total seconds
-    total_seconds = int(time_since_update.total_seconds())
-    hours = total_seconds // 3600
-    minutes = (total_seconds % 3600) // 60
-
-    #get the grammer right by using correct singular/plural for minutes and hours
-    if minutes == 1:
-        min = "minute"
+    if "local_update_status" in st.session_state:
+        time_since = st.session_state.local_update_status["time_since"]
+        time_since = time_since.total_seconds()
+        time_since = f"{round((time_since / 3600),1)} hours"
     else:
-        min = "minutes"
-    if hours == 1:
-        hour = "hour"
-    else:
-        hour = "hours"
-
-    #avoid returning 0 hours, because we have the OCD
-    if hours == 0:
-        return f"({int(minutes)} {min} ago)"
-    else:
-        return f"{int(hours)} {hour}, {int(minutes)} {min} ago"
-
-def get_time_until_next_update()->str:
-
-    #get the next sync time from the last_sync_state.json file
-    with open("last_sync_state.json", "r") as f:
-        last_sync_state = json.load(f)
-    next_sync = last_sync_state['next_sync']
-    logger.info(f"next_sync: {next_sync}")
-    logger.info(f"session state next_sync: {st.session_state.next_sync}")
-
-    next_sync = datetime.datetime.strptime(next_sync, '%Y-%m-%d %H:%M UTC').replace(tzinfo=datetime.UTC)
-    dt_now = datetime.datetime.now(datetime.UTC)
-    time_until_update = next_sync - dt_now
-    if time_until_update.total_seconds() < 0:
-        st.session_state.sync_available = True
-        return "update available, use sync now to refresh data"
-    else:
-        st.session_state.sync_available = False
-
-    hours = time_until_update.total_seconds() // 3600
-    minutes = (time_until_update.total_seconds() % 3600) // 60
-
-    #get the grammer right by using correct singular/plural for minutes and hours
-    if minutes == 1:
-        min = "minute"
-    else:
-        min = "minutes"
-    if hours == 1:
-        hour = "hour"
-    else:
-        hour = "hours"
-
-    #avoid returning 0 hours, because we have the OCD
-    if hours == 0:
-        result = f"{int(minutes)} {min}"
-    else:
-        result = f"{int(hours)} {hour}, {int(minutes)} {min}"
-    return result
+        time_since = None
+    return time_since
 
 def get_module_fits(type_id):
 
     with Session(mkt_db.engine) as session:
-        query = f"""
+        query = """
             SELECT * FROM doctrines WHERE type_id = :type_id
             """
         try:
@@ -427,7 +350,7 @@ def get_market_data(show_all, selected_categories, selected_items):
         ORDER BY type_id
     """
 
-    stats_query = f"""
+    stats_query = """
         SELECT * FROM marketstats
     """
 
@@ -478,7 +401,7 @@ def get_market_data(show_all, selected_categories, selected_items):
     """
 
     with Session(sde_db.engine) as session:
-        logger.info(f"executing SDE query")
+        logger.info("executing SDE query")
         result = session.execute(text(sde_query))
         sde_df = pd.DataFrame(result.fetchall(), columns=['type_id', 'group_name', 'category_name'])
         session.close()
@@ -507,7 +430,7 @@ def get_market_data(show_all, selected_categories, selected_items):
     logger.info(f"TIME get_stats() clean_mkt_data() = {elapsed_time} ms")
     print("-"*100)
 
-    logger.info(f"returning market data")
+    logger.info("returning market data")
 
     t8 = time.perf_counter()
     elapsed_time = round((t8-t7)*1000, 2)
@@ -516,46 +439,55 @@ def get_market_data(show_all, selected_categories, selected_items):
 
     return sell_df, buy_df, stats
 
-def verify_db_path(path):
-    if not os.path.exists(path):
-        logger.warning(f"DB path does not exist: {path}")
-        return False
-    return True
+def check_if_db_not_in_session_state(remote: bool = False):
+    if remote:
+        if "remote_update_status" not in st.session_state:
+            logger.info("Remote database is not in session state")
+            return True
+        else:
+            return False
+    else:
+        if "local_update_status" not in st.session_state:
+            logger.info("Local database is not in session state")
+            return True
+        else:
+            return False
 
-
-def init_db():
-    """ This function checks to see if the databases are available locally. If not, it will sync the databases from the remote server using the configuration in given in the config.py file, using credentials stored in the .streamlit/secrets.toml (for local development) or st.secrets (for production). This code was designed to be used with sqlite embedded-replica databases hosted on Turso Cloud.
+def check_db_state():
+    start_time = time.perf_counter()
     """
+    Check the update state of the databases. If the remote database is more recent than the local database, sync the local database.
+    Args:
+        table_names: list[str] | str - The tables to check the updates for
 
-    mkt_db = DatabaseConfig("wcmkt")
-    sde_db = DatabaseConfig("sde")
-    build_cost_db = DatabaseConfig("build_cost")
-    db_paths = {
-        mkt_db.alias: mkt_db.path,
-        sde_db.alias: sde_db.path,
-        build_cost_db.alias: build_cost_db.path,
-    }
+    """
+    db = DatabaseConfig("wcmkt")
+    update_wcmkt_state()
+    update_wcmkt_state()
 
-    for key, value in db_paths.items():
-        alias = key
-        db_path = value
-        db = DatabaseConfig(alias)
-        try:
-            if verify_db_path(db.path):
-                logger.info(f"DB path exists: {db.path}")
-                status = {key: "success" if verify_db_path(db.path) else "failed"}
-            else:
-                logger.warning(f"DB path does not exist: {db.path}")
-                logger.info("syncing db")
-                logger.info(f"syncing db: {db.path}")
-                db.sync()
-        except Exception as e:
-                logger.error(f"Error syncing db: {e}")
+    try:
+        local_update_time = st.session_state.local_update_status['updated']
+        remote_update_time = st.session_state.remote_update_status['updated']
+    except:
+        raise ValueError("Local or remote database is None")
 
-        status = {key: "success" if verify_db_path(db.path) else "failed"}
-    for key, value in status.items():
-        logger.info(f"init_db() status: {key}: {value}")
-    return True
+    if remote_update_time > local_update_time:
+        logger.info("Remote database has been updated since last check, syncing local database⏰🛜⚠️")
+        db.sync()
+
+        if db.validate_sync():
+            logger.info("Local database synced and validated✅🏠")
+            update_wcmkt_state()
+        else:
+            logger.info("Local database synced but validation failed❌🏠")
+    else:
+        logger.info("Local database is up to date✅🏠")
+
+    logger.info("-"*100)
+    end_time = time.perf_counter()
+    elapsed_time = round((end_time-start_time)*1000, 2)
+    logger.info(f"TIME check_db_state() = {elapsed_time} ms")
+    logger.info("-"*100)
 
 if __name__ == "__main__":
     pass

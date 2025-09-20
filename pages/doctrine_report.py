@@ -9,7 +9,7 @@ import streamlit as st
 import pathlib
 from logging_config import setup_logging
 from db_handler import get_update_time
-from doctrines import create_fit_df, get_fit_summary
+from doctrines import create_fit_df
 from config import DatabaseConfig
 
 logger = setup_logging(__name__, log_file="experiments.log")
@@ -69,7 +69,7 @@ def get_fit_name_from_db(fit_id: int) -> str:
     """Get the fit name from the ship_targets table using fit_id."""
     try:
         logger.info(f"Getting fit name from database for fit_id: {fit_id}")
-        logger.info(f"Query: SELECT fit_name FROM ship_targets WHERE fit_id = :fit_id")
+        logger.info("Query: SELECT fit_name FROM ship_targets WHERE fit_id = :fit_id")
         with mktdb.engine.connect() as conn:
             result = conn.execute(text("SELECT fit_name FROM ship_targets WHERE fit_id = :fit_id"), {"fit_id": fit_id})
             row = result.fetchone()

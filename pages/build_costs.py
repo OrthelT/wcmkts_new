@@ -1,7 +1,7 @@
 import os
 import sys
 from dataclasses import dataclass
-from typing import Sequence, Tuple, Any, Dict, List
+from typing import Sequence, Tuple, Any
 import pandas as pd
 import sqlalchemy as sa
 import sqlalchemy.orm as orm
@@ -10,7 +10,6 @@ import pathlib
 import requests
 import json
 import warnings
-import logging
 # ASYNC LIBRARIES
 import asyncio
 import httpx
@@ -37,7 +36,6 @@ from db_handler import (
 from utils import update_industry_index
 import datetime
 import time
-from time import perf_counter, process_time
 
 build_cost_db = DatabaseConfig("build_cost")
 build_cost_url = build_cost_db.url
@@ -395,15 +393,14 @@ async def get_costs_async(job: JobQuery) -> tuple[dict, dict]:
 
 def display_log_status(status: dict):
 
-    logger.info(f"Status Report:")
+    logger.info("Status Report:")
     logger.info(f"Requests: {status['req_count']}")
     logger.info(f"Successes: {status['success_count']}")
     logger.info(f"Errors: {status['error_count']}")
     if status["error_count"] > 0:
         logger.error(f"Error Log: {status['error_log']}")
         st.toast(f"Errors returned for {status['error_count']}. This is likely due to problems with the external industry data API. Please try again later.", icon="⚠️")
-    else:
-        st.toast(f"Returned results for {status['success_count']} structures.", icon="✅")
+
 
     with open("status.log", "w") as f:
         f.write(json.dumps(status, indent=4))
@@ -413,12 +410,12 @@ def get_all_structures(
     *, unwrap: bool = False
 ) -> Sequence[sa.Row[Tuple[Structure]]] | list[dict[str, Any]]:
     engine = sa.create_engine(build_cost_url)
-    logger.info(f"Getting all structures")
+    logger.info("Getting all structures")
     if st.session_state.super:
-        logger.info(f"Super mode enabled")
+        logger.info("Super mode enabled")
         stmt = sa.select(Structure).where(Structure.structure_id == super_shipyard_id)
     else:
-        logger.info(f"Super mode disabled")
+        logger.info("Super mode disabled")
 
         stmt = (
             sa.select(Structure)
@@ -671,8 +668,6 @@ def display_material_costs(results: dict, selected_structure: str, structure_nam
         key="material_structure_selector",
         help="Choose a structure to see detailed material costs and quantities",
     )
-    if st.session_state.material_structure_selector:
-        st.toast(f"Selected structure: {selected_structure_for_materials}", icon="✅")
 
     if selected_structure_for_materials not in results:
         st.error(f"No data found for structure: {selected_structure}")
@@ -986,12 +981,12 @@ def main():
             te=te,
             material_prices=st.session_state.price_source,
         )
-        logger.info(f"=" * 80)
-        logger.info(f"=" * 80)
+        logger.info("=" * 80)
+        logger.info("=" * 80)
         logger.info("\n")
-        logger.info(f"get_costs()")
-        logger.info(f"=" * 80)
-        logger.info(f"=" * 80)
+        logger.info("get_costs()")
+        logger.info("=" * 80)
+        logger.info("=" * 80)
         logger.info("\n")
         t1 = time.perf_counter()
 
@@ -1006,9 +1001,9 @@ def main():
 
         t2 = time.perf_counter()
         elapsed_time = round((t2 - t1) * 1000, 2)
-        logger.info(f"=" * 80)
+        logger.info("=" * 80)
         logger.info(f"TIME get_costs() = {elapsed_time} ms")
-        logger.info(f"=" * 80)
+        logger.info("=" * 80)
         logger.info("\n")
 
         # Cache the results and parameters
