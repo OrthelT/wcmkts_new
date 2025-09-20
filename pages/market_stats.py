@@ -50,7 +50,9 @@ def all_sde_info(type_ids: list = None)->pd.DataFrame:
     if not type_ids:
         type_ids = get_market_type_ids()
     logger.info(f"type_ids: {len(type_ids)}")
-    type_ids_str = ','.join(map(str, type_ids))
+
+    # Create placeholders for the IN clause using named parameters
+    placeholders = ','.join([f':type_id_{i}' for i in range(len(type_ids))])
 
     sde_query = f"""
     SELECT DISTINCT it.typeName as type_name, it.typeID as type_id, it.groupID as group_id, ig.groupName as group_name,
@@ -58,15 +60,19 @@ def all_sde_info(type_ids: list = None)->pd.DataFrame:
     FROM invTypes it
     JOIN invGroups ig ON it.groupID = ig.groupID
     JOIN invCategories ic ON ig.categoryID = ic.categoryID
-    WHERE it.typeID in (:type_ids_str)
+    WHERE it.typeID in ({placeholders})
     """
+
+    # Create parameter dictionary
+    params = {f'type_id_{i}': type_id for i, type_id in enumerate(type_ids)}
 
     engine = sde_db.engine
     with engine.connect() as conn:
-        result = conn.execute(text(sde_query), {'type_ids_str': type_ids_str} )
+        result = conn.execute(text(sde_query), params)
         df = pd.DataFrame(result.fetchall(),
             columns=['type_name', 'type_id', 'group_id', 'group_name', 'category_id', 'category_name'])
-        logger.info(df.head())
+        logger.info(f"df: {len(df)}")
+        logger.info(f"df: {df.head()}")
     conn.close()
 
     return df
