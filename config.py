@@ -3,7 +3,7 @@ import streamlit as st
 import libsql
 from logging_config import setup_logging
 import sqlite3 as sql
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from models import UpdateLog

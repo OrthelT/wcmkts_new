@@ -49,13 +49,16 @@ def init_db():
     logger.info("-"*100)
     logger.info("updating wcmkt state")
     logger.info("-"*100)
-    update_wcmkt_state()
+
     logger.info("wcmkt state updated✅")
     logger.info("-"*100)
     end_time = perf_counter()
     elapsed_time = round((end_time-start_time)*1000, 2)
     logger.info(f"TIME init_db() = {elapsed_time} ms")
     logger.info("-"*100)
+
+    update_wcmkt_state()
+
     return True
 
 if __name__ == "__main__":

@@ -463,7 +463,6 @@ def check_db_state():
     """
     db = DatabaseConfig("wcmkt")
     update_wcmkt_state()
-    update_wcmkt_state()
 
     try:
         local_update_time = st.session_state.local_update_status['updated']
