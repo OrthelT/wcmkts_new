@@ -1,7 +1,5 @@
 import pandas as pd
-from sqlalchemy import create_engine, text
-from db_handler import get_local_mkt_engine
-import streamlit as st
+from sqlalchemy import text
 from logging_config import setup_logging
 from config import DatabaseConfig
 # Set up logging

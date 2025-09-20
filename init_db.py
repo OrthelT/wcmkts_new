@@ -2,7 +2,7 @@ from config import DatabaseConfig
 import os
 from logging_config import setup_logging
 from sync_state import update_wcmkt_state
-
+from time import perf_counter
 
 logger = setup_logging(__name__)
 def verify_db_path(path):
@@ -14,7 +14,7 @@ def verify_db_path(path):
 def init_db():
     """ This function checks to see if the databases are available locally. If not, it will sync the databases from the remote server using the configuration in given in the config.py file, using credentials stored in the .streamlit/secrets.toml (for local development) or st.secrets (for production). This code was designed to be used with sqlite embedded-replica databases hosted on Turso Cloud.
     """
-
+    start_time = perf_counter()
     logger.info("-"*100)
     logger.info("initializing databases")
     logger.info("-"*100)
@@ -51,6 +51,10 @@ def init_db():
     logger.info("-"*100)
     update_wcmkt_state()
     logger.info("wcmkt state updated✅")
+    logger.info("-"*100)
+    end_time = perf_counter()
+    elapsed_time = round((end_time-start_time)*1000, 2)
+    logger.info(f"TIME init_db() = {elapsed_time} ms")
     logger.info("-"*100)
     return True
 

@@ -1,4 +1,3 @@
-import os
 import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -8,7 +7,6 @@ import requests
 from tenacity import retry, stop_after_attempt, wait_exponential
 from logging_config import setup_logging
 import time
-from datetime import timedelta
 from config import DatabaseConfig
 from sync_state import update_wcmkt_state
 
@@ -44,7 +42,7 @@ def execute_query_with_retry(session, query):
 def get_mkt_data(base_query):
     mkt_start = time.perf_counter()
     logger.info("\n")
-    logger.info(f"="*80)
+    logger.info("="*80)
 
     with Session(mkt_db.engine) as session:
         try:
@@ -57,12 +55,12 @@ def get_mkt_data(base_query):
     mkt_end = time.perf_counter()
 
     logger.info(f"getting market data, total time: {round(( mkt_end - mkt_start)*1000, 2)} ms")
-    logger.info(f"="*80)
+    logger.info("="*80)
     logger.info("\n")
     return df
 
 def request_type_names(type_ids):
-    logger.info(f"requesting type names with cache")
+    logger.info("requesting type names with cache")
     # Process in chunks of 1000
     chunk_size = 1000
     all_results = []
@@ -106,9 +104,9 @@ def clean_mkt_data(df):
     return df
 
 def get_fitting_data(type_id):
-    logger.info(f"getting fitting data with cache")
+    logger.info("getting fitting data with cache")
     with Session(mkt_db.engine) as session:
-        query = f"""
+        query = """
             SELECT * FROM doctrines
             """
 
@@ -209,7 +207,7 @@ def get_time_since_esi_update()->str:
 def get_module_fits(type_id):
 
     with Session(mkt_db.engine) as session:
-        query = f"""
+        query = """
             SELECT * FROM doctrines WHERE type_id = :type_id
             """
         try:
@@ -352,7 +350,7 @@ def get_market_data(show_all, selected_categories, selected_items):
         ORDER BY type_id
     """
 
-    stats_query = f"""
+    stats_query = """
         SELECT * FROM marketstats
     """
 
@@ -403,7 +401,7 @@ def get_market_data(show_all, selected_categories, selected_items):
     """
 
     with Session(sde_db.engine) as session:
-        logger.info(f"executing SDE query")
+        logger.info("executing SDE query")
         result = session.execute(text(sde_query))
         sde_df = pd.DataFrame(result.fetchall(), columns=['type_id', 'group_name', 'category_name'])
         session.close()
@@ -432,7 +430,7 @@ def get_market_data(show_all, selected_categories, selected_items):
     logger.info(f"TIME get_stats() clean_mkt_data() = {elapsed_time} ms")
     print("-"*100)
 
-    logger.info(f"returning market data")
+    logger.info("returning market data")
 
     t8 = time.perf_counter()
     elapsed_time = round((t8-t7)*1000, 2)
@@ -444,18 +442,19 @@ def get_market_data(show_all, selected_categories, selected_items):
 def check_if_db_not_in_session_state(remote: bool = False):
     if remote:
         if "remote_update_status" not in st.session_state:
-            logger.info(f"Remote database is not in session state")
+            logger.info("Remote database is not in session state")
             return True
         else:
             return False
     else:
         if "local_update_status" not in st.session_state:
-            logger.info(f"Local database is not in session state")
+            logger.info("Local database is not in session state")
             return True
         else:
             return False
 
 def check_db_state():
+    start_time = time.perf_counter()
     """
     Check the update state of the databases. If the remote database is more recent than the local database, sync the local database.
     Args:
@@ -473,20 +472,22 @@ def check_db_state():
         raise ValueError("Local or remote database is None")
 
     if remote_update_time > local_update_time:
-        logger.info(f"Remote database has been updated since last check, syncing local database⏰🛜⚠️")
+        logger.info("Remote database has been updated since last check, syncing local database⏰🛜⚠️")
         db.sync()
-        logger.info(f"Local database synced✅🏠")
-        logger.info(f"Updating wcmkt state")
-        update_wcmkt_state()
+
         if db.validate_sync():
-            logger.info(f"Local database synced and validated✅🏠")
+            logger.info("Local database synced and validated✅🏠")
+            update_wcmkt_state()
         else:
-            logger.info(f"Local database synced but validation failed❌🏠")
+            logger.info("Local database synced but validation failed❌🏠")
     else:
-        logger.info(f"Local database is up to date✅🏠")
+        logger.info("Local database is up to date✅🏠")
 
-
-
+    logger.info("-"*100)
+    end_time = time.perf_counter()
+    elapsed_time = round((end_time-start_time)*1000, 2)
+    logger.info(f"TIME check_db_state() = {elapsed_time} ms")
+    logger.info("-"*100)
 
 if __name__ == "__main__":
     pass

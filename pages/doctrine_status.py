@@ -9,7 +9,7 @@ import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from logging_config import setup_logging
-from db_handler import get_update_time, get_time_since_esi_update
+from db_handler import get_update_time
 from doctrines import create_fit_df, get_all_fit_data
 from config import DatabaseConfig
 # Insert centralized logging configuration
@@ -152,7 +152,7 @@ def get_module_stock_list(module_names: list):
             if module_name not in st.session_state.module_list_state:
                 logger.info(f"Querying database for {module_name}")
 
-                query = f"""
+                query = """
                     SELECT type_name, type_id, total_stock, fits_on_mkt
                     FROM doctrines
                     WHERE type_name = :module_name
@@ -291,7 +291,7 @@ def main():
             st.markdown("&nbsp;")
             st.markdown("&nbsp;")
             fitting_download_button()
-            st.markdown(f"<span style='font-size: 12px; color: #666;'>*Download all doctrine fit data*</span>", unsafe_allow_html=True)
+            st.markdown("<span style='font-size: 12px; color: #666;'>*Download all doctrine fit data*</span>", unsafe_allow_html=True)
 
         except Exception as e:
             logger.error(f"Error getting fit summary: {e}")
@@ -357,7 +357,7 @@ def main():
     st.session_state.displayed_ships = filtered_df['ship_name'].unique().tolist()
 
     if filtered_df.empty:
-        st.info(f"No fits found with the selected filters.")
+        st.info("No fits found with the selected filters.")
         return
 
     # Initialize module selection for export
@@ -430,19 +430,19 @@ def main():
                     if fits:
                         st.metric(label="Fits", value=f"{int(fits)}", delta=fits_delta)
                     else:
-                        st.metric(label="Fits", value=f"0", delta=fits_delta)
+                        st.metric(label="Fits", value="0", delta=fits_delta)
 
                 with metric_cols[1]:
                     if hulls:
                         st.metric(label="Hulls", value=f"{int(hulls)}", delta=hulls_delta)
                     else:
-                        st.metric(label="Hulls", value=f"0", delta=hulls_delta)
+                        st.metric(label="Hulls", value="0", delta=hulls_delta)
 
                 with metric_cols[2]:
                     if target:
                         st.metric(label="Target", value=f"{int(target)}")
                     else:
-                        st.metric(label="Target", value=f"0")
+                        st.metric(label="Target", value="0")
 
                 # Progress bar for target percentage
                 target_pct = row['target_percentage']
@@ -531,7 +531,7 @@ def main():
         st.session_state.selected_ships = []
         st.session_state.ship_list_state = {}
         st.session_state.csv_ship_list_state = {}
-        logger.info(f"Cleared ship selection and session state")
+        logger.info("Cleared ship selection and session state")
         logger.info(f"Session state ship list: {st.session_state.ship_list_state}")
         logger.info(f"Session state csv ship list: {st.session_state.csv_ship_list_state}")
         logger.info(f"\n{"-"*60}\n")
@@ -589,7 +589,7 @@ def main():
         st.session_state.selected_modules = []
         st.session_state.module_list_state = {}
         st.session_state.csv_module_list_state = {}
-        logger.info(f"Cleared module selection and session state")
+        logger.info("Cleared module selection and session state")
         logger.info(f"Session state module list: {st.session_state.module_list_state}")
         logger.info(f"Session state csv module list: {st.session_state.csv_module_list_state}")
         logger.info(f"\n{"-"*60}\n")

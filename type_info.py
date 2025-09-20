@@ -1,5 +1,4 @@
-import libsql
-from sqlalchemy import text, create_engine, select
+from sqlalchemy import text, create_engine
 from sqlalchemy.orm import Session
 
 sde_db = create_engine("sqlite+libsql:///sde.db")

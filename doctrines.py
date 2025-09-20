@@ -3,7 +3,6 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 import pandas as pd
-from sqlalchemy import text
 from config import DatabaseConfig
 from logging_config import setup_logging
 
@@ -52,7 +51,7 @@ def get_target_value(ship_name):
 
 @st.cache_data(ttl=600, show_spinner="Loading cached doctrine fits...")
 def create_fit_df()->pd.DataFrame:
-    logger.info(f"Creating fit dataframe")
+    logger.info("Creating fit dataframe")
     df = get_all_fit_data()
 
     if df.empty:
@@ -129,7 +128,7 @@ def get_fit_summary(fits:list = None)->pd.DataFrame:
 @st.cache_data(ttl=600)
 def get_all_fit_data()->pd.DataFrame:
     """Create a dataframe with all fit information"""
-    logger.info(f"Getting fit info from doctrines table")
+    logger.info("Getting fit info from doctrines table")
     engine = mktdb.engine
     with engine.connect() as conn:
         df = pd.read_sql_query("SELECT * FROM doctrines", conn)

@@ -6,8 +6,6 @@ from sqlalchemy import text
 import requests
 from config import DatabaseConfig
 from email.utils import parsedate_to_datetime as _parsedate_tz
-import datetime
-from datetime import timezone
 
 mkt_db = DatabaseConfig("wcmkt")
 sde_db = DatabaseConfig("sde")
