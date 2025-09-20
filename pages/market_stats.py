@@ -4,18 +4,19 @@ import time
 
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from httpx import head
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from sqlalchemy import text
+from sqlalchemy import text,select,join
 from sqlalchemy.orm import Session
 from db_handler import check_db_state,safe_format,get_market_history,get_fitting_data,get_module_fits
 from logging_config import setup_logging
 import millify
 from config import DatabaseConfig
-from db_handler import get_market_data
+from db_handler import get_market_data, new_get_market_data
 from init_db import init_db
 
 
@@ -41,13 +42,14 @@ def get_market_type_ids()->list:
     with Session(mkt_db.engine) as session:
         result = session.execute(text(mkt_query))
         type_ids = [row[0] for row in result.fetchall()]
+        logger.info(f"type_ids: {len(type_ids)}")
         return type_ids
 
 # Function to get unique categories and item names
-@st.cache_data(ttl=600)
 def all_sde_info(type_ids: list = None)->pd.DataFrame:
     if not type_ids:
         type_ids = get_market_type_ids()
+    logger.info(f"type_ids: {len(type_ids)}")
     type_ids_str = ','.join(map(str, type_ids))
 
     sde_query = f"""
@@ -56,67 +58,44 @@ def all_sde_info(type_ids: list = None)->pd.DataFrame:
     FROM invTypes it
     JOIN invGroups ig ON it.groupID = ig.groupID
     JOIN invCategories ic ON ig.categoryID = ic.categoryID
-    WHERE it.typeID IN (:type_ids_str)
+    WHERE it.typeID in (:type_ids_str)
     """
-    with Session(sde_db.engine) as session:
-        result = session.execute(text(sde_query), {'type_ids_str': type_ids_str})
+
+    engine = sde_db.engine
+    with engine.connect() as conn:
+        result = conn.execute(text(sde_query), {'type_ids_str': type_ids_str} )
         df = pd.DataFrame(result.fetchall(),
             columns=['type_name', 'type_id', 'group_id', 'group_name', 'category_id', 'category_name'])
-        df = df.reset_index(drop=True)
-        return df
+        logger.info(df.head())
+    conn.close()
 
-def get_filter_options(selected_categories=None):
-    try:
+    return df
 
-        # First get type_ids from market orders
-        mkt_query = """
-        SELECT DISTINCT type_id
-        FROM marketorders
-        WHERE is_buy_order = 0
-        """
-        logger.info("getting filter options")
-        with Session(mkt_db.engine) as session:
-            result = session.execute(text(mkt_query))
-            type_ids = [row[0] for row in result.fetchall()]
+def get_filter_options(selected_category: str=None)->tuple[list, list]:
 
-            if not type_ids:
-                return [], []
-            type_ids_str = ','.join(map(str, type_ids))
+    sde_df = all_sde_info()
+    sde_df = sde_df.reset_index(drop=True)
+    logger.info(f"sde_df: {len(sde_df)}")
+    logger.info(f"selected_category: {selected_category}")
 
-        # Then get category info from SDE database
-        sde_query = f"""
-        SELECT DISTINCT it.typeName as type_name, it.typeID as type_id, it.groupID as group_id, ig.groupName as group_name,
-               ic.categoryID as category_id, ic.categoryName as category_name
-        FROM invTypes it
-        JOIN invGroups ig ON it.groupID = ig.groupID
-        JOIN invCategories ic ON ig.categoryID = ic.categoryID
-        WHERE it.typeID IN ({type_ids_str})
-        """
-        with Session(sde_db.engine) as session:
-            result = session.execute(text(sde_query))
-            df = pd.DataFrame(result.fetchall(),
-                columns=['type_name', 'type_id', 'group_id', 'group_name', 'category_id', 'category_name'])
-            df = df.reset_index(drop=True)
-
-            categories = sorted(df['category_name'].unique())
-
-            if selected_categories:
-                df = df[df['category_name'].isin(selected_categories)]
-                selected_categories_type_ids = df['type_id'].unique().tolist()
-                st.session_state.selected_categories_type_ids = selected_categories_type_ids
-
-        session.close()
-
-        session.close()
-
-        items = sorted(df['type_name'].unique())
-
-        return categories, items
-
-
-    except Exception as e:
-        st.error(f"Database error: {str(e)}")
-        return [], []
+    if selected_category:
+        sde_df = sde_df[sde_df['category_name'] == selected_category]
+        selected_categories_type_ids = sde_df['type_id'].unique().tolist()
+        selected_category_id = sde_df['category_id'].iloc[0]
+        selected_type_names = sorted(sde_df['type_name'].unique().tolist())
+        st.session_state.selected_category = selected_category
+        st.session_state.selected_category_info = {
+            'category_name': selected_category,
+            'category_id': selected_category_id,
+            'type_ids': selected_categories_type_ids,
+            'type_names': selected_type_names}
+        items = selected_type_names
+    else:
+        categories = sorted(sde_df['category_name'].unique().tolist())
+        items = sorted(sde_df['type_name'].unique().tolist())
+    logger.info(f"categories: {len(categories)}")
+    logger.info(f"items: {len(items)}")
+    return categories, items
 
 # Query function
 def create_price_volume_chart(df):
@@ -304,7 +283,7 @@ def main():
     logger.info("Getting initial categories")
     # Get initial categories
     categories, _ = get_filter_options()
-
+    logger.info(f"categories: {len(categories)}")
     # Category filter - changed to selectbox for single selection
     selected_category = st.sidebar.selectbox(
         "Select Category",
@@ -313,19 +292,16 @@ def main():
         format_func=lambda x: "All Categories" if x == "" else x
     )
 
-    # Convert to list format for compatibility with existing code
-    selected_categories = [selected_category] if selected_category else []
-
-    logger.info(f"Selected category: {selected_category}")
-
-    # Debug info
     if selected_category:
         st.sidebar.text(f"Category: {selected_category}")
+        st.session_state.selected_category = selected_category
+        # Get filtered items based on selected category
+        _, available_items = get_filter_options(selected_category if not show_all and selected_category else None)
 
-    # Get filtered items based on selected category
-    _, available_items = get_filter_options(selected_categories if not show_all and selected_category else None)
+    else:
+        _, available_items = get_filter_options()
 
-    # Item name filter - changed to selectbox for single selection
+        # Item name filter - changed to selectbox for single selection
     selected_item = st.sidebar.selectbox(
         "Select Item",
         options=[""] + available_items,  # Add empty option to allow no selection
@@ -333,18 +309,18 @@ def main():
         format_func=lambda x: "All Items" if x == "" else x
     )
 
-    # Convert to list format for compatibility with existing code
-    selected_items = [selected_item] if selected_item else []
-
-    # Debug info
     if selected_item:
         st.sidebar.text(f"Item: {selected_item}")
-
-    logger.info(f"Selected item: {selected_item}")
+        st.session_state.selected_item = selected_item
+        logger.info(f"Selected item: {selected_item}")
+        selected_items = [selected_item]
+    else:
+        selected_item = None
+        selected_items = available_items
 
     t1 = time.perf_counter()
 
-    sell_data, buy_data, stats = get_market_data(show_all, selected_categories, selected_items)
+    sell_data, buy_data, stats = get_market_data(show_all, selected_category, selected_items)
 
     # Main content
     t2 = time.perf_counter()
@@ -374,22 +350,22 @@ def main():
 
     if not sell_data.empty:
 
-        logger.info(f"selected_items: {selected_items}, type: {type(selected_items)}, len: {len(selected_items)}")
-        logger.info(f"selected_categories: {selected_categories}, type: {type(selected_categories)}, len: {len(selected_categories)}")
-        if len(selected_items) == 1:
-            sell_data = sell_data[sell_data['type_name'] == selected_items[0]]
+        if 'selected_item' in st.session_state:
+            selected_item = st.session_state.selected_item
+            sell_data = sell_data[sell_data['type_name'] == selected_item]
             if not buy_data.empty:
-                buy_data = buy_data[buy_data['type_name'] == selected_items[0]]
-            stats = stats[stats['type_name'] == selected_items[0]]
+                buy_data = buy_data[buy_data['type_name'] == selected_item]
+            stats = stats[stats['type_name'] == selected_item]
             type_id = sell_data['type_id'].iloc[0]
             if type_id:
                 fit_df = get_fitting_data(type_id)
             else:
                 fit_df = pd.DataFrame()
-        elif len(selected_categories) == 1:
-            stats = stats[stats['category_name'] == selected_categories[0]]
+        elif 'selected_category' in st.session_state:
+            selected_category = st.session_state.selected_category
+            stats = stats[stats['category_name'] == selected_category]
             stats = stats.reset_index(drop=True)
-            stats_type_ids = st.session_state.selected_categories_type_ids
+            stats_type_ids = st.session_state.selected_category_info['type_ids']
 
             if not buy_data.empty:
                 buy_data = buy_data[buy_data['type_id'].isin(stats_type_ids)]
@@ -404,7 +380,7 @@ def main():
         with col1:
             if not sell_data.empty:
                 min_price = stats['min_price'].min()
-                if pd.notna(min_price) and selected_items:
+                if pd.notna(min_price) and selected_item:
                     display_min_price = millify.millify(min_price, precision=2)
                     st.metric("Sell Price (min)", f"{display_min_price} ISK")
             else:
@@ -427,7 +403,7 @@ def main():
 
         with col3:
             days_remaining = stats['days_remaining'].min()
-            if pd.notna(days_remaining) and selected_items:
+            if pd.notna(days_remaining) and selected_item:
                 display_days_remaining = f"{days_remaining:.1f}"
                 st.metric("Days Remaining", f"{display_days_remaining}")
             elif sell_order_count > 0:
@@ -458,7 +434,8 @@ def main():
         display_df = sell_data.copy()
 
         #create a header for the item
-        if len(selected_items) == 1:
+        if 'selected_item' in st.session_state:
+            selected_item = st.session_state.selected_item
             image_id = display_df.iloc[0]['type_id']
             type_name = display_df.iloc[0]['type_name']
             st.subheader(f"{type_name}", divider="blue")
@@ -478,8 +455,9 @@ def main():
                             st.write(fit_df[fit_df['type_id'] == type_id]['group_name'].iloc[0])
                 except:
                     pass
-        elif selected_categories:
-            cat_label = selected_categories[0]
+        elif 'selected_category' in st.session_state:
+            selected_category = st.session_state.selected_category
+            cat_label = selected_category
             if cat_label.endswith("s"):
                 cat_label = cat_label
             else:
@@ -508,10 +486,13 @@ def main():
         # Display buy orders if they exist
         if not buy_data.empty:
             # Display buy orders header
-            if len(selected_items) == 1:
+            if 'selected_item' in st.session_state:
+                selected_item = st.session_state.selected_item
+                type_name = selected_item
                 st.subheader(f"Buy Orders for {type_name}", divider="orange")
-            elif selected_categories:
-                cat_label = selected_categories[0]
+            elif 'selected_category' in st.session_state:
+                selected_category = st.session_state.selected_category
+                cat_label = selected_category
                 if cat_label.endswith("s"):
                     cat_label = cat_label
                 else:
@@ -582,7 +563,8 @@ def main():
         st.divider()
 
         st.subheader("Fitting Data")
-        if len(selected_items) == 1:
+        if 'selected_item' in st.session_state:
+            selected_item = st.session_state.selected_item
             if isship:
                 st.dataframe(fit_df, hide_index=True)
             else:

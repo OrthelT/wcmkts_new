@@ -167,7 +167,11 @@ def get_fitting_data(type_id):
     return df3
 
 @st.cache_resource(ttl=600)
-def get_stats(stats_query):
+def get_stats(stats_query=None):
+    if stats_query is None:
+        stats_query = """
+            SELECT * FROM marketstats
+        """
     engine = mkt_db.engine
     with engine.connect() as conn:
         stats = pd.read_sql_query(stats_query, conn)
@@ -302,33 +306,40 @@ def get_4H_price(type_id):
     except:
         return None
 
+@st.cache_data(ttl=600)
 def new_get_market_data(show_all):
     df = get_all_mkt_data()
 
-    if 'selected_categories_type_ids' in st.session_state:
-        df2 = df[df['type_id'].isin(st.session_state.selected_categories_type_ids)]
-    elif 'selected_items_type_ids' in st.session_state:
-        df2 = df[df['type_id'].isin(st.session_state.selected_items_type_ids)]
-    else:
-        df2 = df
+    if 'selected_category_info' in st.session_state:
+        orders_df = df[df['type_id'].isin(st.session_state.selected_category_info['type_ids'])]
+    elif 'selected_item' in st.session_state:
+        orders_df = df[df['type_id'].isin(st.session_state.selected_items_type_ids)]
+    elif show_all:
+        orders_df = df
+
+    stats_df = get_stats()
+    stats_df = stats_df[stats_df['type_id'].isin(orders_df['type_id'].unique())]
 
 
 
-def get_market_data(show_all, selected_categories, selected_items):
+    return orders_df
+
+@st.cache_data(ttl=600)
+def get_market_data(show_all, selected_category, selected_item):
     # Get filtered_type_ids based on selected categories and items
     filtered_type_ids = None
 
     if not show_all:
         # Get type_ids for the selected categories from SDE first
         sde_conditions = []
-        if selected_categories:
-            logger.info(f"selected_categories: {selected_categories}")
-            categories_str = ', '.join(f"'{cat}'" for cat in selected_categories)
+        if selected_category:
+            logger.info(f"selected_categories: {selected_category}")
+            categories_str = ', '.join(f"'{cat}'" for cat in selected_category)
             sde_conditions.append(f"ic.categoryName IN ({categories_str})")
 
-        if selected_items:
-            logger.info(f"selected_items: {selected_items}")
-            items_str = ', '.join(f'"{item}"' for item in selected_items)
+        if selected_item:
+            logger.info(f"selected_items: {selected_item}")
+            items_str = ', '.join(f'"{item}"' for item in selected_item)
             sde_conditions.append(f"it.typeName IN ({items_str})")
 
         if sde_conditions:
