@@ -23,7 +23,15 @@ st.set_page_config(
         layout="wide"
     )
 
+logger.info("*"*60)
+logger.info("-"*60)
+logger.info("Initializing application")
+
+
 if not st.session_state.get('db_initialized'):
+    logger.info("-"*30)
+    logger.info("Initializing database")
+
     result = init_db()
     if result:
         st.toast("Database initialized successfully", icon="✅")
@@ -31,5 +39,7 @@ if not st.session_state.get('db_initialized'):
     else:
         st.toast("Database initialization failed", icon="❌")
         st.session_state.db_initialized = False
-
+else:
+    logger.info("Databases already initialized in session state")
+logger.info("*"*60)
 pg.run()
