@@ -61,7 +61,6 @@ misc_files/
 fit_summary_df.csv
 fit_summary.csv
 data/
-helpers.py
 nakah_hfi.json
 dev_files/
 proj_config.py
@@ -71,4 +70,4 @@ archive/
 todos_hurricane_fleet_issue.txt
 AGENTS.md
 depreciated-code/
-AGENTS.md
+helpers.py

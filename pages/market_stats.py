@@ -628,8 +628,19 @@ def main():
         st.divider()
 
         st.subheader("Price History")
-        history_chart = create_history_chart(selected_item_id)
+        if 'selected_item_id' in st.session_state:
+            selected_item_id = st.session_state.selected_item_id
+        else:
+            selected_item_id = get_backup_type_id(selected_item)
+            st.session_state.selected_item_id = selected_item_id
+        if selected_item_id:
+            logger.info(f"Displaying history chart for {selected_item_id}")
+            history_chart = create_history_chart(selected_item_id)
+        else:
+            history_chart = None
+
         if history_chart:
+            logger.info(f"Displaying history chart for {selected_item_id}")
             st.plotly_chart(history_chart, use_container_width=False)
 
             colh1, colh2 = st.columns(2)
