@@ -3,10 +3,10 @@ import datetime
 from logging_config import setup_logging
 from config import DatabaseConfig
 from datetime import timezone, datetime, timedelta
-from time import perf_counter
+from time import perf_counter, time
+import threading
 
 logger = setup_logging(__name__)
-
 
 def update_wcmkt_state()-> None:
     """
@@ -29,7 +29,6 @@ def update_wcmkt_state()-> None:
     remote_update_status['time_since'] = now - remote_update
     remote_update_status['needs_update'] = remote_update_status['time_since'] > timedelta(hours=2)
 
-
     logger.info("-"*60)
     st.session_state.local_update_status = local_update_status
     logger.info("local_status saved to session state:")
@@ -46,8 +45,6 @@ def update_wcmkt_state()-> None:
     elapsed_time = round((end_time-start_time)*1000, 2)
     logger.info(f"TIME update_wcmkt_state() = {elapsed_time} ms")
     logger.info("-"*60)
-
-
 
 if __name__ == "__main__":
     pass

@@ -17,19 +17,20 @@ class DatabaseConfig:
 
     _db_paths = {
         "wcmkt2": "wcmkt2.db", #production database
-        "sde": "sde.db",
+        "sde": "sde_lite.db",
         "build_cost": "buildcost.db",
+
     }
 
     _db_turso_urls = {
         "wcmkt2_turso": st.secrets.wcmkt2_turso.url,
-        "sde_turso": st.secrets.sde_aws_turso.url,
+        "sde_turso": st.secrets.sde_lite_turso.url,
         "build_cost_turso": st.secrets.buildcost_turso.url,
     }
 
     _db_turso_auth_tokens = {
         "wcmkt2_turso": st.secrets.wcmkt2_turso.token,
-        "sde_turso": st.secrets.sde_aws_turso.token,
+        "sde_turso": st.secrets.sde_lite_turso.token,
         "build_cost_turso": st.secrets.buildcost_turso.token,
     }
 
@@ -107,8 +108,14 @@ class DatabaseConfig:
         with self.engine.connect() as conn:
             result = conn.execute(text("SELECT MAX(last_update) FROM marketstats")).fetchone()
             local_last_update = result[0]
+        logger.info("-"*40)
+        logger.info(f"alias: {alias} validate_sync()")
+        timestamp = datetime.now(timezone.utc)
+        local_timestamp = datetime.now()
+        logger.info(f"time: {local_timestamp.strftime('%Y-%m-%d %H:%M:%S')} (local); {timestamp.strftime('%Y-%m-%d %H:%M:%S')} (utc)")
         logger.info(f"remote_last_update: {remote_last_update}")
         logger.info(f"local_last_update: {local_last_update}")
+        logger.info("-"*40)
         validation_test = remote_last_update == local_last_update
         logger.info(f"validation_test: {validation_test}")
         return validation_test

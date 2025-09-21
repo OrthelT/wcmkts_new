@@ -12,12 +12,15 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from sqlalchemy import text,bindparam
 from sqlalchemy.orm import Session
-from db_handler import check_db_state,safe_format,get_market_history,get_fitting_data,get_module_fits
+from db_handler import safe_format,get_market_history,get_fitting_data,get_module_fits
 from logging_config import setup_logging
 import millify
 from config import DatabaseConfig
-from db_handler import get_market_data, new_get_market_data
+from db_handler import new_get_market_data
 from init_db import init_db
+from sync_state import update_wcmkt_state
+
+from datetime import datetime, timezone
 
 
 mkt_db = DatabaseConfig("wcmkt")
@@ -61,8 +64,15 @@ def all_sde_info(type_ids: list = None)->pd.DataFrame:
     WHERE it.typeID IN :type_ids
     """).bindparams(bindparam('type_ids', expanding=True))
 
+    new_sde_query = text("""
+    SELECT typeName as type_name, typeID as type_id, groupID as group_id, groupName as group_name,
+           categoryID as category_id, categoryName as category_name
+    FROM sdetypes
+    WHERE typeID IN :type_ids
+    """).bindparams(bindparam('type_ids', expanding=True))
+
     with Session(sde_db.engine) as session:
-        result = session.execute(sde_query, {'type_ids': type_ids})
+        result = session.execute(new_sde_query, {'type_ids': type_ids})
         df = pd.DataFrame(result.fetchall(),
             columns=['type_name', 'type_id', 'group_id', 'group_name', 'category_id', 'category_name'])
         logger.info(f"df: {len(df)}")
@@ -70,7 +80,7 @@ def all_sde_info(type_ids: list = None)->pd.DataFrame:
 
     return df
 
-def get_filter_options(selected_category: str=None)->tuple[list, list]:
+def get_filter_options(selected_category: str=None)->tuple[list, list, pd.DataFrame]:
 
     sde_df = all_sde_info()
     sde_df = sde_df.reset_index(drop=True)
@@ -78,10 +88,11 @@ def get_filter_options(selected_category: str=None)->tuple[list, list]:
     logger.info(f"selected_category: {selected_category}")
 
     if selected_category:
-        sde_df = sde_df[sde_df['category_name'] == selected_category]
-        selected_categories_type_ids = sde_df['type_id'].unique().tolist()
-        selected_category_id = sde_df['category_id'].iloc[0]
-        selected_type_names = sorted(sde_df['type_name'].unique().tolist())
+        cat_sde_df = sde_df[sde_df['category_name'] == selected_category]
+        cat_type_info = cat_sde_df.copy()
+        selected_categories_type_ids = cat_sde_df['type_id'].unique().tolist()
+        selected_category_id = cat_sde_df['category_id'].iloc[0]
+        selected_type_names = sorted(cat_sde_df['type_name'].unique().tolist())
         st.session_state.selected_category = selected_category
         st.session_state.selected_category_info = {
             'category_name': selected_category,
@@ -93,7 +104,8 @@ def get_filter_options(selected_category: str=None)->tuple[list, list]:
     else:
         categories = sorted(sde_df['category_name'].unique().tolist())
         items = sorted(sde_df['type_name'].unique().tolist())
-    return categories, items
+        cat_type_info = sde_df.copy()
+    return categories, items, cat_type_info
 
 # Query function
 def create_price_volume_chart(df):
@@ -253,21 +265,72 @@ def dump_session_state():
             logger.info(f"{k}")
             logger.info("+++++")
             for k2,v2 in v.items():
-                logger.info(f"{k2}: {v2}")
+                logger.info(f"{k2}")
         else:
-            logger.info(f"{k}: {v}")
+            logger.info(f"{k, v}")
         logger.info("-"*40)
     logger.info("*"*40)
     logger.info("="*40)
+
+
+@st.cache_data(ttl=600)
+def check_for_db_updates()->tuple[bool, float]:
+    db = DatabaseConfig("wcmkt")
+    check = db.validate_sync()
+    local_time = datetime.now()
+    return check, local_time
+
+def check_db():
+    check, local_time = check_for_db_updates()
+    now = time.time()
+    logger.info(f"check_db() check: {check}, time: {local_time}")
+    logger.info(f"last_check: {now - st.session_state.get('last_check', 0)} seconds ago")
+
+    if not check and utime > st.session_state.get("last_check", 0):
+        st.toast("More recent remote database data available, syncing local database", icon="🕧")
+        logger.info("check_db() check is False, syncing local database 🛜")
+        db = DatabaseConfig("wcmkt")
+        db.sync()
+        if db.validate_sync():
+            logger.info("Local database synced and validated🟢")
+            update_wcmkt_state()
+        else:
+            logger.info("Local database synced but validation failed❌")
+    else:
+        st.toast("DB is up to date", icon="✅")
+
+# Run this once every 600 seconds (10 minutes)
+def maybe_run_check():
+    now = time.time()
+    if "last_check" not in st.session_state:
+        check_db()
+        st.session_state["last_check"] = now
+        logger.info("last_check not in st.session_state, setting to now")
+        logger.info("-"*40)
+
+    last_run = st.session_state.get("last_check", 0)
+    logger.info("-"*40)
+    logger.info(f"last_run: {last_run}")
+    logger.info(f"now: {now}")
+    logger.info("-"*40)
+
+    if now - last_run > 600:   # 600 seconds = 10 minutes
+        logger.info("Running check_db()")
+        logger.info(f"now - last_run: {now - last_run}")
+        check_db()
+        st.session_state["last_check"] = now
+    logger.info("-"*40)
+
 
 def main():
     logger.info("*****************************************************")
     logger.info("Starting main function")
     logger.info("*****************************************************")
 
+    maybe_run_check()
+
     wclogo = "images/wclogo.png"
     st.image(wclogo, width=150)
-    check_db_state()
 
     # Title
     st.title("Winter Coalition Market Stats")
@@ -280,7 +343,7 @@ def main():
 
     logger.info("Getting initial categories")
     # Get initial categories
-    categories, _ = get_filter_options()
+    categories, available_items, _ = get_filter_options()
     logger.info(f"categories: {len(categories)}")
     # Category filter - changed to selectbox for single selection
     selected_category = st.sidebar.selectbox(
@@ -293,7 +356,6 @@ def main():
     if selected_category == "":
         st.session_state.selected_category = None
         st.session_state.selected_category_info = None
-        st.session_state.selected_items_type_ids = []
         st.session_state.selected_item = None
 
     if selected_category and selected_category != None:
@@ -301,13 +363,8 @@ def main():
         st.session_state.selected_category = selected_category
         logger.info(f"selected_category: {selected_category}")
         # Get filtered items based on selected category
-        _, available_items = get_filter_options(selected_category if not show_all and selected_category else None)
+        _, available_items, cat_type_info = get_filter_options(selected_category if not show_all and selected_category else None)
 
-    else:
-        _, available_items = get_filter_options()
-        st.session_state.selected_items_type_ids = available_items
-        st.session_state.selected_category = None
-        st.session_state.selected_category_info = None
 
         # Item name filter - changed to selectbox for single selection
     selected_item = st.sidebar.selectbox(
@@ -321,15 +378,16 @@ def main():
         st.sidebar.text(f"Item: {selected_item}")
         st.session_state.selected_item = selected_item
         logger.info(f"Selected item: {selected_item}")
-        st.session_state.selected_items_type_ids = [selected_item]
+
     else:
         selected_item = None
-        st.session_state.selected_items_type_ids = available_items
+
 
     t1 = time.perf_counter()
 
     # sell_data, buy_data, stats = get_market_data(show_all, selected_category, selected_items)
     sell_data, buy_data, stats = new_get_market_data(show_all)
+
     # Main content
     t2 = time.perf_counter()
     elapsed_time = (t2-t1)*1000
@@ -376,6 +434,7 @@ def main():
 
         elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
             selected_category = st.session_state.selected_category
+
             stats = stats[stats['category_name'] == selected_category]
             stats = stats.reset_index(drop=True)
             stats_type_ids = st.session_state.selected_category_info['type_ids']
@@ -477,6 +536,7 @@ def main():
                     pass
         elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
             selected_category = st.session_state.selected_category
+
             cat_label = selected_category
             if cat_label.endswith("s"):
                 cat_label = cat_label
@@ -599,11 +659,17 @@ def main():
     # Display sync status in sidebar
     with st.sidebar:
         display_sync_status()
+
+        # utility function to dump session state in development mode -- leave off in production
         dump = st.sidebar.button("Dump Session State", use_container_width=True)
         if dump:
             dump_session_state()
             st.toast("Session state dumped", icon="✅")
 
+        st.sidebar.markdown("---")
+        db_check = st.sidebar.button("Check DB State", use_container_width=True)
+        if db_check:
+            check_db()
 
 if __name__ == "__main__":
     main()

@@ -36,7 +36,15 @@ def init_db():
             if verify_db_path(db_path):
                 logger.info(f"DB path exists: {db_path}✔️")
                 status = {key: "success initialized🟢" if verify_db_path(db_path) else "failed🔴"}
+
             else:
+                #TODO: remove this once sde_lite.db is the updated sde.db
+                if db.path == "sde_lite.db":
+                    logger.info("sde_lite.db is the updated sde.db, deleting old sde.db")
+                    if os.path.exists("sde.db"):
+                        os.remove("sde.db")
+                    else:
+                        logger.info("sde.db does not exist, skipping deletion")
                 logger.warning(f"DB path does not exist: {db_path}⚠️")
                 logger.info("syncing db")
                 logger.info(f"syncing db: {db_path}🛜")
