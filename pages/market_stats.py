@@ -286,7 +286,7 @@ def check_db():
     logger.info(f"check_db() check: {check}, time: {local_time}")
     logger.info(f"last_check: {now - st.session_state.get('last_check', 0)} seconds ago")
 
-    if not check and utime > st.session_state.get("last_check", 0):
+    if not check:
         st.toast("More recent remote database data available, syncing local database", icon="🕧")
         logger.info("check_db() check is False, syncing local database 🛜")
         db = DatabaseConfig("wcmkt")

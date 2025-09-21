@@ -28,23 +28,34 @@ def init_db():
         build_cost_db.alias: build_cost_db.path,
     }
     status = {}
+
+    #TODO: remove this once sde_lite.db is the updated sde.db
+
+    if os.path.exists("sde.db-info"):
+        logger.info("removing sde.db-info🪓")
+        os.remove("sde.db-info")
+    if os.path.exists("sde.db"):
+        logger.info("removing sde.db🪓")
+        os.remove("sde.db")
+    if os.path.exists("sde.db-shm"):
+        logger.info("removing sde.db-shm🪓")
+        os.remove("sde.db-shm")
+    if os.path.exists("sde.db-wal"):
+        logger.info("removing sde.db-wal🪓")
+        os.remove("sde.db-wal")
+
+
     for key, value in db_paths.items():
         alias = key
         db_path = value
         db = DatabaseConfig(alias)
+
         try:
             if verify_db_path(db_path):
                 logger.info(f"DB path exists: {db_path}✔️")
                 status = {key: "success initialized🟢" if verify_db_path(db_path) else "failed🔴"}
 
             else:
-                #TODO: remove this once sde_lite.db is the updated sde.db
-                if db.path == "sde_lite.db":
-                    logger.info("sde_lite.db is the updated sde.db, deleting old sde.db")
-                    if os.path.exists("sde.db"):
-                        os.remove("sde.db")
-                    else:
-                        logger.info("sde.db does not exist, skipping deletion")
                 logger.warning(f"DB path does not exist: {db_path}⚠️")
                 logger.info("syncing db")
                 logger.info(f"syncing db: {db_path}🛜")
