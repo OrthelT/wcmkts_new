@@ -19,7 +19,7 @@ from config import DatabaseConfig
 from db_handler import new_get_market_data
 from init_db import init_db
 from sync_state import update_wcmkt_state
-
+from type_info import get_backup_type_id
 from datetime import datetime, timezone
 
 
@@ -284,20 +284,28 @@ def check_db():
     check, local_time = check_for_db_updates()
     now = time.time()
     logger.info(f"check_db() check: {check}, time: {local_time}")
-    logger.info(f"last_check: {now - st.session_state.get('last_check', 0)} seconds ago")
+    logger.info(f"last_check: {round(now - st.session_state.get('last_check', 0), 2)} seconds ago")
 
     if not check:
         st.toast("More recent remote database data available, syncing local database", icon="🕧")
         logger.info("check_db() check is False, syncing local database 🛜")
         db = DatabaseConfig("wcmkt")
         db.sync()
+        st.cache_data.clear()
         if db.validate_sync():
             logger.info("Local database synced and validated🟢")
             update_wcmkt_state()
         else:
             logger.info("Local database synced but validation failed❌")
     else:
-        st.toast("DB is up to date", icon="✅")
+        if 'local_update_status' in st.session_state:
+            local_update_since = st.session_state.local_update_status["time_since"]
+            local_update_since = local_update_since.total_seconds()
+            local_update_since = local_update_since // 60
+            local_update_since = f"{int(local_update_since)} mins"
+        else:
+            local_update_since = DatabaseConfig("wcmkt").get_time_since_update("marketstats", remote=False)
+        st.toast(f"DB updated: {local_update_since} ago", icon="✅")
 
 # Run this once every 600 seconds (10 minutes)
 def maybe_run_check():
@@ -310,8 +318,8 @@ def maybe_run_check():
 
     last_run = st.session_state.get("last_check", 0)
     logger.info("-"*40)
-    logger.info(f"last_run: {last_run}")
-    logger.info(f"now: {now}")
+    logger.info(f"last check: {datetime.fromtimestamp(last_run).strftime('%m-%d %H:%M UTC')}")
+    logger.info(f"now: {datetime.fromtimestamp(now).strftime('%m-%d %H:%M UTC')}")
     logger.info("-"*40)
 
     if now - last_run > 600:   # 600 seconds = 10 minutes
@@ -416,17 +424,17 @@ def main():
 
         if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
             selected_item = st.session_state.selected_item
+            if 'selected_item_id' in st.session_state:
+                selected_item_id = st.session_state.selected_item_id
+            else:
+                selected_item_id = get_backup_type_id(selected_item)
+                st.session_state.selected_item_id = selected_item_id
             sell_data = sell_data[sell_data['type_name'] == selected_item]
             if not buy_data.empty:
                 buy_data = buy_data[buy_data['type_name'] == selected_item]
             stats = stats[stats['type_name'] == selected_item]
-            try:
-                type_id = sell_data['type_id'].iloc[0]
-            except:
-                logger.info(f"No type_id found for {selected_item}")
-                type_id = None
-            if type_id:
-                fit_df = get_fitting_data(type_id)
+            if selected_item_id:
+                fit_df = get_fitting_data(selected_item_id)
             else:
                 fit_df = pd.DataFrame()
 
@@ -506,9 +514,14 @@ def main():
         #create a header for the item
         if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
             selected_item = st.session_state.selected_item
+            if 'selected_item_id' in st.session_state:
+                selected_item_id = st.session_state.selected_item_id
+            else:
+                selected_item_id = get_backup_type_id(selected_item)
+                st.session_state.selected_item_id = selected_item_id
             try:
-                image_id = display_df.iloc[0]['type_id']
-                type_name = display_df.iloc[0]['type_name']
+                image_id = selected_item_id
+                type_name = selected_item
             except:
                 logger.info(f"No type_id or type_name found for {selected_item}")
                 image_id = None
@@ -527,9 +540,9 @@ def main():
                     if fits_on_mkt:
                         st.subheader("Winter Co. Doctrine", divider="orange")
                         if cat_id in [7,8,18]:
-                            st.write(get_module_fits(type_id))
+                            st.write(get_module_fits(selected_item_id))
                         else:
-                            st.write(fit_df[fit_df['type_id'] == type_id]['group_name'].iloc[0])
+                            st.write(fit_df[fit_df['type_id'] == selected_item_id]['group_name'].iloc[0])
                 except:
                     pass
         elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:

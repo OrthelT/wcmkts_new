@@ -116,6 +116,26 @@ SDE_AUTH_TOKEN=your_sde_auth_token
 streamlit run app.py
 ```
 
+### Local Secrets
+
+For local Streamlit runs, store credentials in `.streamlit/secrets.toml` (git‑ignored). This is the default source for database URLs/tokens used by `DatabaseConfig`. Example structure:
+
+```
+[wcmkt2_turso]
+url = "libsql://..."
+token = "..."
+
+[sde_aws_turso]
+url = "libsql://..."
+token = "..."
+
+[buildcost_turso]
+url = "libsql://..."
+token = "..."
+```
+
+`.env` variables may be used for other tooling, but the app resolves secrets via Streamlit.
+
 ## Usage
 
 1. **Filtering Data**

@@ -39,12 +39,12 @@ def list_targets():
         targets = result.fetchall()
 
     if targets:
-        print("\nCurrent ship targets in database:")
+        logger.info("Current ship targets in database:")
         for ship_name, target in targets:
-            print(f"{ship_name}: {target}")
+            logger.info(f"{ship_name}: {target}")
 
     else:
-        print("No targets set in database")
+        logger.info("No targets set in database")
     conn.close()
 
 def update_target(fit_id: int, new_target: int) -> bool:
@@ -108,36 +108,38 @@ def update_ship_targets_from_csv(old_ship_targets: pd.DataFrame, updated_targets
     new_ship_targets = pd.concat([old_ship_targets, updated_targets])
     new_ship_targets=new_ship_targets.reset_index(drop=True)
     new_ship_targets['id'] = new_ship_targets.index
-    print(new_ship_targets)
+    logger.info("Proposed new ship targets:")
+    logger.info("\n" + new_ship_targets.to_string(index=False))
     new_length = len(new_ship_targets)
 
-    print(f"Old length: {old_length}")
-    print(f"New length: {new_length}")
-    print(f"Difference: {new_length - old_length}")
+    logger.info(f"Old length: {old_length}")
+    logger.info(f"New length: {new_length}")
+    logger.info(f"Difference: {new_length - old_length}")
 
     if new_ship_targets.duplicated(subset=['fit_id']).any():
-        print("Duplicates found")
+        logger.warning("Duplicates found")
     else:
-        print("No duplicates found")
+        logger.info("No duplicates found")
     confirm = input("Confirm? (y/n)")
     if confirm == "y":
         #confirm update
         if len(updated_targets) > len(old_ship_targets):
             new_ship_targets = new_ship_targets[~new_ship_targets['fit_id'].isin(old_ship_targets['fit_id'])]
-            print(f"New ships: {len(new_ship_targets)}")
-            print(new_ship_targets)
+            logger.info(f"New ships: {len(new_ship_targets)}")
+            logger.info("\n" + new_ship_targets.to_string(index=False))
 
             confirm_update = input("Confirm update? (y/n)")
         else:
-            print("No new ships found")
+            logger.info("No new ships found")
             confirm_update = "y"
         if confirm_update == "y":
             updated_target_values = new_ship_targets[new_ship_targets['fit_id'].isin(updated_targets['fit_id'])]
             if len(updated_target_values) > 0:
-                print(updated_target_values)
+                logger.info("Updated target values:")
+                logger.info("\n" + updated_target_values.to_string(index=False))
                 confirm_update_values = input("Confirm update values? (y/n)")
             else:
-                print("No updated target values found")
+                logger.info("No updated target values found")
                 confirm_update_values = "y"
 
 
@@ -147,9 +149,9 @@ def update_ship_targets_from_csv(old_ship_targets: pd.DataFrame, updated_targets
 
             new_ship_targets.to_csv("data/ship_targets.csv", index=False)
         else:
-            print("Update cancelled")
+            logger.info("Update cancelled")
     else:
-        print("No update needed")
+        logger.info("No update needed")
 
     return new_ship_targets
 

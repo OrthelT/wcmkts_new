@@ -213,7 +213,7 @@ def get_module_fits(type_id):
             fit = fit.fetchall()
             df = pd.DataFrame(fit)
         except Exception as e:
-            print(f"Failed to get data for {type_id}: {str(e)}")
+            logger.error(f"Failed to get data for type_id={type_id}: {str(e)}")
             raise
         session.close()
 
