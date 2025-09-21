@@ -661,10 +661,10 @@ def main():
         display_sync_status()
 
         # utility function to dump session state in development mode -- leave off in production
-        dump = st.sidebar.button("Dump Session State", use_container_width=True)
-        if dump:
-            dump_session_state()
-            st.toast("Session state dumped", icon="✅")
+        # dump = st.sidebar.button("Dump Session State", use_container_width=True)
+        # if dump:
+        #     dump_session_state()
+        #     st.toast("Session state dumped", icon="✅")
 
         st.sidebar.markdown("---")
         db_check = st.sidebar.button("Check DB State", use_container_width=True)
