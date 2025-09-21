@@ -628,9 +628,13 @@ def main():
         st.divider()
 
         st.subheader("Price History")
-        if 'selected_item_id' in st.session_state:
-            selected_item_id = st.session_state.selected_item_id
-        else:
+        try:
+            if 'selected_item_id' in st.session_state:
+                selected_item_id = st.session_state.selected_item_id
+        except:
+            selected_item_id = None
+
+        try:
             # Get selected_item from session state if available
             if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
                 selected_item = st.session_state.selected_item
@@ -638,6 +642,9 @@ def main():
                 st.session_state.selected_item_id = selected_item_id
             else:
                 selected_item_id = None
+        except:
+            selected_item_id = None
+
         if selected_item_id:
             logger.info(f"Displaying history chart for {selected_item_id}")
             history_chart = create_history_chart(selected_item_id)
