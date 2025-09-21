@@ -386,6 +386,7 @@ def main():
         st.sidebar.text(f"Item: {selected_item}")
         st.session_state.selected_item = selected_item
         logger.info(f"Selected item: {selected_item}")
+        st.session_state.selected_item_id = get_backup_type_id(selected_item)
 
     else:
         selected_item = None
