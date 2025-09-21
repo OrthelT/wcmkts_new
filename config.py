@@ -1,14 +1,12 @@
-import os
-import sys
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, select
 import streamlit as st
 import libsql
 from logging_config import setup_logging
 import sqlite3 as sql
-import datetime as dt
-from sync_state import sync_state
-import json
-from sync_state import update_saved_sync
+from datetime import datetime, timezone
+from sqlalchemy.orm import Session
+from models import UpdateLog
+
 
 logger = setup_logging(__name__)
 
@@ -18,26 +16,26 @@ class DatabaseConfig:
 
     _db_paths = {
         "wcmkt2": "wcmkt2.db", #production database
-        "sde": "sde.db",
+        "sde": "sde_lite.db",
         "build_cost": "buildcost.db",
+
     }
 
     _db_turso_urls = {
         "wcmkt2_turso": st.secrets.wcmkt2_turso.url,
-        "sde_turso": st.secrets.sde_aws_turso.url,
+        "sde_turso": st.secrets.sde_lite_turso.url,
         "build_cost_turso": st.secrets.buildcost_turso.url,
     }
 
     _db_turso_auth_tokens = {
         "wcmkt2_turso": st.secrets.wcmkt2_turso.token,
-        "sde_turso": st.secrets.sde_aws_turso.token,
+        "sde_turso": st.secrets.sde_lite_turso.token,
         "build_cost_turso": st.secrets.buildcost_turso.token,
     }
 
     def __init__(self, alias: str, dialect: str = "sqlite+libsql"):
         if alias == "wcmkt":
             alias = self.wcdbmap
-            logger.info(f'using wcmkt alias: {alias}')
         elif alias == "wcmkt2" or alias == "wcmkt3":
             logger.warning(f"Alias {alias} is deprecated, using {self.wcdbmap} instead")
             alias = self.wcdbmap
@@ -93,17 +91,13 @@ class DatabaseConfig:
             logger.info("Syncing database...")
             conn.sync()
         conn.close()
-        update_time = dt.datetime.now(dt.UTC)
-        sync_info = sync_state(update_time)
-        st.session_state.last_sync = sync_info['last_sync']
-        st.session_state.next_sync = sync_info['next_sync']
-        logger.info(f"Database synced at {update_time}")
+        update_time = datetime.now(timezone.utc)
+        logger.info(f"Database synced at {update_time} UTC")
 
         if self.alias == "wcmkt2":
             validation_test = self.validate_sync()
             st.session_state.sync_status = "Success" if validation_test else "Failed"
         st.session_state.sync_check = False
-        update_saved_sync()
 
     def validate_sync(self)-> bool:
         alias = self.alias
@@ -113,8 +107,14 @@ class DatabaseConfig:
         with self.engine.connect() as conn:
             result = conn.execute(text("SELECT MAX(last_update) FROM marketstats")).fetchone()
             local_last_update = result[0]
+        logger.info("-"*40)
+        logger.info(f"alias: {alias} validate_sync()")
+        timestamp = datetime.now(timezone.utc)
+        local_timestamp = datetime.now()
+        logger.info(f"time: {local_timestamp.strftime('%Y-%m-%d %H:%M:%S')} (local); {timestamp.strftime('%Y-%m-%d %H:%M:%S')} (utc)")
         logger.info(f"remote_last_update: {remote_last_update}")
         logger.info(f"local_last_update: {local_last_update}")
+        logger.info("-"*40)
         validation_test = remote_last_update == local_last_update
         logger.info(f"validation_test: {validation_test}")
         return validation_test
@@ -172,6 +172,34 @@ class DatabaseConfig:
             else:
                 column_info = [col.name for col in columns]
             return column_info
+
+    def get_most_recent_update(self, table_name: str, remote: bool = False)-> datetime:
+        """
+        Get the most recent update time for a specific table
+        Args:
+            table_name: str - The name of the table to get the most recent update time for
+            remote: bool - If True, get the most recent update time from the remote database, if False, get the most recent update time from the local database
+
+        Returns:
+            The most recent update time for the table
+        """
+        engine = self.remote_engine if remote else self.engine
+        session = Session(bind=engine)
+        with session.begin():
+            updates = select(UpdateLog.timestamp).where(UpdateLog.table_name == table_name).order_by(UpdateLog.timestamp.desc())
+            result = session.execute(updates).fetchone()
+        session.close()
+        update_time = result[0] if result is not None else None
+        update_time = update_time.replace(tzinfo=timezone.utc) if update_time is not None else None
+        return update_time
+
+    def get_time_since_update(self, table_name: str = "marketstats", remote: bool = False):
+        status = self.get_most_recent_update(table_name, remote=remote)
+        now = datetime.now(timezone.utc)
+        time_since = now - status
+        logger.info(f"update_time: {status} utc")
+        logger.info(f"time_since: {time_since}")
+        return time_since if time_since is not None else None
 
 
 if __name__ == "__main__":

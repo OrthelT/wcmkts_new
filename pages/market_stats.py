@@ -2,20 +2,26 @@ import os
 import sys
 import time
 
-from db_handler import get_market_data
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from httpx import head
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from sqlalchemy import text
+from sqlalchemy import text,bindparam
 from sqlalchemy.orm import Session
-from db_handler import  *
+from db_handler import safe_format,get_market_history,get_fitting_data,get_module_fits
 from logging_config import setup_logging
 import millify
 from config import DatabaseConfig
-from sync_state import sync_state
+from db_handler import new_get_market_data
+from init_db import init_db
+from sync_state import update_wcmkt_state
+from type_info import get_backup_type_id
+from datetime import datetime, timezone
+
 
 mkt_db = DatabaseConfig("wcmkt")
 sde_db = DatabaseConfig("sde")
@@ -29,54 +35,77 @@ logger.info("Application started")
 logger.info(f"streamlit version: {st.__version__}")
 logger.info("-"*100)
 
-# Function to get unique categories and item names
-def get_filter_options(selected_categories=None):
-    try:
-        # First get type_ids from market orders
-        mkt_query = """
-        SELECT DISTINCT type_id
-        FROM marketorders
-        WHERE is_buy_order = 0
-        """
-        logger.info("getting filter options")
-        with Session(mkt_db.engine) as session:
-            result = session.execute(text(mkt_query))
-            type_ids = [row[0] for row in result.fetchall()]
-
-            if not type_ids:
-                return [], []
-            type_ids_str = ','.join(map(str, type_ids))
-
+@st.cache_data(ttl=600)
+def get_market_type_ids()->list:
+    # Get all type_ids from market orders
+    mkt_query = """
+    SELECT DISTINCT type_id
+    FROM marketorders
+    """
+    with Session(mkt_db.engine) as session:
+        result = session.execute(text(mkt_query))
+        type_ids = [row[0] for row in result.fetchall()]
         logger.info(f"type_ids: {len(type_ids)}")
+        return type_ids
 
-        # Then get category info from SDE database
-        sde_query = f"""
-        SELECT DISTINCT it.typeName as type_name, it.typeID as type_id, it.groupID as group_id, ig.groupName as group_name,
-               ic.categoryID as category_id, ic.categoryName as category_name
-        FROM invTypes it
-        JOIN invGroups ig ON it.groupID = ig.groupID
-        JOIN invCategories ic ON ig.categoryID = ic.categoryID
-        WHERE it.typeID IN ({type_ids_str})
-        """
-        with Session(sde_db.engine) as session:
-            result = session.execute(text(sde_query))
-            df = pd.DataFrame(result.fetchall(),
-                              columns=['type_name', 'type_id', 'group_id', 'group_name', 'category_id', 'category_name'])
+# Function to get unique categories and item names
+def all_sde_info(type_ids: list = None)->pd.DataFrame:
+    if not type_ids:
+        type_ids = get_market_type_ids()
+    logger.info(f"type_ids: {len(type_ids)}")
 
-            categories = sorted(df['category_name'].unique())
+    # Use SQLAlchemy's proper IN clause with parameter binding
+    sde_query = text("""
+    SELECT DISTINCT it.typeName as type_name, it.typeID as type_id, it.groupID as group_id, ig.groupName as group_name,
+           ic.categoryID as category_id, ic.categoryName as category_name
+    FROM invTypes it
+    JOIN invGroups ig ON it.groupID = ig.groupID
+    JOIN invCategories ic ON ig.categoryID = ic.categoryID
+    WHERE it.typeID IN :type_ids
+    """).bindparams(bindparam('type_ids', expanding=True))
 
-            if selected_categories:
-                df = df[df['category_name'].isin(selected_categories)]
+    new_sde_query = text("""
+    SELECT typeName as type_name, typeID as type_id, groupID as group_id, groupName as group_name,
+           categoryID as category_id, categoryName as category_name
+    FROM sdetypes
+    WHERE typeID IN :type_ids
+    """).bindparams(bindparam('type_ids', expanding=True))
 
-        items = sorted(df['type_name'].unique())
+    with Session(sde_db.engine) as session:
+        result = session.execute(new_sde_query, {'type_ids': type_ids})
+        df = pd.DataFrame(result.fetchall(),
+            columns=['type_name', 'type_id', 'group_id', 'group_name', 'category_id', 'category_name'])
+        logger.info(f"df: {len(df)}")
+        session.close()
 
+    return df
 
-        return categories, items
+def get_filter_options(selected_category: str=None)->tuple[list, list, pd.DataFrame]:
 
+    sde_df = all_sde_info()
+    sde_df = sde_df.reset_index(drop=True)
+    logger.info(f"sde_df: {len(sde_df)}")
+    logger.info(f"selected_category: {selected_category}")
 
-    except Exception as e:
-        st.error(f"Database error: {str(e)}")
-        return [], []
+    if selected_category:
+        cat_sde_df = sde_df[sde_df['category_name'] == selected_category]
+        cat_type_info = cat_sde_df.copy()
+        selected_categories_type_ids = cat_sde_df['type_id'].unique().tolist()
+        selected_category_id = cat_sde_df['category_id'].iloc[0]
+        selected_type_names = sorted(cat_sde_df['type_name'].unique().tolist())
+        st.session_state.selected_category = selected_category
+        st.session_state.selected_category_info = {
+            'category_name': selected_category,
+            'category_id': selected_category_id,
+            'type_ids': selected_categories_type_ids,
+            'type_names': selected_type_names}
+        items = selected_type_names
+        categories = [selected_category]
+    else:
+        categories = sorted(sde_df['category_name'].unique().tolist())
+        items = sorted(sde_df['type_name'].unique().tolist())
+        cat_type_info = sde_df.copy()
+    return categories, items, cat_type_info
 
 # Query function
 def create_price_volume_chart(df):
@@ -216,61 +245,97 @@ def create_history_chart(type_id):
 
 def display_sync_status():
     """Display sync status in the sidebar."""
-    time_since_esi_update = get_time_since_esi_update()
-    st.sidebar.markdown(f"**Last ESI update:** {time_since_esi_update}")
-    time_until_update = get_time_until_next_update()
-    st.sidebar.markdown(f"*Next ESI update in {time_until_update}*")
+    if "local_update_status" not in st.session_state:
+        init_db()
+    update_time = st.session_state.local_update_status["updated"]
+    update_time = update_time.strftime("%Y-%m-%d | %H:%M UTC")
+    time_since_update = st.session_state.local_update_status["time_since"]
+    time_since_update = time_since_update.total_seconds()
+    time_since_update = f"{round((time_since_update / 3600),1)} hours"
+    st.markdown("&nbsp;"*5)
+    st.sidebar.markdown(f"<span style='font-size: 14px; color: lightgrey;'>*Last ESI update: {update_time}*</span>", unsafe_allow_html=True)
 
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Database Sync Status")
-    status_color = "green" if st.session_state.sync_status == "Success" else "red"
+@st.fragment
+def dump_session_state():
+    logger.info("*"*40)
+    logger.info("Dumping session state")
+    logger.info("*"*40)
+    for k,v in st.session_state.items():
+        if isinstance(v, dict):
+            logger.info(f"{k}")
+            logger.info("+++++")
+            for k2,v2 in v.items():
+                logger.info(f"{k2}")
+        else:
+            logger.info(f"{k, v}")
+        logger.info("-"*40)
+    logger.info("*"*40)
+    logger.info("="*40)
 
-    if st.session_state.last_sync:
-        last_sync_time = st.session_state.last_sync
-        st.sidebar.markdown(f"**Last sync:** {last_sync_time}")
-        if st.session_state.next_sync:
-            next_sync_time = st.session_state.next_sync
-            st.sidebar.markdown(f"**Next scheduled sync:** {next_sync_time}")
+
+@st.cache_data(ttl=600)
+def check_for_db_updates()->tuple[bool, float]:
+    db = DatabaseConfig("wcmkt")
+    check = db.validate_sync()
+    local_time = datetime.now()
+    return check, local_time
+
+def check_db():
+    check, local_time = check_for_db_updates()
+    now = time.time()
+    logger.info(f"check_db() check: {check}, time: {local_time}")
+    logger.info(f"last_check: {round(now - st.session_state.get('last_check', 0), 2)} seconds ago")
+
+    if not check:
+        st.toast("More recent remote database data available, syncing local database", icon="🕧")
+        logger.info("check_db() check is False, syncing local database 🛜")
+        db = DatabaseConfig("wcmkt")
+        db.sync()
+        st.cache_data.clear()
+        if db.validate_sync():
+            logger.info("Local database synced and validated🟢")
+            update_wcmkt_state()
+        else:
+            logger.info("Local database synced but validation failed❌")
     else:
-        st.sidebar.markdown("**Last sync:** Not yet run")
+        if 'local_update_status' in st.session_state:
+            local_update_since = st.session_state.local_update_status["time_since"]
+            local_update_since = local_update_since.total_seconds()
+            local_update_since = local_update_since // 60
+            local_update_since = f"{int(local_update_since)} mins"
+        else:
+            local_update_since = DatabaseConfig("wcmkt").get_time_since_update("marketstats", remote=False)
+        st.toast(f"DB updated: {local_update_since} ago", icon="✅")
 
-    st.sidebar.markdown(f"**Status:** <span style='color:{status_color}'>{st.session_state.sync_status}</span>", unsafe_allow_html=True)
+# Run this once every 600 seconds (10 minutes)
+def maybe_run_check():
+    now = time.time()
+    if "last_check" not in st.session_state:
+        check_db()
+        st.session_state["last_check"] = now
+        logger.info("last_check not in st.session_state, setting to now")
+        logger.info("-"*40)
 
-    # Manual sync button
-    if st.sidebar.button("Sync Now"):
-        try:
-            mkt_db.sync()
-            st.session_state.sync_status = "Success"
-            st.rerun()
-        except Exception as e:
-            logger.error(f"st.session_state.sync_status: {st.session_state.sync_status}")
-            st.sidebar.error(f"Sync failed: {str(e)}")
+    last_run = st.session_state.get("last_check", 0)
+    logger.info("-"*40)
+    logger.info(f"last check: {datetime.fromtimestamp(last_run).strftime('%m-%d %H:%M UTC')}")
+    logger.info(f"now: {datetime.fromtimestamp(now).strftime('%m-%d %H:%M UTC')}")
+    logger.info("-"*40)
 
-    if st.session_state.sync_status == "Success":
-        st.sidebar.success("Database sync completed successfully!")
+    if now - last_run > 600:   # 600 seconds = 10 minutes
+        logger.info("Running check_db()")
+        logger.info(f"now - last_run: {now - last_run}")
+        check_db()
+        st.session_state["last_check"] = now
+    logger.info("-"*40)
+
 
 def main():
-
+    logger.info("*****************************************************")
     logger.info("Starting main function")
-    logger.info(mkt_db.path)
+    logger.info("*****************************************************")
 
-    logger.info("Checking sync status and initiating sync state")
-    sync_info = sync_state()
-    sync_needed = sync_info['sync_needed']
-    last_sync = sync_info['last_sync']
-    next_sync = sync_info['next_sync']
-
-    logger.info(f"sync_needed: {sync_needed}")
-    logger.info(f"last_sync: {last_sync}")
-    logger.info(f"next_sync: {next_sync}")
-
-    if sync_needed:
-        logger.info("Sync needed, syncing now")
-        mkt_db.sync()
-        st.session_state.sync_status = "Success"
-        st.rerun()
-    else:
-        logger.info(f"No sync needed: last sync: {last_sync}, next sync: {next_sync}\n")
+    maybe_run_check()
 
     wclogo = "images/wclogo.png"
     st.image(wclogo, width=150)
@@ -286,29 +351,30 @@ def main():
 
     logger.info("Getting initial categories")
     # Get initial categories
-    categories, _ = get_filter_options()
-
+    categories, available_items, _ = get_filter_options()
+    logger.info(f"categories: {len(categories)}")
     # Category filter - changed to selectbox for single selection
     selected_category = st.sidebar.selectbox(
         "Select Category",
         options=[""] + categories,  # Add empty option to allow no selection
         index=0,
+        key="selected_category_choice",
         format_func=lambda x: "All Categories" if x == "" else x
     )
+    if selected_category == "":
+        st.session_state.selected_category = None
+        st.session_state.selected_category_info = None
+        st.session_state.selected_item = None
 
-    # Convert to list format for compatibility with existing code
-    selected_categories = [selected_category] if selected_category else []
-
-    logger.info(f"Selected category: {selected_category}")
-
-    # Debug info
-    if selected_category:
+    if selected_category and selected_category != None:
         st.sidebar.text(f"Category: {selected_category}")
+        st.session_state.selected_category = selected_category
+        logger.info(f"selected_category: {selected_category}")
+        # Get filtered items based on selected category
+        _, available_items, cat_type_info = get_filter_options(selected_category if not show_all and selected_category else None)
 
-    # Get filtered items based on selected category
-    _, available_items = get_filter_options(selected_categories if not show_all and selected_category else None)
 
-    # Item name filter - changed to selectbox for single selection
+        # Item name filter - changed to selectbox for single selection
     selected_item = st.sidebar.selectbox(
         "Select Item",
         options=[""] + available_items,  # Add empty option to allow no selection
@@ -316,28 +382,27 @@ def main():
         format_func=lambda x: "All Items" if x == "" else x
     )
 
-    # Convert to list format for compatibility with existing code
-    selected_items = [selected_item] if selected_item else []
-
-    # Debug info
     if selected_item:
         st.sidebar.text(f"Item: {selected_item}")
+        st.session_state.selected_item = selected_item
+        logger.info(f"Selected item: {selected_item}")
+        st.session_state.selected_item_id = get_backup_type_id(selected_item)
 
-    logger.info(f"Selected item: {selected_item}")
+    else:
+        selected_item = None
 
 
     t1 = time.perf_counter()
 
-    sell_data, buy_data, stats = get_market_data(show_all, selected_categories, selected_items)
+    # sell_data, buy_data, stats = get_market_data(show_all, selected_category, selected_items)
+    sell_data, buy_data, stats = new_get_market_data(show_all)
 
     # Main content
     t2 = time.perf_counter()
     elapsed_time = (t2-t1)*1000
-    print("-"*100)
     logger.info(f"TIME get_market_data() = {round(elapsed_time, 2)} ms")
-    print("-"*100)
 
-    # Process sell orders
+    # # Process sell orders
     sell_order_count = 0
     sell_total_value = 0
     if not sell_data.empty:
@@ -351,28 +416,42 @@ def main():
         buy_order_count = buy_data['order_id'].nunique()
         buy_total_value = (buy_data['price'] * buy_data['volume_remain']).sum()
 
-    logger.info(f"sell_order_count: {sell_order_count}")
-    logger.info(f"sell_total_value: {sell_total_value}")
-    logger.info(f"buy_order_count: {buy_order_count}")
-    logger.info(f"buy_total_value: {buy_total_value}")
-
-    fit_df = pd.DataFrame()
-    timestamp = None
+    logger.info(f"sell_order_count: {sell_order_count:,}")
+    logger.info(f"sell_total_value: {millify.millify(sell_total_value, precision=2) } ISK")
+    logger.info(f"buy_order_count: {buy_order_count:,}")
+    logger.info(f"buy_total_value: {millify.millify(buy_total_value, precision=2)} ISK")
 
     if not sell_data.empty:
-        if len(selected_items) == 1:
-            sell_data = sell_data[sell_data['type_name'] == selected_items[0]]
+
+        if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
+            selected_item = st.session_state.selected_item
+            if 'selected_item_id' in st.session_state:
+                selected_item_id = st.session_state.selected_item_id
+            else:
+                selected_item_id = get_backup_type_id(selected_item)
+                st.session_state.selected_item_id = selected_item_id
+            sell_data = sell_data[sell_data['type_name'] == selected_item]
             if not buy_data.empty:
-                buy_data = buy_data[buy_data['type_name'] == selected_items[0]]
-            stats = stats[stats['type_name'] == selected_items[0]]
-            type_id = sell_data['type_id'].iloc[0]
-            if type_id:
-                fit_df, timestamp = get_fitting_data(type_id)
+                buy_data = buy_data[buy_data['type_name'] == selected_item]
+            stats = stats[stats['type_name'] == selected_item]
+            if selected_item_id:
+                fit_df = get_fitting_data(selected_item_id)
             else:
                 fit_df = pd.DataFrame()
-                timestamp = None
-        elif len(selected_categories) == 1:
-            stats = stats[stats['category_name'] == selected_categories[0]]
+
+        elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
+            selected_category = st.session_state.selected_category
+
+            stats = stats[stats['category_name'] == selected_category]
+            stats = stats.reset_index(drop=True)
+            stats_type_ids = st.session_state.selected_category_info['type_ids']
+
+            if not buy_data.empty:
+                buy_data = buy_data[buy_data['type_id'].isin(stats_type_ids)]
+                buy_data = buy_data.reset_index(drop=True)
+            if not sell_data.empty:
+                sell_data = sell_data[sell_data['type_id'].isin(stats_type_ids)]
+                sell_data = sell_data.reset_index(drop=True)
 
         # Display metrics
         col1, col2, col3, col4 = st.columns(4)
@@ -380,7 +459,7 @@ def main():
         with col1:
             if not sell_data.empty:
                 min_price = stats['min_price'].min()
-                if pd.notna(min_price) and selected_items:
+                if pd.notna(min_price) and selected_item:
                     display_min_price = millify.millify(min_price, precision=2)
                     st.metric("Sell Price (min)", f"{display_min_price} ISK")
             else:
@@ -403,7 +482,7 @@ def main():
 
         with col3:
             days_remaining = stats['days_remaining'].min()
-            if pd.notna(days_remaining) and selected_items:
+            if pd.notna(days_remaining) and selected_item:
                 display_days_remaining = f"{days_remaining:.1f}"
                 st.metric("Days Remaining", f"{display_days_remaining}")
             elif sell_order_count > 0:
@@ -434,28 +513,43 @@ def main():
         display_df = sell_data.copy()
 
         #create a header for the item
-        if len(selected_items) == 1:
-            image_id = display_df.iloc[0]['type_id']
-            type_name = display_df.iloc[0]['type_name']
+        if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
+            selected_item = st.session_state.selected_item
+            if 'selected_item_id' in st.session_state:
+                selected_item_id = st.session_state.selected_item_id
+            else:
+                selected_item_id = get_backup_type_id(selected_item)
+                st.session_state.selected_item_id = selected_item_id
+            try:
+                image_id = selected_item_id
+                type_name = selected_item
+            except:
+                logger.info(f"No type_id or type_name found for {selected_item}")
+                image_id = None
+                type_name = None
             st.subheader(f"{type_name}", divider="blue")
             col1, col2 = st.columns(2)
             with col1:
-                if isship:
-                    st.image(f'https://images.evetech.net/types/{image_id}/render?size=64')
-                else:
-                    st.image(f'https://images.evetech.net/types/{image_id}/icon')
+                if image_id:
+                    if isship:
+                        st.image(f'https://images.evetech.net/types/{image_id}/render?size=64')
+                    else:
+                        st.image(f'https://images.evetech.net/types/{image_id}/icon')
+
             with col2:
                 try:
                     if fits_on_mkt:
                         st.subheader("Winter Co. Doctrine", divider="orange")
                         if cat_id in [7,8,18]:
-                            st.write(get_module_fits(type_id))
+                            st.write(get_module_fits(selected_item_id))
                         else:
-                            st.write(fit_df[fit_df['type_id'] == type_id]['group_name'].iloc[0])
+                            st.write(fit_df[fit_df['type_id'] == selected_item_id]['group_name'].iloc[0])
                 except:
                     pass
-        elif selected_categories:
-            cat_label = selected_categories[0]
+        elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
+            selected_category = st.session_state.selected_category
+
+            cat_label = selected_category
             if cat_label.endswith("s"):
                 cat_label = cat_label
             else:
@@ -484,10 +578,13 @@ def main():
         # Display buy orders if they exist
         if not buy_data.empty:
             # Display buy orders header
-            if len(selected_items) == 1:
+            if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
+                selected_item = st.session_state.selected_item
+                type_name = selected_item
                 st.subheader(f"Buy Orders for {type_name}", divider="orange")
-            elif selected_categories:
-                cat_label = selected_categories[0]
+            elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
+                selected_category = st.session_state.selected_category
+                cat_label = selected_category
                 if cat_label.endswith("s"):
                     cat_label = cat_label
                 else:
@@ -531,7 +628,7 @@ def main():
         st.divider()
 
         st.subheader("Price History")
-        history_chart = create_history_chart(sell_data['type_id'].iloc[0])
+        history_chart = create_history_chart(selected_item_id)
         if history_chart:
             st.plotly_chart(history_chart, use_container_width=False)
 
@@ -539,7 +636,7 @@ def main():
             with colh1:
                 # Display history data
                 st.subheader("History Data")
-                history_df = get_market_history(sell_data['type_id'].iloc[0])
+                history_df = get_market_history(selected_item_id)
                 history_df.date = pd.to_datetime(history_df.date).dt.strftime("%Y-%m-%d")
                 history_df.average = round(history_df.average.astype(float), 2)
                 history_df = history_df.sort_values(by='date', ascending=False)
@@ -549,7 +646,7 @@ def main():
             with colh2:
                 avgpr30 = history_df[:30].average.mean()
                 avgvol30 = history_df[:30].volume.mean()
-                st.subheader(f"{sell_data['type_name'].iloc[0]}",divider=True)
+                st.subheader(f"{selected_item}",divider=True)
                 st.metric("Average Price (30 days)", f"{avgpr30:,.2f} ISK")
                 st.metric("Average Volume (30 days)", f"{avgvol30:,.0f}")
         else:
@@ -558,7 +655,8 @@ def main():
         st.divider()
 
         st.subheader("Fitting Data")
-        if len(selected_items) == 1:
+        if 'selected_item' in st.session_state:
+            selected_item = st.session_state.selected_item
             if isship:
                 st.dataframe(fit_df, hide_index=True)
             else:
@@ -573,8 +671,17 @@ def main():
     # Display sync status in sidebar
     with st.sidebar:
         display_sync_status()
-        st.sidebar.text(f"Database: {mkt_db.alias}")
 
+        # utility function to dump session state in development mode -- leave off in production
+        # dump = st.sidebar.button("Dump Session State", use_container_width=True)
+        # if dump:
+        #     dump_session_state()
+        #     st.toast("Session state dumped", icon="✅")
+
+        st.sidebar.markdown("---")
+        db_check = st.sidebar.button("Check DB State", use_container_width=True)
+        if db_check:
+            check_db()
 
 if __name__ == "__main__":
     main()

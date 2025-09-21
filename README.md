@@ -1,10 +1,15 @@
-# Winter Coalition Market Stats Viewer (v.0.52)
+# Winter Coalition Market App (v.0.61)
 A Streamlit application for viewing EVE Online market statistics for Winter Coalition. This tool provides real-time market data analysis, historical price tracking, and fitting information for various items in EVE Online markets.
 
 SUPPORT: Join the Discord for support https://discord.gg/BxatJE572Y
 CONTRIBUTING: Contributors welcome. This project is fully open source under MIT License. Source code and full documentation available on GitHub: https://github.com/OrthelT/wcmkts_new
 
 ## UPDATES:
+*version 0.61*
+- Adds csv downloads for doctrine fits (Doctrine Status tool).
+- Simplified db update scheduling with periodic checks for updated data. Adds check DB status button to display time since last update.
+- Performance enhancements from streamlined data pipelines and better caching design
+
 *version 0.6*
 - Introduces the DatabaseConfig class in the config.py file, providing a unified interface for managing multiple database connections (local SQLite, remote Turso, and LibSQL sync operations). See the dedicated section below for more details.
 - Market data is now updated more frequently, every two hours.
@@ -115,6 +120,26 @@ SDE_AUTH_TOKEN=your_sde_auth_token
 ```bash
 streamlit run app.py
 ```
+
+### Local Secrets
+
+For local Streamlit runs, store credentials in `.streamlit/secrets.toml` (git‑ignored). This is the default source for database URLs/tokens used by `DatabaseConfig`. Example structure:
+
+```
+[wcmkt2_turso]
+url = "libsql://..."
+token = "..."
+
+[sde_aws_turso]
+url = "libsql://..."
+token = "..."
+
+[buildcost_turso]
+url = "libsql://..."
+token = "..."
+```
+
+`.env` variables may be used for other tooling, but the app resolves secrets via Streamlit.
 
 ## Usage
 

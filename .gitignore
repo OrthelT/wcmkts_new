@@ -70,3 +70,5 @@ archive/
 *.db*
 todos_hurricane_fleet_issue.txt
 AGENTS.md
+depreciated-code/
+AGENTS.md
