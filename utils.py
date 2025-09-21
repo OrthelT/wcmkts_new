@@ -5,7 +5,6 @@ from logging_config import setup_logging
 from sqlalchemy import text
 import requests
 from config import DatabaseConfig
-from email.utils import parsedate_to_datetime as _parsedate_tz
 
 mkt_db = DatabaseConfig("wcmkt")
 sde_db = DatabaseConfig("sde")
@@ -30,7 +29,7 @@ def fetch_industry_system_cost_indices():
     url = "https://esi.evetech.net/latest/industry/systems/?datasource=tranquility"
 
     if "etag" in st.session_state:
-        print("etag found")
+        logger.debug("ETag found; sending If-None-Match")
         headers = {
             "Accept": "application/json",
             "User-Agent": "WC Markets v0.52 (admin contact: Orthel.Toralen@gmail.com; +https://github.com/OrthelT/wcmkts_new",
@@ -45,8 +44,8 @@ def fetch_industry_system_cost_indices():
 
     response = requests.get(url, headers=headers)
 
-    print(response.status_code)
-    print(response.headers)
+    logger.debug(f"ESI status: {response.status_code}")
+    logger.debug(f"ESI headers: {response.headers}")
 
     etag = response.headers.get("ETag")
 
@@ -61,8 +60,8 @@ def fetch_industry_system_cost_indices():
         st.session_state.etag = etag
         st.session_state.sci_last_modified = datetime.datetime.strptime(response.headers.get('Last-Modified'), "%a, %d %b %Y %H:%M:%S GMT").replace(tzinfo=datetime.timezone.utc)
         st.session_state.sci_expires = datetime.datetime.strptime(response.headers.get('Expires'), "%a, %d %b %Y %H:%M:%S GMT").replace(tzinfo=datetime.timezone.utc)
-        print(f"last modified: {st.session_state.sci_last_modified}")
-        print(f"expires: {st.session_state.sci_expires}")
+        logger.info(f"SCI last modified: {st.session_state.sci_last_modified}")
+        logger.info(f"SCI expires: {st.session_state.sci_expires}")
 
     else:
         response.raise_for_status()

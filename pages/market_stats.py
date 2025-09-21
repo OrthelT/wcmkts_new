@@ -391,9 +391,7 @@ def main():
     # Main content
     t2 = time.perf_counter()
     elapsed_time = (t2-t1)*1000
-    print("-"*100)
     logger.info(f"TIME get_market_data() = {round(elapsed_time, 2)} ms")
-    print("-"*100)
 
     # # Process sell orders
     sell_order_count = 0

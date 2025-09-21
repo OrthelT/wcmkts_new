@@ -1,12 +1,17 @@
 from sqlalchemy import text, create_engine
 from sqlalchemy.orm import Session
 import os
+from logging_config import setup_logging
+
+logger = setup_logging(__name__)
 
 def get_type_name(type_id: int) -> str:
-    if os.path.exists("sde.db"):
-        sde = "sqlite+libsql:///sde.db"
+    # Prefer sde_lite.db; fall back to sde.db if present
+    if os.path.exists("sde_lite.db"):
+        sde = "sqlite+libsql:///sde_lite.db"
     else:
-        raise FileNotFoundError("sde.db not found")
+        logger.error("No SDE database found (expected sde_lite.db)")
+        return None
     sdee_engine = create_engine(sde)
     with Session(bind=sdee_engine) as session:
         try:
@@ -15,8 +20,7 @@ def get_type_name(type_id: int) -> str:
             type_name = row[0] if row is not None else None
             return type_name
         except Exception as e:
-            print(f"Error getting type name for type_id: {type_id}")
-            print(f"Error: {e}")
+            logger.error(f"Error getting type name for type_id={type_id}: {e}")
             return None
 
 

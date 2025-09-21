@@ -54,7 +54,6 @@ def get_all_mkt_data()->pd.DataFrame:
         all_mkt_end = time.perf_counter()
         elapsed_time = round((all_mkt_end - all_mkt_start)*1000, 2)
         logger.info(f"TIME get_all_mkt_data() = {elapsed_time} ms")
-        print("-"*100)
         df = df.reset_index(drop=True)
         return df
 
@@ -118,7 +117,7 @@ def get_fitting_data(type_id):
             fit = fit.fetchall()
             df = pd.DataFrame(fit)
         except Exception as e:
-            print(f"Failed to get data for {fit_id}: {str(e)}")
+            logger.error(f"Failed to get doctrine data for type_id={type_id}: {str(e)}")
             raise
         session.close()
 

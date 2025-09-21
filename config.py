@@ -1,11 +1,10 @@
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, select
 import streamlit as st
 import libsql
 from logging_config import setup_logging
 import sqlite3 as sql
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
-from sqlalchemy import select
 from models import UpdateLog
 
 
@@ -192,13 +191,15 @@ class DatabaseConfig:
         session.close()
         update_time = result[0] if result is not None else None
         update_time = update_time.replace(tzinfo=timezone.utc) if update_time is not None else None
-        print(f"update_time: {update_time}")
         return update_time
 
     def get_time_since_update(self, table_name: str = "marketstats", remote: bool = False):
         status = self.get_most_recent_update(table_name, remote=remote)
-        logger.info(f"status: {status}")
-        return status[0] if status is not None else None
+        now = datetime.now(timezone.utc)
+        time_since = now - status
+        logger.info(f"update_time: {status} utc")
+        logger.info(f"time_since: {time_since}")
+        return time_since if time_since is not None else None
 
 
 if __name__ == "__main__":
