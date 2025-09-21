@@ -862,12 +862,62 @@ def main():
         selected_group = st.sidebar.selectbox("Select a group", group_names)
         group_id = groups[groups["groupName"] == selected_group]["groupID"].values[0]
         logger.info(f"Selected group: {selected_group} ({group_id})")
+    try:
+        types_df = get_types_for_group(group_id)
+        types_df = types_df.sort_values(by="typeName")
 
-    types_df = get_types_for_group(group_id)
-    types_df = types_df.sort_values(by="typeName")
-    type_names = types_df["typeName"].unique()
-    selected_item = st.sidebar.selectbox("Select an item", type_names)
-    type_id = types_df[types_df["typeName"] == selected_item]["typeID"].values[0]
+        # Check if types_df is empty
+        if len(types_df) == 0:
+            st.warning(f"No items found for group: {selected_group}")
+            selected_group = None
+            selected_category = "Ship"
+            index = categories.index("Ship")
+            selected_category = st.sidebar.selectbox("Select a category", categories, index=index)
+            category_id = df[df["category"] == selected_category]["id"].values[0]
+            group_id = 1012
+            st.rerun()
+        else:
+            type_names = types_df["typeName"].unique()
+            selected_item = st.sidebar.selectbox("Select an item", type_names)
+            type_names_list = type_names.tolist()
+    except Exception as e:
+        st.warning(f"invalid group: {e}")
+        selected_group = None
+        selected_category = "Ship"
+        index = categories.index("Ship")
+        selected_category = st.sidebar.selectbox("Select a category", categories, index=index)
+        category_id = df[df["category"] == selected_category]["id"].values[0]
+        group_id = 1012
+        st.rerun()
+
+    # Only proceed if we have valid data
+    if 'selected_item' in locals() and 'type_names_list' in locals() and 'types_df' in locals():
+        try:
+            if selected_item not in type_names_list:
+                st.warning(f"Selected item: {selected_item} not a buildable item")
+                selected_item = None
+            else:
+                # Filter the DataFrame and check if any results exist
+                filtered_df = types_df[types_df["typeName"] == selected_item]
+                if len(filtered_df) == 0:
+                    st.warning(f"Selected item: {selected_item} not found in types database")
+                    selected_item = None
+                else:
+                    type_id = filtered_df["typeID"].values[0]
+        except Exception as e:
+            st.warning(f"invalid item: {e}")
+            selected_item = None
+            st.rerun()
+    else:
+        # If we don't have the required variables, set defaults
+        selected_item = None
+        type_id = None
+
+    # Ensure type_id is defined before proceeding
+    if 'type_id' not in locals() or type_id is None:
+        st.warning(f"Selected item: {selected_item if 'selected_item' in locals() else 'None'} not a buildable item")
+        selected_item = None
+        st.rerun()
 
     runs = st.sidebar.number_input("Runs", min_value=1, max_value=100000, value=1)
     me = st.sidebar.number_input("ME", min_value=0, max_value=10, value=0)
