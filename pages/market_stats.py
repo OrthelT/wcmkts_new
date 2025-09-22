@@ -717,12 +717,12 @@ def main():
         if db_check:
             check_db()
 
-        st.sidebar.markdown("---")
-        force_sync = st.sidebar.button("Force Sync", use_container_width=True, type="tertiary")
-        if force_sync:
-            st.cache_data.clear()
-            st.cache_resource.clear()
-            mkt_db.sync()
+        # st.sidebar.markdown("---")
+        # force_sync = st.sidebar.button("Force Sync", use_container_width=True, type="tertiary")
+        # if force_sync:
+        #     st.cache_data.clear()
+        #     st.cache_resource.clear()
+        #     mkt_db.sync()
 
 if __name__ == "__main__":
     main()
