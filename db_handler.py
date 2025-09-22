@@ -38,9 +38,38 @@ def execute_query_with_retry(session, query):
         raise
 
 @st.cache_data(ttl=600)
-def get_all_mkt_data()->pd.DataFrame:
+def get_all_mkt_stats()->pd.DataFrame:
     logger.info("-"*40)
-    logger.info("getting all market data")
+    all_mkt_start = time.perf_counter()
+    query = """
+    SELECT * FROM marketstats
+    """
+    def _read_all():
+        with Session(mkt_db.engine) as session:
+                result = session.execute(text(query))
+                columns = result.keys()
+                session.close()
+                return pd.DataFrame(result.fetchall(), columns=columns)
+    try:
+        df = _read_all()
+    except Exception as e:
+        logger.error(f"Failed to get market stats: {str(e)}")
+        try:
+            mkt_db.sync()
+            df = _read_all()
+        except Exception as e2:
+            logger.error(f"Failed to get market stats after sync: {str(e2)}")
+            raise
+    all_mkt_end = time.perf_counter()
+    elapsed_time = round((all_mkt_end - all_mkt_start)*1000, 2)
+    logger.info(f"TIME get_all_mkt_stats() = {elapsed_time} ms")
+    logger.info("-"*40)
+    df = df.reset_index(drop=True)
+    return df
+
+
+@st.cache_data(ttl=600)
+def get_all_mkt_orders()->pd.DataFrame:
     logger.info("-"*40)
     all_mkt_start = time.perf_counter()
     query = """
@@ -60,8 +89,8 @@ def get_all_mkt_data()->pd.DataFrame:
             with Session(mkt_db.engine) as session:
                 result = session.execute(text(query))
                 columns = result.keys()
+                session.close()
                 return pd.DataFrame(result.fetchall(), columns=columns)
-        session.close()
 
     try:
         df = _read_all()
@@ -84,7 +113,8 @@ def get_all_mkt_data()->pd.DataFrame:
 
     all_mkt_end = time.perf_counter()
     elapsed_time = round((all_mkt_end - all_mkt_start)*1000, 2)
-    logger.info(f"TIME get_all_mkt_data() = {elapsed_time} ms")
+    logger.info(f"TIME get_all_mkt_orders() = {elapsed_time} ms")
+    logger.info("-"*40)
     df = df.reset_index(drop=True)
     return df
 
@@ -136,23 +166,32 @@ def clean_mkt_data(df):
 
     return df
 
-def get_fitting_data(type_id):
-    logger.info("getting fitting data with cache")
+
+@st.cache_data(ttl=600)
+def get_all_fitting_data()->pd.DataFrame:
     with mkt_db.local_access():
         with Session(mkt_db.engine) as session:
             query = """
                 SELECT * FROM doctrines
                 """
-
             try:
-                fit = session.execute(text(query))
-                fit = fit.fetchall()
-                df = pd.DataFrame(fit)
+                fits = session.execute(text(query))
+                fits = fits.fetchall()
+                df = pd.DataFrame(fits)
+                df = df.reset_index(drop=True)
             except Exception as e:
-                logger.error(f"Failed to get doctrine data for type_id={type_id}: {str(e)}")
+                logger.error(f"Failed to get doctrine data: {str(e)}")
                 raise
             session.close()
+    return df
 
+
+def get_fitting_data(type_id):
+    logger.info("getting fitting data")
+    df = get_all_fitting_data()
+    if df.empty:
+        return None, None
+    else:
         df2 = df.copy()
         df2 = df2[df2['type_id'] == type_id]
         df2.reset_index(drop=True, inplace=True)
@@ -189,7 +228,7 @@ def get_fitting_data(type_id):
         df3.reset_index(drop=True, inplace=True)
     return df3
 
-@st.cache_resource(ttl=600)
+@st.cache_data(ttl=600)
 def get_stats(stats_query=None):
     if stats_query is None:
         stats_query = """
@@ -242,6 +281,31 @@ def get_market_history(type_id):
     with mkt_db.local_access():
         with mkt_db.engine.connect() as conn:
             return pd.read_sql_query(query, conn)
+
+@st.cache_data(ttl=600)
+def get_all_market_history()->pd.DataFrame:
+    query = """
+        SELECT * FROM market_history
+    """
+    def _read_all():
+        with mkt_db.local_access():
+            with Session(mkt_db.engine) as session:
+                result = session.execute(text(query))
+                columns = result.keys()
+                session.close()
+                return pd.DataFrame(result.fetchall(), columns=columns)
+    try:
+        df = _read_all()
+    except Exception as e:
+        logger.error(f"Failed to get market history: {str(e)}")
+        try:
+            mkt_db.sync()
+            df = _read_all()
+        except Exception as e2:
+            logger.error(f"Failed to get market history after sync: {e2}")
+            raise
+    df = df.reset_index(drop=True)
+    return df
 
 def get_update_time()->str:
     if "local_update_status" in st.session_state:
@@ -315,7 +379,7 @@ def get_4H_price(type_id):
         return None
 
 def new_get_market_data(show_all):
-    df = get_all_mkt_data()
+    df = get_all_mkt_orders()
 
     if 'selected_category_info' in st.session_state and st.session_state.selected_category_info is not None:
         orders_df = df[df['type_id'].isin(st.session_state.selected_category_info['type_ids'])]
