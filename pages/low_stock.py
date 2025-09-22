@@ -36,8 +36,7 @@ def get_filter_options(selected_categories=None):
                 df = df[df['category_name'].isin(selected_categories)]
 
             items = sorted(df['type_name'].unique())
-            logger.info(f"items: {len(items)}")
-            logger.info(f"categories: {len(categories)}")
+            logger.info(f"items: {len(items)} categories: {len(categories)}")
 
             return categories, items
 
@@ -46,6 +45,7 @@ def get_filter_options(selected_categories=None):
         st.error(f"Database error: {str(e)}")
         return [], []
 
+@st.cache_data(ttl=600)
 def get_market_stats(selected_categories=None, selected_items=None, max_days_remaining=None, doctrine_only=False):
     # Start with base query for marketstats
     query = """
@@ -61,6 +61,7 @@ def get_market_stats(selected_categories=None, selected_items=None, max_days_rem
     engine = mktdb.engine
     with engine.connect() as conn:
         df = pd.read_sql(text(query), conn)
+    conn.close()
 
     # Apply filters
     if selected_categories:
@@ -121,6 +122,7 @@ def create_days_remaining_chart(df):
 
     return fig
 
+
 def main():
        # Title
     st.title("Winter Coalition Market Low Stock Alert")
@@ -143,7 +145,6 @@ def main():
     if 'selected_categories' not in st.session_state:
         st.session_state.selected_categories = []
 
-    # Category filter - multiselect with checkboxes
     st.sidebar.subheader("Category Filter")
     selected_categories = st.sidebar.multiselect(
         "Select Categories",
@@ -152,8 +153,9 @@ def main():
         help="Select one or more categories to filter the data"
     )
 
-    # Update session state
     st.session_state.selected_categories = selected_categories
+    logger.info(f"selected_categories: {selected_categories}")
+
 
     # Days remaining filter
     st.sidebar.subheader("Days Remaining Filter")

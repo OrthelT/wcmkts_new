@@ -56,10 +56,11 @@ def get_all_mkt_data()->pd.DataFrame:
         logger.error(f"Pre-read sync attempt failed: {e}")
 
     def _read_all():
-        with Session(mkt_db.engine) as session:
-            result = session.execute(text(query))
-            columns = result.keys()
-            return pd.DataFrame(result.fetchall(), columns=columns)
+        with mkt_db.local_access():
+            with Session(mkt_db.engine) as session:
+                result = session.execute(text(query))
+                columns = result.keys()
+                return pd.DataFrame(result.fetchall(), columns=columns)
         session.close()
 
     try:
@@ -137,19 +138,20 @@ def clean_mkt_data(df):
 
 def get_fitting_data(type_id):
     logger.info("getting fitting data with cache")
-    with Session(mkt_db.engine) as session:
-        query = """
-            SELECT * FROM doctrines
-            """
+    with mkt_db.local_access():
+        with Session(mkt_db.engine) as session:
+            query = """
+                SELECT * FROM doctrines
+                """
 
-        try:
-            fit = session.execute(text(query))
-            fit = fit.fetchall()
-            df = pd.DataFrame(fit)
-        except Exception as e:
-            logger.error(f"Failed to get doctrine data for type_id={type_id}: {str(e)}")
-            raise
-        session.close()
+            try:
+                fit = session.execute(text(query))
+                fit = fit.fetchall()
+                df = pd.DataFrame(fit)
+            except Exception as e:
+                logger.error(f"Failed to get doctrine data for type_id={type_id}: {str(e)}")
+                raise
+            session.close()
 
         df2 = df.copy()
         df2 = df2[df2['type_id'] == type_id]
@@ -195,8 +197,9 @@ def get_stats(stats_query=None):
         """
     engine = mkt_db.engine
     try:
-        with engine.connect() as conn:
-            stats = pd.read_sql_query(stats_query, conn)
+        with mkt_db.local_access():
+            with engine.connect() as conn:
+                stats = pd.read_sql_query(stats_query, conn)
     except Exception as e:
         msg = str(e).lower()
         if "malform" in msg or "database disk image is malformed" in msg:
@@ -214,8 +217,9 @@ def get_stats(stats_query=None):
 
 def query_local_mkt_db(query: str) -> pd.DataFrame:
     engine = mkt_db.engine
-    with engine.connect() as conn:
-        df = pd.read_sql_query(query, conn)
+    with mkt_db.local_access():
+        with engine.connect() as conn:
+            df = pd.read_sql_query(query, conn)
     return df
 
 # Helper function to safely format numbers
@@ -235,7 +239,9 @@ def get_market_history(type_id):
         WHERE type_id = {type_id}
         ORDER BY date
     """
-    return pd.read_sql_query(query, (mkt_db.engine))
+    with mkt_db.local_access():
+        with mkt_db.engine.connect() as conn:
+            return pd.read_sql_query(query, conn)
 
 def get_update_time()->str:
     if "local_update_status" in st.session_state:
@@ -300,7 +306,9 @@ def get_4H_price(type_id):
     query = f"""
         SELECT * FROM marketstats WHERE type_id = {type_id}
         """
-    df = pd.read_sql_query(query, (mkt_db.engine))
+    with mkt_db.local_access():
+        with mkt_db.engine.connect() as conn:
+            df = pd.read_sql_query(query, conn)
     try:
         return df.price.iloc[0]
     except:

@@ -68,8 +68,7 @@ def get_doctrine_lead_ship(doctrine_id: int) -> int:
 def get_fit_name_from_db(fit_id: int) -> str:
     """Get the fit name from the ship_targets table using fit_id."""
     try:
-        logger.info(f"Getting fit name from database for fit_id: {fit_id}")
-        logger.info("Query: SELECT fit_name FROM ship_targets WHERE fit_id = :fit_id")
+
         with mktdb.engine.connect() as conn:
             result = conn.execute(text("SELECT fit_name FROM ship_targets WHERE fit_id = :fit_id"), {"fit_id": fit_id})
             row = result.fetchone()

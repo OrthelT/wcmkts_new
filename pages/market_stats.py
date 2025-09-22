@@ -331,6 +331,21 @@ def main():
     logger.info("Starting main function")
     logger.info("*****************************************************")
 
+    if not st.session_state.get('db_initialized'):
+        logger.info("-"*30)
+        logger.info("Initializing database")
+
+        result = init_db()
+        if result:
+            st.toast("Database initialized successfully", icon="✅")
+            st.session_state.db_initialized = True
+        else:
+            st.toast("Database initialization failed", icon="❌")
+            st.session_state.db_initialized = False
+    else:
+        logger.info("Databases already initialized in session state")
+    logger.info("*"*60)
+
     maybe_run_check()
 
     wclogo = "images/wclogo.png"

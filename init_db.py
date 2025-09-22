@@ -29,22 +29,6 @@ def init_db():
     }
     status = {}
 
-    #TODO: remove this once sde_lite.db is the updated sde.db
-
-    if os.path.exists("sde.db-info"):
-        logger.info("removing sde.db-info🪓")
-        os.remove("sde.db-info")
-    if os.path.exists("sde.db"):
-        logger.info("removing sde.db🪓")
-        os.remove("sde.db")
-    if os.path.exists("sde.db-shm"):
-        logger.info("removing sde.db-shm🪓")
-        os.remove("sde.db-shm")
-    if os.path.exists("sde.db-wal"):
-        logger.info("removing sde.db-wal🪓")
-        os.remove("sde.db-wal")
-
-
     for key, value in db_paths.items():
         alias = key
         db_path = value
