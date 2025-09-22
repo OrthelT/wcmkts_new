@@ -373,11 +373,14 @@ def main():
         format_func=lambda x: "All Categories" if x == "" else x
     )
     if selected_category == "":
+        logger.info(f"selected_category is {selected_category}")
         st.session_state.selected_category = None
         st.session_state.selected_category_info = None
         st.session_state.selected_item = None
+        st.session_state.selected_item_id = None
 
     if selected_category and selected_category != None:
+        logger.info(f"selected_category exists and is not None")
         st.sidebar.text(f"Category: {selected_category}")
         st.session_state.selected_category = selected_category
         logger.info(f"selected_category: {selected_category}")
@@ -393,7 +396,11 @@ def main():
         format_func=lambda x: "All Items" if x == "" else x
     )
 
-    if selected_item:
+    if selected_item == "":
+        st.session_state.selected_item = None
+        st.session_state.selected_item_id = None
+
+    if selected_item and selected_item != None:
         st.sidebar.text(f"Item: {selected_item}")
         st.session_state.selected_item = selected_item
         logger.info(f"Selected item: {selected_item}")
