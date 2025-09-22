@@ -314,20 +314,14 @@ def maybe_run_check():
         check_db()
         st.session_state["last_check"] = now
         logger.info("last_check not in st.session_state, setting to now")
-        logger.info("-"*40)
 
     last_run = st.session_state.get("last_check", 0)
-    logger.info("-"*40)
-    logger.info(f"last check: {datetime.fromtimestamp(last_run).strftime('%m-%d %H:%M UTC')}")
-    logger.info(f"now: {datetime.fromtimestamp(now).strftime('%m-%d %H:%M UTC')}")
-    logger.info("-"*40)
 
     if now - last_run > 600:   # 600 seconds = 10 minutes
         logger.info("Running check_db()")
         logger.info(f"now - last_run: {now - last_run}")
         check_db()
         st.session_state["last_check"] = now
-    logger.info("-"*40)
 
 
 def main():

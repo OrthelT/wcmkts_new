@@ -6,9 +6,14 @@ import sqlite3 as sql
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from models import UpdateLog
+import threading
+from contextlib import suppress
 
 
 logger = setup_logging(__name__)
+
+# Global lock to serialize sync operations within the process
+_SYNC_LOCK = threading.Lock()
 
 class DatabaseConfig:
 
@@ -86,27 +91,102 @@ class DatabaseConfig:
             self._sqlite_local_connect = sql.connect(self.path)
         return self._sqlite_local_connect
 
-    def sync(self):
-        with self.libsql_sync_connect as conn:
-            logger.info("Syncing database...")
-            conn.sync()
-        conn.close()
-        update_time = datetime.now(timezone.utc)
-        logger.info(f"Database synced at {update_time} UTC")
+    def _dispose_local_connections(self):
+        """Dispose/close all local connections/engines to safely allow file operations.
 
-        if self.alias == "wcmkt2":
-            validation_test = self.validate_sync()
-            st.session_state.sync_status = "Success" if validation_test else "Failed"
-        st.session_state.sync_check = False
+        This helps prevent corruption during sync by ensuring no open handles.
+        """
+        # Dispose SQLAlchemy engine (local file)
+        if self._engine is not None:
+            with suppress(Exception):
+                self._engine.dispose()
+            self._engine = None
+
+        # Close libsql direct connection if any
+        if self._libsql_connect is not None:
+            with suppress(Exception):
+                self._libsql_connect.close()
+            self._libsql_connect = None
+
+        # Close libsql sync connection if any (avoid reusing for sync)
+        if self._libsql_sync_connect is not None:
+            with suppress(Exception):
+                self._libsql_sync_connect.close()
+            self._libsql_sync_connect = None
+
+        # Close raw sqlite3 connection if any
+        if self._sqlite_local_connect is not None:
+            with suppress(Exception):
+                self._sqlite_local_connect.close()
+            self._sqlite_local_connect = None
+
+    def integrity_check(self) -> bool:
+        """Run PRAGMA integrity_check on the local database.
+
+        Returns True if the result is 'ok', False otherwise or on error.
+        """
+        try:
+            # Use a short-lived connection
+            with self.engine.connect() as conn:
+                result = conn.execute(text("PRAGMA integrity_check")).fetchone()
+            status = str(result[0]).lower() if result and result[0] is not None else ""
+            ok = status == "ok"
+            logger.info(f"Integrity check ({self.alias}): {status}")
+            return ok
+        except Exception as e:
+            logger.error(f"Integrity check error ({self.alias}): {e}")
+            return False
+
+    def sync(self):
+        """Synchronize the local database with the remote Turso replica safely.
+
+        Uses a process-wide lock and disposes local connections to prevent
+        concurrent reads/writes from corrupting the database file.
+        """
+        with _SYNC_LOCK:
+            logger.info("Preparing for database sync: disposing local connections …")
+            self._dispose_local_connections()
+            logger.info("Syncing database…")
+            conn = None
+            try:
+                # Explicitly manage connection lifecycle; avoid relying on context manager
+                conn = libsql.connect(self.path, sync_url=self.turso_url, auth_token=self.token)
+                st.cache_data.clear()
+                st.cache_resource.clear()
+                conn.sync()
+            except Exception as e:
+                logger.error(f"Database sync failed: {e}")
+                raise
+            finally:
+                if conn is not None:
+                    with suppress(Exception):
+                        conn.close()
+                        logger.info("Connection closed")
+
+            update_time = datetime.now(timezone.utc)
+            logger.info(f"Database synced at {update_time} UTC")
+
+            # Post-sync integrity validation
+            ok = self.integrity_check()
+            if not ok:
+                logger.error("Post-sync integrity check failed.")
+
+            # For market DBs, also validate last_update parity if integrity ok
+            if self.alias == "wcmkt2":
+                validation_test = self.validate_sync() if ok else False
+                st.session_state.sync_status = "Success" if validation_test else "Failed"
+            st.session_state.sync_check = False
 
     def validate_sync(self)-> bool:
         alias = self.alias
         with self.remote_engine.connect() as conn:
             result = conn.execute(text("SELECT MAX(last_update) FROM marketstats")).fetchone()
             remote_last_update = result[0]
+            conn.close()
         with self.engine.connect() as conn:
             result = conn.execute(text("SELECT MAX(last_update) FROM marketstats")).fetchone()
             local_last_update = result[0]
+            conn.close()
         logger.info("-"*40)
         logger.info(f"alias: {alias} validate_sync()")
         timestamp = datetime.now(timezone.utc)

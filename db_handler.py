@@ -46,16 +46,39 @@ def get_all_mkt_data()->pd.DataFrame:
     query = """
     SELECT * FROM marketorders
     """
-    with Session(mkt_db.engine) as session:
-        result = session.execute(text(query))
-        columns = result.keys()
-        df = pd.DataFrame(result.fetchall(), columns=columns)
+    # Proactive integrity check before reading
+    try:
+        if not mkt_db.integrity_check():
 
-        all_mkt_end = time.perf_counter()
-        elapsed_time = round((all_mkt_end - all_mkt_start)*1000, 2)
-        logger.info(f"TIME get_all_mkt_data() = {elapsed_time} ms")
-        df = df.reset_index(drop=True)
-        return df
+            logger.warning("Local DB integrity check failed; attempting resync before read…")
+            mkt_db.sync()
+    except Exception as e:
+        logger.error(f"Pre-read sync attempt failed: {e}")
+
+    def _read_all():
+        with Session(mkt_db.engine) as session:
+            result = session.execute(text(query))
+            columns = result.keys()
+            return pd.DataFrame(result.fetchall(), columns=columns)
+        session.close()
+
+    try:
+        df = _read_all()
+    except Exception as e:
+        # Handle on-the-fly corruption by resyncing and retrying once
+        msg = str(e).lower()
+        if "malform" in msg or "database disk image is malformed" in msg:
+            logger.error("Detected malformed DB during read; resyncing and retrying once…")
+            mkt_db.sync()
+            df = _read_all()
+        else:
+            raise
+
+    all_mkt_end = time.perf_counter()
+    elapsed_time = round((all_mkt_end - all_mkt_start)*1000, 2)
+    logger.info(f"TIME get_all_mkt_data() = {elapsed_time} ms")
+    df = df.reset_index(drop=True)
+    return df
 
 
 
