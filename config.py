@@ -38,6 +38,13 @@ class DatabaseConfig:
         "build_cost_turso": st.secrets.buildcost_turso.token,
     }
 
+    # Shared handles per-alias to avoid multiple simultaneous connections to the same file
+    _engines: dict[str, object] = {}
+    _remote_engines: dict[str, object] = {}
+    _libsql_connects: dict[str, object] = {}
+    _libsql_sync_connects: dict[str, object] = {}
+    _sqlite_local_connects: dict[str, object] = {}
+
     def __init__(self, alias: str, dialect: str = "sqlite+libsql"):
         if alias == "wcmkt":
             alias = self.wcdbmap
@@ -61,64 +68,76 @@ class DatabaseConfig:
 
     @property
     def engine(self):
-        if self._engine is None:
-            self._engine = create_engine(self.url)
-        return self._engine
+        eng = DatabaseConfig._engines.get(self.alias)
+        if eng is None:
+            eng = create_engine(self.url)
+            DatabaseConfig._engines[self.alias] = eng
+        return eng
 
     @property
     def remote_engine(self):
-        if self._remote_engine is None:
+        eng = DatabaseConfig._remote_engines.get(self.alias)
+        if eng is None:
             turso_url = self._db_turso_urls[f"{self.alias}_turso"]
             auth_token = self._db_turso_auth_tokens[f"{self.alias}_turso"]
-            self._remote_engine = create_engine(f"sqlite+{turso_url}?secure=true", connect_args={"auth_token": auth_token,},)
-        return self._remote_engine
+            eng = create_engine(
+                f"sqlite+{turso_url}?secure=true",
+                connect_args={"auth_token": auth_token},
+            )
+            DatabaseConfig._remote_engines[self.alias] = eng
+        return eng
 
     @property
     def libsql_local_connect(self):
-        if self._libsql_connect is None:
-            self._libsql_connect = libsql.connect(self.path)
-        return self._libsql_connect
+        conn = DatabaseConfig._libsql_connects.get(self.alias)
+        if conn is None:
+            conn = libsql.connect(self.path)
+            DatabaseConfig._libsql_connects[self.alias] = conn
+        return conn
 
     @property
     def libsql_sync_connect(self):
-        if self._libsql_sync_connect is None:
-            self._libsql_sync_connect = libsql.connect(self.path, sync_url = self.turso_url, auth_token=self.token)
-        return self._libsql_sync_connect
+        conn = DatabaseConfig._libsql_sync_connects.get(self.alias)
+        if conn is None:
+            conn = libsql.connect(self.path, sync_url=self.turso_url, auth_token=self.token)
+            DatabaseConfig._libsql_sync_connects[self.alias] = conn
+        return conn
 
     @property
     def sqlite_local_connect(self):
-        if self._sqlite_local_connect is None:
-            self._sqlite_local_connect = sql.connect(self.path)
-        return self._sqlite_local_connect
+        conn = DatabaseConfig._sqlite_local_connects.get(self.alias)
+        if conn is None:
+            conn = sql.connect(self.path)
+            DatabaseConfig._sqlite_local_connects[self.alias] = conn
+        return conn
 
     def _dispose_local_connections(self):
         """Dispose/close all local connections/engines to safely allow file operations.
-
         This helps prevent corruption during sync by ensuring no open handles.
         """
-        # Dispose SQLAlchemy engine (local file)
-        if self._engine is not None:
+        # Dispose SQLAlchemy engine (local file) shared across instances
+        eng = DatabaseConfig._engines.pop(self.alias, None)
+        if eng is not None:
             with suppress(Exception):
-                self._engine.dispose()
-            self._engine = None
+                eng.dispose()
 
         # Close libsql direct connection if any
-        if self._libsql_connect is not None:
+        conn = DatabaseConfig._libsql_connects.pop(self.alias, None)
+        if conn is not None:
             with suppress(Exception):
-                self._libsql_connect.close()
-            self._libsql_connect = None
+                conn.close()
 
         # Close libsql sync connection if any (avoid reusing for sync)
-        if self._libsql_sync_connect is not None:
+        sconn = DatabaseConfig._libsql_sync_connects.pop(self.alias, None)
+        if sconn is not None:
             with suppress(Exception):
-                self._libsql_sync_connect.close()
-            self._libsql_sync_connect = None
+                sconn.close()
 
         # Close raw sqlite3 connection if any
-        if self._sqlite_local_connect is not None:
+        sqlite_conn = DatabaseConfig._sqlite_local_connects.pop(self.alias, None)
+        if sqlite_conn is not None:
             with suppress(Exception):
-                self._sqlite_local_connect.close()
-            self._sqlite_local_connect = None
+                sqlite_conn.close()
 
     def integrity_check(self) -> bool:
         """Run PRAGMA integrity_check on the local database.
@@ -149,10 +168,10 @@ class DatabaseConfig:
             logger.info("Syncing database…")
             conn = None
             try:
-                # Explicitly manage connection lifecycle; avoid relying on context manager
-                conn = libsql.connect(self.path, sync_url=self.turso_url, auth_token=self.token)
                 st.cache_data.clear()
                 st.cache_resource.clear()
+                # Explicitly manage connection lifecycle; avoid relying on context manager
+                conn = libsql.connect(self.path, sync_url=self.turso_url, auth_token=self.token)
                 conn.sync()
             except Exception as e:
                 logger.error(f"Database sync failed: {e}")
@@ -207,6 +226,7 @@ class DatabaseConfig:
                 result = conn.execute(stmt)
                 tables = result.fetchall()
                 table_list = [table.name for table in tables if "sqlite" not in table.name]
+                conn.close()
                 return table_list
         else:
             engine = self.remote_engine
@@ -215,6 +235,7 @@ class DatabaseConfig:
                 result = conn.execute(stmt)
                 tables = result.fetchall()
                 table_list = [table.name for table in tables if "sqlite" not in table.name]
+                conn.close()
                 return table_list
 
     def get_table_columns(self, table_name: str, local_only: bool = True, full_info: bool = False) -> list[dict]:
@@ -251,6 +272,7 @@ class DatabaseConfig:
                 })
             else:
                 column_info = [col.name for col in columns]
+            conn.close()
             return column_info
 
     def get_most_recent_update(self, table_name: str, remote: bool = False)-> datetime:
@@ -268,9 +290,11 @@ class DatabaseConfig:
         with session.begin():
             updates = select(UpdateLog.timestamp).where(UpdateLog.table_name == table_name).order_by(UpdateLog.timestamp.desc())
             result = session.execute(updates).fetchone()
+
+            update_time = result[0] if result is not None else None
+            update_time = update_time.replace(tzinfo=timezone.utc) if update_time is not None else None
         session.close()
-        update_time = result[0] if result is not None else None
-        update_time = update_time.replace(tzinfo=timezone.utc) if update_time is not None else None
+        engine.dispose()
         return update_time
 
     def get_time_since_update(self, table_name: str = "marketstats", remote: bool = False):

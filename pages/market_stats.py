@@ -290,8 +290,10 @@ def check_db():
         st.toast("More recent remote database data available, syncing local database", icon="🕧")
         logger.info("check_db() check is False, syncing local database 🛜")
         db = DatabaseConfig("wcmkt")
-        db.sync()
         st.cache_data.clear()
+        st.cache_resource.clear()
+        db.sync()
+
         if db.validate_sync():
             logger.info("Local database synced and validated🟢")
             update_wcmkt_state()
@@ -699,6 +701,13 @@ def main():
         db_check = st.sidebar.button("Check DB State", use_container_width=True)
         if db_check:
             check_db()
+
+        st.sidebar.markdown("---")
+        force_sync = st.sidebar.button("Force Sync", use_container_width=True, type="tertiary")
+        if force_sync:
+            st.cache_data.clear()
+            st.cache_resource.clear()
+            mkt_db.sync()
 
 if __name__ == "__main__":
     main()

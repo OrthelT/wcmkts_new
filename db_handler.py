@@ -69,8 +69,15 @@ def get_all_mkt_data()->pd.DataFrame:
         msg = str(e).lower()
         if "malform" in msg or "database disk image is malformed" in msg:
             logger.error("Detected malformed DB during read; resyncing and retrying once…")
-            mkt_db.sync()
-            df = _read_all()
+            try:
+                mkt_db.sync()
+                df = _read_all()
+            except Exception as e2:
+                msg2 = str(e2).lower()
+                logger.error(f"Retry after sync failed: {msg2}. Falling back to remote read.")
+                # Final fallback: read directly from remote so UI stays up
+                with mkt_db.remote_engine.connect() as conn:
+                    df = pd.read_sql_query(query, conn)
         else:
             raise
 
@@ -187,8 +194,22 @@ def get_stats(stats_query=None):
             SELECT * FROM marketstats
         """
     engine = mkt_db.engine
-    with engine.connect() as conn:
-        stats = pd.read_sql_query(stats_query, conn)
+    try:
+        with engine.connect() as conn:
+            stats = pd.read_sql_query(stats_query, conn)
+    except Exception as e:
+        msg = str(e).lower()
+        if "malform" in msg or "database disk image is malformed" in msg:
+            logger.error("Malformed DB during stats read; syncing and falling back to remote if needed…")
+            try:
+                mkt_db.sync()
+                with mkt_db.engine.connect() as conn:
+                    stats = pd.read_sql_query(stats_query, conn)
+            except Exception:
+                with mkt_db.remote_engine.connect() as conn:
+                    stats = pd.read_sql_query(stats_query, conn)
+        else:
+            raise
     return stats
 
 def query_local_mkt_db(query: str) -> pd.DataFrame:
