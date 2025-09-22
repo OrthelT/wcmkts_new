@@ -285,14 +285,14 @@ def get_4H_price(type_id):
     except:
         return None
 
-@st.cache_data(ttl=600)
 def new_get_market_data(show_all):
     df = get_all_mkt_data()
 
     if 'selected_category_info' in st.session_state and st.session_state.selected_category_info is not None:
         orders_df = df[df['type_id'].isin(st.session_state.selected_category_info['type_ids'])]
-    elif 'selected_item' in st.session_state and st.session_state.selected_item is not None:
-        orders_df = df[df['type_id'].isin(st.session_state.selected_items_type_ids)]
+    if 'selected_item_id' in st.session_state and st.session_state.selected_item_id is not None:
+        logger.info(f"selected_item_id: {st.session_state.selected_item_id}")
+        orders_df = df[df['type_id'] == st.session_state.selected_item_id]
     else:
         orders_df = df
 
@@ -302,10 +302,13 @@ def new_get_market_data(show_all):
 
     sell_orders_df = orders_df[orders_df['is_buy_order'] == 0]
     sell_orders_df = sell_orders_df.reset_index(drop=True)
-    sell_orders_df = clean_mkt_data(sell_orders_df)
+
     buy_orders_df = orders_df[orders_df['is_buy_order'] == 1]
     buy_orders_df = buy_orders_df.reset_index(drop=True)
-    buy_orders_df = clean_mkt_data(buy_orders_df)
+    if not sell_orders_df.empty:
+        sell_orders_df = clean_mkt_data(sell_orders_df)
+    if not buy_orders_df.empty:
+        buy_orders_df = clean_mkt_data(buy_orders_df)
 
     return sell_orders_df, buy_orders_df, stats_df
 
