@@ -1,4 +1,4 @@
-# Winter Coalition Market App (v.0.61)
+# Winter Coalition Market App (v.0.62)
 A Streamlit application for viewing EVE Online market statistics for Winter Coalition. This tool provides real-time market data analysis, historical price tracking, and fitting information for various items in EVE Online markets.
 
 SUPPORT: Join the Discord for support https://discord.gg/BxatJE572Y
