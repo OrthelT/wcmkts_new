@@ -205,11 +205,9 @@ def get_ship_stock_list(ship_names: list):
                 result = session.execute(text(query))
                 row = result.fetchone()
                 if row and row[2] is not None:
-                    ship_name = row[0]
                     ship_id = row[1]
                     ship_stock = int(row[2])
                     ship_fits = int(row[3])
-                    fit_id = int(row[4])
                     ship_target = get_ship_target(ship_id, 0)
                     ship_info = f"{ship} (Qty: {ship_stock} | Fits: {ship_fits} | Target: {ship_target})"
                     csv_ship_info = f"{ship},{ship_id},{ship_stock},{ship_fits},{ship_target}\n"

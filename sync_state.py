@@ -3,8 +3,7 @@ import datetime
 from logging_config import setup_logging
 from config import DatabaseConfig
 from datetime import timezone, datetime, timedelta
-from time import perf_counter, time
-import threading
+from time import perf_counter
 
 logger = setup_logging(__name__)
 

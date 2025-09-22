@@ -4,7 +4,6 @@ import time
 
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from httpx import head
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -20,7 +19,7 @@ from db_handler import new_get_market_data, get_all_mkt_orders, get_all_mkt_stat
 from init_db import init_db
 from sync_state import update_wcmkt_state
 from type_info import get_backup_type_id
-from datetime import datetime, timezone
+from datetime import datetime
 
 
 mkt_db = DatabaseConfig("wcmkt")
@@ -53,16 +52,6 @@ def all_sde_info(type_ids: list = None)->pd.DataFrame:
     if not type_ids:
         type_ids = get_market_type_ids()
     logger.info(f"type_ids: {len(type_ids)}")
-
-    # Use SQLAlchemy's proper IN clause with parameter binding
-    sde_query = text("""
-    SELECT DISTINCT it.typeName as type_name, it.typeID as type_id, it.groupID as group_id, ig.groupName as group_name,
-           ic.categoryID as category_id, ic.categoryName as category_name
-    FROM invTypes it
-    JOIN invGroups ig ON it.groupID = ig.groupID
-    JOIN invCategories ic ON ig.categoryID = ic.categoryID
-    WHERE it.typeID IN :type_ids
-    """).bindparams(bindparam('type_ids', expanding=True))
 
     new_sde_query = text("""
     SELECT typeName as type_name, typeID as type_id, groupID as group_id, groupName as group_name,
@@ -385,7 +374,7 @@ def main():
         st.session_state.selected_item_id = None
 
     if selected_category and selected_category != None:
-        logger.info(f"selected_category exists and is not None")
+        logger.info("selected_category exists and is not None")
         st.sidebar.text(f"Category: {selected_category}")
         st.session_state.selected_category = selected_category
         logger.info(f"selected_category: {selected_category}")
@@ -438,7 +427,7 @@ def main():
         buy_order_count = buy_data['order_id'].nunique()
         buy_total_value = (buy_data['price'] * buy_data['volume_remain']).sum()
 
-
+    fit_df = pd.DataFrame()
     if not sell_data.empty:
 
         if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
@@ -711,19 +700,96 @@ def main():
 
         st.divider()
 
-        st.subheader("Fitting Data")
-        if 'selected_item' in st.session_state:
+    if fit_df:
+        st.subheader(f"Fitting Data",divider="blue")
+
+        if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
             selected_item = st.session_state.selected_item
-            if isship:
-                st.dataframe(fit_df, hide_index=True)
-            else:
-                st.write("Fitting data only available for ships")
         else:
-            st.write("Fitting data not available for this item or no item selected")
+            selected_item = " "
+        if 'selected_item_id' in st.session_state and st.session_state.selected_item_id is not None:
+            selected_item_id = st.session_state.selected_item_id
+        else:
+            selected_item_id = get_backup_type_id(selected_item)
+        try:
+            fit_id = fit_df['fit_id'].iloc[0]
+        except:
+            fit_id = " "
+        st.markdown(f"<span style='font-weight: bold; color: orange;'>{selected_item}</span> | type_id: {selected_item_id} | fit_id: {fit_id}", unsafe_allow_html=True)
 
-    else:
-        st.warning("No data found for the selected filters.")
-
+        if isship:
+            col_config = {
+                'fit_id': st.column_config.NumberColumn(
+                    "Fit ID",
+                    help="WC Doctrine Fit ID"
+                ),
+                'ship_name': st.column_config.TextColumn(
+                    "Ship Name",
+                    help="Ship Name",
+                    width="medium"
+                ),
+                'type_id': st.column_config.NumberColumn(
+                    "Type ID",
+                    help="Type ID"
+                ),
+                'type_name': st.column_config.TextColumn(
+                    "Type Name",
+                    help="Type Name",
+                    width="medium"
+                ),
+                'hulls': st.column_config.NumberColumn(
+                    "Hulls",
+                    help="Number of ship hulls available for this fit",
+                    width="small"
+                ),
+                'fit_qty': st.column_config.NumberColumn(
+                    "Qty/fit",
+                    help="Quantity of this item per fit",
+                    format="localized",
+                    width="small"
+                ),
+                'Fits on Market': st.column_config.NumberColumn(
+                    "Fits",
+                    help="Total fits available on market for this item",
+                    format="localized",
+                    width="small"
+                ),
+                'total_stock': st.column_config.NumberColumn(
+                    "Stock",
+                    help="Total stock of this item",
+                    format="localized",
+                    width="small"
+                ),
+                'price': st.column_config.NumberColumn(
+                    "Price",
+                    help="Price of this item (lowest 5-percentile price of current sell orders, or if no sell orders, the historical average price)",
+                    format="localized"
+                ),
+                'avg_vol': st.column_config.NumberColumn(
+                    "Avg Vol",
+                    help="Average volume of this item over the last 30 days",
+                    format="localized",
+                    width="small"
+                ),
+                'days': st.column_config.NumberColumn(
+                    "Days",
+                    help="Days remaining for this item (based on historical average sales for the last 30 days)",
+                    format="localized",
+                    width="small"
+                ),
+                'group_name': st.column_config.Column(
+                    "Group",
+                    help="Group of this item",
+                    width="small"
+                ),
+                'category_id': st.column_config.NumberColumn(
+                    "Category ID",
+                    help="Category ID of this item",
+                    format="plain",
+                    width="small"
+                ),
+            }
+            st.dataframe(fit_df, hide_index=True, column_config=col_config, use_container_width=True)
 
     # Display sync status in sidebar
     with st.sidebar:
