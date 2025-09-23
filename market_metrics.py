@@ -362,78 +362,32 @@ def render_ISK_volume_table_ui():
     """
     Render the complete ISK volume table UI with all controls
     """
+    start_date = st.session_state.get("chart_start_date", None)
+    end_date = st.session_state.get("chart_end_date", None)
+    date_period = st.session_state.get("chart_date_period_radio") or "daily"
 
-    @st.fragment
-    def table_fragment():
-        # Table controls section
-        st.subheader("Table Controls")
-
-
-        # Get available date range for validation
-        min_date, max_date = get_available_date_range()
-
-        # First row: Moving average and date period radio buttons
-        col1, col2 = st.columns(2)
-
-
-        with col1:
-            st.write("**Moving Average Period:**")
-            moving_avg_period = st.radio(
-                "Moving Average",
-                options=[3, 7, 14, 30],
-                index=2,  # Default to 14
-                horizontal=True,
-                key="table_moving_avg_radio"
-            )
-
-        with col2:
-            st.write("**Date Aggregation:**")
-            date_period = st.radio(
-                "Date Period",
-                options=['daily', 'weekly', 'monthly', 'yearly'],
-                index=0,  # Default to daily
-                format_func=lambda x: x.title(),
-                horizontal=True,
-                key="table_date_period_radio"
-            )
-
-        # Second row: Date range selectors with validation
-        st.write("**Date Range:**")
-        st.caption(f"Available data range: {min_date.strftime('%Y-%m-%d')} to {max_date.strftime('%Y-%m-%d')}")
-        col3, col4 = st.columns(2)
-
-        with col3:
-            start_date = st.date_input(
-                "Start Date",
-                value=None,
-                min_value=min_date.date(),
-                max_value=max_date.date(),
-                help=f"Select start date (available: {min_date.strftime('%Y-%m-%d')} to {max_date.strftime('%Y-%m-%d')})",
-                key="table_start_date"
-            )
-
-        with col4:
-            end_date = st.date_input(
-                "End Date",
-                value=None,
-                min_value=min_date.date(),
-                max_value=max_date.date(),
-                help=f"Select end date (available: {min_date.strftime('%Y-%m-%d')} to {max_date.strftime('%Y-%m-%d')})",
-                key="table_end_date"
-            )
-
-        # Create and display the table using the consolidated function
-        table = create_ISK_volume_table(
-            date_period=date_period,
-            start_date=start_date,
-            end_date=end_date
+    data_table_config = {
+        "Date": st.column_config.DateColumn(
+            "Date",
+            help="Date of the data",
+            format="YYYY-MM-DD"
+        ),
+        "ISK Volume": st.column_config.NumberColumn(
+            "ISK Volume",
+            help="ISK Volume of the data",
+            format="compact"
         )
-        st.dataframe(table, use_container_width=True)
+    }
 
-    # Call the fragment
-    table_fragment()
+    table = create_ISK_volume_table(
+        date_period=str(date_period).lower(),
+        start_date=start_date,
+        end_date=end_date,
+
+    )
+    st.write(f"Start Date: {start_date} | End Date: {end_date} | Date Period: {date_period}")
+    st.dataframe(table, use_container_width=False, column_config=data_table_config)
+
 
 if __name__ == "__main__":
-    df = get_all_market_history()
-    df = df.sort_values(by='date', ascending=False)
-    print(df.head())
+    pass

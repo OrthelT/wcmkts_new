@@ -18,6 +18,10 @@ dependencies = [
     "sqlalchemy==2.0.25",
     "sqlalchemy-libsql>=0.2.0",
     "streamlit==1.44.1",
-    "tenacity==8.2.3",
     "typing>=3.10.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
 ]

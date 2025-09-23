@@ -3,7 +3,7 @@ from sqlalchemy import text
 import streamlit as st
 
 import requests
-from tenacity import retry, stop_after_attempt, wait_exponential
+from typing import Any, Mapping
 from logging_config import setup_logging
 import time
 from config import DatabaseConfig
@@ -27,13 +27,48 @@ sde_url = sde_db.turso_url
 sde_auth_token = sde_db.token
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
-def execute_query_with_retry(session, query):
+def read_df(
+    db: DatabaseConfig,
+    query: Any,
+    params: Mapping[str, Any] | None = None,
+    *,
+    local: bool = True,
+    fallback_remote_on_malformed: bool = True,
+) -> pd.DataFrame:
+    """Execute a read-only SQL query and return a DataFrame.
+
+    - Uses `db.local_access()` + `db.engine.connect()` for local reads.
+    - Optionally falls back to remote on malformed/corrupt local DB.
+    - Accepts raw SQL strings or SQLAlchemy TextClause; params are optional.
+    """
+
+    def _run_local() -> pd.DataFrame:
+        with db.local_access():
+            with db.engine.connect() as conn:
+                sql = query
+                return pd.read_sql_query(sql, conn, params=params)
+
+    def _run_remote() -> pd.DataFrame:
+        with db.remote_engine.connect() as conn:
+            sql = query
+            return pd.read_sql_query(sql, conn, params=params)
+
+    if not local:
+        return _run_remote()
+
     try:
-        result = session.execute(text(query))
-        return result.fetchall(), result.keys()
+        return _run_local()
     except Exception as e:
-        logger.error(f"Query failed, retrying... Error: {str(e)}")
+        msg = str(e).lower()
+        if fallback_remote_on_malformed and (
+            "malform" in msg or "database disk image is malformed" in msg
+        ):
+            logger.error("Local DB malformed; syncing and retrying, with remote fallback…")
+            try:
+                db.sync()
+                return _run_local()
+            except Exception:
+                return _run_remote()
         raise
 
 @st.cache_data(ttl=600)
@@ -246,16 +281,16 @@ def safe_format(value, format_string):
         return ''
 
 @st.cache_data(ttl=600)
-def get_market_history(type_id):
-    query = f"""
+def get_market_history(type_id: int)->pd.DataFrame:
+    query = """
         SELECT date, average, volume
         FROM market_history
-        WHERE type_id = {type_id}
-        ORDER BY date
+        WHERE type_id = :type_id
+        ORDER BY date DESC
     """
     with mkt_db.local_access():
         with mkt_db.engine.connect() as conn:
-            return pd.read_sql_query(query, conn)
+            return pd.read_sql_query(text(query), conn, params={"type_id": type_id})
 
 @st.cache_data(ttl=600)
 def get_all_market_history()->pd.DataFrame:
@@ -316,10 +351,11 @@ def get_groups_for_category(category_id: int)->pd.DataFrame:
         df = pd.read_csv("build_commodity_groups.csv")
         return df
     else:
-        query = f"""
-            SELECT DISTINCT groupID, groupName FROM invGroups WHERE categoryID = {category_id}
+        query = """
+            SELECT DISTINCT groupID, groupName FROM invGroups WHERE categoryID = :category_id
         """
-    df = pd.read_sql_query(query, (sde_db.engine))
+    with sde_db.engine.connect() as conn:
+        df = pd.read_sql_query(text(query), conn, params={"category_id": category_id})
     return df
 
 def get_types_for_group(group_id: int)->pd.DataFrame:
@@ -336,15 +372,15 @@ def get_types_for_group(group_id: int)->pd.DataFrame:
     return df
 
 def get_4H_price(type_id):
-    query = f"""
-        SELECT * FROM marketstats WHERE type_id = {type_id}
+    query = """
+        SELECT * FROM marketstats WHERE type_id = :type_id
         """
     with mkt_db.local_access():
         with mkt_db.engine.connect() as conn:
-            df = pd.read_sql_query(query, conn)
+            df = pd.read_sql_query(text(query), conn, params={"type_id": type_id})
     try:
         return df.price.iloc[0]
-    except:
+    except Exception:
         return None
 
 def new_get_market_data(show_all):

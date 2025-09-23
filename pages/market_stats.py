@@ -10,8 +10,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from sqlalchemy import text,bindparam
-from sqlalchemy.orm import Session
-from db_handler import safe_format,get_market_history,get_fitting_data,get_module_fits
+from db_handler import safe_format, get_market_history, get_fitting_data, get_module_fits, read_df
 from logging_config import setup_logging
 import millify
 from config import DatabaseConfig
@@ -20,7 +19,7 @@ from init_db import init_db
 from sync_state import update_wcmkt_state
 from type_info import get_backup_type_id
 from datetime import datetime
-from market_metrics import calculate_daily_ISK_volume, render_ISK_volume_chart_ui, render_ISK_volume_table_ui
+from market_metrics import render_ISK_volume_chart_ui, render_ISK_volume_table_ui
 
 
 mkt_db = DatabaseConfig("wcmkt")
@@ -42,11 +41,10 @@ def get_market_type_ids()->list:
     SELECT DISTINCT type_id
     FROM marketorders
     """
-    with Session(mkt_db.engine) as session:
-        result = session.execute(text(mkt_query))
-        type_ids = [row[0] for row in result.fetchall()]
-        logger.info(f"type_ids: {len(type_ids)}")
-        return type_ids
+    df = read_df(mkt_db, mkt_query)
+    type_ids = df['type_id'].tolist()
+    logger.info(f"type_ids: {len(type_ids)}")
+    return type_ids
 
 # Function to get unique categories and item names
 def all_sde_info(type_ids: list = None)->pd.DataFrame:
@@ -61,13 +59,8 @@ def all_sde_info(type_ids: list = None)->pd.DataFrame:
     WHERE typeID IN :type_ids
     """).bindparams(bindparam('type_ids', expanding=True))
 
-    with Session(sde_db.engine) as session:
-        result = session.execute(new_sde_query, {'type_ids': type_ids})
-        df = pd.DataFrame(result.fetchall(),
-            columns=['type_name', 'type_id', 'group_id', 'group_name', 'category_id', 'category_name'])
-        logger.info(f"df: {len(df)}")
-        session.close()
-
+    df = read_df(sde_db, new_sde_query, {'type_ids': type_ids})
+    logger.info(f"df: {len(df)}")
     return df
 
 def get_filter_options(selected_category: str=None, show_all: bool=False)->tuple[list, list, pd.DataFrame]:
@@ -173,12 +166,7 @@ def create_history_chart(type_id):
         row=2, col=1
     )
 
-    # Calculate ranges with padding
-    min_price = df['average'].min()
-    max_price = df['average'].max()
-    price_padding = (max_price - min_price) * 0.05  # 5% padding
-    min_volume = df['volume'].min()
-    max_volume = df['volume'].max()
+    # Calculate ranges (not used currently)
 
     # Update layout for both subplots
     fig.update_layout(
@@ -485,7 +473,8 @@ def main():
 
     # Main content
     t2 = time.perf_counter()
-    elapsed_time = (t2-t1)*1000
+    elapsed_time = (t2 - t1) * 1000
+    logger.info(f"new_get_market_data elapsed: {elapsed_time:.2f} ms")
 
     # # Process sell orders
     sell_order_count = 0
@@ -518,7 +507,7 @@ def main():
             if selected_item_id:
                 try:
                     fit_df = get_fitting_data(selected_item_id)
-                except:
+                except Exception:
                     logger.warning(f"Failed to get fitting data for {selected_item_id}")
                     fit_df = pd.DataFrame()
             else:
@@ -718,7 +707,7 @@ def main():
 
             st.dataframe(buy_display_df, hide_index=True)
 
-        if selected_item == None or selected_item == "":
+        if selected_item is None or selected_item == "":
             logger.info("No item selected")
             pass
         else:
@@ -729,10 +718,10 @@ def main():
         st.divider()
 
         st.subheader("Price History")
-        if selected_item == None or selected_item == "":
+        if selected_item is None or selected_item == "":
             logger.info("No item selected")
             render_ISK_volume_chart_ui()
-            with st.expander("Market History Data"):
+            with st.expander("Expand to view Market History Data"):
                 render_ISK_volume_table_ui()
         elif selected_item and selected_item is not None:
             try:

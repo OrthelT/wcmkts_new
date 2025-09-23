@@ -1,6 +1,5 @@
 
 from sqlalchemy import text
-from sqlalchemy.orm import Session
 import pandas as pd
 import sys
 import os
@@ -8,7 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 import pathlib
 from logging_config import setup_logging
-from db_handler import get_update_time
+from db_handler import get_update_time, read_df
 from doctrines import create_fit_df
 from config import DatabaseConfig
 
@@ -28,58 +27,45 @@ def get_module_stock_list(module_names: list):
     if not st.session_state.get('csv_module_list_state'):
         st.session_state.csv_module_list_state = {}
 
-    with Session(mktdb.engine) as session:
-        for module_name in module_names:
-            # Check if the module is already in the list, if not, get the data from the database
-            if module_name not in st.session_state.module_list_state:
-                logger.info(f"Querying database for {module_name}")
+    for module_name in module_names:
+        if module_name not in st.session_state.module_list_state:
+            logger.info(f"Querying database for {module_name}")
 
-                query = """
-                    SELECT type_name, type_id, total_stock, fits_on_mkt
-                    FROM doctrines
-                    WHERE type_name = :module_name
-                    LIMIT 1
+            query = text(
                 """
-                result = session.execute(text(query), {'module_name': module_name})
-                row = result.fetchone()
-                if row and row[2] is not None:  # total_stock is now at index 2
-                    # Use market stock (total_stock)
-                    module_info = f"{module_name} (Total: {int(row[2])} | Fits: {int(row[3])})"
-                    csv_module_info = f"{module_name},{row[1]},{int(row[2])},{int(row[3])}\n"
-                else:
-                    # No quantity if market stock not available
-                    module_info = f"{module_name}"
-                    csv_module_info = f"{module_name},0,0,0\n"
+                SELECT type_name, type_id, total_stock, fits_on_mkt
+                FROM doctrines
+                WHERE type_name = :module_name
+                LIMIT 1
+                """
+            )
+            df = read_df(mktdb, query, {"module_name": module_name})
+            if not df.empty and pd.notna(df.loc[0, 'total_stock']):
+                module_info = f"{module_name} (Total: {int(df.loc[0, 'total_stock'])} | Fits: {int(df.loc[0, 'fits_on_mkt'])})"
+                csv_module_info = f"{module_name},{int(df.loc[0, 'type_id'])},{int(df.loc[0, 'total_stock'])},{int(df.loc[0, 'fits_on_mkt'])}\n"
+            else:
+                module_info = f"{module_name}"
+                csv_module_info = f"{module_name},0,0,0\n"
 
-                # Add the module to the session state list
-                st.session_state.module_list_state[module_name] = module_info
-                st.session_state.csv_module_list_state[module_name] = csv_module_info
+            st.session_state.module_list_state[module_name] = module_info
+            st.session_state.csv_module_list_state[module_name] = csv_module_info
 
 def get_doctrine_lead_ship(doctrine_id: int) -> int:
     """Get the type ID of the lead ship for a doctrine"""
-    query = f"SELECT * FROM lead_ships WHERE doctrine_id = {doctrine_id}"
-    with mktdb.engine.connect() as conn:
-        df = pd.read_sql_query(query, conn)
-        if df.empty:
-            return None
-        else:
-            return df['lead_ship'].iloc[0]
+    query = text("SELECT lead_ship FROM lead_ships WHERE doctrine_id = :doctrine_id")
+    df = read_df(mktdb, query, {"doctrine_id": doctrine_id})
+    if df.empty:
+        return None
+    return int(df.loc[0, 'lead_ship'])
 
 def get_fit_name_from_db(fit_id: int) -> str:
     """Get the fit name from the ship_targets table using fit_id."""
     try:
-
-        with mktdb.engine.connect() as conn:
-            result = conn.execute(text("SELECT fit_name FROM ship_targets WHERE fit_id = :fit_id"), {"fit_id": fit_id})
-            row = result.fetchone()
-            if row:
-                fit_name = row[0]
-            else:
-                fit_name = "Unknown Fit"
-                logger.warning(f"No fit name found for fit_id: {fit_id}")
-        conn.close()
-        return fit_name
-
+        df = read_df(mktdb, text("SELECT fit_name FROM ship_targets WHERE fit_id = :fit_id"), {"fit_id": fit_id})
+        if not df.empty:
+            return str(df.loc[0, 'fit_name'])
+        logger.warning(f"No fit name found for fit_id: {fit_id}")
+        return "Unknown Fit"
     except Exception as e:
         logger.error(f"Error getting fit name for fit_id: {fit_id}")
         logger.error(f"Error: {e}")
@@ -325,7 +311,7 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
                 with ship_col1:
                     try:
                         st.image(ship_image_url, width=64)
-                    except:
+                    except Exception:
                         st.text("🚀")
                     st.text(f"Fit ID: {fit_id}")
 
@@ -336,7 +322,7 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
                     ship_target = fit_summary[fit_summary['fit_id'] == fit_id]['ship_target'].iloc[0]
                     try:
                         ship_target = int(ship_target * st.session_state.target_multiplier)
-                    except:
+                    except Exception:
                         ship_target = ship_target
 
                     st.subheader(ship_name,divider="orange")
@@ -434,9 +420,7 @@ def main():
         st.warning("No doctrine fits found in the database.")
         return
 
-    engine = mktdb.engine
-    with engine.connect() as conn:
-        df = pd.read_sql_query("SELECT * FROM doctrine_fits", conn)
+    df = read_df(mktdb, "SELECT * FROM doctrine_fits")
 
     doctrine_names = df.doctrine_name.unique()
 
@@ -474,7 +458,7 @@ def main():
     with header_col1:
         try:
             st.image(lead_ship_image_url, width=128)
-        except:
+        except Exception:
             st.text("🚀 Ship Image Not Available")
 
     with header_col2:

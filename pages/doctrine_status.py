@@ -7,9 +7,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 import pandas as pd
 from sqlalchemy import text
-from sqlalchemy.orm import Session
 from logging_config import setup_logging
-from db_handler import get_update_time
+from db_handler import get_update_time, read_df
 from doctrines import create_fit_df, get_all_fit_data
 from config import DatabaseConfig
 # Insert centralized logging configuration
@@ -126,11 +125,8 @@ def format_module_list(modules_list):
 def get_fit_name(fit_id: int) -> str:
     """Get the fit name for a given fit id"""
     try:
-        conn = mkt_db.libsql_local_connect
-        cursor = conn.cursor()
-        cursor.execute("SELECT fit_name FROM ship_targets WHERE fit_id = ?", (fit_id,))
-        result = cursor.fetchone()
-        return result[0] if result else "Unknown Fit"
+        df = read_df(mkt_db, text("SELECT fit_name FROM ship_targets WHERE fit_id = :fit_id"), {"fit_id": fit_id})
+        return str(df.loc[0, 'fit_name']) if not df.empty else "Unknown Fit"
     except Exception as e:
         logger.error(f"Error getting fit name for fit_id: {fit_id}")
         logger.error(f"Error: {e}")
@@ -145,33 +141,27 @@ def get_module_stock_list(module_names: list):
     if not st.session_state.get('csv_module_list_state'):
         st.session_state.csv_module_list_state = {}
 
-    with Session(mkt_db.engine) as session:
-        for module_name in module_names:
+    for module_name in module_names:
+        if module_name not in st.session_state.module_list_state:
+            logger.info(f"Querying database for {module_name}")
+            query = text(
+                """
+                SELECT type_name, type_id, total_stock, fits_on_mkt
+                FROM doctrines
+                WHERE type_name = :module_name
+                LIMIT 1
+                """
+            )
+            df = read_df(mkt_db, query, {"module_name": module_name})
+            if not df.empty and pd.notna(df.loc[0, 'total_stock']):
+                module_info = f"{module_name} (Total: {int(df.loc[0, 'total_stock'])} | Fits: {int(df.loc[0, 'fits_on_mkt'])})"
+                csv_module_info = f"{module_name},{int(df.loc[0, 'type_id'])},{int(df.loc[0, 'total_stock'])},{int(df.loc[0, 'fits_on_mkt'])}\n"
+            else:
+                module_info = f"{module_name}"
+                csv_module_info = f"{module_name},0,0,0\n"
 
-            #check if the module is already in the list, if not, we will get the data from the database and add it to the list
-            if module_name not in st.session_state.module_list_state:
-                logger.info(f"Querying database for {module_name}")
-
-                query = """
-                    SELECT type_name, type_id, total_stock, fits_on_mkt
-                    FROM doctrines
-                    WHERE type_name = :module_name
-                    LIMIT 1
-            """
-                result = session.execute(text(query), {'module_name': module_name})
-                row = result.fetchone()
-                if row and row[2] is not None:  # total_stock is now at index 2
-                    # Use market stock (total_stock)
-                    module_info = f"{module_name} (Total: {int(row[2])} | Fits: {int(row[3])})"
-                    csv_module_info = f"{module_name},{row[1]},{int(row[2])},{int(row[3])}\n"
-                else:
-                    # No quantity if market stock not available
-                    module_info = f"{module_name}"
-                    csv_module_info = f"{module_name},0,0,0\n"
-
-                #add the module to the session state list
-                st.session_state.module_list_state[module_name] = module_info
-                st.session_state.csv_module_list_state[module_name] = csv_module_info
+            st.session_state.module_list_state[module_name] = module_info
+            st.session_state.csv_module_list_state[module_name] = csv_module_info
 
         #with the session state variables, we can now return the lists by saving to the session state variables, we
         #won't need to run the query again
@@ -184,39 +174,40 @@ def get_ship_stock_list(ship_names: list):
         st.session_state.csv_ship_list_state = {}
 
     logger.info(f"Ship names: {ship_names}")
-    with Session(mkt_db.engine) as session:
-        for ship in ship_names:
-            #check if the ship is already in the list, if not, we will get the data from the database and add it to the list
-            if ship not in st.session_state.ship_list_state:
-                logger.info(f"Querying database for {ship}")
-                if ship == "Ferox Navy Issue":
-                    where_clause = "type_name = 'Ferox Navy Issue' AND fit_id = 473"
-                elif ship == "Hurricane Fleet Issue":
-                    where_clause = "type_name = 'Hurricane Fleet Issue' AND fit_id = 494"
-                else:
-                    where_clause = f"type_name = '{ship}'"
+    for ship in ship_names:
+        if ship not in st.session_state.ship_list_state:
+            logger.info(f"Querying database for {ship}")
+            params = {"ship": ship}
+            extra = ""
+            if ship == "Ferox Navy Issue":
+                extra = " AND fit_id = :fit_id"
+                params["fit_id"] = 473
+            elif ship == "Hurricane Fleet Issue":
+                extra = " AND fit_id = :fit_id"
+                params["fit_id"] = 494
 
-                query = f"""
-                    SELECT type_name, type_id, total_stock, fits_on_mkt, fit_id
-                    FROM doctrines
-                    WHERE {where_clause}
-                    LIMIT 1
+            query = text(
+                f"""
+                SELECT type_name, type_id, total_stock, fits_on_mkt, fit_id
+                FROM doctrines
+                WHERE type_name = :ship{extra}
+                LIMIT 1
                 """
-                result = session.execute(text(query))
-                row = result.fetchone()
-                if row and row[2] is not None:
-                    ship_id = row[1]
-                    ship_stock = int(row[2])
-                    ship_fits = int(row[3])
-                    ship_target = get_ship_target(ship_id, 0)
-                    ship_info = f"{ship} (Qty: {ship_stock} | Fits: {ship_fits} | Target: {ship_target})"
-                    csv_ship_info = f"{ship},{ship_id},{ship_stock},{ship_fits},{ship_target}\n"
-                else:
-                    ship_info = ship
-                    csv_ship_info = f"{ship},0,0,0,0\n"
+            )
+            df = read_df(mkt_db, query, params)
+            if not df.empty and pd.notna(df.loc[0, 'total_stock']):
+                ship_id = int(df.loc[0, 'type_id'])
+                ship_stock = int(df.loc[0, 'total_stock'])
+                ship_fits = int(df.loc[0, 'fits_on_mkt'])
+                ship_target = get_ship_target(ship_id, 0)
+                ship_info = f"{ship} (Qty: {ship_stock} | Fits: {ship_fits} | Target: {ship_target})"
+                csv_ship_info = f"{ship},{ship_id},{ship_stock},{ship_fits},{ship_target}\n"
+            else:
+                ship_info = ship
+                csv_ship_info = f"{ship},0,0,0,0\n"
 
-                st.session_state.ship_list_state[ship] = ship_info
-                st.session_state.csv_ship_list_state[ship] = csv_ship_info
+            st.session_state.ship_list_state[ship] = ship_info
+            st.session_state.csv_ship_list_state[ship] = csv_ship_info
 @st.fragment
 def fitting_download_button():
     if st.download_button("Download Data", data=get_all_fit_data().to_csv(index=False), file_name="wc_doctrine_fits.csv", help="Download all doctrine fit information as a CSV file", mime="text/csv"):
@@ -234,15 +225,10 @@ def get_ship_target(ship_id: int, fit_id: int) -> int:
 
     elif ship_id == 0:
         try:
-            conn = mkt_db.libsql_local_connect
-            cursor = conn.cursor()
-            cursor.execute("SELECT ship_target FROM ship_targets WHERE fit_id = ?", (fit_id,))
-            result = cursor.fetchone()
-            if result:
-                target = result[0]
-            else:
-                target = 20
-            return target
+            df = read_df(mkt_db, text("SELECT ship_target FROM ship_targets WHERE fit_id = :fit_id"), {"fit_id": fit_id})
+            if not df.empty and pd.notna(df.loc[0, 'ship_target']):
+                return int(df.loc[0, 'ship_target'])
+            return 20
         except Exception as e:
             logger.error(f"Error getting target for fit_id: {fit_id}")
             logger.error(f"Error: {e}")
@@ -250,15 +236,10 @@ def get_ship_target(ship_id: int, fit_id: int) -> int:
             return 20
     else:
         try:
-            conn = mkt_db.libsql_local_connect
-            cursor = conn.cursor()
-            cursor.execute("SELECT ship_target FROM ship_targets WHERE ship_id = ?", (ship_id,))
-            result = cursor.fetchone()
-            if result:
-                target = result[0]
-            else:
-                target = 20
-            return target
+            df = read_df(mkt_db, text("SELECT ship_target FROM ship_targets WHERE ship_id = :ship_id"), {"ship_id": ship_id})
+            if not df.empty and pd.notna(df.loc[0, 'ship_target']):
+                return int(df.loc[0, 'ship_target'])
+            return 20
         except Exception as e:
             logger.error(f"Error getting target for ship_id: {ship_id}, using 20 as default")
             logger.error(f"Error: {e}")
@@ -384,7 +365,7 @@ def main():
                 # Ship image and ID info
                 try:
                     st.image(f"https://images.evetech.net/types/{row['ship_id']}/render?size=64", width=64)
-                except:
+                except Exception:
                     st.text("Image not available")
 
                 if target_pct > 90:
