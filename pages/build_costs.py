@@ -9,21 +9,13 @@ import streamlit as st
 import pathlib
 import requests
 import json
-import warnings
 # ASYNC LIBRARIES
 import asyncio
 import httpx
-from config import DatabaseConfig
 
-API_TIMEOUT = 20.0
-MAX_CONCURRENCY = 6  # tune for the API's rate limits
-RETRIES = 2  # light retry; scale if API is flaky
-
-# Suppress the ScriptRunContext warning
-warnings.filterwarnings("ignore", message="missing ScriptRunContext")
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
+from config import DatabaseConfig
 from build_cost_models import Structure, Rig, IndustryIndex
 from logging_config import setup_logging
 from millify import millify
@@ -36,6 +28,9 @@ from db_handler import (
 from utils import update_industry_index
 import datetime
 import time
+API_TIMEOUT = 20.0
+MAX_CONCURRENCY = 6  # tune for the API's rate limits
+RETRIES = 2  # light retry; scale if API is flaky
 
 build_cost_db = DatabaseConfig("build_cost")
 build_cost_url = build_cost_db.url
@@ -67,7 +62,7 @@ class JobQuery:
         else:
             # clean up the cache, if our last job was a super so all structures can populate again:
             self.super = False
-            if st.session_state.super == True:
+            if st.session_state.super:
                 get_all_structures.clear()
                 st.session_state.super = False
 
@@ -326,9 +321,6 @@ async def get_costs_async(job: JobQuery) -> tuple[dict, dict]:
     url_generator = job.yield_urls()
 
     results = {}
-    errors = []
-    results_count = 0
-    errors_count = 0
     status_log = {
         "req_count": 0,
         "success_count": 0,
@@ -448,10 +440,6 @@ def get_jita_price(type_id: int) -> float:
     else:
         logger.error(f"Error fetching price for {type_id}: {response.status_code}")
         raise Exception(f"Error fetching price for {type_id}: {response.status_code}")
-
-
-def filter_commodity_groups():
-    df = pd.read_csv("build_catagories.csv")
 
 
 def is_valid_image_url(url: str) -> bool:
@@ -987,7 +975,7 @@ def main():
         if current_job_params["group_id"] in [30, 659]:
             st.session_state.super = True
         else:
-            if st.session_state.super == True:
+            if st.session_state.super:
                 get_all_structures.clear()
                 st.session_state.super = False
                 structure_names = get_all_structures()

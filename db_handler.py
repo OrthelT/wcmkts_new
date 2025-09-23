@@ -1,10 +1,9 @@
 import pandas as pd
 from sqlalchemy import text
-from sqlalchemy.orm import Session
 import streamlit as st
 
 import requests
-from tenacity import retry, stop_after_attempt, wait_exponential
+from typing import Any, Mapping
 from logging_config import setup_logging
 import time
 from config import DatabaseConfig
@@ -28,13 +27,48 @@ sde_url = sde_db.turso_url
 sde_auth_token = sde_db.token
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
-def execute_query_with_retry(session, query):
+def read_df(
+    db: DatabaseConfig,
+    query: Any,
+    params: Mapping[str, Any] | None = None,
+    *,
+    local: bool = True,
+    fallback_remote_on_malformed: bool = True,
+) -> pd.DataFrame:
+    """Execute a read-only SQL query and return a DataFrame.
+
+    - Uses `db.local_access()` + `db.engine.connect()` for local reads.
+    - Optionally falls back to remote on malformed/corrupt local DB.
+    - Accepts raw SQL strings or SQLAlchemy TextClause; params are optional.
+    """
+
+    def _run_local() -> pd.DataFrame:
+        with db.local_access():
+            with db.engine.connect() as conn:
+                sql = query
+                return pd.read_sql_query(sql, conn, params=params)
+
+    def _run_remote() -> pd.DataFrame:
+        with db.remote_engine.connect() as conn:
+            sql = query
+            return pd.read_sql_query(sql, conn, params=params)
+
+    if not local:
+        return _run_remote()
+
     try:
-        result = session.execute(text(query))
-        return result.fetchall(), result.keys()
+        return _run_local()
     except Exception as e:
-        logger.error(f"Query failed, retrying... Error: {str(e)}")
+        msg = str(e).lower()
+        if fallback_remote_on_malformed and (
+            "malform" in msg or "database disk image is malformed" in msg
+        ):
+            logger.error("Local DB malformed; syncing and retrying, with remote fallback…")
+            try:
+                db.sync()
+                return _run_local()
+            except Exception:
+                return _run_remote()
         raise
 
 @st.cache_data(ttl=600)
@@ -45,11 +79,9 @@ def get_all_mkt_stats()->pd.DataFrame:
     SELECT * FROM marketstats
     """
     def _read_all():
-        with Session(mkt_db.engine) as session:
-                result = session.execute(text(query))
-                columns = result.keys()
-                session.close()
-                return pd.DataFrame(result.fetchall(), columns=columns)
+        with mkt_db.local_access():
+            with mkt_db.engine.connect() as conn:
+                return pd.read_sql_query(query, conn)
     try:
         df = _read_all()
     except Exception as e:
@@ -86,11 +118,8 @@ def get_all_mkt_orders()->pd.DataFrame:
 
     def _read_all():
         with mkt_db.local_access():
-            with Session(mkt_db.engine) as session:
-                result = session.execute(text(query))
-                columns = result.keys()
-                session.close()
-                return pd.DataFrame(result.fetchall(), columns=columns)
+            with mkt_db.engine.connect() as conn:
+                return pd.read_sql_query(query, conn)
 
     try:
         df = _read_all()
@@ -170,59 +199,40 @@ def clean_mkt_data(df):
 @st.cache_data(ttl=600)
 def get_all_fitting_data()->pd.DataFrame:
     with mkt_db.local_access():
-        with Session(mkt_db.engine) as session:
-            query = """
+        query = """
                 SELECT * FROM doctrines
                 """
-            try:
-                fits = session.execute(text(query))
-                fits = fits.fetchall()
-                df = pd.DataFrame(fits)
-                df = df.reset_index(drop=True)
-            except Exception as e:
-                logger.error(f"Failed to get doctrine data: {str(e)}")
-                raise
-            session.close()
+        try:
+            with mkt_db.engine.connect() as conn:
+                df = pd.read_sql_query(query, conn)
+            df = df.reset_index(drop=True)
+        except Exception as e:
+            logger.error(f"Failed to get doctrine data: {str(e)}")
+            raise
     return df
-
 
 def get_fitting_data(type_id):
     logger.info("getting fitting data")
     df = get_all_fitting_data()
     if df.empty:
-        return None, None
+        return None
     else:
         df2 = df.copy()
         df2 = df2[df2['type_id'] == type_id]
         df2.reset_index(drop=True, inplace=True)
         try:
             fit_id = df2.iloc[0]['fit_id']
-        except:
-            return None, None
+        except (IndexError, KeyError):
+            return None
 
         df3 = df.copy()
         df3 = df3[df3['fit_id'] == fit_id]
         df3.reset_index(drop=True, inplace=True)
 
-        cols = ['fit_id', 'ship_id', 'ship_name', 'hulls', 'type_id', 'type_name',
-       'fit_qty', 'fits_on_mkt', 'total_stock', '4H_price', 'avg_vol', 'days',
-       'group_id', 'group_name', 'category_id', 'category_name', 'timestamp',
-       'id']
-        timestamp = df3.iloc[0]['timestamp']
         df3.drop(columns=['ship_id', 'hulls', 'group_id', 'category_name', 'id', 'timestamp'], inplace=True)
 
-
-        numeric_formats = {
-
-            'total_stock': '{:,.0f}',
-            '4H_price': '{:,.2f}',
-            'avg_vol': '{:,.0f}',
-            'days': '{:,.0f}',
-        }
-
-        for col, format_str in numeric_formats.items():
-            if col in df3.columns:  # Only format if column exists
-                df3[col] = df3[col].apply(lambda x: safe_format(x, format_str))
+        df3['type_id'] = round(df3['type_id'],0).astype(int)
+        df3['fit_id'] = round(df3['fit_id'],0).astype(int)
         df3.rename(columns={'fits_on_mkt': 'Fits on Market'}, inplace=True)
         df3 = df3.sort_values(by='Fits on Market', ascending=True)
         df3.reset_index(drop=True, inplace=True)
@@ -271,16 +281,16 @@ def safe_format(value, format_string):
         return ''
 
 @st.cache_data(ttl=600)
-def get_market_history(type_id):
-    query = f"""
+def get_market_history(type_id: int)->pd.DataFrame:
+    query = """
         SELECT date, average, volume
         FROM market_history
-        WHERE type_id = {type_id}
-        ORDER BY date
+        WHERE type_id = :type_id
+        ORDER BY date DESC
     """
     with mkt_db.local_access():
         with mkt_db.engine.connect() as conn:
-            return pd.read_sql_query(query, conn)
+            return pd.read_sql_query(text(query), conn, params={"type_id": type_id})
 
 @st.cache_data(ttl=600)
 def get_all_market_history()->pd.DataFrame:
@@ -289,11 +299,8 @@ def get_all_market_history()->pd.DataFrame:
     """
     def _read_all():
         with mkt_db.local_access():
-            with Session(mkt_db.engine) as session:
-                result = session.execute(text(query))
-                columns = result.keys()
-                session.close()
-                return pd.DataFrame(result.fetchall(), columns=columns)
+            with mkt_db.engine.connect() as conn:
+                return pd.read_sql_query(query, conn)
     try:
         df = _read_all()
     except Exception as e:
@@ -317,19 +324,16 @@ def get_update_time()->str:
 
 
 def get_module_fits(type_id):
-
-    with Session(mkt_db.engine) as session:
+    with mkt_db.local_access():
         query = """
             SELECT * FROM doctrines WHERE type_id = :type_id
             """
         try:
-            fit = session.execute(text(query), {'type_id': type_id})
-            fit = fit.fetchall()
-            df = pd.DataFrame(fit)
+            with mkt_db.engine.connect() as conn:
+                df = pd.read_sql_query(text(query), conn, params={'type_id': type_id})
         except Exception as e:
             logger.error(f"Failed to get data for type_id={type_id}: {str(e)}")
             raise
-        session.close()
 
         df2 = df.copy()
         try:
@@ -338,7 +342,7 @@ def get_module_fits(type_id):
             ships = [f"{ship} ({qty})" for ship, qty in zip(ships, fit_qty)]
             ships = ', '.join(ships)
             return ships
-        except:
+        except (IndexError, KeyError):
             return None
 
 
@@ -347,10 +351,11 @@ def get_groups_for_category(category_id: int)->pd.DataFrame:
         df = pd.read_csv("build_commodity_groups.csv")
         return df
     else:
-        query = f"""
-            SELECT DISTINCT groupID, groupName FROM invGroups WHERE categoryID = {category_id}
+        query = """
+            SELECT DISTINCT groupID, groupName FROM invGroups WHERE categoryID = :category_id
         """
-    df = pd.read_sql_query(query, (sde_db.engine))
+    with sde_db.engine.connect() as conn:
+        df = pd.read_sql_query(text(query), conn, params={"category_id": category_id})
     return df
 
 def get_types_for_group(group_id: int)->pd.DataFrame:
@@ -367,15 +372,15 @@ def get_types_for_group(group_id: int)->pd.DataFrame:
     return df
 
 def get_4H_price(type_id):
-    query = f"""
-        SELECT * FROM marketstats WHERE type_id = {type_id}
+    query = """
+        SELECT * FROM marketstats WHERE type_id = :type_id
         """
     with mkt_db.local_access():
         with mkt_db.engine.connect() as conn:
-            df = pd.read_sql_query(query, conn)
+            df = pd.read_sql_query(text(query), conn, params={"type_id": type_id})
     try:
         return df.price.iloc[0]
-    except:
+    except Exception:
         return None
 
 def new_get_market_data(show_all):
@@ -390,8 +395,11 @@ def new_get_market_data(show_all):
         orders_df = df
 
     stats_df = get_stats()
-    stats_df = stats_df[stats_df['type_id'].isin(orders_df['type_id'].unique())]
-    stats_df = stats_df.reset_index(drop=True)
+    if not stats_df.empty:
+        stats_df = stats_df[stats_df['type_id'].isin(orders_df['type_id'].unique())]
+        stats_df = stats_df.reset_index(drop=True)
+    else:
+        stats_df = pd.DataFrame()
 
     sell_orders_df = orders_df[orders_df['is_buy_order'] == 0]
     sell_orders_df = sell_orders_df.reset_index(drop=True)
@@ -405,7 +413,11 @@ def new_get_market_data(show_all):
 
     return sell_orders_df, buy_orders_df, stats_df
 
-
+def get_chart_table_data()->pd.DataFrame:
+    df = get_all_market_history()
+    df = df.sort_values(by='date', ascending=False)
+    df = df.reset_index(drop=True)
+    return df
 
 if __name__ == "__main__":
     pass

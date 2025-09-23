@@ -1,5 +1,4 @@
 import streamlit as st
-from init_db import init_db
 from logging_config import setup_logging
 
 logger = setup_logging(__name__)

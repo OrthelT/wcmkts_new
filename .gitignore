@@ -32,6 +32,12 @@ wheels/
 .alled.cfg
 *.egg
 
+# Testing and Coverage
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
 # Local files
 dialect.py
 
@@ -40,7 +46,6 @@ dialect.py
 # Streamlit secrets
 .streamlit/secrets.toml
 *.log
-CLAUDE.md
 experimental.py
 dd.py
 *.xlsx
@@ -55,8 +60,6 @@ logs/
 *.log.*.*.*.*
 *.log.*.*.*.*.*
 *.log.*.*.*.*.*.*
-misc_functions.py
-tests/
 misc_files/
 fit_summary_df.csv
 fit_summary.csv
@@ -64,10 +67,8 @@ data/
 nakah_hfi.json
 dev_files/
 proj_config.py
-tests.py
 archive/
 *.db*
 todos_hurricane_fleet_issue.txt
-AGENTS.md
 depreciated-code/
-helpers.py
+doctrine_status_performance.md

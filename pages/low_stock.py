@@ -1,10 +1,7 @@
 import streamlit as st
-
-from sqlalchemy import text
 import pandas as pd
 import plotly.express as px
-from sqlalchemy.orm import Session
-from db_handler import get_update_time
+from db_handler import get_update_time, read_df
 from logging_config import setup_logging
 from config import DatabaseConfig
 # Insert centralized logging configuration
@@ -22,23 +19,26 @@ def get_filter_options(selected_categories=None):
         FROM marketstats
         """
 
-        with Session(mktdb.engine) as session:
-            result = session.execute(text(query))
-            df = pd.DataFrame(result.fetchall(),
-                            columns=['type_id', 'type_name', 'category_id', 'category_name', 'group_id', 'group_name'])
+        df = read_df(mktdb, query)
+        df = df.rename(columns={
+            # Ensure expected column names if the database returns different casing
+            'typeID': 'type_id', 'typeName': 'type_name',
+            'categoryID': 'category_id', 'categoryName': 'category_name',
+            'groupID': 'group_id', 'groupName': 'group_name'
+        })
 
-            if df.empty:
-                return [], []
+        if df.empty:
+            return [], []
 
-            categories = sorted(df['category_name'].unique())
+        categories = sorted(df['category_name'].unique())
 
-            if selected_categories:
-                df = df[df['category_name'].isin(selected_categories)]
+        if selected_categories:
+            df = df[df['category_name'].isin(selected_categories)]
 
-            items = sorted(df['type_name'].unique())
-            logger.info(f"items: {len(items)} categories: {len(categories)}")
+        items = sorted(df['type_name'].unique())
+        logger.info(f"items: {len(items)} categories: {len(categories)}")
 
-            return categories, items
+        return categories, items
 
 
     except Exception as e:
@@ -58,10 +58,7 @@ def get_market_stats(selected_categories=None, selected_items=None, max_days_rem
     """
 
     # Get market stats data
-    engine = mktdb.engine
-    with engine.connect() as conn:
-        df = pd.read_sql(text(query), conn)
-    conn.close()
+    df = read_df(mktdb, query)
 
     # Apply filters
     if selected_categories:
@@ -226,7 +223,7 @@ def main():
                     return 'background-color: #c76d14'  # Light yellow for low
                 else:
                     return ''
-            except:
+            except Exception:
                 return ''
 
         # Add a color indicator for doctrine items
@@ -240,7 +237,7 @@ def main():
                     # Apply highlighting only to the "Item" column (index 0)
                     styles[0] = 'background-color: #328fed'
                     return styles
-            except:
+            except Exception:
                 pass
             return [''] * len(row)
 

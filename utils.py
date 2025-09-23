@@ -2,7 +2,6 @@ import pandas as pd
 import datetime
 import streamlit as st
 from logging_config import setup_logging
-from sqlalchemy import text
 import requests
 from config import DatabaseConfig
 
