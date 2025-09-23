@@ -1,0 +1,55 @@
+[run]
+# Source code directories and files to include in coverage
+source = .
+
+# Exclude patterns
+omit =
+    .venv/*
+    tests/*
+    archive/*
+    __pycache__/*
+    .pytest_cache/*
+    .ruff_cache/*
+    .claude/*
+    .devcontainer/*
+    .vscode/*
+    .streamlit/*
+    *.log
+    *.db*
+    *.csv
+    images/*
+    run_tests.py
+    example_test_run.py
+    app.py
+    pages/*
+    init_db.py
+    set_targets.py
+    sync_state.py
+    build_cost_models.py
+    doctrines.py
+    type_info.py
+    market_metrics.py
+
+[report]
+# Show missing lines in coverage report
+show_missing = True
+
+# Skip files with no executable code
+skip_empty = True
+
+# Minimum coverage percentage to pass (adjusted for core functions only)
+fail_under = 40
+
+# Sort by coverage percentage (descending)
+sort = Cover
+
+# Format for terminal output
+precision = 1
+
+[html]
+# Directory for HTML coverage reports
+directory = htmlcov
+
+[xml]
+# File for XML coverage reports (useful for CI/CD)
+output = coverage.xml

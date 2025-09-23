@@ -10,9 +10,13 @@ from db_handler import get_market_history
 class TestGetMarketHistory:
     """Test cases for get_market_history function"""
 
+    @patch('streamlit.cache_data')
     @patch('db_handler.mkt_db')
-    def test_get_market_history_success(self, mock_mkt_db):
+    def test_get_market_history_success(self, mock_mkt_db, mock_cache):
         """Test successful retrieval of market history data"""
+        # Mock cache decorator
+        mock_cache.return_value = lambda func: func
+
         # Mock data
         mock_data = pd.DataFrame({
             'date': ['2024-01-01', '2024-01-02', '2024-01-03'],
@@ -49,9 +53,13 @@ class TestGetMarketHistory:
             call_args = mock_read_sql.call_args
             assert call_args[1]['params']['type_id'] == 12345
 
+    @patch('streamlit.cache_data')
     @patch('db_handler.mkt_db')
-    def test_get_market_history_empty_result(self, mock_mkt_db):
+    def test_get_market_history_empty_result(self, mock_mkt_db, mock_cache):
         """Test handling of empty result set"""
+        # Mock cache decorator
+        mock_cache.return_value = lambda func: func
+
         # Mock empty DataFrame
         mock_data = pd.DataFrame(columns=['date', 'average', 'volume'])
 
@@ -75,9 +83,13 @@ class TestGetMarketHistory:
             assert len(result) == 0
             assert list(result.columns) == ['date', 'average', 'volume']
 
+    @patch('streamlit.cache_data')
     @patch('db_handler.mkt_db')
-    def test_get_market_history_function_signature(self, mock_mkt_db):
+    def test_get_market_history_function_signature(self, mock_mkt_db, mock_cache):
         """Test that function accepts correct parameters and returns DataFrame"""
+        # Mock cache decorator
+        mock_cache.return_value = lambda func: func
+
         # Mock successful database connection
         mock_conn = Mock()
         mock_conn.__enter__ = Mock(return_value=mock_conn)
@@ -122,8 +134,12 @@ class TestGetMarketHistory:
         assert len(sig.parameters) == 1
         assert 'type_id' in sig.parameters
 
-    def test_get_market_history_return_type(self):
+    @patch('streamlit.cache_data')
+    def test_get_market_history_return_type(self, mock_cache):
         """Test that function returns a DataFrame"""
+        # Mock cache decorator
+        mock_cache.return_value = lambda func: func
+
         with patch('db_handler.mkt_db') as mock_mkt_db:
             # Mock database connection
             mock_conn = Mock()
@@ -152,9 +168,13 @@ class TestGetMarketHistory:
                 assert hasattr(result, 'columns')
                 assert hasattr(result, 'index')
 
+    @patch('streamlit.cache_data')
     @patch('db_handler.mkt_db')
-    def test_get_market_history_data_types(self, mock_mkt_db):
+    def test_get_market_history_data_types(self, mock_mkt_db, mock_cache):
         """Test that returned data has correct data types"""
+        # Mock cache decorator
+        mock_cache.return_value = lambda func: func
+
         # Mock data with various data types
         mock_data = pd.DataFrame({
             'date': ['2024-01-01', '2024-01-02'],

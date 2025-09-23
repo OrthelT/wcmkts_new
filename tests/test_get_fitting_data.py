@@ -144,31 +144,39 @@ class TestGetFittingData:
     @patch('db_handler.get_all_fitting_data')
     def test_get_fitting_data_data_type_conversion(self, mock_get_all_fitting_data):
         """Test that type_id and fit_id are converted to integers"""
+        # Create test data where multiple items share the same fit_id
+        # This ensures the function will return multiple rows after filtering
         mock_data = pd.DataFrame({
-            'type_id': [12345.0, 12345.7],  # Float values
-            'fit_id': [100.0, 100.5],  # Float values
-            'ship_id': [1, 2],
-            'hulls': [1, 1],
-            'group_id': [1, 1],
-            'category_name': ['Ship1', 'Ship1'],
-            'id': [1, 2],
-            'timestamp': ['2024-01-01', '2024-01-01'],
-            'fits_on_mkt': [5, 10]
+            'type_id': [12345.0, 67890.7, 11111.3],  # Float values
+            'fit_id': [100.0, 100.0, 100.0],  # Same fit_id for all
+            'ship_id': [1, 2, 3],
+            'hulls': [1, 1, 1],
+            'group_id': [1, 1, 1],
+            'category_name': ['Ship1', 'Ship1', 'Ship1'],
+            'id': [1, 2, 3],
+            'timestamp': ['2024-01-01', '2024-01-01', '2024-01-01'],
+            'fits_on_mkt': [5, 10, 15]
         })
 
         mock_get_all_fitting_data.return_value = mock_data
 
         result = get_fitting_data(12345)
 
+        # Should not be None
+        assert result is not None
+
         # Check data type conversion
         assert result['type_id'].dtype == 'int64'
         assert result['fit_id'].dtype == 'int64'
 
-        # Check that values are properly rounded and converted
-        assert result['type_id'].iloc[0] == 12345
-        assert result['type_id'].iloc[1] == 12346  # 12345.7 rounded to 12346
-        assert result['fit_id'].iloc[0] == 100
-        assert result['fit_id'].iloc[1] == 101  # 100.5 rounded to 101
+        # Check that all fit_id values are the same (rounded 100.0)
+        assert all(result['fit_id'] == 100)
+
+        # Check that type_id values are properly rounded and converted
+        expected_type_ids = [12345, 67891, 11111]  # rounded values (67890.7 rounds to 67891)
+        actual_type_ids = sorted(result['type_id'].tolist())
+        expected_type_ids_sorted = sorted(expected_type_ids)
+        assert actual_type_ids == expected_type_ids_sorted
 
     @patch('db_handler.get_all_fitting_data')
     def test_get_fitting_data_sorting(self, mock_get_all_fitting_data):

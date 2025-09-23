@@ -32,6 +32,12 @@ wheels/
 .alled.cfg
 *.egg
 
+# Testing and Coverage
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
 # Local files
 dialect.py
 
