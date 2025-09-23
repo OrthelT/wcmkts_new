@@ -273,7 +273,12 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
 
         if selected_doctrine_id in exceptions:
             lead_fit_id = exceptions[selected_doctrine_id]
-        else: lead_fit_id = selected_data[selected_data['ship_id'] == lead_ship_id].fit_id.iloc[0]
+            logger.info(f"Lead fit id: {lead_fit_id}")
+        else:
+            lead_fit_id = selected_data[selected_data['ship_id'] == lead_ship_id].fit_id.iloc[0]
+            logger.info(f"Lead fit id: {lead_fit_id}")
+        logger.info(f"Lead fit id: {lead_fit_id}")
+
 
         # Create two columns for display
         col1, col2 = st.columns(2)
@@ -439,6 +444,7 @@ def main():
     selected_doctrine_id = df[df.doctrine_name == selected_doctrine].doctrine_id.unique()[0]
 
     selected_data = fit_summary[fit_summary['fit_id'].isin(df[df.doctrine_name == selected_doctrine].fit_id.unique())]
+    logger.info(f"Selected data: {selected_data}")
 
     # Get module data from master_df for the selected doctrine
     selected_fit_ids = df[df.doctrine_name == selected_doctrine].fit_id.unique()
@@ -481,6 +487,7 @@ def main():
 
     # Display categorized doctrine data instead of simple dataframe
     display_categorized_doctrine_data(selected_data)
+
 
     # Display lowest stock modules by ship with checkboxes
     display_low_stock_modules(selected_data, doctrine_modules, selected_fit_ids, fit_summary, lead_ship_id, selected_doctrine_id)

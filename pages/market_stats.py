@@ -20,6 +20,7 @@ from init_db import init_db
 from sync_state import update_wcmkt_state
 from type_info import get_backup_type_id
 from datetime import datetime
+from market_metrics import calculate_daily_ISK_volume, render_ISK_volume_chart_ui, render_ISK_volume_table_ui
 
 
 mkt_db = DatabaseConfig("wcmkt")
@@ -319,6 +320,80 @@ def maybe_run_check():
         check_db()
         st.session_state["last_check"] = now
 
+def get_fitting_col_config():
+    col_config = {
+                'fit_id': st.column_config.NumberColumn(
+                    "Fit ID",
+                    help="WC Doctrine Fit ID"
+                ),
+                'ship_name': st.column_config.TextColumn(
+                    "Ship Name",
+                    help="Ship Name",
+                    width="medium"
+                ),
+                'type_id': st.column_config.NumberColumn(
+                    "Type ID",
+                    help="Type ID"
+                ),
+                'type_name': st.column_config.TextColumn(
+                    "Type Name",
+                    help="Type Name",
+                    width="medium"
+                ),
+                'hulls': st.column_config.NumberColumn(
+                    "Hulls",
+                    help="Number of ship hulls available for this fit",
+                    width="small"
+                ),
+                'fit_qty': st.column_config.NumberColumn(
+                    "Qty/fit",
+                    help="Quantity of this item per fit",
+                    format="localized",
+                    width="small"
+                ),
+                'Fits on Market': st.column_config.NumberColumn(
+                    "Fits",
+                    help="Total fits available on market for this item",
+                    format="localized",
+                    width="small"
+                ),
+                'total_stock': st.column_config.NumberColumn(
+                    "Stock",
+                    help="Total stock of this item",
+                    format="localized",
+                    width="small"
+                ),
+                'price': st.column_config.NumberColumn(
+                    "Price",
+                    help="Price of this item (lowest 5-percentile price of current sell orders, or if no sell orders, the historical average price)",
+                    format="localized"
+                ),
+                'avg_vol': st.column_config.NumberColumn(
+                    "Avg Vol",
+                    help="Average volume of this item over the last 30 days",
+                    format="localized",
+                    width="small"
+                ),
+                'days': st.column_config.NumberColumn(
+                    "Days",
+                    help="Days remaining for this item (based on historical average sales for the last 30 days)",
+                    format="localized",
+                    width="small"
+                ),
+                'group_name': st.column_config.Column(
+                    "Group",
+                    help="Group of this item",
+                    width="small"
+                ),
+                'category_id': st.column_config.NumberColumn(
+                    "Category ID",
+                    help="Category ID of this item",
+                    format="plain",
+                    width="small"
+                ),
+            }
+    return col_config
+
 
 def main():
     logger.info("*****************************************************")
@@ -373,7 +448,7 @@ def main():
         st.session_state.selected_item = None
         st.session_state.selected_item_id = None
 
-    if selected_category and selected_category != None:
+    if selected_category and selected_category is not None:
         logger.info("selected_category exists and is not None")
         st.sidebar.text(f"Category: {selected_category}")
         st.session_state.selected_category = selected_category
@@ -394,16 +469,15 @@ def main():
         st.session_state.selected_item = None
         st.session_state.selected_item_id = None
 
-    if selected_item and selected_item != None:
+    elif selected_item and selected_item is not None:
         st.sidebar.text(f"Item: {selected_item}")
         st.session_state.selected_item = selected_item
-        logger.info(f"Selected item: {selected_item}")
         st.session_state.selected_item_id = get_backup_type_id(selected_item)
 
     else:
         selected_item = None
 
-
+    logger.info(f"Selected item: {selected_item}")
     t1 = time.perf_counter()
 
     # sell_data, buy_data, stats = get_market_data(show_all, selected_category, selected_items)
@@ -509,7 +583,7 @@ def main():
 
         with col4:
             isship = False
-            try:
+            if fit_df is not None and fit_df.empty is False:
                 cat_id = stats['category_id'].iloc[0]
                 fits_on_mkt = fit_df['Fits on Market'].min()
 
@@ -518,9 +592,8 @@ def main():
                     st.metric("Fits on Market", f"{display_fits_on_mkt}")
                     isship = True
 
-            except:
+            else:
                 pass
-
 
         st.divider()
         # Display detailed data
@@ -542,7 +615,8 @@ def main():
                 try:
                     image_id = selected_item_id
                     type_name = selected_item
-                except:
+                except Exception as e:
+                    logger.error(f"Error: {e}")
                     logger.info(f"No type_id or type_name found for {selected_item}")
                     image_id = None
                     type_name = None
@@ -563,7 +637,8 @@ def main():
                                 st.write(get_module_fits(selected_item_id))
                             else:
                                 st.write(fit_df[fit_df['type_id'] == selected_item_id]['group_name'].iloc[0])
-                    except:
+                    except Exception as e:
+                        logger.error(f"Error: {e}")
                         pass
             elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
                 selected_category = st.session_state.selected_category
@@ -643,65 +718,77 @@ def main():
 
             st.dataframe(buy_display_df, hide_index=True)
 
-        # Display charts
-        st.subheader("Market Order Distribution")
-        price_vol_chart = create_price_volume_chart(sell_data)
-        st.plotly_chart(price_vol_chart, use_container_width=True)
+        if selected_item == None or selected_item == "":
+            logger.info("No item selected")
+            pass
+        else:
+            st.subheader("Market Order Distribution")
+            price_vol_chart = create_price_volume_chart(sell_data)
+            st.plotly_chart(price_vol_chart, use_container_width=True)
 
         st.divider()
 
         st.subheader("Price History")
-        try:
-            if 'selected_item_id' in st.session_state:
-                selected_item_id = st.session_state.selected_item_id
-        except:
-            selected_item_id = None
-
-        try:
-            # Get selected_item from session state if available
-            if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
-                selected_item = st.session_state.selected_item
-                selected_item_id = get_backup_type_id(selected_item)
-                st.session_state.selected_item_id = selected_item_id
-            else:
+        if selected_item == None or selected_item == "":
+            logger.info("No item selected")
+            render_ISK_volume_chart_ui()
+            with st.expander("Market History Data"):
+                render_ISK_volume_table_ui()
+        elif selected_item and selected_item is not None:
+            try:
+                if 'selected_item_id' in st.session_state:
+                    selected_item_id = st.session_state.selected_item_id
+            except Exception as e:
+                logger.error(f"Error: {e}")
                 selected_item_id = None
-        except:
-            selected_item_id = None
 
-        if selected_item_id:
-            logger.info(f"Displaying history chart for {selected_item_id}")
-            history_chart = create_history_chart(selected_item_id)
-        else:
-            history_chart = None
+            try:
+                # Get selected_item from session state if available
+                if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
+                    selected_item = st.session_state.selected_item
+                    selected_item_id = get_backup_type_id(selected_item)
+                    st.session_state.selected_item_id = selected_item_id
+                else:
+                    selected_item_id = None
+            except Exception as e:
+                logger.error(f"Error: {e}")
+                selected_item_id = None
 
-        if history_chart:
-            logger.info(f"Displaying history chart for {selected_item_id}")
-            st.plotly_chart(history_chart, use_container_width=False)
+            if selected_item_id:
+                logger.info(f"Displaying history chart for {selected_item_id}")
+                history_chart = create_history_chart(selected_item_id)
+            else:
+                history_chart = None
 
-            colh1, colh2 = st.columns(2)
-            with colh1:
-                # Display history data
-                st.subheader("History Data")
-                history_df = get_market_history(selected_item_id)
-                history_df.date = pd.to_datetime(history_df.date).dt.strftime("%Y-%m-%d")
-                history_df.average = round(history_df.average.astype(float), 2)
-                history_df = history_df.sort_values(by='date', ascending=False)
-                history_df.volume = history_df.volume.astype(int)
-                st.dataframe(history_df, hide_index=True)
+            if history_chart:
+                logger.info(f"Displaying history chart for {selected_item_id}")
+                st.plotly_chart(history_chart, use_container_width=False)
 
-            with colh2:
-                avgpr30 = history_df[:30].average.mean()
-                avgvol30 = history_df[:30].volume.mean()
-                st.subheader(f"{selected_item}",divider=True)
-                st.metric("Average Price (30 days)", f"{avgpr30:,.2f} ISK")
-                st.metric("Average Volume (30 days)", f"{avgvol30:,.0f}")
-        else:
-            st.write("History data not available for this item or no item selected")
+                colh1, colh2 = st.columns(2)
+                with colh1:
+                    # Display history data
+                    st.subheader("History Data")
+                    history_df = get_market_history(selected_item_id)
+                    history_df.date = pd.to_datetime(history_df.date).dt.strftime("%Y-%m-%d")
+                    history_df.average = round(history_df.average.astype(float), 2)
+                    history_df = history_df.sort_values(by='date', ascending=False)
+                    history_df.volume = history_df.volume.astype(int)
+                    st.dataframe(history_df, hide_index=True)
+
+                with colh2:
+                    avgpr30 = history_df[:30].average.mean()
+                    avgvol30 = history_df[:30].volume.mean()
+                    st.subheader(f"{selected_item}",divider=True)
+                    st.metric("Average Price (30 days)", f"{avgpr30:,.2f} ISK")
+                    st.metric("Average Volume (30 days)", f"{avgvol30:,.0f}")
+            else:
+                pass
 
         st.divider()
-
-    if fit_df:
-        st.subheader(f"Fitting Data",divider="blue")
+    if fit_df is None:
+        fit_df = pd.DataFrame()
+    if fit_df.empty is False and fit_df is not None:
+        st.subheader("Fitting Data",divider="blue")
 
         if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
             selected_item = st.session_state.selected_item
@@ -713,95 +800,22 @@ def main():
             selected_item_id = get_backup_type_id(selected_item)
         try:
             fit_id = fit_df['fit_id'].iloc[0]
-        except:
+        except Exception as e:
+            logger.error(f"Error: {e}")
             fit_id = " "
         st.markdown(f"<span style='font-weight: bold; color: orange;'>{selected_item}</span> | type_id: {selected_item_id} | fit_id: {fit_id}", unsafe_allow_html=True)
 
         if isship:
-            col_config = {
-                'fit_id': st.column_config.NumberColumn(
-                    "Fit ID",
-                    help="WC Doctrine Fit ID"
-                ),
-                'ship_name': st.column_config.TextColumn(
-                    "Ship Name",
-                    help="Ship Name",
-                    width="medium"
-                ),
-                'type_id': st.column_config.NumberColumn(
-                    "Type ID",
-                    help="Type ID"
-                ),
-                'type_name': st.column_config.TextColumn(
-                    "Type Name",
-                    help="Type Name",
-                    width="medium"
-                ),
-                'hulls': st.column_config.NumberColumn(
-                    "Hulls",
-                    help="Number of ship hulls available for this fit",
-                    width="small"
-                ),
-                'fit_qty': st.column_config.NumberColumn(
-                    "Qty/fit",
-                    help="Quantity of this item per fit",
-                    format="localized",
-                    width="small"
-                ),
-                'Fits on Market': st.column_config.NumberColumn(
-                    "Fits",
-                    help="Total fits available on market for this item",
-                    format="localized",
-                    width="small"
-                ),
-                'total_stock': st.column_config.NumberColumn(
-                    "Stock",
-                    help="Total stock of this item",
-                    format="localized",
-                    width="small"
-                ),
-                'price': st.column_config.NumberColumn(
-                    "Price",
-                    help="Price of this item (lowest 5-percentile price of current sell orders, or if no sell orders, the historical average price)",
-                    format="localized"
-                ),
-                'avg_vol': st.column_config.NumberColumn(
-                    "Avg Vol",
-                    help="Average volume of this item over the last 30 days",
-                    format="localized",
-                    width="small"
-                ),
-                'days': st.column_config.NumberColumn(
-                    "Days",
-                    help="Days remaining for this item (based on historical average sales for the last 30 days)",
-                    format="localized",
-                    width="small"
-                ),
-                'group_name': st.column_config.Column(
-                    "Group",
-                    help="Group of this item",
-                    width="small"
-                ),
-                'category_id': st.column_config.NumberColumn(
-                    "Category ID",
-                    help="Category ID of this item",
-                    format="plain",
-                    width="small"
-                ),
-            }
-            st.dataframe(fit_df, hide_index=True, column_config=col_config, use_container_width=True)
+            column_config = get_fitting_col_config()
+            st.dataframe(fit_df, hide_index=True, column_config=column_config, use_container_width=True)
+
 
     # Display sync status in sidebar
     with st.sidebar:
         display_sync_status()
 
-        # utility function to dump session state in development mode -- leave off in production
-        # dump = st.sidebar.button("Dump Session State", use_container_width=True)
-        # if dump:
-        #     dump_session_state()
-        #     st.toast("Session state dumped", icon="✅")
-
         st.sidebar.divider()
+
         db_check = st.sidebar.button("Check DB State", use_container_width=True)
         if db_check:
             check_db()

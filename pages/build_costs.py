@@ -9,7 +9,6 @@ import streamlit as st
 import pathlib
 import requests
 import json
-import warnings
 # ASYNC LIBRARIES
 import asyncio
 import httpx

@@ -187,7 +187,7 @@ def get_fitting_data(type_id):
         df2.reset_index(drop=True, inplace=True)
         try:
             fit_id = df2.iloc[0]['fit_id']
-        except:
+        except (IndexError, KeyError):
             return None
 
         df3 = df.copy()
@@ -307,7 +307,7 @@ def get_module_fits(type_id):
             ships = [f"{ship} ({qty})" for ship, qty in zip(ships, fit_qty)]
             ships = ', '.join(ships)
             return ships
-        except:
+        except (IndexError, KeyError):
             return None
 
 
@@ -359,8 +359,11 @@ def new_get_market_data(show_all):
         orders_df = df
 
     stats_df = get_stats()
-    stats_df = stats_df[stats_df['type_id'].isin(orders_df['type_id'].unique())]
-    stats_df = stats_df.reset_index(drop=True)
+    if not stats_df.empty:
+        stats_df = stats_df[stats_df['type_id'].isin(orders_df['type_id'].unique())]
+        stats_df = stats_df.reset_index(drop=True)
+    else:
+        stats_df = pd.DataFrame()
 
     sell_orders_df = orders_df[orders_df['is_buy_order'] == 0]
     sell_orders_df = sell_orders_df.reset_index(drop=True)
@@ -374,7 +377,11 @@ def new_get_market_data(show_all):
 
     return sell_orders_df, buy_orders_df, stats_df
 
-
+def get_chart_table_data()->pd.DataFrame:
+    df = get_all_market_history()
+    df = df.sort_values(by='date', ascending=False)
+    df = df.reset_index(drop=True)
+    return df
 
 if __name__ == "__main__":
     pass
