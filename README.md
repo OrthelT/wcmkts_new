@@ -5,6 +5,13 @@ SUPPORT: Join the Discord for support https://discord.gg/BxatJE572Y
 CONTRIBUTING: Contributors welcome. This project is fully open source under MIT License. Source code and full documentation available on GitHub: https://github.com/OrthelT/wcmkts_new
 
 ## UPDATES:
+*version 0.63* 
+Adds interactive market ISK volume charting to Market Stats, including moving averages, date aggregation, and configurable outlier handling. Refactors DB read paths for resilience and consistency. Introduces a lightweight pytest suite with docs and coverage config.
+- New charting UI: moving average (3/7/14/30), date aggregation, outlier handling (cap/remove/none), and data table     
+- DB handling: consistent local/remote read helpers with integrity checks + safe fallbacks                              
+- Tests: 24 focused tests with pytest config, coverage setup, and a simple test runner                                  
+- Docs: testing guide and coverage config   
+
 *version 0.62*
 - Adds csv downloads for market data (Market Stats tool)
 - Various bug fixes to handle concurrency footguns and prevent null values from getting passed to data display constructors.
