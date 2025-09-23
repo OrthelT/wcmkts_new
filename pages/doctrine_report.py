@@ -76,7 +76,7 @@ def get_fit_name_from_db(fit_id: int) -> str:
                 fit_name = row[0]
             else:
                 fit_name = "Unknown Fit"
-        logger.info(f"Fit name: {fit_name}")
+                logger.warning(f"No fit name found for fit_id: {fit_id}")
         conn.close()
         return fit_name
 
