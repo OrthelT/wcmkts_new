@@ -99,7 +99,6 @@ def get_all_mkt_stats()->pd.DataFrame:
     df = df.reset_index(drop=True)
     return df
 
-
 @st.cache_data(ttl=600)
 def get_all_mkt_orders()->pd.DataFrame:
     logger.info("-"*40)

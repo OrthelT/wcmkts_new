@@ -1,4 +1,4 @@
-from sqlalchemy import Integer, String, Float, Boolean, MetaData
+from sqlalchemy import Integer, String, Float, Boolean
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 class Base(DeclarativeBase):
@@ -56,15 +56,19 @@ class SdeTypes(Base):
     groupID: Mapped[int] = mapped_column(Integer)
     groupName: Mapped[str] = mapped_column(String)
     categoryID: Mapped[int] = mapped_column(Integer)
+    categoryName: Mapped[str] = mapped_column(String)
     volume: Mapped[float] = mapped_column(Float)
+    metaGroupID: Mapped[int] = mapped_column(Integer, nullable=True)
+    metaGroupName: Mapped[str] = mapped_column(String, nullable=True)
+
+    # metaGroupID: Mapped[int] = mapped_column(Integer, nullable=True)
 
     def __repr__(self) -> str:
-        return f"sdeTypes(typeID={self.typeID!r}, typeName={self.typeName!r}, groupID={self.groupID!r}, groupName={self.groupName!r}, categoryID={self.categoryID!r}, volume={self.volume!r})"
+        return f"sdeTypes(typeID={self.typeID!r}, typeName={self.typeName!r}, groupID={self.groupID!r}, groupName={self.groupName!r}, categoryID={self.categoryID!r}, categoryName={self.categoryName!r}, volume={self.volume!r}, metaGroupID={self.metaGroupID!r}, metaGroupName={self.metaGroupName!r})"
 
 class InvMetaTypes(Base):
     __tablename__ = "invMetaTypes"
     typeID: Mapped[int] = mapped_column(Integer, primary_key=True)
-    parentTypeID: Mapped[int] = mapped_column(Integer, nullable=True)
     metaGroupID: Mapped[int] = mapped_column(Integer, nullable=True)
 
     def __repr__(self) -> str:
@@ -74,8 +78,6 @@ class InvMetaGroups(Base):
     __tablename__ = "invMetaGroups"
     metaGroupID: Mapped[int] = mapped_column(Integer, primary_key=True)
     metaGroupName: Mapped[str] = mapped_column(String, nullable=True)
-    description: Mapped[str] = mapped_column(String, nullable=True)
-    iconID: Mapped[int] = mapped_column(Integer, nullable=True)
 
     def __repr__(self) -> str:
         return f"invMetaGroups(metaGroupID={self.metaGroupID!r}, metaGroupName={self.metaGroupName!r}, description={self.description!r}, iconID={self.iconID!r})"
