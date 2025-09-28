@@ -515,20 +515,73 @@ def main():
             selected_item = None
             selected_item_id = None
             fit_df = pd.DataFrame()
-            st.header("All Sell Orders", divider="green")
+
         elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
             selected_category = st.session_state.selected_category
 
             stats = stats[stats['category_name'] == selected_category]
             stats = stats.reset_index(drop=True)
             stats_type_ids = st.session_state.selected_category_info['type_ids']
-            st.header(selected_category, divider="green")
+
             if not buy_data.empty:
                 buy_data = buy_data[buy_data['type_id'].isin(stats_type_ids)]
                 buy_data = buy_data.reset_index(drop=True)
             if not sell_data.empty:
                 sell_data = sell_data[sell_data['type_id'].isin(stats_type_ids)]
                 sell_data = sell_data.reset_index(drop=True)
+
+        # Initialize variables needed for header display
+        isship = False
+        fits_on_mkt = None
+        cat_id = None
+
+        if fit_df is not None and fit_df.empty is False:
+            cat_id = stats['category_id'].iloc[0]
+            fits_on_mkt = fit_df['Fits on Market'].min()
+            if cat_id == 6:
+                isship = True
+
+        # Create headers for different filter states
+        if show_all:
+            st.header("All Sell Orders", divider="green")
+        elif 'selected_item' in st.session_state and st.session_state.selected_item is not None:
+            selected_item = st.session_state.selected_item
+            if 'selected_item_id' in st.session_state:
+                selected_item_id = st.session_state.selected_item_id
+            else:
+                selected_item_id = get_backup_type_id(selected_item)
+                st.session_state.selected_item_id = selected_item_id
+            try:
+                image_id = selected_item_id
+                type_name = selected_item
+            except Exception as e:
+                logger.error(f"Error: {e}")
+                logger.info(f"No type_id or type_name found for {selected_item}")
+                image_id = None
+                type_name = None
+            st.subheader(f"{type_name}", divider="blue")
+            col1, col2 = st.columns(2)
+            with col1:
+                if image_id:
+                    if isship:
+                        st.image(f'https://images.evetech.net/types/{image_id}/render?size=64')
+                    else:
+                        st.image(f'https://images.evetech.net/types/{image_id}/icon')
+
+            with col2:
+                try:
+                    if fits_on_mkt is not None and fits_on_mkt:
+                        st.subheader("Winter Co. Doctrine", divider="orange")
+                        if cat_id in [7,8,18]:
+                            st.write(get_module_fits(selected_item_id))
+                        else:
+                            st.write(fit_df[fit_df['type_id'] == selected_item_id]['group_name'].iloc[0])
+                except Exception as e:
+                    logger.error(f"Error: {e}")
+                    pass
+        elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
+            selected_category = st.session_state.selected_category
+            st.header(selected_category + "s", divider="green")
 
         # 30-Day Historical Metrics Section
         render_30day_metrics_ui()
@@ -575,19 +628,10 @@ def main():
                 st.metric("Total Sell Orders", "0")
 
         with col4:
-            isship = False
-            fits_on_mkt = None  # Initialize the variable
-            cat_id = None  # Initialize cat_id as well
-
-            if fit_df is not None and fit_df.empty is False:
-                cat_id = stats['category_id'].iloc[0]
-                fits_on_mkt = fit_df['Fits on Market'].min()
-
+            if fit_df is not None and fit_df.empty is False and fits_on_mkt is not None:
                 if cat_id == 6:
                     display_fits_on_mkt = f"{fits_on_mkt:,.0f}"
                     st.metric("Fits on Market", f"{display_fits_on_mkt}")
-                    isship = True
-
             else:
                 pass
 
@@ -597,57 +641,20 @@ def main():
         # Format the DataFrame for display with null handling
         display_df = sell_data.copy()
 
-        #create a header for the item
-        if show_all:
+        # Add subheader for sell orders section
+        if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
+            selected_item = st.session_state.selected_item
+            st.subheader("Sell Orders for " + selected_item, divider="blue")
+        elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
+            selected_category = st.session_state.selected_category
+            cat_label = selected_category
+            if not cat_label.endswith("s"):
+                cat_label = cat_label + "s"
+            st.subheader(f"Sell Orders for {cat_label}", divider="blue")
+        elif show_all:
             st.subheader("All Sell Orders", divider="green")
         else:
-            if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
-                selected_item = st.session_state.selected_item
-                if 'selected_item_id' in st.session_state:
-                    selected_item_id = st.session_state.selected_item_id
-                else:
-                    selected_item_id = get_backup_type_id(selected_item)
-                    st.session_state.selected_item_id = selected_item_id
-                try:
-                    image_id = selected_item_id
-                    type_name = selected_item
-                except Exception as e:
-                    logger.error(f"Error: {e}")
-                    logger.info(f"No type_id or type_name found for {selected_item}")
-                    image_id = None
-                    type_name = None
-                st.subheader(f"{type_name}", divider="blue")
-                col1, col2 = st.columns(2)
-                with col1:
-                    if image_id:
-                        if isship:
-                            st.image(f'https://images.evetech.net/types/{image_id}/render?size=64')
-                        else:
-                            st.image(f'https://images.evetech.net/types/{image_id}/icon')
-
-                with col2:
-                    try:
-                        if fits_on_mkt is not None and fits_on_mkt:
-                            st.subheader("Winter Co. Doctrine", divider="orange")
-                            if cat_id in [7,8,18]:
-                                st.write(get_module_fits(selected_item_id))
-                            else:
-                                st.write(fit_df[fit_df['type_id'] == selected_item_id]['group_name'].iloc[0])
-                    except Exception as e:
-                        logger.error(f"Error: {e}")
-                        pass
-                st.subheader("Sell Orders for " + selected_item, divider="blue")
-            elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
-                selected_category = st.session_state.selected_category
-
-                cat_label = selected_category
-                if cat_label.endswith("s"):
-                    cat_label = cat_label
-                else:
-                    cat_label = cat_label + "s"
-                st.subheader(f"Sell Orders for {cat_label}", divider="blue")
-            else:
-                st.subheader("All Sell Orders", divider="green")
+            st.subheader("All Sell Orders", divider="green")
 
         display_df.type_id = display_df.type_id.astype(str)
         display_df.order_id = display_df.order_id.astype(str)

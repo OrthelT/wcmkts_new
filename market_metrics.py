@@ -547,9 +547,8 @@ def render_30day_metrics_ui():
 
     This function displays average daily sales and ISK value for the last 30 days,
     filtered by the current selection (item, category, or all items).
+    Only displays if history data is available.
     """
-    st.subheader("30-Day Market Performance", divider="gray")
-
     # Determine what filters to apply for the metrics
     metrics_category = None
     metrics_item_id = None
@@ -564,6 +563,12 @@ def render_30day_metrics_ui():
         selected_category=metrics_category,
         selected_item_id=metrics_item_id
     )
+
+    # Only show metrics if we have actual history data
+    if avg_daily_volume == 0 and avg_daily_isk_value == 0:
+        return  # Don't show metrics section if no history data
+
+    st.subheader("30-Day Market Performance", divider="gray")
 
     # Display 30-day metrics
     col_m1, col_m2, col_m3, col_m4 = st.columns(4)
