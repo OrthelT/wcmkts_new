@@ -1,3 +1,4 @@
+import sqlite3 as sql
 import pandas as pd
 from sqlalchemy import text
 import streamlit as st
@@ -43,7 +44,8 @@ def read_df(
     """
 
     def _run_local() -> pd.DataFrame:
-        with db.local_access():
+        with suppress(Exception):
+            pass  # no global read lock
             with db.engine.connect() as conn:
                 sql = query
                 return pd.read_sql_query(sql, conn, params=params)

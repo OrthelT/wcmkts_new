@@ -9,6 +9,54 @@ from models import UpdateLog
 import threading
 from contextlib import suppress, contextmanager
 
+import os
+import contextlib
+try:
+    import fcntl  # Unix
+    _HAVE_FCNTL = True
+except Exception:
+    fcntl = None
+    _HAVE_FCNTL = False
+
+@contextlib.contextmanager
+def _sync_filelock(lock_path: str):
+    os.makedirs(os.path.dirname(lock_path) or ".", exist_ok=True)
+    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o644)
+    acquired = False
+    try:
+        if _HAVE_FCNTL:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                acquired = True
+            except BlockingIOError:
+                acquired = False
+        else:
+            import msvcrt  # type: ignore
+            try:
+                msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+                acquired = True
+            except OSError:
+                acquired = False
+        yield acquired
+    finally:
+        try:
+            if acquired:
+                if _HAVE_FCNTL:
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+                else:
+                    import msvcrt  # type: ignore
+                    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+        finally:
+            os.close(fd)
+
+def _init_wal(db_path: str):
+    with sql.connect(db_path) as con:
+        con.execute("PRAGMA journal_mode=WAL;")
+        con.execute("PRAGMA synchronous=NORMAL;")
+        con.execute("PRAGMA temp_store=MEMORY;")
+        con.execute("PRAGMA wal_autocheckpoint=0;")
+
+
 
 logger = setup_logging(__name__)
 
@@ -71,6 +119,11 @@ class DatabaseConfig:
         self._sqlite_local_connect = None
 
     @property
+try:
+    _init_wal(self.path)
+except Exception:
+    pass
+
     def engine(self):
         eng = DatabaseConfig._engines.get(self.alias)
         if eng is None:
@@ -178,51 +231,57 @@ class DatabaseConfig:
             logger.error(f"Integrity check error ({self.alias}): {e}")
             return False
 
-    def sync(self):
-        """Synchronize the local database with the remote Turso replica safely.
+def open_ro_sqlite(self):
+    uri = f"file:{self.path}?mode=ro"
+    con = sql.connect(uri, uri=True, check_same_thread=False)
+    con.execute("PRAGMA read_uncommitted=0;")
+    con.execute("PRAGMA mmap_size=0;")
+    con.execute("PRAGMA busy_timeout=250;")
+    return con
 
-        Uses a process-wide lock and disposes local connections to prevent
-        concurrent reads/writes from corrupting the database file.
-        """
-        # Block local reads during sync using alias lock; also serialize across threads
-        alias_lock = self._get_local_lock()
-        alias_lock.acquire()
-        try:
-            with _SYNC_LOCK:
-                self._dispose_local_connections()
-                logger.debug("Disposing local connections and syncing database…")
-                conn = None
-                try:
-                    st.cache_data.clear()
-                    st.cache_resource.clear()
-                    # Explicitly manage connection lifecycle; avoid relying on context manager
-                    conn = libsql.connect(self.path, sync_url=self.turso_url, auth_token=self.token)
-                    conn.sync()
-                except Exception as e:
-                    logger.error(f"Database sync failed: {e}")
-                    raise
-                finally:
-                    if conn is not None:
-                        with suppress(Exception):
-                            conn.close()
-                            logger.info("Connection closed")
 
-                update_time = datetime.now(timezone.utc)
-                logger.info(f"Database synced at {update_time} UTC")
+    
+def sync(self):
+    """Synchronize the local database with the remote Turso replica safely.
 
-                # Post-sync integrity validation
-                ok = self.integrity_check()
-                if not ok:
-                    logger.error("Post-sync integrity check failed.")
+    Uses a cross-process nonblocking file lock so only one sync runs at a time,
+    without blocking readers.
+    """
+    lockfile = f"{self.path}.sync.lock"
+    with _sync_filelock(lockfile) as acquired:
+        if not acquired:
+            logger.debug("Sync skipped: another process is syncing.")
+            return False
+        with _SYNC_LOCK:  # keep thread safety inside this process
+            self._dispose_local_connections()
+            logger.debug("Disposing local connections and syncing database…")
+            conn = None
+            try:
+                st.cache_data.clear()
+                st.cache_resource.clear()
+                conn = libsql.connect(self.path, sync_url=self.turso_url, auth_token=self.token)
+                conn.sync()
+            except Exception as e:
+                logger.error(f"Database sync failed: {e}")
+                raise
+            finally:
+                if conn is not None:
+                    with suppress(Exception):
+                        conn.close()
+                        logger.info("Connection closed")
 
-                # For market DBs, also validate last_update parity if integrity ok
-                if self.alias == "wcmkt2":
-                    validation_test = self.validate_sync() if ok else False
-                    st.session_state.sync_status = "Success" if validation_test else "Failed"
-                st.session_state.sync_check = False
-        finally:
-            logger.debug(f"alias_lock released for {self.alias}")
-            alias_lock.release()
+            update_time = datetime.now(timezone.utc)
+            logger.info(f"Database synced at {update_time} UTC")
+
+            ok = self.integrity_check()
+            if not ok:
+                logger.error("Post-sync integrity check failed.")
+
+            if self.alias == "wcmkt2":
+                validation_test = self.validate_sync() if ok else False
+                st.session_state.sync_status = "Success" if validation_test else "Failed"
+            st.session_state.sync_check = False
+    return True
 
     def validate_sync(self)-> bool:
         alias = self.alias
