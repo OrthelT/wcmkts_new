@@ -49,15 +49,6 @@ def _sync_filelock(lock_path: str):
         finally:
             os.close(fd)
 
-def _init_wal(db_path: str):
-    with sql.connect(db_path) as con:
-        con.execute("PRAGMA journal_mode=WAL;")
-        con.execute("PRAGMA synchronous=NORMAL;")
-        con.execute("PRAGMA temp_store=MEMORY;")
-        con.execute("PRAGMA wal_autocheckpoint=0;")
-
-
-
 logger = setup_logging(__name__)
 
 # Global lock to serialize sync operations within the process
@@ -119,11 +110,6 @@ class DatabaseConfig:
         self._sqlite_local_connect = None
 
     @property
-try:
-    _init_wal(self.path)
-except Exception:
-    pass
-
     def engine(self):
         eng = DatabaseConfig._engines.get(self.alias)
         if eng is None:
@@ -231,44 +217,41 @@ except Exception:
             logger.error(f"Integrity check error ({self.alias}): {e}")
             return False
 
-def open_ro_sqlite(self):
-    uri = f"file:{self.path}?mode=ro"
-    con = sql.connect(uri, uri=True, check_same_thread=False)
-    con.execute("PRAGMA read_uncommitted=0;")
-    con.execute("PRAGMA mmap_size=0;")
-    con.execute("PRAGMA busy_timeout=250;")
-    return con
+    def open_ro_sqlite(self):
+        uri = f"file:{self.path}?mode=ro"
+        con = sql.connect(uri, uri=True, check_same_thread=False)
+        con.execute("PRAGMA read_uncommitted=0;")
+        con.execute("PRAGMA mmap_size=0;")
+        con.execute("PRAGMA busy_timeout=250;")
+        return con
 
-
-    
-def sync(self):
-    """Synchronize the local database with the remote Turso replica safely.
-
-    Uses a cross-process nonblocking file lock so only one sync runs at a time,
-    without blocking readers.
-    """
-    lockfile = f"{self.path}.sync.lock"
-    with _sync_filelock(lockfile) as acquired:
-        if not acquired:
-            logger.debug("Sync skipped: another process is syncing.")
-            return False
-        with _SYNC_LOCK:  # keep thread safety inside this process
-            self._dispose_local_connections()
-            logger.debug("Disposing local connections and syncing database…")
-            conn = None
-            try:
-                st.cache_data.clear()
-                st.cache_resource.clear()
-                conn = libsql.connect(self.path, sync_url=self.turso_url, auth_token=self.token)
-                conn.sync()
-            except Exception as e:
-                logger.error(f"Database sync failed: {e}")
-                raise
-            finally:
-                if conn is not None:
-                    with suppress(Exception):
-                        conn.close()
-                        logger.info("Connection closed")
+    def sync(self):
+        """Synchronize the local database with the remote Turso replica safely.
+        Uses a cross-process nonblocking file lock so only one sync runs at a time,
+        without blocking readers.
+        """
+        lockfile = f"{self.path}.sync.lock"
+        with _sync_filelock(lockfile) as acquired:
+            if not acquired:
+                logger.debug("Sync skipped: another process is syncing.")
+                return False
+            with _SYNC_LOCK:  # keep thread safety inside this process
+                self._dispose_local_connections()
+                logger.debug("Disposing local connections and syncing database…")
+                conn = None
+                try:
+                    st.cache_data.clear()
+                    st.cache_resource.clear()
+                    conn = libsql.connect(self.path, sync_url=self.turso_url, auth_token=self.token)
+                    conn.sync()
+                except Exception as e:
+                    logger.error(f"Database sync failed: {e}")
+                    raise
+                finally:
+                    if conn is not None:
+                        with suppress(Exception):
+                            conn.close()
+                            logger.info("Connection closed")
 
             update_time = datetime.now(timezone.utc)
             logger.info(f"Database synced at {update_time} UTC")
@@ -281,7 +264,7 @@ def sync(self):
                 validation_test = self.validate_sync() if ok else False
                 st.session_state.sync_status = "Success" if validation_test else "Failed"
             st.session_state.sync_check = False
-    return True
+        return True
 
     def validate_sync(self)-> bool:
         alias = self.alias

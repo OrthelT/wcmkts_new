@@ -3,13 +3,20 @@ import os
 from logging_config import setup_logging
 from sync_state import update_wcmkt_state
 from time import perf_counter
+import sqlite3 as sql
 
 logger = setup_logging(__name__)
-def verify_db_path(path):
-    if not os.path.exists(path):
-        logger.warning(f"DB path does not exist: {path}")
+
+
+def verify_db_path(db_path):
+    if not os.path.exists(db_path) or os.path.getsize(db_path) == 0:
         return False
-    return True
+    with sql.connect(f"file:{db_path}?mode=ro", uri=True) as con:
+        n = con.execute("""
+            SELECT COUNT(*) FROM sqlite_master
+            WHERE type='table' AND name IN ('market_history','market_orders' /* etc */)
+        """).fetchone()[0]
+        return n > 0
 
 def init_db():
     """ This function checks to see if the databases are available locally. If not, it will sync the databases from the remote server using the configuration in given in the config.py file, using credentials stored in the .streamlit/secrets.toml (for local development) or st.secrets (for production). This code was designed to be used with sqlite embedded-replica databases hosted on Turso Cloud.
@@ -66,3 +73,4 @@ def init_db():
 
 if __name__ == "__main__":
     pass
+

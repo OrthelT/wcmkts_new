@@ -2,7 +2,7 @@ import sqlite3 as sql
 import pandas as pd
 from sqlalchemy import text
 import streamlit as st
-
+from contextlib import suppress
 import requests
 from typing import Any, Mapping
 from logging_config import setup_logging
