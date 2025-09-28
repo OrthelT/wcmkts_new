@@ -10,6 +10,7 @@ logger = setup_logging(__name__)
 # Import from the root directory
 
 mktdb = DatabaseConfig("wcmkt")
+sde_db = DatabaseConfig("sde")
 
 def get_filter_options(selected_categories=None):
     try:
@@ -46,7 +47,14 @@ def get_filter_options(selected_categories=None):
         return [], []
 
 @st.cache_data(ttl=600)
-def get_market_stats(selected_categories=None, selected_items=None, max_days_remaining=None, doctrine_only=False):
+def get_market_stats(selected_categories=None, selected_items=None, max_days_remaining=None, doctrine_only=False, tech2_only=False):
+
+    if tech2_only:
+        tech2_query = """
+        SELECT typeID FROM sdetypes WHERE metaGroupID = 2
+        """
+        tech2_type_ids = read_df(sde_db, tech2_query)['typeID'].tolist()
+
     # Start with base query for marketstats
     query = """
     SELECT ms.*,
@@ -88,6 +96,9 @@ def get_market_stats(selected_categories=None, selected_items=None, max_days_rem
 
         # Add the ships column
         df['ships'] = df['type_id'].map(ship_groups)
+
+    if tech2_only:
+        df = df[df['type_id'].isin(tech2_type_ids)]
 
     return df
 
@@ -134,25 +145,24 @@ def main():
 
     # Doctrine items filter
     doctrine_only = st.sidebar.checkbox("Show Doctrine Items Only", value=False, help="Show only items that are used in a doctrine fit, the fits used are shown in the 'Used In Fits' column")
+    tech2_only = st.sidebar.checkbox("Show Tech 2 Items Only", value=False, help="Show only items that are in the Tech 2 group")
 
     # Get initial categories
     categories, _ = get_filter_options()
 
-    # Initialize session state for categories if not already present
-    if 'selected_categories' not in st.session_state:
-        st.session_state.selected_categories = []
 
     st.sidebar.subheader("Category Filter")
-    selected_categories = st.sidebar.multiselect(
+    st.sidebar.multiselect(
         "Select Categories",
         options=categories,
-        default=st.session_state.selected_categories,
+        key="multiselect_categories",
         help="Select one or more categories to filter the data"
     )
 
-    st.session_state.selected_categories = selected_categories
-    logger.info(f"selected_categories: {selected_categories}")
-
+    if st.session_state.get('multiselect_categories'):
+        selected_categories = st.session_state.multiselect_categories
+    else:
+        selected_categories = []
 
     # Days remaining filter
     st.sidebar.subheader("Days Remaining Filter")
@@ -166,7 +176,7 @@ def main():
     )
 
     # Get filtered data
-    df = get_market_stats(selected_categories, None, max_days_remaining, doctrine_only)
+    df = get_market_stats(selected_categories, None, max_days_remaining, doctrine_only, tech2_only)
 
     if not df.empty:
         # Sort by days_remaining (ascending) to show most critical items first
@@ -195,23 +205,28 @@ def main():
         display_df = display_df[columns_to_show]
 
         numeric_formats = {
-            'total_volume_remain': st.column_config.NumberColumn('Volume Remaining',  format='localized', help='total items currently available on the market'),
+            'type_id': st.column_config.NumberColumn('Type ID', help='type ID of the item', width='small'),
+            'type_name': st.column_config.TextColumn('Item', help='name of the item', width='medium'),
+            'total_volume_remain': st.column_config.NumberColumn('Volume Remaining',  format='localized', help='total items currently available on the market', width='small'),
             'price': st.column_config.NumberColumn('Price', format='localized', help='lowest 5-percentile price of current sell orders, or if no sell orders, the historical average price'),
-            'days_remaining': st.column_config.NumberColumn('Days Remaining', format='localized', help='days of stock remaining based on historical average sales for the last 30 days'),
-            'avg_volume': st.column_config.NumberColumn('Avg Vol', format='localized', help='average volume over the last 30 days'),
+            'days_remaining': st.column_config.NumberColumn('Days Remaining', format='localized', help='days of stock remaining based on historical average sales for the last 30 days', width='small'),
+            'avg_volume': st.column_config.NumberColumn('Avg Vol', format='localized', help='average volume over the last 30 days', width='small'),
+            'ships': st.column_config.ListColumn('Fits', help='number of fits available on the market', width='large'),
+            'category_name': st.column_config.TextColumn('Category', help='category of the item'),
         }
+
+        # manual column config replaced with st.column_config
+
         # Rename columns
-        column_renames = {
-            'type_name': 'Item',
-            'group_name': 'Group',
-            'category_name': 'Category',
-            'ships': 'Used In Fits'
-        }
-        display_df = display_df.rename(columns=column_renames)
+        # column_renames = {
+        #     'type_name': 'Item',
+        #     'group_name': 'Group',
+        # }
+        # display_df = display_df.rename(columns=column_renames)
 
         # Reorder columns
-        column_order = ['Item', 'days_remaining', 'price', 'total_volume_remain', 'avg_volume', 'Used In Fits', 'Category', 'Group']
-        display_df = display_df[column_order]
+        # column_order = ['Item', 'days_remaining', 'price', 'total_volume_remain', 'avg_volume', 'Used In Fits', 'Category', 'Group']
+        # display_df = display_df[column_order]
 
         # Add a color indicator for critical items
         def highlight_critical(val):

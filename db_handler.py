@@ -68,6 +68,7 @@ def read_df(
                 db.sync()
                 return _run_local()
             except Exception:
+                logger.error("Failed to sync local DB; falling back to remote read.")
                 return _run_remote()
         raise
 
@@ -98,7 +99,6 @@ def get_all_mkt_stats()->pd.DataFrame:
     logger.info("-"*40)
     df = df.reset_index(drop=True)
     return df
-
 
 @st.cache_data(ttl=600)
 def get_all_mkt_orders()->pd.DataFrame:
