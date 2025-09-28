@@ -19,7 +19,7 @@ from init_db import init_db
 from sync_state import update_wcmkt_state
 from type_info import get_backup_type_id
 from datetime import datetime
-from market_metrics import render_ISK_volume_chart_ui, render_ISK_volume_table_ui
+from market_metrics import render_ISK_volume_chart_ui, render_ISK_volume_table_ui, render_30day_metrics_ui
 
 
 mkt_db = DatabaseConfig("wcmkt")
@@ -509,25 +509,32 @@ def main():
                     fit_df = pd.DataFrame()
             else:
                 fit_df = pd.DataFrame()
+
         elif show_all:
             selected_category = None
             selected_item = None
             selected_item_id = None
             fit_df = pd.DataFrame()
-
+            st.header("All Sell Orders", divider="green")
         elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
             selected_category = st.session_state.selected_category
 
             stats = stats[stats['category_name'] == selected_category]
             stats = stats.reset_index(drop=True)
             stats_type_ids = st.session_state.selected_category_info['type_ids']
-
+            st.header(selected_category, divider="green")
             if not buy_data.empty:
                 buy_data = buy_data[buy_data['type_id'].isin(stats_type_ids)]
                 buy_data = buy_data.reset_index(drop=True)
             if not sell_data.empty:
                 sell_data = sell_data[sell_data['type_id'].isin(stats_type_ids)]
                 sell_data = sell_data.reset_index(drop=True)
+
+        # 30-Day Historical Metrics Section
+        render_30day_metrics_ui()
+
+        # Current Market Metrics Section
+        st.subheader("Current Market Status", divider="grey")
 
         # Display metrics
         col1, col2, col3, col4 = st.columns(4)
@@ -629,6 +636,7 @@ def main():
                     except Exception as e:
                         logger.error(f"Error: {e}")
                         pass
+                st.subheader("Sell Orders for " + selected_item, divider="blue")
             elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
                 selected_category = st.session_state.selected_category
 

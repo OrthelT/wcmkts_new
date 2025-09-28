@@ -6,6 +6,8 @@ import numpy as np
 import streamlit as st
 from sqlalchemy import text
 from logging_config import setup_logging
+from datetime import datetime, timedelta
+import millify
 
 logger = setup_logging(__name__)
 
@@ -53,6 +55,63 @@ def get_market_history_by_category(selected_category=None):
         history_df = read_df(mkt_db, history_query)
     logger.info(history_df.columns)
     return history_df
+
+def calculate_30day_metrics(selected_category=None, selected_item_id=None):
+    """
+    Calculate average daily sales and total daily ISK value for the last 30 days
+
+    Args:
+        selected_category: Category name to filter by (optional)
+        selected_item_id: Specific item type_id to filter by (optional)
+
+    Returns:
+        tuple: (avg_daily_volume, avg_daily_isk_value)
+    """
+    try:
+        # Get market history data based on filters
+        if selected_item_id:
+            # Filter by specific item
+            mkt_db = DatabaseConfig("wcmkt")
+            history_query = text("SELECT * FROM market_history WHERE type_id = :type_id")
+            df = read_df(mkt_db, history_query, {'type_id': str(selected_item_id)})
+        elif selected_category:
+            # Filter by category
+            df = get_market_history_by_category(selected_category)
+        else:
+            # All market history
+            df = get_all_market_history()
+
+        if df.empty:
+            return 0, 0
+
+        # Convert date column to datetime
+        df['date'] = pd.to_datetime(df['date'])
+
+        # Get last 30 days of data
+        cutoff_date = datetime.now() - timedelta(days=30)
+        df_30days = df[df['date'] >= cutoff_date]
+
+        if df_30days.empty:
+            return 0, 0
+
+        # Calculate daily metrics
+        df_30days['daily_isk_volume'] = df_30days['average'] * df_30days['volume']
+
+        # Group by date and sum
+        daily_metrics = df_30days.groupby('date').agg({
+            'volume': 'sum',
+            'daily_isk_volume': 'sum'
+        }).reset_index()
+
+        # Calculate averages
+        avg_daily_volume = daily_metrics['volume'].mean()
+        avg_daily_isk_value = daily_metrics['daily_isk_volume'].mean()
+
+        return avg_daily_volume, avg_daily_isk_value
+
+    except Exception as e:
+        logger.error(f"Error calculating 30-day metrics: {e}")
+        return 0, 0
 
 def calculate_daily_ISK_volume():
     df = get_all_market_history()
@@ -482,6 +541,66 @@ def render_ISK_volume_table_ui():
     else:
         st.dataframe(table, use_container_width=False, column_config=data_table_config)
 
+def render_30day_metrics_ui():
+    """
+    Render the 30-day market performance metrics section
+
+    This function displays average daily sales and ISK value for the last 30 days,
+    filtered by the current selection (item, category, or all items).
+    """
+    st.subheader("30-Day Market Performance", divider="gray")
+
+    # Determine what filters to apply for the metrics
+    metrics_category = None
+    metrics_item_id = None
+
+    if 'selected_item_id' in st.session_state and st.session_state.selected_item_id is not None:
+        metrics_item_id = st.session_state.selected_item_id
+    elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
+        metrics_category = st.session_state.selected_category
+
+    # Calculate 30-day metrics
+    avg_daily_volume, avg_daily_isk_value = calculate_30day_metrics(
+        selected_category=metrics_category,
+        selected_item_id=metrics_item_id
+    )
+
+    # Display 30-day metrics
+    col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+
+    with col_m1:
+        if avg_daily_volume > 0:
+            display_avg_volume = millify.millify(avg_daily_volume, precision=2)
+            st.metric("Avg Daily Sales (30d)", f"{display_avg_volume}")
+        else:
+            st.metric("Avg Daily Sales (30d)", "0")
+
+    with col_m2:
+        if avg_daily_isk_value > 0:
+            display_avg_isk = millify.millify(avg_daily_isk_value, precision=2)
+            st.metric("Avg Daily ISK Value (30d)", f"{display_avg_isk} ISK")
+        else:
+            st.metric("Avg Daily ISK Value (30d)", "0 ISK")
+
+    with col_m3:
+        # Calculate total 30-day volume
+        total_30d_volume = avg_daily_volume * 30 if avg_daily_volume > 0 else 0
+        if total_30d_volume > 0:
+            display_total_volume = millify.millify(total_30d_volume, precision=2)
+            st.metric("Total Volume (30d)", f"{display_total_volume}")
+        else:
+            st.metric("Total 30d Volume", "0")
+
+    with col_m4:
+        # Calculate total 30-day ISK value
+        total_30d_isk = avg_daily_isk_value * 30 if avg_daily_isk_value > 0 else 0
+        if total_30d_isk > 0:
+            display_total_isk = millify.millify(total_30d_isk, precision=2)
+            st.metric("Total ISK Value (30d)", f"{display_total_isk} ISK")
+        else:
+            st.metric("Total 30d ISK Value", "0 ISK")
+
+    st.divider()
 
 if __name__ == "__main__":
     pass
