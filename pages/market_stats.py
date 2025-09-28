@@ -255,7 +255,6 @@ def dump_session_state():
     logger.info("*"*40)
     logger.info("="*40)
 
-
 @st.cache_data(ttl=600)
 def check_for_db_updates()->tuple[bool, float]:
     db = DatabaseConfig("wcmkt")
@@ -718,7 +717,14 @@ def main():
 
         st.divider()
 
-        st.subheader("Price History")
+        if st.session_state.get('selected_category') is not None:
+            filter_info = f"Category: {st.session_state.get('selected_category')}"
+            suffix = "s"
+        else:
+            filter_info = "All Items"
+            suffix = ""
+
+        st.subheader("Price History - " + filter_info + suffix)
         if selected_item is None or selected_item == "":
             logger.debug("No item selected")
             render_ISK_volume_chart_ui()
