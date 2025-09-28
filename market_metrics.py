@@ -575,7 +575,10 @@ def render_30day_metrics_ui():
 
     with col_m1:
         if avg_daily_volume > 0:
-            display_avg_volume = millify.millify(avg_daily_volume, precision=2)
+            if avg_daily_volume < 1000:
+                display_avg_volume = f"{avg_daily_volume:,.0f}"
+            else:
+                display_avg_volume = millify.millify(avg_daily_volume, precision=1)
             st.metric("Avg Daily Sales (30d)", f"{display_avg_volume}")
         else:
             st.metric("Avg Daily Sales (30d)", "0")
@@ -606,6 +609,68 @@ def render_30day_metrics_ui():
             st.metric("Total 30d ISK Value", "0 ISK")
 
     st.divider()
+
+def render_current_market_status_ui(sell_data, stats, selected_item, sell_order_count, sell_total_value, fit_df, fits_on_mkt, cat_id):
+    """
+    Render the current market status metrics section
+
+    Args:
+        sell_data: DataFrame with current sell orders
+        stats: DataFrame with market statistics
+        selected_item: Currently selected item name
+        sell_order_count: Count of sell orders
+        sell_total_value: Total value of sell orders
+        fit_df: DataFrame with fitting data
+        fits_on_mkt: Number of fits available on market
+        cat_id: Category ID of the selected item
+    """
+    st.subheader("Current Market Status", divider="grey")
+
+    # Display metrics
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        if not sell_data.empty:
+            min_price = stats['min_price'].min()
+            if pd.notna(min_price) and selected_item:
+                display_min_price = millify.millify(min_price, precision=2)
+                st.metric("Sell Price (min)", f"{display_min_price} ISK")
+        else:
+            st.metric("Sell Price (min)", "0 ISK")
+
+        if sell_total_value > 0:
+            display_sell_total_value = millify.millify(sell_total_value, precision=2)
+            st.metric("Market Value (sell orders)", f"{display_sell_total_value} ISK")
+        else:
+            st.metric("Market Value (sell orders)", "0 ISK")
+
+    with col2:
+        if not sell_data.empty:
+            volume = sell_data['volume_remain'].sum()
+            if pd.notna(volume):
+                display_volume = millify.millify(volume, precision=2)
+                st.metric("Market Stock (sell orders)", f"{display_volume}")
+        else:
+            st.metric("Market Stock (sell orders)", "0")
+
+    with col3:
+        days_remaining = stats['days_remaining'].min()
+        if pd.notna(days_remaining) and selected_item:
+            display_days_remaining = f"{days_remaining:.1f}"
+            st.metric("Days Remaining", f"{display_days_remaining}")
+        elif sell_order_count > 0:
+            display_sell_order_count = f"{sell_order_count:,.0f}"
+            st.metric("Total Sell Orders", f"{display_sell_order_count}")
+        else:
+            st.metric("Total Sell Orders", "0")
+
+    with col4:
+        if fit_df is not None and fit_df.empty is False and fits_on_mkt is not None:
+            if cat_id == 6:
+                display_fits_on_mkt = f"{fits_on_mkt:,.0f}"
+                st.metric("Fits on Market", f"{display_fits_on_mkt}")
+        else:
+            pass
 
 if __name__ == "__main__":
     pass

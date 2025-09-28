@@ -19,7 +19,7 @@ from init_db import init_db
 from sync_state import update_wcmkt_state
 from type_info import get_backup_type_id
 from datetime import datetime
-from market_metrics import render_ISK_volume_chart_ui, render_ISK_volume_table_ui, render_30day_metrics_ui
+from market_metrics import render_ISK_volume_chart_ui, render_ISK_volume_table_ui, render_30day_metrics_ui, render_current_market_status_ui
 
 
 mkt_db = DatabaseConfig("wcmkt")
@@ -583,60 +583,25 @@ def main():
             selected_category = st.session_state.selected_category
             st.header(selected_category + "s", divider="green")
 
-        # 30-Day Historical Metrics Section
-        render_30day_metrics_ui()
-
         # Current Market Metrics Section
-        st.subheader("Current Market Status", divider="grey")
+        render_current_market_status_ui(
+            sell_data=sell_data,
+            stats=stats,
+            selected_item=selected_item,
+            sell_order_count=sell_order_count,
+            sell_total_value=sell_total_value,
+            fit_df=fit_df,
+            fits_on_mkt=fits_on_mkt,
+            cat_id=cat_id
+        )
 
-        # Display metrics
-        col1, col2, col3, col4 = st.columns(4)
+        # 30-Day Historical Metrics Section
+        with st.expander("30-Day Market Performance (expand to view metrics)", expanded=False):
+            render_30day_metrics_ui()
 
-        with col1:
-            if not sell_data.empty:
-                min_price = stats['min_price'].min()
-                if pd.notna(min_price) and selected_item:
-                    display_min_price = millify.millify(min_price, precision=2)
-                    st.metric("Sell Price (min)", f"{display_min_price} ISK")
-            else:
-                st.metric("Sell Price (min)", "0 ISK")
-
-            if sell_total_value > 0:
-                display_sell_total_value = millify.millify(sell_total_value, precision=2)
-                st.metric("Market Value (sell orders)", f"{display_sell_total_value} ISK")
-            else:
-                st.metric("Market Value (sell orders)", "0 ISK")
-
-        with col2:
-            if not sell_data.empty:
-                volume = sell_data['volume_remain'].sum()
-                if pd.notna(volume):
-                    display_volume = millify.millify(volume, precision=2)
-                    st.metric("Market Stock (sell orders)", f"{display_volume}")
-            else:
-                st.metric("Market Stock (sell orders)", "0")
-
-        with col3:
-            days_remaining = stats['days_remaining'].min()
-            if pd.notna(days_remaining) and selected_item:
-                display_days_remaining = f"{days_remaining:.1f}"
-                st.metric("Days Remaining", f"{display_days_remaining}")
-            elif sell_order_count > 0:
-                display_sell_order_count = f"{sell_order_count:,.0f}"
-                st.metric("Total Sell Orders", f"{display_sell_order_count}")
-            else:
-                st.metric("Total Sell Orders", "0")
-
-        with col4:
-            if fit_df is not None and fit_df.empty is False and fits_on_mkt is not None:
-                if cat_id == 6:
-                    display_fits_on_mkt = f"{fits_on_mkt:,.0f}"
-                    st.metric("Fits on Market", f"{display_fits_on_mkt}")
-            else:
-                pass
 
         st.divider()
-        # Display detailed data
+
 
         # Format the DataFrame for display with null handling
         display_df = sell_data.copy()
@@ -834,14 +799,6 @@ def main():
         st.download_button("Download Market Orders", data=get_all_mkt_orders().to_csv(index=False), file_name="4H_market_orders.csv", mime="text/csv",type="tertiary", help="Download all 4H market orders as a CSV file",icon="📥")
         st.download_button("Download Market Stats", data=get_all_mkt_stats().to_csv(index=False), file_name="4H_market_stats.csv", mime="text/csv",type="tertiary", help="Download aggregated 4H market statistics for commonly traded items as a CSV file",icon="📥")
         st.download_button("Download Market History", data=get_all_market_history().to_csv(index=False), file_name="4H_market_history.csv", mime="text/csv",type="tertiary", help="Download 4H market history for commonly traded items as a CSV file",icon="📥")
-
-
-        # st.sidebar.markdown("---")
-        # force_sync = st.sidebar.button("Force Sync", use_container_width=True, type="tertiary")
-        # if force_sync:
-        #     st.cache_data.clear()
-        #     st.cache_resource.clear()
-        #     mkt_db.sync()
 
 if __name__ == "__main__":
     main()
