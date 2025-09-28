@@ -43,14 +43,14 @@ def get_market_type_ids()->list:
     """
     df = read_df(mkt_db, mkt_query)
     type_ids = df['type_id'].tolist()
-    logger.info(f"type_ids: {len(type_ids)}")
+    logger.debug(f"type_ids: {len(type_ids)}")
     return type_ids
 
 # Function to get unique categories and item names
 def all_sde_info(type_ids: list = None)->pd.DataFrame:
     if not type_ids:
         type_ids = get_market_type_ids()
-    logger.info(f"type_ids: {len(type_ids)}")
+    logger.debug(f"type_ids: {len(type_ids)}")
 
     new_sde_query = text("""
     SELECT typeName as type_name, typeID as type_id, groupID as group_id, groupName as group_name,
@@ -60,15 +60,15 @@ def all_sde_info(type_ids: list = None)->pd.DataFrame:
     """).bindparams(bindparam('type_ids', expanding=True))
 
     df = read_df(sde_db, new_sde_query, {'type_ids': type_ids})
-    logger.info(f"df: {len(df)}")
+    logger.debug(f"df: {len(df)}")
     return df
 
 def get_filter_options(selected_category: str=None, show_all: bool=False)->tuple[list, list, pd.DataFrame]:
 
     sde_df = all_sde_info()
     sde_df = sde_df.reset_index(drop=True)
-    logger.info(f"sde_df: {len(sde_df)}")
-    logger.info(f"selected_category: {selected_category}")
+    logger.debug(f"sde_df: {len(sde_df)}")
+    logger.debug(f"selected_category: {selected_category}")
 
     if show_all:
         categories = sorted(sde_df['category_name'].unique().tolist())
@@ -417,10 +417,9 @@ def main():
     # Show all option
     show_all = st.sidebar.checkbox("Show All Data", value=False)
 
-    logger.info("Getting initial categories")
     # Get initial categories
     categories, available_items, _ = get_filter_options()
-    logger.info(f"categories: {len(categories)}")
+    logger.debug(f"categories: {len(categories)}")
     # Category filter - changed to selectbox for single selection
     selected_category = st.sidebar.selectbox(
         "Select Category",
@@ -430,17 +429,15 @@ def main():
         format_func=lambda x: "All Categories" if x == "" else x
     )
     if selected_category == "":
-        logger.info(f"selected_category is {selected_category}")
         st.session_state.selected_category = None
         st.session_state.selected_category_info = None
         st.session_state.selected_item = None
         st.session_state.selected_item_id = None
 
     if selected_category and selected_category is not None:
-        logger.info("selected_category exists and is not None")
+        logger.info(f"selected_category {selected_category}")
         st.sidebar.text(f"Category: {selected_category}")
         st.session_state.selected_category = selected_category
-        logger.info(f"selected_category: {selected_category}")
         # Get filtered items based on selected category
         _, available_items, cat_type_info = get_filter_options(selected_category if not show_all and selected_category else None)
 
@@ -458,14 +455,15 @@ def main():
         st.session_state.selected_item_id = None
 
     elif selected_item and selected_item is not None:
+        logger.info(f"selected_item: {selected_item}")
         st.sidebar.text(f"Item: {selected_item}")
         st.session_state.selected_item = selected_item
         st.session_state.selected_item_id = get_backup_type_id(selected_item)
+        logger.info(f"selected_item_id: {st.session_state.selected_item_id}")
 
     else:
         selected_item = None
 
-    logger.info(f"Selected item: {selected_item}")
     t1 = time.perf_counter()
 
     # sell_data, buy_data, stats = get_market_data(show_all, selected_category, selected_items)
@@ -572,6 +570,9 @@ def main():
 
         with col4:
             isship = False
+            fits_on_mkt = None  # Initialize the variable
+            cat_id = None  # Initialize cat_id as well
+
             if fit_df is not None and fit_df.empty is False:
                 cat_id = stats['category_id'].iloc[0]
                 fits_on_mkt = fit_df['Fits on Market'].min()
@@ -620,7 +621,7 @@ def main():
 
                 with col2:
                     try:
-                        if fits_on_mkt:
+                        if fits_on_mkt is not None and fits_on_mkt:
                             st.subheader("Winter Co. Doctrine", divider="orange")
                             if cat_id in [7,8,18]:
                                 st.write(get_module_fits(selected_item_id))
@@ -708,7 +709,7 @@ def main():
             st.dataframe(buy_display_df, hide_index=True)
 
         if selected_item is None or selected_item == "":
-            logger.info("No item selected")
+            logger.debug("No item selected")
             pass
         else:
             st.subheader("Market Order Distribution")
@@ -719,7 +720,7 @@ def main():
 
         st.subheader("Price History")
         if selected_item is None or selected_item == "":
-            logger.info("No item selected")
+            logger.debug("No item selected")
             render_ISK_volume_chart_ui()
             with st.expander("Expand to view Market History Data"):
                 render_ISK_volume_table_ui()
@@ -744,13 +745,13 @@ def main():
                 selected_item_id = None
 
             if selected_item_id:
-                logger.info(f"Displaying history chart for {selected_item_id}")
+                logger.debug(f"Displaying history chart for {selected_item_id}")
                 history_chart = create_history_chart(selected_item_id)
             else:
                 history_chart = None
 
             if history_chart:
-                logger.info(f"Displaying history chart for {selected_item_id}")
+                logger.debug(f"Displaying history chart for {selected_item_id}")
                 st.plotly_chart(history_chart, use_container_width=False)
 
                 colh1, colh2 = st.columns(2)

@@ -148,7 +148,6 @@ class DatabaseConfig:
         if lock is None:
             lock = threading.RLock()
             DatabaseConfig._local_locks[self.alias] = lock
-            logger.info(f"local_access() lock acquired for {self.alias}")
         return lock
 
     @contextmanager
@@ -157,11 +156,10 @@ class DatabaseConfig:
         lock = self._get_local_lock()
         lock.acquire()
         try:
+            logger.debug(f"local_access() lock acquired for {self.alias}")
             yield
-            logger.info(f"local_access() lock for {self.alias}")
         finally:
             lock.release()
-            logger.info(f"local_access() lock released for {self.alias}")
 
     def integrity_check(self) -> bool:
         """Run PRAGMA integrity_check on the local database.
@@ -172,9 +170,9 @@ class DatabaseConfig:
             # Use a short-lived connection
             with self.engine.connect() as conn:
                 result = conn.execute(text("PRAGMA integrity_check")).fetchone()
+                logger.debug(f"integrity_check() result: {result}")
             status = str(result[0]).lower() if result and result[0] is not None else ""
             ok = status == "ok"
-            logger.info(f"Integrity check ({self.alias}): {status}")
             return ok
         except Exception as e:
             logger.error(f"Integrity check error ({self.alias}): {e}")
@@ -191,9 +189,8 @@ class DatabaseConfig:
         alias_lock.acquire()
         try:
             with _SYNC_LOCK:
-                logger.info("Preparing for database sync: disposing local connections …")
                 self._dispose_local_connections()
-                logger.info("Syncing database…")
+                logger.debug("Disposing local connections and syncing database…")
                 conn = None
                 try:
                     st.cache_data.clear()
@@ -224,7 +221,7 @@ class DatabaseConfig:
                     st.session_state.sync_status = "Success" if validation_test else "Failed"
                 st.session_state.sync_check = False
         finally:
-            logger.info(f"alias_lock released for {self.alias}")
+            logger.debug(f"alias_lock released for {self.alias}")
             alias_lock.release()
 
     def validate_sync(self)-> bool:

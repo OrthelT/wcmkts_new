@@ -212,7 +212,7 @@ def get_all_fitting_data()->pd.DataFrame:
     return df
 
 def get_fitting_data(type_id):
-    logger.info("getting fitting data")
+    logger.debug("getting fitting data")
     df = get_all_fitting_data()
     if df.empty:
         return None
@@ -389,7 +389,7 @@ def new_get_market_data(show_all):
     if 'selected_category_info' in st.session_state and st.session_state.selected_category_info is not None:
         orders_df = df[df['type_id'].isin(st.session_state.selected_category_info['type_ids'])]
     if 'selected_item_id' in st.session_state and st.session_state.selected_item_id is not None:
-        logger.info(f"selected_item_id: {st.session_state.selected_item_id}")
+        logger.debug(f"selected_item_id: {st.session_state.selected_item_id}")
         orders_df = df[df['type_id'] == st.session_state.selected_item_id]
     else:
         orders_df = df

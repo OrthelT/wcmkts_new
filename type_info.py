@@ -51,14 +51,13 @@ def get_type_id_from_fuzzworks(type_name: str) -> int:
         raise Exception(f"Error fetching type id for {type_name}: {response.status_code}")
 
 def get_backup_type_id(type_name: str) -> int:
-    logger.warning(f"Getting type_id for {type_name}")
     type_id = get_type_id_from_sde(type_name)
     if type_id:
-        logger.info(f"SDE found type_id for {type_name}: {type_id}")
+        logger.debug(f"SDE found type_id for {type_name}: {type_id}")
     else:
         type_id = get_type_id_from_fuzzworks(type_name)
         if type_id:
-            logger.info(f"Fuzzwork found type_id for {type_name}: {type_id}")
+            logger.debug(f"Fuzzwork found type_id for {type_name}: {type_id}")
         else:
             logger.error(f"No type_id found for {type_name}")
             type_id = None
