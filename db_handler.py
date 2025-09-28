@@ -68,6 +68,7 @@ def read_df(
                 db.sync()
                 return _run_local()
             except Exception:
+                logger.error("Failed to sync local DB; falling back to remote read.")
                 return _run_remote()
         raise
 
