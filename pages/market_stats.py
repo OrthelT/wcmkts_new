@@ -19,7 +19,7 @@ from init_db import init_db
 from sync_state import update_wcmkt_state
 from type_info import get_backup_type_id
 from datetime import datetime
-from market_metrics import render_ISK_volume_chart_ui, render_ISK_volume_table_ui
+from market_metrics import render_ISK_volume_chart_ui, render_ISK_volume_table_ui, render_30day_metrics_ui, render_current_market_status_ui
 
 
 mkt_db = DatabaseConfig("wcmkt")
@@ -254,7 +254,6 @@ def dump_session_state():
         logger.info("-"*40)
     logger.info("*"*40)
     logger.info("="*40)
-
 
 @st.cache_data(ttl=600)
 def check_for_db_updates()->tuple[bool, float]:
@@ -510,6 +509,7 @@ def main():
                     fit_df = pd.DataFrame()
             else:
                 fit_df = pd.DataFrame()
+
         elif show_all:
             selected_category = None
             selected_item = None
@@ -530,117 +530,96 @@ def main():
                 sell_data = sell_data[sell_data['type_id'].isin(stats_type_ids)]
                 sell_data = sell_data.reset_index(drop=True)
 
-        # Display metrics
-        col1, col2, col3, col4 = st.columns(4)
+        # Initialize variables needed for header display
+        isship = False
+        fits_on_mkt = None
+        cat_id = None
 
-        with col1:
-            if not sell_data.empty:
-                min_price = stats['min_price'].min()
-                if pd.notna(min_price) and selected_item:
-                    display_min_price = millify.millify(min_price, precision=2)
-                    st.metric("Sell Price (min)", f"{display_min_price} ISK")
+        if fit_df is not None and fit_df.empty is False:
+            cat_id = stats['category_id'].iloc[0]
+            fits_on_mkt = fit_df['Fits on Market'].min()
+            if cat_id == 6:
+                isship = True
+
+        # Create headers for different filter states
+        if show_all:
+            st.header("All Sell Orders", divider="green")
+        elif 'selected_item' in st.session_state and st.session_state.selected_item is not None:
+            selected_item = st.session_state.selected_item
+            if 'selected_item_id' in st.session_state:
+                selected_item_id = st.session_state.selected_item_id
             else:
-                st.metric("Sell Price (min)", "0 ISK")
+                selected_item_id = get_backup_type_id(selected_item)
+                st.session_state.selected_item_id = selected_item_id
+            try:
+                image_id = selected_item_id
+                type_name = selected_item
+            except Exception as e:
+                logger.error(f"Error: {e}")
+                logger.info(f"No type_id or type_name found for {selected_item}")
+                image_id = None
+                type_name = None
+            st.subheader(f"{type_name}", divider="blue")
+            col1, col2 = st.columns(2)
+            with col1:
+                if image_id:
+                    if isship:
+                        st.image(f'https://images.evetech.net/types/{image_id}/render?size=64')
+                    else:
+                        st.image(f'https://images.evetech.net/types/{image_id}/icon')
 
-            if sell_total_value > 0:
-                display_sell_total_value = millify.millify(sell_total_value, precision=2)
-                st.metric("Market Value (sell orders)", f"{display_sell_total_value} ISK")
-            else:
-                st.metric("Market Value (sell orders)", "0 ISK")
+            with col2:
+                try:
+                    if fits_on_mkt is not None and fits_on_mkt:
+                        st.subheader("Winter Co. Doctrine", divider="orange")
+                        if cat_id in [7,8,18]:
+                            st.write(get_module_fits(selected_item_id))
+                        else:
+                            st.write(fit_df[fit_df['type_id'] == selected_item_id]['group_name'].iloc[0])
+                except Exception as e:
+                    logger.error(f"Error: {e}")
+                    pass
+        elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
+            selected_category = st.session_state.selected_category
+            st.header(selected_category + "s", divider="green")
 
-        with col2:
-            if not sell_data.empty:
-                volume = sell_data['volume_remain'].sum()
-                if pd.notna(volume):
-                    display_volume = millify.millify(volume, precision=2)
-                    st.metric("Market Stock (sell orders)", f"{display_volume}")
-            else:
-                st.metric("Market Stock (sell orders)", "0")
+        # Current Market Metrics Section
+        render_current_market_status_ui(
+            sell_data=sell_data,
+            stats=stats,
+            selected_item=selected_item,
+            sell_order_count=sell_order_count,
+            sell_total_value=sell_total_value,
+            fit_df=fit_df,
+            fits_on_mkt=fits_on_mkt,
+            cat_id=cat_id
+        )
 
-        with col3:
-            days_remaining = stats['days_remaining'].min()
-            if pd.notna(days_remaining) and selected_item:
-                display_days_remaining = f"{days_remaining:.1f}"
-                st.metric("Days Remaining", f"{display_days_remaining}")
-            elif sell_order_count > 0:
-                display_sell_order_count = f"{sell_order_count:,.0f}"
-                st.metric("Total Sell Orders", f"{display_sell_order_count}")
-            else:
-                st.metric("Total Sell Orders", "0")
+        # 30-Day Historical Metrics Section
+        with st.expander("30-Day Market Performance (expand to view metrics)", expanded=False):
+            render_30day_metrics_ui()
 
-        with col4:
-            isship = False
-            fits_on_mkt = None  # Initialize the variable
-            cat_id = None  # Initialize cat_id as well
-
-            if fit_df is not None and fit_df.empty is False:
-                cat_id = stats['category_id'].iloc[0]
-                fits_on_mkt = fit_df['Fits on Market'].min()
-
-                if cat_id == 6:
-                    display_fits_on_mkt = f"{fits_on_mkt:,.0f}"
-                    st.metric("Fits on Market", f"{display_fits_on_mkt}")
-                    isship = True
-
-            else:
-                pass
 
         st.divider()
-        # Display detailed data
+
 
         # Format the DataFrame for display with null handling
         display_df = sell_data.copy()
 
-        #create a header for the item
-        if show_all:
+        # Add subheader for sell orders section
+        if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
+            selected_item = st.session_state.selected_item
+            st.subheader("Sell Orders for " + selected_item, divider="blue")
+        elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
+            selected_category = st.session_state.selected_category
+            cat_label = selected_category
+            if not cat_label.endswith("s"):
+                cat_label = cat_label + "s"
+            st.subheader(f"Sell Orders for {cat_label}", divider="blue")
+        elif show_all:
             st.subheader("All Sell Orders", divider="green")
         else:
-            if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
-                selected_item = st.session_state.selected_item
-                if 'selected_item_id' in st.session_state:
-                    selected_item_id = st.session_state.selected_item_id
-                else:
-                    selected_item_id = get_backup_type_id(selected_item)
-                    st.session_state.selected_item_id = selected_item_id
-                try:
-                    image_id = selected_item_id
-                    type_name = selected_item
-                except Exception as e:
-                    logger.error(f"Error: {e}")
-                    logger.info(f"No type_id or type_name found for {selected_item}")
-                    image_id = None
-                    type_name = None
-                st.subheader(f"{type_name}", divider="blue")
-                col1, col2 = st.columns(2)
-                with col1:
-                    if image_id:
-                        if isship:
-                            st.image(f'https://images.evetech.net/types/{image_id}/render?size=64')
-                        else:
-                            st.image(f'https://images.evetech.net/types/{image_id}/icon')
-
-                with col2:
-                    try:
-                        if fits_on_mkt is not None and fits_on_mkt:
-                            st.subheader("Winter Co. Doctrine", divider="orange")
-                            if cat_id in [7,8,18]:
-                                st.write(get_module_fits(selected_item_id))
-                            else:
-                                st.write(fit_df[fit_df['type_id'] == selected_item_id]['group_name'].iloc[0])
-                    except Exception as e:
-                        logger.error(f"Error: {e}")
-                        pass
-            elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
-                selected_category = st.session_state.selected_category
-
-                cat_label = selected_category
-                if cat_label.endswith("s"):
-                    cat_label = cat_label
-                else:
-                    cat_label = cat_label + "s"
-                st.subheader(f"Sell Orders for {cat_label}", divider="blue")
-            else:
-                st.subheader("All Sell Orders", divider="green")
+            st.subheader("All Sell Orders", divider="green")
 
         display_df.type_id = display_df.type_id.astype(str)
         display_df.order_id = display_df.order_id.astype(str)
@@ -718,7 +697,14 @@ def main():
 
         st.divider()
 
-        st.subheader("Price History")
+        if st.session_state.get('selected_category') is not None:
+            filter_info = f"Category: {st.session_state.get('selected_category')}"
+            suffix = "s"
+        else:
+            filter_info = "All Items"
+            suffix = ""
+
+        st.subheader("Price History - " + filter_info + suffix)
         if selected_item is None or selected_item == "":
             logger.debug("No item selected")
             render_ISK_volume_chart_ui()
@@ -813,14 +799,6 @@ def main():
         st.download_button("Download Market Orders", data=get_all_mkt_orders().to_csv(index=False), file_name="4H_market_orders.csv", mime="text/csv",type="tertiary", help="Download all 4H market orders as a CSV file",icon="📥")
         st.download_button("Download Market Stats", data=get_all_mkt_stats().to_csv(index=False), file_name="4H_market_stats.csv", mime="text/csv",type="tertiary", help="Download aggregated 4H market statistics for commonly traded items as a CSV file",icon="📥")
         st.download_button("Download Market History", data=get_all_market_history().to_csv(index=False), file_name="4H_market_history.csv", mime="text/csv",type="tertiary", help="Download 4H market history for commonly traded items as a CSV file",icon="📥")
-
-
-        # st.sidebar.markdown("---")
-        # force_sync = st.sidebar.button("Force Sync", use_container_width=True, type="tertiary")
-        # if force_sync:
-        #     st.cache_data.clear()
-        #     st.cache_resource.clear()
-        #     mkt_db.sync()
 
 if __name__ == "__main__":
     main()

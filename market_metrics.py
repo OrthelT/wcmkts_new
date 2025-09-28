@@ -1,8 +1,117 @@
-from db_handler import get_all_market_history
+from db_handler import get_all_market_history, read_df
+from config import DatabaseConfig
 import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
 import streamlit as st
+from sqlalchemy import text
+from logging_config import setup_logging
+from datetime import datetime, timedelta
+import millify
+
+logger = setup_logging(__name__)
+
+def get_market_history_by_category(selected_category=None):
+    """
+    Get market history data filtered by category
+
+    Args:
+        selected_category: Category name to filter by (optional)
+
+    Returns:
+        pandas DataFrame: Market history data, optionally filtered by category
+    """
+    if selected_category is None:
+        # Return all market history if no category selected
+        return get_all_market_history()
+
+    # Get type_ids for the selected category from SDE
+    sde_db = DatabaseConfig("sde")
+    category_query = text("""
+        SELECT typeID as type_id
+        FROM sdetypes
+        WHERE categoryName = :category_name
+    """)
+
+    type_ids_df = read_df(sde_db, category_query, {'category_name': selected_category})
+    if type_ids_df.empty:
+        return pd.DataFrame()  # Return empty if no types found for category
+
+    type_ids = type_ids_df['type_id'].tolist()
+
+    # Get market history for those type_ids
+    mkt_db = DatabaseConfig("wcmkt")
+    # Convert type_ids to strings since the DB stores them as VARCHAR
+    type_ids_str = [str(tid) for tid in type_ids]
+
+    # Use a simpler approach with string formatting for the IN clause
+    if len(type_ids_str) == 1:
+        history_query = text("SELECT * FROM market_history WHERE type_id = :type_id")
+        history_df = read_df(mkt_db, history_query, {'type_id': type_ids_str[0]})
+    else:
+        # Create a comma-separated string for multiple IDs
+        type_ids_joined = ','.join(f"'{tid}'" for tid in type_ids_str)
+        history_query = text(f"SELECT * FROM market_history WHERE type_id IN ({type_ids_joined})")
+        history_df = read_df(mkt_db, history_query)
+    logger.info(history_df.columns)
+    return history_df
+
+def calculate_30day_metrics(selected_category=None, selected_item_id=None):
+    """
+    Calculate average daily sales and total daily ISK value for the last 30 days
+
+    Args:
+        selected_category: Category name to filter by (optional)
+        selected_item_id: Specific item type_id to filter by (optional)
+
+    Returns:
+        tuple: (avg_daily_volume, avg_daily_isk_value)
+    """
+    try:
+        # Get market history data based on filters
+        if selected_item_id:
+            # Filter by specific item
+            mkt_db = DatabaseConfig("wcmkt")
+            history_query = text("SELECT * FROM market_history WHERE type_id = :type_id")
+            df = read_df(mkt_db, history_query, {'type_id': str(selected_item_id)})
+        elif selected_category:
+            # Filter by category
+            df = get_market_history_by_category(selected_category)
+        else:
+            # All market history
+            df = get_all_market_history()
+
+        if df.empty:
+            return 0, 0
+
+        # Convert date column to datetime
+        df['date'] = pd.to_datetime(df['date'])
+
+        # Get last 30 days of data
+        cutoff_date = datetime.now() - timedelta(days=30)
+        df_30days = df[df['date'] >= cutoff_date]
+
+        if df_30days.empty:
+            return 0, 0
+
+        # Calculate daily metrics
+        df_30days['daily_isk_volume'] = df_30days['average'] * df_30days['volume']
+
+        # Group by date and sum
+        daily_metrics = df_30days.groupby('date').agg({
+            'volume': 'sum',
+            'daily_isk_volume': 'sum'
+        }).reset_index()
+
+        # Calculate averages
+        avg_daily_volume = daily_metrics['volume'].mean()
+        avg_daily_isk_value = daily_metrics['daily_isk_volume'].mean()
+
+        return avg_daily_volume, avg_daily_isk_value
+
+    except Exception as e:
+        logger.error(f"Error calculating 30-day metrics: {e}")
+        return 0, 0
 
 def calculate_daily_ISK_volume():
     df = get_all_market_history()
@@ -12,7 +121,7 @@ def calculate_daily_ISK_volume():
 
     return df2
 
-def calculate_ISK_volume_by_period(date_period='daily', start_date=None, end_date=None):
+def calculate_ISK_volume_by_period(date_period='daily', start_date=None, end_date=None, selected_category=None):
     """
     Calculate ISK volume aggregated by different time periods
 
@@ -20,11 +129,12 @@ def calculate_ISK_volume_by_period(date_period='daily', start_date=None, end_dat
         date_period: 'daily', 'weekly', 'monthly', 'yearly'
         start_date: datetime or None for all dates
         end_date: datetime or None for all dates
+        selected_category: Category name to filter by (optional)
 
     Returns:
         pandas Series with ISK volume data
     """
-    df = get_all_market_history()
+    df = get_market_history_by_category(selected_category)
 
     # Convert date column to datetime first
     df['date'] = pd.to_datetime(df['date'])
@@ -69,14 +179,19 @@ def calculate_ISK_volume_by_period(date_period='daily', start_date=None, end_dat
 
     return df_grouped
 
-def get_available_date_range():
+def get_available_date_range(selected_category=None):
     """
     Get the min and max dates available in the market history data
+
+    Args:
+        selected_category: Category name to filter by (optional)
 
     Returns:
         tuple: (min_date, max_date) as pandas datetime objects
     """
-    df = get_all_market_history()
+    df = get_market_history_by_category(selected_category)
+    if df.empty:
+        return None, None
     df['date'] = pd.to_datetime(df['date'])
     return df['date'].min(), df['date'].max()
 
@@ -138,7 +253,7 @@ def handle_outliers(series, method='cap', outlier_threshold=1.5, cap_percentile=
         raise ValueError("Method must be 'remove', 'cap', or 'none'")
 
 def create_ISK_volume_chart(moving_avg_period=14, date_period='daily', start_date=None, end_date=None,
-                           outlier_method='cap', outlier_threshold=1.5, cap_percentile=95):
+                           outlier_method='cap', outlier_threshold=1.5, cap_percentile=95, selected_category=None):
     """
     Create an interactive ISK volume chart with moving average and outlier handling
 
@@ -150,12 +265,13 @@ def create_ISK_volume_chart(moving_avg_period=14, date_period='daily', start_dat
         outlier_method: 'none', 'remove', or 'cap' for outlier handling
         outlier_threshold: threshold for outlier detection (1.5 for IQR method)
         cap_percentile: percentile to cap outliers at (when method='cap')
+        selected_category: Category name to filter by (optional)
 
     Returns:
         plotly.graph_objects.Figure: The chart figure
     """
     # Get the data based on selected parameters
-    df = calculate_ISK_volume_by_period(date_period, start_date, end_date)
+    df = calculate_ISK_volume_by_period(date_period, start_date, end_date, selected_category)
 
     # Handle outliers if requested
     if outlier_method != 'none':
@@ -175,18 +291,24 @@ def create_ISK_volume_chart(moving_avg_period=14, date_period='daily', start_dat
     }
     period_label = period_labels.get(date_period, 'Daily')
 
-    # Add the ISK volume bars
-    fig.add_trace(go.Bar(x=df.index, y=df.values, name=f'{period_label} ISK Volume'))
+    # Add the ISK volume bars with custom hover template
+    fig.add_trace(go.Bar(
+        x=df.index,
+        y=df.values,
+        name=f'{period_label} ISK Volume',
+        hovertemplate='<b>%{x}</b><br>ISK Volume: %{y:,.0f}<extra></extra>'
+    ))
 
     # Calculate moving average with user-selected period
     moving_avg = df.rolling(window=moving_avg_period, min_periods=1).mean()
 
-    # Add the moving average line
+    # Add the moving average line with custom hover template
     fig.add_trace(go.Scatter(
         x=df.index,
         y=moving_avg.values,
         name=f'{moving_avg_period}-Period Moving Average',
-        line=dict(color='#FF69B4', width=2)
+        line=dict(color='#FF69B4', width=2),
+        hovertemplate='<b>%{x}</b><br>Moving Avg: %{y:,.0f}<extra></extra>'
     ))
 
     # Add outlier handling info to title
@@ -196,14 +318,19 @@ def create_ISK_volume_chart(moving_avg_period=14, date_period='daily', start_dat
     elif outlier_method == 'remove':
         title_suffix = " (Outliers removed)"
 
+    # Add category info to title if filtered
+    category_suffix = ""
+    if selected_category:
+        category_suffix = f" - {selected_category}"
+
     fig.update_layout(
-        title=f'{period_label} ISK Volume with {moving_avg_period}-Period Moving Average{title_suffix}',
+        title=f'{period_label} ISK Volume with {moving_avg_period}-Period Moving Average{category_suffix}{title_suffix}',
         xaxis_title='Date',
         yaxis_title='ISK Volume'
     )
     return fig
 
-def create_ISK_volume_table(date_period='daily', start_date=None, end_date=None):
+def create_ISK_volume_table(date_period='daily', start_date=None, end_date=None, selected_category=None):
     """
     Create an ISK volume table with the same filtering as the chart
 
@@ -211,12 +338,13 @@ def create_ISK_volume_table(date_period='daily', start_date=None, end_date=None)
         date_period: 'daily', 'weekly', 'monthly', 'yearly'
         start_date: Start date for filtering (optional)
         end_date: End date for filtering (optional)
+        selected_category: Category name to filter by (optional)
 
     Returns:
         pandas DataFrame: Formatted table data
     """
     # Get the data using the same function as the chart
-    df = calculate_ISK_volume_by_period(date_period, start_date, end_date)
+    df = calculate_ISK_volume_by_period(date_period, start_date, end_date, selected_category)
 
     # Convert to DataFrame and format
     table_df = df.reset_index()
@@ -240,8 +368,19 @@ def render_ISK_volume_chart_ui():
 
     @st.fragment
     def chart_fragment():
-        # Get available date range for validation
-        min_date, max_date = get_available_date_range()
+        # Get selected category from session state
+        selected_category = st.session_state.get('selected_category', None)
+
+        # Get available date range for validation (considering category filter)
+        min_date, max_date = get_available_date_range(selected_category)
+
+        # Handle case where no data is available for the selected category
+        if min_date is None or max_date is None:
+            if selected_category:
+                st.warning(f"No market history data available for category: {selected_category}")
+            else:
+                st.warning("No market history data available")
+            return
 
 
         # Second row: Date range selectors with validation
@@ -351,7 +490,8 @@ def render_ISK_volume_chart_ui():
             end_date=end_date,
             outlier_method=outlier_method,
             outlier_threshold=outlier_threshold,
-            cap_percentile=cap_percentile
+            cap_percentile=cap_percentile,
+            selected_category=selected_category
         )
         st.plotly_chart(chart, use_container_width=True)
 
@@ -365,6 +505,7 @@ def render_ISK_volume_table_ui():
     start_date = st.session_state.get("chart_start_date", None)
     end_date = st.session_state.get("chart_end_date", None)
     date_period = st.session_state.get("chart_date_period_radio") or "daily"
+    selected_category = st.session_state.get('selected_category', None)
 
     data_table_config = {
         "Date": st.column_config.DateColumn(
@@ -383,11 +524,153 @@ def render_ISK_volume_table_ui():
         date_period=str(date_period).lower(),
         start_date=start_date,
         end_date=end_date,
-
+        selected_category=selected_category
     )
-    st.write(f"Start Date: {start_date} | End Date: {end_date} | Date Period: {date_period}")
-    st.dataframe(table, use_container_width=False, column_config=data_table_config)
 
+    # Display filter information
+    filter_info = f"Start Date: {start_date} | End Date: {end_date} | Date Period: {date_period}"
+    if selected_category:
+        filter_info += f" | Category: {selected_category}"
+    st.write(filter_info)
+
+    if table.empty:
+        if selected_category:
+            st.warning(f"No market history data available for category: {selected_category}")
+        else:
+            st.warning("No market history data available for the selected filters")
+    else:
+        st.dataframe(table, use_container_width=False, column_config=data_table_config)
+
+def render_30day_metrics_ui():
+    """
+    Render the 30-day market performance metrics section
+
+    This function displays average daily sales and ISK value for the last 30 days,
+    filtered by the current selection (item, category, or all items).
+    Only displays if history data is available.
+    """
+    # Determine what filters to apply for the metrics
+    metrics_category = None
+    metrics_item_id = None
+
+    if 'selected_item_id' in st.session_state and st.session_state.selected_item_id is not None:
+        metrics_item_id = st.session_state.selected_item_id
+    elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
+        metrics_category = st.session_state.selected_category
+
+    # Calculate 30-day metrics
+    avg_daily_volume, avg_daily_isk_value = calculate_30day_metrics(
+        selected_category=metrics_category,
+        selected_item_id=metrics_item_id
+    )
+
+    # Only show metrics if we have actual history data
+    if avg_daily_volume == 0 and avg_daily_isk_value == 0:
+        return  # Don't show metrics section if no history data
+
+    st.subheader("30-Day Market Performance", divider="gray")
+
+    # Display 30-day metrics
+    col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+
+    with col_m1:
+        if avg_daily_volume > 0:
+            if avg_daily_volume < 1000:
+                display_avg_volume = f"{avg_daily_volume:,.0f}"
+            else:
+                display_avg_volume = millify.millify(avg_daily_volume, precision=1)
+            st.metric("Avg Daily Sales (30d)", f"{display_avg_volume}")
+        else:
+            st.metric("Avg Daily Sales (30d)", "0")
+
+    with col_m2:
+        if avg_daily_isk_value > 0:
+            display_avg_isk = millify.millify(avg_daily_isk_value, precision=2)
+            st.metric("Avg Daily ISK Value (30d)", f"{display_avg_isk} ISK")
+        else:
+            st.metric("Avg Daily ISK Value (30d)", "0 ISK")
+
+    with col_m3:
+        # Calculate total 30-day volume
+        total_30d_volume = avg_daily_volume * 30 if avg_daily_volume > 0 else 0
+        if total_30d_volume > 0:
+            display_total_volume = millify.millify(total_30d_volume, precision=2)
+            st.metric("Total Volume (30d)", f"{display_total_volume}")
+        else:
+            st.metric("Total 30d Volume", "0")
+
+    with col_m4:
+        # Calculate total 30-day ISK value
+        total_30d_isk = avg_daily_isk_value * 30 if avg_daily_isk_value > 0 else 0
+        if total_30d_isk > 0:
+            display_total_isk = millify.millify(total_30d_isk, precision=2)
+            st.metric("Total ISK Value (30d)", f"{display_total_isk} ISK")
+        else:
+            st.metric("Total 30d ISK Value", "0 ISK")
+
+    st.divider()
+
+def render_current_market_status_ui(sell_data, stats, selected_item, sell_order_count, sell_total_value, fit_df, fits_on_mkt, cat_id):
+    """
+    Render the current market status metrics section
+
+    Args:
+        sell_data: DataFrame with current sell orders
+        stats: DataFrame with market statistics
+        selected_item: Currently selected item name
+        sell_order_count: Count of sell orders
+        sell_total_value: Total value of sell orders
+        fit_df: DataFrame with fitting data
+        fits_on_mkt: Number of fits available on market
+        cat_id: Category ID of the selected item
+    """
+    st.subheader("Current Market Status", divider="grey")
+
+    # Display metrics
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        if not sell_data.empty:
+            min_price = stats['min_price'].min()
+            if pd.notna(min_price) and selected_item:
+                display_min_price = millify.millify(min_price, precision=2)
+                st.metric("Sell Price (min)", f"{display_min_price} ISK")
+        else:
+            st.metric("Sell Price (min)", "0 ISK")
+
+        if sell_total_value > 0:
+            display_sell_total_value = millify.millify(sell_total_value, precision=2)
+            st.metric("Market Value (sell orders)", f"{display_sell_total_value} ISK")
+        else:
+            st.metric("Market Value (sell orders)", "0 ISK")
+
+    with col2:
+        if not sell_data.empty:
+            volume = sell_data['volume_remain'].sum()
+            if pd.notna(volume):
+                display_volume = millify.millify(volume, precision=2)
+                st.metric("Market Stock (sell orders)", f"{display_volume}")
+        else:
+            st.metric("Market Stock (sell orders)", "0")
+
+    with col3:
+        days_remaining = stats['days_remaining'].min()
+        if pd.notna(days_remaining) and selected_item:
+            display_days_remaining = f"{days_remaining:.1f}"
+            st.metric("Days Remaining", f"{display_days_remaining}")
+        elif sell_order_count > 0:
+            display_sell_order_count = f"{sell_order_count:,.0f}"
+            st.metric("Total Sell Orders", f"{display_sell_order_count}")
+        else:
+            st.metric("Total Sell Orders", "0")
+
+    with col4:
+        if fit_df is not None and fit_df.empty is False and fits_on_mkt is not None:
+            if cat_id == 6:
+                display_fits_on_mkt = f"{fits_on_mkt:,.0f}"
+                st.metric("Fits on Market", f"{display_fits_on_mkt}")
+        else:
+            pass
 
 if __name__ == "__main__":
     pass
