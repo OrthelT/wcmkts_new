@@ -209,10 +209,11 @@ def main():
             'type_name': st.column_config.TextColumn('Item', help='name of the item', width='medium'),
             'total_volume_remain': st.column_config.NumberColumn('Volume Remaining',  format='localized', help='total items currently available on the market', width='small'),
             'price': st.column_config.NumberColumn('Price', format='localized', help='lowest 5-percentile price of current sell orders, or if no sell orders, the historical average price'),
-            'days_remaining': st.column_config.NumberColumn('Days Remaining', format='localized', help='days of stock remaining based on historical average sales for the last 30 days', width='small'),
+            'days_remaining': st.column_config.NumberColumn('Days', format='localized', help='days of stock remaining based on historical average sales for the last 30 days', width='small'),
             'avg_volume': st.column_config.NumberColumn('Avg Vol', format='localized', help='average volume over the last 30 days', width='small'),
-            'ships': st.column_config.ListColumn('Fits', help='number of fits available on the market', width='large'),
+            'ships': st.column_config.ListColumn('Used In Fits', help='number of fits available on the market', width='large'),
             'category_name': st.column_config.TextColumn('Category', help='category of the item'),
+            'group_name': st.column_config.TextColumn('Group', help='group of the item'),
         }
 
         # manual column config replaced with st.column_config
@@ -246,11 +247,11 @@ def main():
             # Check if the "Used In Fits" column has data
             try:
                 # Check if the value is not empty and not NaN
-                if isinstance(row['Used In Fits'], list) and len(row['Used In Fits']) > 0:
+                if isinstance(row['ships'], list) and len(row['ships']) > 0:
                     # Create a list of empty strings for all columns
                     styles = [''] * len(row)
                     # Apply highlighting only to the "Item" column (index 0)
-                    styles[0] = 'background-color: #328fed'
+                    styles[1] = 'background-color: #328fed'
                     return styles
             except Exception:
                 pass
