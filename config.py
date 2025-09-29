@@ -88,6 +88,7 @@ class DatabaseConfig:
     _libsql_sync_connects: dict[str, object] = {}
     _sqlite_local_connects: dict[str, object] = {}
     _local_locks: dict[str, threading.RLock] = {}
+    _ro_engines: dict[str, object] = {}
 
     def __init__(self, alias: str, dialect: str = "sqlite+libsql"):
         if alias == "wcmkt":
@@ -109,6 +110,7 @@ class DatabaseConfig:
         self._libsql_connect = None
         self._libsql_sync_connect = None
         self._sqlite_local_connect = None
+        self._ro_engine = None
 
     @property
     def engine(self):
@@ -158,17 +160,19 @@ class DatabaseConfig:
     @property
     def ro_engine(self):
         """SQLAlchemy engine to the local file, read-only, no pooling."""
-        logger.info("Getting read-only engine")
-        eng = getattr(self, "_ro_engine", None)
+        eng = DatabaseConfig._ro_engines.get(self.alias)
         if eng is not None:
             return eng
+        else:
         # URI form with read-only flags
-        uri = f"sqlite+pysqlite:///file:{self.path}?mode=ro&uri=true"
-        eng = create_engine(
-            uri,
-            poolclass=NullPool,                  # no long-lived pooled handles
-            connect_args={"check_same_thread": False},
-        )
+            uri = f"sqlite+pysqlite:///file:{self.path}?mode=ro&uri=true"
+            eng = create_engine(
+                uri,
+                poolclass=NullPool,                  # no long-lived pooled handles
+                connect_args={"check_same_thread": False},
+            )
+            DatabaseConfig._ro_engines[self.alias] = eng
+        return eng
 
         # @event.listens_for(eng, "connect")
         # def _set_pragmas(dbapi_con, _):
@@ -181,6 +185,19 @@ class DatabaseConfig:
 
         self._ro_engine = eng
         return eng
+
+    @contextmanager
+    def local_access(self):
+        """Guard local DB access to avoid overlapping with sync."""
+        pass
+        # lock = self._get_local_lock()
+        # lock.acquire()
+        # try:
+        #     logger.debug(f"local_access() lock acquired for {self.alias}")
+        #     yield
+        # finally:
+        #     lock.release()
+        #     logger.debug(f"local_access() lock released for {self.alias}")
 
     def _dispose_local_connections(self):
         """Dispose/close all local connections/engines to safely allow file operations.

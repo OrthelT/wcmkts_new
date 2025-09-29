@@ -38,7 +38,7 @@ def read_df(
 ) -> pd.DataFrame:
     """Execute a read-only SQL query and return a DataFrame.
 
-    - Uses `db.local_access()` + `db.engine.connect()` for local reads.
+    - Uses `db.ro_engine.connect()` for local reads.
     - Optionally falls back to remote on malformed/corrupt local DB.
     - Accepts raw SQL strings or SQLAlchemy TextClause; params are optional.
     """
@@ -46,7 +46,7 @@ def read_df(
     def _run_local() -> pd.DataFrame:
         with suppress(Exception):
             pass  # no global read lock
-            with db.engine.connect() as conn:
+            with db.ro_engine.connect() as conn:
                 sql = query
                 return pd.read_sql_query(sql, conn, params=params)
 
@@ -82,9 +82,8 @@ def get_all_mkt_stats()->pd.DataFrame:
     SELECT * FROM marketstats
     """
     def _read_all():
-        with mkt_db.local_access():
-            with mkt_db.engine.connect() as conn:
-                return pd.read_sql_query(query, conn)
+        with mkt_db.ro_engine.connect() as conn:
+            return pd.read_sql_query(query, conn)
     try:
         df = _read_all()
     except Exception as e:
@@ -112,16 +111,14 @@ def get_all_mkt_orders()->pd.DataFrame:
     # Proactive integrity check before reading
     try:
         if not mkt_db.integrity_check():
-
             logger.warning("Local DB integrity check failed; attempting resync before read…")
             mkt_db.sync()
     except Exception as e:
         logger.error(f"Pre-read sync attempt failed: {e}")
 
     def _read_all():
-        with mkt_db.local_access():
-            with mkt_db.engine.connect() as conn:
-                return pd.read_sql_query(query, conn)
+        with mkt_db.ro_engine.connect() as conn:
+            return pd.read_sql_query(query, conn)
 
     try:
         df = _read_all()
@@ -200,17 +197,16 @@ def clean_mkt_data(df):
 
 @st.cache_data(ttl=600)
 def get_all_fitting_data()->pd.DataFrame:
-    with mkt_db.local_access():
-        query = """
-                SELECT * FROM doctrines
-                """
-        try:
-            with mkt_db.engine.connect() as conn:
-                df = pd.read_sql_query(query, conn)
-            df = df.reset_index(drop=True)
-        except Exception as e:
-            logger.error(f"Failed to get doctrine data: {str(e)}")
-            raise
+    query = """
+            SELECT * FROM doctrines
+            """
+    try:
+        with mkt_db.ro_engine.connect() as conn:
+            df = pd.read_sql_query(query, conn)
+        df = df.reset_index(drop=True)
+    except Exception as e:
+        logger.error(f"Failed to get doctrine data: {str(e)}")
+        raise
     return df
 
 def get_fitting_data(type_id):
@@ -248,9 +244,8 @@ def get_stats(stats_query=None):
         """
     engine = mkt_db.engine
     try:
-        with mkt_db.local_access():
-            with engine.connect() as conn:
-                stats = pd.read_sql_query(stats_query, conn)
+        with mkt_db.ro_engine.connect() as conn:
+            stats = pd.read_sql_query(stats_query, conn)
     except Exception as e:
         msg = str(e).lower()
         if "malform" in msg or "database disk image is malformed" in msg:
@@ -268,9 +263,8 @@ def get_stats(stats_query=None):
 
 def query_local_mkt_db(query: str) -> pd.DataFrame:
     engine = mkt_db.engine
-    with mkt_db.local_access():
-        with engine.connect() as conn:
-            df = pd.read_sql_query(query, conn)
+    with mkt_db.ro_engine.connect() as conn:
+        df = pd.read_sql_query(query, conn)
     return df
 
 # Helper function to safely format numbers
@@ -290,9 +284,8 @@ def get_market_history(type_id: int)->pd.DataFrame:
         WHERE type_id = :type_id
         ORDER BY date DESC
     """
-    with mkt_db.local_access():
-        with mkt_db.engine.connect() as conn:
-            return pd.read_sql_query(text(query), conn, params={"type_id": type_id})
+    with mkt_db.ro_engine.connect() as conn:
+        return pd.read_sql_query(text(query), conn, params={"type_id": type_id})
 
 @st.cache_data(ttl=600)
 def get_all_market_history()->pd.DataFrame:
@@ -300,9 +293,8 @@ def get_all_market_history()->pd.DataFrame:
         SELECT * FROM market_history
     """
     def _read_all():
-        with mkt_db.local_access():
-            with mkt_db.engine.connect() as conn:
-                return pd.read_sql_query(query, conn)
+        with mkt_db.ro_engine.connect() as conn:
+            return pd.read_sql_query(query, conn)
     try:
         df = _read_all()
     except Exception as e:
@@ -326,13 +318,12 @@ def get_update_time()->str:
 
 
 def get_module_fits(type_id):
-    with mkt_db.local_access():
+    with mkt_db.ro_engine.connect() as conn:
         query = """
             SELECT * FROM doctrines WHERE type_id = :type_id
             """
         try:
-            with mkt_db.engine.connect() as conn:
-                df = pd.read_sql_query(text(query), conn, params={'type_id': type_id})
+            df = pd.read_sql_query(text(query), conn, params={'type_id': type_id})
         except Exception as e:
             logger.error(f"Failed to get data for type_id={type_id}: {str(e)}")
             raise
@@ -356,7 +347,7 @@ def get_groups_for_category(category_id: int)->pd.DataFrame:
         query = """
             SELECT DISTINCT groupID, groupName FROM invGroups WHERE categoryID = :category_id
         """
-    with sde_db.engine.connect() as conn:
+    with sde_db.ro_engine.connect() as conn:
         df = pd.read_sql_query(text(query), conn, params={"category_id": category_id})
     return df
 
@@ -377,9 +368,8 @@ def get_4H_price(type_id):
     query = """
         SELECT * FROM marketstats WHERE type_id = :type_id
         """
-    with mkt_db.local_access():
-        with mkt_db.engine.connect() as conn:
-            df = pd.read_sql_query(text(query), conn, params={"type_id": type_id})
+    with mkt_db.ro_engine.connect() as conn:
+        df = pd.read_sql_query(text(query), conn, params={"type_id": type_id})
     try:
         return df.price.iloc[0]
     except Exception:
