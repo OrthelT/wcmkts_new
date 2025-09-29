@@ -210,7 +210,13 @@ def get_ship_stock_list(ship_names: list):
             st.session_state.csv_ship_list_state[ship] = csv_ship_info
 @st.fragment
 def fitting_download_button():
-    if st.download_button("Download Data", data=get_all_fit_data().to_csv(index=False), file_name="wc_doctrine_fits.csv", help="Download all doctrine fit information as a CSV file", mime="text/csv"):
+    data = get_all_fit_data()
+    _, summary_data = create_fit_df()
+    targets = summary_data[['fit_id', 'ship_target']]
+    data = data.merge(targets, on='fit_id', how='left')
+    data = data.reset_index(drop=True)
+
+    if st.download_button("Download Data", data=data.to_csv(index=False), file_name="wc_doctrine_fits.csv", help="Download all doctrine fit information as a CSV file", mime="text/csv"):
         st.toast("Data downloaded successfully", icon="✅")
 
 def get_ship_target(ship_id: int, fit_id: int) -> int:
