@@ -231,7 +231,7 @@ def get_ship_target(ship_id: int, fit_id: int) -> int:
 
     elif ship_id == 0:
         try:
-            df = read_df(mkt_db, text("SELECT ship_target FROM ship_targets WHERE fit_id = :fit_id"), {"fit_id": fit_id})
+            df = read_df(mkt_db, query=text("SELECT ship_target FROM ship_targets WHERE fit_id = :fit_id"), params={"fit_id": fit_id})
             if not df.empty and pd.notna(df.loc[0, 'ship_target']):
                 return int(df.loc[0, 'ship_target'])
             return 20

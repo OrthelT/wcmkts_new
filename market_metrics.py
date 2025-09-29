@@ -53,7 +53,6 @@ def get_market_history_by_category(selected_category=None):
         type_ids_joined = ','.join(f"'{tid}'" for tid in type_ids_str)
         history_query = text(f"SELECT * FROM market_history WHERE type_id IN ({type_ids_joined})")
         history_df = read_df(mkt_db, history_query)
-    logger.info(history_df.columns)
     return history_df
 
 def calculate_30day_metrics(selected_category=None, selected_item_id=None):
@@ -146,7 +145,7 @@ def calculate_ISK_volume_by_period(date_period='daily', start_date=None, end_dat
             start_date = pd.to_datetime(start_date)
         else:
             start_date = pd.to_datetime(start_date)
-        df = df[df['date'] >= start_date]
+        df = df[df['date'] >= start_date].copy()
 
     if end_date is not None:
         # Convert end_date to datetime if it's a date object
@@ -154,7 +153,7 @@ def calculate_ISK_volume_by_period(date_period='daily', start_date=None, end_dat
             end_date = pd.to_datetime(end_date)
         else:
             end_date = pd.to_datetime(end_date)
-        df = df[df['date'] <= end_date]
+        df = df[df['date'] <= end_date].copy()
 
     df['total_isk_volume'] = df['average'] * df['volume']
 

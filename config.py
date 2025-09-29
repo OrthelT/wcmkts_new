@@ -1,4 +1,5 @@
-from sqlalchemy import create_engine, text, select
+from sqlalchemy import create_engine, text, select, event
+from sqlalchemy.pool import NullPool
 import streamlit as st
 import libsql
 from logging_config import setup_logging
@@ -154,6 +155,33 @@ class DatabaseConfig:
             DatabaseConfig._sqlite_local_connects[self.alias] = conn
         return conn
 
+    @property
+    def ro_engine(self):
+        """SQLAlchemy engine to the local file, read-only, no pooling."""
+        logger.info("Getting read-only engine")
+        eng = getattr(self, "_ro_engine", None)
+        if eng is not None:
+            return eng
+        # URI form with read-only flags
+        uri = f"sqlite+pysqlite:///file:{self.path}?mode=ro&uri=true"
+        eng = create_engine(
+            uri,
+            poolclass=NullPool,                  # no long-lived pooled handles
+            connect_args={"check_same_thread": False},
+        )
+
+        # @event.listens_for(eng, "connect")
+        # def _set_pragmas(dbapi_con, _):
+        #     logger.info("Setting PRAGMAS for read-only engine")
+        #     cur = dbapi_con.cursor()
+        #     cur.execute("PRAGMA read_uncommitted=0;")
+        #     cur.execute("PRAGMA mmap_size=0;")   # avoid stale mappings
+        #     cur.execute("PRAGMA busy_timeout=250;")
+        #     cur.close()
+
+        self._ro_engine = eng
+        return eng
+
     def _dispose_local_connections(self):
         """Dispose/close all local connections/engines to safely allow file operations.
         This helps prevent corruption during sync by ensuring no open handles.
@@ -189,16 +217,6 @@ class DatabaseConfig:
             DatabaseConfig._local_locks[self.alias] = lock
         return lock
 
-    @contextmanager
-    def local_access(self):
-        """Guard local DB access to avoid overlapping with sync."""
-        lock = self._get_local_lock()
-        lock.acquire()
-        try:
-            logger.debug(f"local_access() lock acquired for {self.alias}")
-            yield
-        finally:
-            lock.release()
 
     def integrity_check(self) -> bool:
         """Run PRAGMA integrity_check on the local database.
@@ -206,13 +224,10 @@ class DatabaseConfig:
         Returns True if the result is 'ok', False otherwise or on error.
         """
         try:
-            # Use a short-lived connection
-            with self.engine.connect() as conn:
-                result = conn.execute(text("PRAGMA integrity_check")).fetchone()
-                logger.debug(f"integrity_check() result: {result}")
-            status = str(result[0]).lower() if result and result[0] is not None else ""
-            ok = status == "ok"
-            return ok
+            with self.open_ro_sqlite() as con:
+                row = con.execute("PRAGMA integrity_check").fetchone()
+            status = (row[0] if row else "").lower()
+            return status == "ok"
         except Exception as e:
             logger.error(f"Integrity check error ({self.alias}): {e}")
             return False
@@ -364,11 +379,13 @@ class DatabaseConfig:
             update_time = result[0] if result is not None else None
             update_time = update_time.replace(tzinfo=timezone.utc) if update_time is not None else None
         session.close()
-        engine.dispose()
         return update_time
 
     def get_time_since_update(self, table_name: str = "marketstats", remote: bool = False):
         status = self.get_most_recent_update(table_name, remote=remote)
+        if status is None:
+            logger.info("No update time available yet")
+            return None
         now = datetime.now(timezone.utc)
         time_since = now - status
         logger.info(f"update_time: {status} utc")
