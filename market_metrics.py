@@ -89,7 +89,7 @@ def calculate_30day_metrics(selected_category=None, selected_item_id=None):
 
         # Get last 30 days of data
         cutoff_date = datetime.now() - timedelta(days=30)
-        df_30days = df[df['date'] >= cutoff_date]
+        df_30days = df[df['date'] >= cutoff_date].copy()
 
         if df_30days.empty:
             return 0, 0
