@@ -428,7 +428,6 @@ def main():
     selected_doctrine_id = df[df.doctrine_name == selected_doctrine].doctrine_id.unique()[0]
 
     selected_data = fit_summary[fit_summary['fit_id'].isin(df[df.doctrine_name == selected_doctrine].fit_id.unique())]
-    logger.info(f"Selected data: {selected_data}")
 
     # Get module data from master_df for the selected doctrine
     selected_fit_ids = df[df.doctrine_name == selected_doctrine].fit_id.unique()
