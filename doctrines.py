@@ -146,9 +146,24 @@ def create_fit_df()->pd.DataFrame:
 def get_all_fit_data()->pd.DataFrame:
     """Create a dataframe with all fit information"""
     logger.info("Getting fit info from doctrines table")
-    engine = mktdb.ro_engine
-    with engine.connect() as conn:
-        df = pd.read_sql_query("SELECT * FROM doctrines", conn)
+    query = "SELECT * FROM doctrines"
+
+    def _read_all():
+        with mktdb.local_access():
+            with mktdb.engine.connect() as conn:
+                return pd.read_sql_query(query, conn)
+
+    try:
+        df = _read_all()
+    except Exception as e:
+        logger.error(f"Failed to get fit data: {str(e)}")
+        try:
+            mktdb.sync()
+            df = _read_all()
+        except Exception as e2:
+            logger.error(f"Failed to get fit data after sync: {str(e2)}")
+            raise
+
     return df
 
 if __name__ == "__main__":
