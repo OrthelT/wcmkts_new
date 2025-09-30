@@ -37,3 +37,14 @@
 ## Architecture Overview (Brief)
 - Streamlit frontend (`app.py` + `pages/`) backed by local LibSQL replicas synced from Turso via `DatabaseConfig`. Business logic stays in modules; UI files should remain thin and delegate to helpers.
 
+## TODOs
+✅ COMPLETED - Refactored concurrency handling to use read-write locks (RWLock) instead of exclusive locks
+  - Multiple concurrent reads now allowed
+  - Writers maintain exclusive access
+  - Sync operations properly block all access
+  - Added comprehensive test coverage (12 new tests)
+
+✅ COMPLETED - Updated tests to reflect current state of the codebase
+  - All 36 tests passing (24 existing + 12 new)
+  - Added test_rwlock.py for RWLock implementation
+  - Added test_database_config_concurrency.py for DatabaseConfig concurrency behavior 

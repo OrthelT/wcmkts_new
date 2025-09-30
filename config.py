@@ -16,6 +16,73 @@ logger = setup_logging(__name__)
 # Global lock to serialize sync operations within the process
 _SYNC_LOCK = threading.Lock()
 
+
+class RWLock:
+    """Read-Write lock implementation.
+
+    Allows multiple concurrent readers OR one exclusive writer.
+    Writers wait for all readers to finish before acquiring.
+    """
+    def __init__(self):
+        self._readers = 0
+        self._writers = 0
+        self._read_ready = threading.Condition(threading.Lock())
+        self._write_ready = threading.Condition(threading.Lock())
+
+    def acquire_read(self):
+        """Acquire a read lock. Multiple readers can hold the lock simultaneously."""
+        self._read_ready.acquire()
+        try:
+            while self._writers > 0:
+                self._read_ready.wait()
+            self._readers += 1
+        finally:
+            self._read_ready.release()
+
+    def release_read(self):
+        """Release a read lock."""
+        self._read_ready.acquire()
+        try:
+            self._readers -= 1
+            if self._readers == 0:
+                self._read_ready.notify_all()
+        finally:
+            self._read_ready.release()
+
+    def acquire_write(self):
+        """Acquire a write lock. Exclusive access - blocks all readers and writers."""
+        self._write_ready.acquire()
+        self._writers += 1
+        self._write_ready.release()
+
+        self._read_ready.acquire()
+        while self._readers > 0:
+            self._read_ready.wait()
+
+    def release_write(self):
+        """Release a write lock."""
+        self._writers -= 1
+        self._read_ready.notify_all()
+        self._read_ready.release()
+
+    @contextmanager
+    def read_lock(self):
+        """Context manager for read lock."""
+        self.acquire_read()
+        try:
+            yield
+        finally:
+            self.release_read()
+
+    @contextmanager
+    def write_lock(self):
+        """Context manager for write lock."""
+        self.acquire_write()
+        try:
+            yield
+        finally:
+            self.release_write()
+
 class DatabaseConfig:
 
     wcdbmap = "wcmkt2" #master config variable for the database to use
@@ -48,7 +115,7 @@ class DatabaseConfig:
     _libsql_connects: dict[str, object] = {}
     _libsql_sync_connects: dict[str, object] = {}
     _sqlite_local_connects: dict[str, object] = {}
-    _local_locks: dict[str, threading.RLock] = {}
+    _local_locks: dict[str, RWLock] = {}  # Changed from RLock to RWLock
     _ro_engines: dict[str, object] = {}
 
     def __init__(self, alias: str, dialect: str = "sqlite+libsql"):
@@ -169,23 +236,31 @@ class DatabaseConfig:
             with suppress(Exception):
                 ro_engine.dispose()
 
-    def _get_local_lock(self) -> threading.RLock:
+    def _get_local_lock(self) -> RWLock:
+        """Get or create a read-write lock for this database alias."""
         lock = DatabaseConfig._local_locks.get(self.alias)
         if lock is None:
-            lock = threading.RLock()
+            lock = RWLock()
             DatabaseConfig._local_locks[self.alias] = lock
         return lock
 
     @contextmanager
-    def local_access(self):
-        """Guard local DB access to avoid overlapping with sync."""
+    def local_access(self, write: bool = False):
+        """Guard local DB access to avoid overlapping with sync.
+
+        Args:
+            write: If True, acquire exclusive write lock. If False, acquire shared read lock.
+                   Multiple readers can access simultaneously, but writes are exclusive.
+        """
         lock = self._get_local_lock()
-        lock.acquire()
-        try:
-            logger.debug(f"local_access() lock acquired for {self.alias}")
-            yield
-        finally:
-            lock.release()
+        if write:
+            with lock.write_lock():
+                logger.debug(f"local_access() write lock acquired for {self.alias}")
+                yield
+        else:
+            with lock.read_lock():
+                logger.debug(f"local_access() read lock acquired for {self.alias}")
+                yield
 
     def integrity_check(self) -> bool:
         """Run PRAGMA integrity_check on the local database.
@@ -207,13 +282,13 @@ class DatabaseConfig:
     def sync(self):
         """Synchronize the local database with the remote Turso replica safely.
 
-        Uses a process-wide lock and disposes local connections to prevent
-        concurrent reads/writes from corrupting the database file.
+        Uses a write lock to block all access during sync, and disposes local
+        connections to prevent corruption. Read-only engine is preserved for
+        minimal disruption to concurrent reads after sync completes.
         """
-        # Block local reads during sync using alias lock; also serialize across threads
-        alias_lock = self._get_local_lock()
-        alias_lock.acquire()
-        try:
+        # Acquire write lock to block all access during sync
+        lock = self._get_local_lock()
+        with lock.write_lock():
             with _SYNC_LOCK:
                 self._dispose_local_connections()
                 logger.debug("Disposing local connections and syncing database…")
@@ -246,9 +321,7 @@ class DatabaseConfig:
                     validation_test = self.validate_sync() if ok else False
                     st.session_state.sync_status = "Success" if validation_test else "Failed"
                 st.session_state.sync_check = False
-        finally:
-            logger.debug(f"alias_lock released for {self.alias}")
-            alias_lock.release()
+                logger.debug(f"Write lock will be released for {self.alias}")
 
     def validate_sync(self)-> bool:
         alias = self.alias

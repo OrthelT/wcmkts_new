@@ -324,10 +324,18 @@ from config import DatabaseConfig
 # Initialize database
 mkt_db = DatabaseConfig("wcmkt2")
 
-# Query local database
-with mkt_db.engine.connect() as conn:
-    result = conn.execute(text("SELECT * FROM marketorders LIMIT 10"))
-    data = result.fetchall()
+# Query local database (read operation - allows concurrent reads)
+with mkt_db.local_access():  # Uses read lock by default
+    with mkt_db.engine.connect() as conn:
+        result = conn.execute(text("SELECT * FROM marketorders LIMIT 10"))
+        data = result.fetchall()
+
+# Write operation (exclusive access)
+with mkt_db.local_access(write=True):  # Uses write lock
+    with mkt_db.engine.connect() as conn:
+        conn.execute(text("UPDATE marketorders SET price = :price WHERE order_id = :id"),
+                    {"price": 1000, "id": 123})
+        conn.commit()
 
 # Query remote database
 with mkt_db.remote_engine.connect() as conn:
