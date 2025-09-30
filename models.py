@@ -105,8 +105,7 @@ class Doctrines(Base):
 
 class ShipTargets(Base):
     __tablename__ = "ship_targets"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    fit_id: Mapped[int] = mapped_column(Integer)
+    fit_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     fit_name: Mapped[str] = mapped_column(String)
     ship_id: Mapped[int] = mapped_column(Integer)
     ship_name: Mapped[str] = mapped_column(String)

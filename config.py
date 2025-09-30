@@ -1,5 +1,6 @@
-from sqlalchemy import create_engine, text, select
+from sqlalchemy import create_engine, text, select, NullPool
 import streamlit as st
+# os.environ.setdefault("RUST_LOG", "debug")
 import libsql
 from logging_config import setup_logging
 import sqlite3 as sql
@@ -48,6 +49,7 @@ class DatabaseConfig:
     _libsql_sync_connects: dict[str, object] = {}
     _sqlite_local_connects: dict[str, object] = {}
     _local_locks: dict[str, threading.RLock] = {}
+    _ro_engines: dict[str, object] = {}
 
     def __init__(self, alias: str, dialect: str = "sqlite+libsql"):
         if alias == "wcmkt":
@@ -69,6 +71,7 @@ class DatabaseConfig:
         self._libsql_connect = None
         self._libsql_sync_connect = None
         self._sqlite_local_connect = None
+        self._ro_engine = None
 
     @property
     def engine(self):
@@ -115,6 +118,23 @@ class DatabaseConfig:
             DatabaseConfig._sqlite_local_connects[self.alias] = conn
         return conn
 
+    @property
+    def ro_engine(self):
+        """SQLAlchemy engine to the local file, read-only, no pooling."""
+        eng = DatabaseConfig._ro_engines.get(self.alias)
+        if eng is not None:
+            return eng
+        else:
+        # URI form with read-only flags
+            uri = f"sqlite+pysqlite:///file:{self.path}?mode=ro&uri=true"
+            eng = create_engine(
+                uri,
+                poolclass=NullPool,                  # no long-lived pooled handles
+                connect_args={"check_same_thread": False},
+            )
+            DatabaseConfig._ro_engines[self.alias] = eng
+        return eng
+
     def _dispose_local_connections(self):
         """Dispose/close all local connections/engines to safely allow file operations.
         This helps prevent corruption during sync by ensuring no open handles.
@@ -142,6 +162,12 @@ class DatabaseConfig:
         if sqlite_conn is not None:
             with suppress(Exception):
                 sqlite_conn.close()
+
+        # Close read-only engine if any
+        ro_engine = DatabaseConfig._ro_engines.pop(self.alias, None)
+        if ro_engine is not None:
+            with suppress(Exception):
+                ro_engine.dispose()
 
     def _get_local_lock(self) -> threading.RLock:
         lock = DatabaseConfig._local_locks.get(self.alias)
