@@ -193,4 +193,4 @@ def load_new_ship_targets(new_targets: pd.DataFrame):
     logger.info("Ship targets loaded")
 
 if __name__ == "__main__":
-    update_from_targets_csv("dev_files/target_updates.csv")
+    pass

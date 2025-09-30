@@ -1,5 +1,5 @@
 import pandas as pd
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
 import streamlit as st
 
 import requests
@@ -71,6 +71,24 @@ def read_df(
                 logger.error("Failed to sync local DB; falling back to remote read.")
                 return _run_remote()
         raise
+
+def new_read_df(db: DatabaseConfig, query: Any, params: Mapping[str, Any] | None = None) -> pd.DataFrame:
+    """Execute a read-only SQL query and return a DataFrame."""
+    def _read_all():
+        with db.local_access():
+            with db.engine.connect() as conn:
+                return pd.read_sql_query(query, conn, params=params)
+
+    try:
+        return _read_all()
+    except Exception as e:
+        logger.error(f"Failed to read data: {str(e)}")
+        try:
+            db.sync()
+            return _read_all()
+        except Exception as e2:
+            logger.error(f"Failed to read data after sync: {str(e2)}")
+            raise
 
 @st.cache_data(ttl=600)
 def get_all_mkt_stats()->pd.DataFrame:
