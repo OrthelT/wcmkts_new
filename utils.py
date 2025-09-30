@@ -83,6 +83,18 @@ def fetch_industry_system_cost_indices():
     df.rename(columns={'system_id': 'solar_system_id'}, inplace=True)
 
     return df
+def get_janice_price(type_id: int) -> float:
+    api_key = st.secrets.janice.api_key
+    url = f"https://janice.e-351.com/api/rest/v2/pricer/{type_id}?market=2"
+
+    headers = {'X-ApiKey': api_key, 'accept': 'application/json'}
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        data = response.json()
+        return data.get("top5AveragePrices").get("sellPrice")
+    else:
+        logger.error(f"Error fetching price for {type_id}: {response.status_code}")
+        raise Exception(f"Error fetching price for {type_id}: {response.status_code}")
 
 if __name__ == "__main__":
     pass

@@ -25,7 +25,7 @@ from db_handler import (
     get_4H_price,
     request_type_names,
 )
-from utils import update_industry_index
+from utils import update_industry_index, get_janice_price
 import datetime
 import time
 API_TIMEOUT = 20.0
@@ -432,14 +432,18 @@ def yield_structure():
 
 
 def get_jita_price(type_id: int) -> float:
-    url = f"https://market.fuzzwork.co.uk/aggregates/?region=10000002&types={type_id}"
-    response = requests.get(url)
-    if response.status_code == 200:
-        data = response.json()
-        return data[str(type_id)]["sell"]["percentile"]
-    else:
-        logger.error(f"Error fetching price for {type_id}: {response.status_code}")
-        raise Exception(f"Error fetching price for {type_id}: {response.status_code}")
+    # temporarily using janice price until fuzzwork is updated
+    return get_janice_price(type_id)
+
+    # TODO: revert to fuzzwork when updated
+    # url = f"https://market.fuzzwork.co.uk/aggregates/?region=10000002&types={type_id}"
+    # response = requests.get(url)
+    # if response.status_code == 200:
+    #     data = response.json()
+    #     return data[str(type_id)]["sell"]["percentile"]
+    # else:
+    #     logger.error(f"Error fetching price for {type_id}: {response.status_code}")
+    #     raise Exception(f"Error fetching price for {type_id}: {response.status_code}")
 
 
 def is_valid_image_url(url: str) -> bool:
