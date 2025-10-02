@@ -54,7 +54,6 @@ def get_market_history_by_category(selected_category=None):
         type_ids_joined = ','.join(f"'{tid}'" for tid in type_ids_str)
         history_query = text(f"SELECT * FROM market_history WHERE type_id IN ({type_ids_joined})")
         history_df = read_df(mkt_db, history_query)
-    logger.info(history_df.columns)
     return history_df
 
 def calculate_30day_metrics(selected_category=None, selected_item_id=None):
@@ -180,6 +179,7 @@ def calculate_ISK_volume_by_period(date_period='daily', start_date=None, end_dat
 
     return df_grouped
 
+@st.cache_data(ttl=600)
 def get_available_date_range(selected_category=None):
     """
     Get the min and max dates available in the market history data
