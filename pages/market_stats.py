@@ -20,7 +20,7 @@ from sync_state import update_wcmkt_state
 from type_info import get_backup_type_id
 from datetime import datetime
 from market_metrics import render_ISK_volume_chart_ui, render_ISK_volume_table_ui, render_30day_metrics_ui, render_current_market_status_ui
-
+from utils import get_jita_price
 
 mkt_db = DatabaseConfig("wcmkt")
 sde_db = DatabaseConfig("sde")
@@ -34,6 +34,19 @@ logger.info("Application started")
 logger.info(f"streamlit version: {st.__version__}")
 logger.info("-"*100)
 
+
+@st.cache_data(ttl=600)
+def get_watchlist_type_ids()->list:
+    # Get all type_ids from watchlist
+    watchlist_query = """
+    SELECT DISTINCT type_id
+    FROM watchlist
+    """
+    df = read_df(mkt_db, watchlist_query)
+    type_ids = df['type_id'].tolist()
+    logger.debug(f"type_ids: {len(type_ids)}")
+    return type_ids
+
 @st.cache_data(ttl=600)
 def get_market_type_ids()->list:
     # Get all type_ids from market orders
@@ -43,6 +56,8 @@ def get_market_type_ids()->list:
     """
     df = read_df(mkt_db, mkt_query)
     type_ids = df['type_id'].tolist()
+    watchlist_type_ids = get_watchlist_type_ids()
+    type_ids = list(set(type_ids + watchlist_type_ids))
     logger.debug(f"type_ids: {len(type_ids)}")
     return type_ids
 
@@ -50,7 +65,7 @@ def get_market_type_ids()->list:
 def all_sde_info(type_ids: list = None)->pd.DataFrame:
     if not type_ids:
         type_ids = get_market_type_ids()
-    logger.debug(f"type_ids: {len(type_ids)}")
+    logger.info(f"type_ids: {len(type_ids)}")
 
     new_sde_query = text("""
     SELECT typeName as type_name, typeID as type_id, groupID as group_id, groupName as group_name,
@@ -67,7 +82,7 @@ def get_filter_options(selected_category: str=None, show_all: bool=False)->tuple
 
     sde_df = all_sde_info()
     sde_df = sde_df.reset_index(drop=True)
-    logger.debug(f"sde_df: {len(sde_df)}")
+    logger.info(f"sde_df: {len(sde_df)}")
     logger.debug(f"selected_category: {selected_category}")
 
     if show_all:
@@ -432,6 +447,7 @@ def main():
         st.session_state.selected_category_info = None
         st.session_state.selected_item = None
         st.session_state.selected_item_id = None
+        st.session_state.jita_price = None
 
     if selected_category and selected_category is not None:
         logger.info(f"selected_category {selected_category}")
@@ -458,6 +474,7 @@ def main():
         st.sidebar.text(f"Item: {selected_item}")
         st.session_state.selected_item = selected_item
         st.session_state.selected_item_id = get_backup_type_id(selected_item)
+        st.session_state.jita_price = get_jita_price(st.session_state.selected_item_id)
         logger.info(f"selected_item_id: {st.session_state.selected_item_id}")
 
     else:
@@ -693,7 +710,7 @@ def main():
         else:
             st.subheader("Market Order Distribution")
             price_vol_chart = create_price_volume_chart(sell_data)
-            st.plotly_chart(price_vol_chart, use_container_width=True)
+            st.plotly_chart(price_vol_chart, config={'width': 'content'})
 
         st.divider()
 
@@ -729,36 +746,50 @@ def main():
             except Exception as e:
                 logger.error(f"Error: {e}")
                 selected_item_id = None
+    else:
+        if st.session_state.selected_item is not None:
+            st.write(f"No current market orders found for {st.session_state.selected_item}")
+        else:
+            pass
 
-            if selected_item_id:
-                logger.debug(f"Displaying history chart for {selected_item_id}")
-                history_chart = create_history_chart(selected_item_id)
-            else:
-                history_chart = None
+    if st.session_state.selected_item_id is not None:
+        selected_item_id = st.session_state.selected_item_id
+        logger.debug(f"Displaying history chart for {selected_item_id}")
+        history_chart = create_history_chart(selected_item_id)
+    else:
+        history_chart = None
+    if selected_item_id is not None:
+        selected_history = get_market_history(selected_item_id)
+    else:
+        selected_history = None
 
-            if history_chart:
-                logger.debug(f"Displaying history chart for {selected_item_id}")
-                st.plotly_chart(history_chart, use_container_width=False)
+    if history_chart:
+        logger.debug(f"Displaying history chart for {selected_item_id}")
+        st.plotly_chart(history_chart, config={'width': 'content'})
+    
+    if selected_history is not None and selected_history.empty is False:
+        logger.info(f"Displaying history data for {selected_item_id}")
+        logger.info(f"selected_history: {selected_history}")
+        colh1, colh2 = st.columns(2)
+        with colh1:
 
-                colh1, colh2 = st.columns(2)
-                with colh1:
-                    # Display history data
-                    st.subheader("History Data")
-                    history_df = get_market_history(selected_item_id)
-                    history_df.date = pd.to_datetime(history_df.date).dt.strftime("%Y-%m-%d")
-                    history_df.average = round(history_df.average.astype(float), 2)
-                    history_df = history_df.sort_values(by='date', ascending=False)
-                    history_df.volume = history_df.volume.astype(int)
-                    st.dataframe(history_df, hide_index=True)
+            # Display history data
+            st.subheader("History Data")
+            history_df = get_market_history(selected_item_id)
+            history_df.date = pd.to_datetime(history_df.date).dt.strftime("%Y-%m-%d")
+            history_df.average = round(history_df.average.astype(float), 2)
+            history_df = history_df.sort_values(by='date', ascending=False)
+            history_df.volume = history_df.volume.astype(int)
+            st.dataframe(history_df, hide_index=True)
 
-                with colh2:
-                    avgpr30 = history_df[:30].average.mean()
-                    avgvol30 = history_df[:30].volume.mean()
-                    st.subheader(f"{selected_item}",divider=True)
-                    st.metric("Average Price (30 days)", f"{avgpr30:,.2f} ISK")
-                    st.metric("Average Volume (30 days)", f"{avgvol30:,.0f}")
-            else:
-                pass
+        with colh2:
+            avgpr30 = history_df[:30].average.mean()
+            avgvol30 = history_df[:30].volume.mean()
+            st.subheader(f"{selected_item}",divider=True)
+            st.metric("Average Price (30 days)", f"{avgpr30:,.2f} ISK")
+            st.metric("Average Volume (30 days)", f"{avgvol30:,.0f}")
+    else:
+        st.write("No history data recorded for this item")
 
         st.divider()
     if fit_df is None:
@@ -783,7 +814,7 @@ def main():
 
         if isship:
             column_config = get_fitting_col_config()
-            st.dataframe(fit_df, hide_index=True, column_config=column_config, use_container_width=True)
+            st.dataframe(fit_df, hide_index=True, column_config=column_config, width='content')
 
 
     # Display sync status in sidebar
@@ -792,7 +823,7 @@ def main():
 
         st.sidebar.divider()
 
-        db_check = st.sidebar.button("Check DB State", use_container_width=True)
+        db_check = st.sidebar.button("Check DB State", width='content')
         if db_check:
             check_db()
         st.sidebar.divider()

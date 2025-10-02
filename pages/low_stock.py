@@ -270,7 +270,7 @@ def main():
         # Display charts
         st.subheader("Days Remaining by Item")
         days_chart = create_days_remaining_chart(df)
-        st.plotly_chart(days_chart, use_container_width=True)
+        st.plotly_chart(days_chart)
 
     else:
         st.warning("No items found with the selected filters.")

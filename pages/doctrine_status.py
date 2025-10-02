@@ -507,12 +507,12 @@ def main():
     ship_col1, ship_col2 = st.sidebar.columns(2)
 
     # Add "Select All Ships" button
-    if ship_col1.button("📋 Select All Ships", use_container_width=True):
+    if ship_col1.button("📋 Select All Ships", width='content'):
         st.session_state.selected_ships = st.session_state.displayed_ships.copy()
         st.rerun()
 
     # Add "Clear Ship Selection" button
-    if ship_col2.button("🗑️ Clear Ships", use_container_width=True):
+    if ship_col2.button("🗑️ Clear Ships", width='content'):
         st.session_state.selected_ships = []
         st.session_state.ship_list_state = {}
         st.session_state.csv_ship_list_state = {}
@@ -527,7 +527,7 @@ def main():
     col1, col2 = st.sidebar.columns(2)
 
     # Add "Select All Modules" functionality
-    if col1.button("📋 Select All Modules", use_container_width=True):
+    if col1.button("📋 Select All Modules", width='content'):
         # Create a list to collect all module keys that are currently visible based on filters
         visible_modules = []
         low_stock_modules = []
@@ -570,7 +570,7 @@ def main():
         st.rerun()
 
     # Clear module selection button
-    if col2.button("🗑️ Clear Modules", use_container_width=True):
+    if col2.button("🗑️ Clear Modules", width='content'):
         st.session_state.selected_modules = []
         st.session_state.module_list_state = {}
         st.session_state.csv_module_list_state = {}
@@ -652,10 +652,10 @@ def main():
             data=csv_export,
             file_name="doctrine_export.csv",
             mime="text/csv",
-            use_container_width=True
+            width='content'
         )
         # Copy to clipboard button
-        if col2.button("📋 Copy to Clipboard", use_container_width=True):
+        if col2.button("📋 Copy to Clipboard", width='content'):
             st.sidebar.code(export_text, language="")
             st.sidebar.success("Copied to clipboard! Use Ctrl+C to copy the text above.")
     else:

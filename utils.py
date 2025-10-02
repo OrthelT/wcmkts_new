@@ -83,6 +83,24 @@ def fetch_industry_system_cost_indices():
     df.rename(columns={'system_id': 'solar_system_id'}, inplace=True)
 
     return df
+
+def get_jita_price(type_id: int) -> float:
+    try:
+        url = f"https://market.fuzzwork.co.uk/aggregates/?region=10000002&types={type_id}"
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            return data[str(type_id)]["sell"]["percentile"]
+        else:
+            logger.error(f"Error fetching price for {type_id}: {response.status_code}")
+            raise Exception(f"Error fetching price for {type_id}: {response.status_code}")
+    except requests.exceptions.ReadTimeout:
+        logger.error(f"Timeout fetching price for {type_id}")
+        return get_janice_price(type_id)
+    except Exception as e:
+        logger.error(f"Error fetching price for {type_id}: {e}")
+        raise Exception(f"Error fetching price for {type_id}: {e}")
+
 def get_janice_price(type_id: int) -> float:
     api_key = st.secrets.janice.api_key
     url = f"https://janice.e-351.com/api/rest/v2/pricer/{type_id}?market=2"

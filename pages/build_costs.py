@@ -25,7 +25,7 @@ from db_handler import (
     get_4H_price,
     request_type_names,
 )
-from utils import update_industry_index, get_janice_price
+from utils import update_industry_index, get_jita_price
 import datetime
 import time
 API_TIMEOUT = 20.0
@@ -431,19 +431,7 @@ def yield_structure():
         yield structure
 
 
-def get_jita_price(type_id: int) -> float:
-    # temporarily using janice price until fuzzwork is updated
-    return get_janice_price(type_id)
 
-    # TODO: revert to fuzzwork when updated
-    # url = f"https://market.fuzzwork.co.uk/aggregates/?region=10000002&types={type_id}"
-    # response = requests.get(url)
-    # if response.status_code == 200:
-    #     data = response.json()
-    #     return data[str(type_id)]["sell"]["percentile"]
-    # else:
-    #     logger.error(f"Error fetching price for {type_id}: {response.status_code}")
-    #     raise Exception(f"Error fetching price for {type_id}: {response.status_code}")
 
 
 def is_valid_image_url(url: str) -> bool:
@@ -766,7 +754,7 @@ def display_material_costs(results: dict, selected_structure: str, structure_nam
                 "cost_percentage",
             ],
             hide_index=True,
-            use_container_width=True,
+            width='stretch',
         )
     with col2:
         # material cost chart
@@ -777,7 +765,7 @@ def display_material_costs(results: dict, selected_structure: str, structure_nam
             y_label="",
             x_label="",
             horizontal=True,
-            use_container_width=False,
+            width='content',
             height=310,
         )
 
@@ -1097,7 +1085,7 @@ def main():
             if is_valid_image_url(url):
                 st.image(url)
             else:
-                st.image(alt_url, use_container_width=True)
+                st.image(alt_url, width='stretch')
         with col2:
             st.header(f"Build cost for {selected_item}", divider="violet")
             st.write(
@@ -1153,7 +1141,7 @@ def main():
             display_df,
             column_config=col_config,
             column_order=col_order,
-            use_container_width=True,
+            width='stretch',
         )
         if st.session_state.super:
             st.markdown(

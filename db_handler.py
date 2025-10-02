@@ -1,3 +1,4 @@
+from httpx import get
 import pandas as pd
 from sqlalchemy import text, bindparam
 import streamlit as st
@@ -165,7 +166,11 @@ def get_all_mkt_orders()->pd.DataFrame:
     df = df.reset_index(drop=True)
     return df
 
-
+def get_price_from_mkt_orders(type_id):
+    df = get_all_mkt_orders()
+    df = df[df['type_id'] == type_id]
+    df = df.reset_index(drop=True)
+    return df['price'].iloc[0]
 
 def request_type_names(type_ids):
     logger.info("requesting type names with cache")
@@ -438,4 +443,4 @@ def get_chart_table_data()->pd.DataFrame:
     return df
 
 if __name__ == "__main__":
-    pass
+    get_market_history(1296)

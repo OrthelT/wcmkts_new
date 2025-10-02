@@ -5,6 +5,15 @@ SUPPORT: Join the Discord for support https://discord.gg/BxatJE572Y
 CONTRIBUTING: Contributors welcome. This project is fully open source under MIT License. Source code and full documentation available on GitHub: https://github.com/OrthelT/wcmkts_new
 
 ## UPDATES:
+*version 0.1.2*
+- moves to new versioning scheme to match python standard
+- feat: adds Jita price info for selected items
+- refactored data displays to handle items when missing from the market
+- bumped dependencies and moved to streamlit 1.50
+- housekeeping to update syntax planned for deprication
+
+## Previous updated
+(*note these version numbers are outdated following shift to standard 0.0.0 versioning*)
 *version 0.64* (2025-09-29)
 - adds tech 2 filtering to Low Stock tool.
 - adds category filtering for Price History charts

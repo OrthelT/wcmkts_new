@@ -242,7 +242,7 @@ def display_categorized_doctrine_data(selected_data):
                     )
 
                 },
-                use_container_width=True,
+                width='stretch',
                 hide_index=True
             )
 
@@ -506,11 +506,11 @@ def main():
             data=csv_export,
             file_name="low_stock_list.csv",
             mime="text/csv",
-            use_container_width=True
+            width='content'
         )
 
     # Clear selection button
-    if st.sidebar.button("🗑️ Clear Selection", use_container_width=True):
+    if st.sidebar.button("🗑️ Clear Selection", width='content'):
         st.session_state.selected_modules = []
         st.session_state.module_list_state = {}
         st.session_state.csv_module_list_state = {}

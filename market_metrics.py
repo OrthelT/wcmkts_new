@@ -1,4 +1,4 @@
-from db_handler import get_all_market_history, read_df
+from db_handler import get_all_market_history, read_df, get_price_from_mkt_orders
 from config import DatabaseConfig
 import pandas as pd
 import plotly.graph_objects as go
@@ -296,7 +296,7 @@ def create_ISK_volume_chart(moving_avg_period=14, date_period='daily', start_dat
         x=df.index,
         y=df.values,
         name=f'{period_label} ISK Volume',
-        hovertemplate='<b>%{x}</b><br>ISK Volume: %{y:,.0f}<extra></extra>'
+        hovertemplate='<b>%{x}</b><br>ISK: %{y:,.0f}<extra></extra>'
     ))
 
     # Calculate moving average with user-selected period
@@ -308,7 +308,7 @@ def create_ISK_volume_chart(moving_avg_period=14, date_period='daily', start_dat
         y=moving_avg.values,
         name=f'{moving_avg_period}-Period Moving Average',
         line=dict(color='#FF69B4', width=2),
-        hovertemplate='<b>%{x}</b><br>Moving Avg: %{y:,.0f}<extra></extra>'
+        hovertemplate='<b>%{x}</b><br>Mov Avg: %{y:,.0f}<extra></extra>'
     ))
 
     # Add outlier handling info to title
@@ -493,7 +493,7 @@ def render_ISK_volume_chart_ui():
             cap_percentile=cap_percentile,
             selected_category=selected_category
         )
-        st.plotly_chart(chart, use_container_width=True)
+        st.plotly_chart(chart, config={'width': 'stretch'})
 
     # Call the fragment
     chart_fragment()
@@ -539,7 +539,7 @@ def render_ISK_volume_table_ui():
         else:
             st.warning("No market history data available for the selected filters")
     else:
-        st.dataframe(table, use_container_width=False, column_config=data_table_config)
+        st.dataframe(table, width='content', column_config=data_table_config)
 
 def render_30day_metrics_ui():
     """
@@ -566,7 +566,7 @@ def render_30day_metrics_ui():
 
     # Only show metrics if we have actual history data
     if avg_daily_volume == 0 and avg_daily_isk_value == 0:
-        return  # Don't show metrics section if no history data
+        return  st.write("No history data recorded for this item") # Don't show metrics section if no history data
 
     st.subheader("30-Day Market Performance", divider="gray")
 
@@ -626,23 +626,33 @@ def render_current_market_status_ui(sell_data, stats, selected_item, sell_order_
     """
     st.subheader("Current Market Status", divider="grey")
 
-    # Display metrics
-    col1, col2, col3, col4 = st.columns(4)
+    # Display metrics - conditionally show col1 based on selected_item
+    if selected_item:
+        col1, col2, col3, col4 = st.columns(4)
+    else:
+        col2, col3, col4 = st.columns(3)
 
-    with col1:
-        if not sell_data.empty:
-            min_price = stats['min_price'].min()
-            if pd.notna(min_price) and selected_item:
-                display_min_price = millify.millify(min_price, precision=2)
-                st.metric("Sell Price (min)", f"{display_min_price} ISK")
-        else:
-            st.metric("Sell Price (min)", "0 ISK")
-
-        if sell_total_value > 0:
-            display_sell_total_value = millify.millify(sell_total_value, precision=2)
-            st.metric("Market Value (sell orders)", f"{display_sell_total_value} ISK")
-        else:
-            st.metric("Market Value (sell orders)", "0 ISK")
+    if selected_item:
+        with col1:
+            if not sell_data.empty:
+                min_price = stats['min_price'].min()
+                if pd.notna(min_price) and selected_item:
+                    display_min_price = millify.millify(min_price, precision=2)
+                    st.metric("4-HWWF Sell Price", f"{display_min_price} ISK")
+                elif selected_item and st.session_state.selected_item_id is not None:
+                    try:
+                        display_min_price = millify.millify(get_price_from_mkt_orders(st.session_state.selected_item_id), precision=2)
+                        st.metric("4-HWWF Sell Price", f"{display_min_price} ISK")
+                    
+                    except Exception:
+                        pass
+                    
+                else:
+                    pass
+                
+            if st.session_state.jita_price is not None:
+                display_jita_price = millify.millify(st.session_state.jita_price, precision=2)
+                st.metric("Jita Price", f"{display_jita_price} ISK")
 
     with col2:
         if not sell_data.empty:
@@ -652,6 +662,11 @@ def render_current_market_status_ui(sell_data, stats, selected_item, sell_order_
                 st.metric("Market Stock (sell orders)", f"{display_volume}")
         else:
             st.metric("Market Stock (sell orders)", "0")
+        if sell_total_value > 0:
+            display_sell_total_value = millify.millify(sell_total_value, precision=2)
+            st.metric("Sell Orders Value", f"{display_sell_total_value} ISK")
+        else:
+            st.metric("Sell Orders Value", "0 ISK")
 
     with col3:
         days_remaining = stats['days_remaining'].min()
