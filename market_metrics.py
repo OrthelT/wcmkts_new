@@ -11,6 +11,7 @@ import millify
 
 logger = setup_logging(__name__)
 
+@st.cache_data(ttl=600)
 def get_market_history_by_category(selected_category=None):
     """
     Get market history data filtered by category
@@ -574,6 +575,14 @@ def render_30day_metrics_ui():
     col_m1, col_m2, col_m3, col_m4 = st.columns(4)
 
     with col_m1:
+        if avg_daily_isk_value > 0:
+            display_avg_isk = millify.millify(avg_daily_isk_value, precision=2)
+            st.metric("Avg Daily ISK Value (30d)", f"{display_avg_isk} ISK")
+        else:
+            st.metric("Avg Daily ISK Value (30d)", "0 ISK")
+
+
+    with col_m2:
         if avg_daily_volume > 0:
             if avg_daily_volume < 1000:
                 display_avg_volume = f"{avg_daily_volume:,.0f}"
@@ -582,15 +591,17 @@ def render_30day_metrics_ui():
             st.metric("Avg Daily Sales (30d)", f"{display_avg_volume}")
         else:
             st.metric("Avg Daily Sales (30d)", "0")
-
-    with col_m2:
-        if avg_daily_isk_value > 0:
-            display_avg_isk = millify.millify(avg_daily_isk_value, precision=2)
-            st.metric("Avg Daily ISK Value (30d)", f"{display_avg_isk} ISK")
-        else:
-            st.metric("Avg Daily ISK Value (30d)", "0 ISK")
-
+    
     with col_m3:
+        # Calculate total 30-day ISK value
+        total_30d_isk = avg_daily_isk_value * 30 if avg_daily_isk_value > 0 else 0
+        if total_30d_isk > 0:
+            display_total_isk = millify.millify(total_30d_isk, precision=2)
+            st.metric("Total ISK Value (30d)", f"{display_total_isk} ISK")
+        else:
+            st.metric("Total 30d ISK Value", "0 ISK")
+
+    with col_m4:
         # Calculate total 30-day volume
         total_30d_volume = avg_daily_volume * 30 if avg_daily_volume > 0 else 0
         if total_30d_volume > 0:
@@ -599,14 +610,6 @@ def render_30day_metrics_ui():
         else:
             st.metric("Total 30d Volume", "0")
 
-    with col_m4:
-        # Calculate total 30-day ISK value
-        total_30d_isk = avg_daily_isk_value * 30 if avg_daily_isk_value > 0 else 0
-        if total_30d_isk > 0:
-            display_total_isk = millify.millify(total_30d_isk, precision=2)
-            st.metric("Total ISK Value (30d)", f"{display_total_isk} ISK")
-        else:
-            st.metric("Total 30d ISK Value", "0 ISK")
 
     st.divider()
 
