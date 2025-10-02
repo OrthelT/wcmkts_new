@@ -758,8 +758,9 @@ def main():
         history_chart = create_history_chart(selected_item_id)
     else:
         history_chart = None
-    if selected_item_id is not None:
-        selected_history = get_market_history(selected_item_id)
+    
+    if st.session_state.selected_item_id is not None:
+        selected_history = get_market_history(st.session_state.selected_item_id)
     else:
         selected_history = None
 
