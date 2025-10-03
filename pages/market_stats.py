@@ -418,12 +418,12 @@ def main():
     logger.info("*"*60)
 
     maybe_run_check()
-
-    wclogo = "images/wclogo.png"
-    st.image(wclogo, width=150)
-
-    # Title
-    st.title("Winter Coalition Market Stats")
+    col1, col2 = st.columns([0.2, 0.8], vertical_alignment="bottom")
+    with col1:
+        wclogo = "images/wclogo.png"
+        st.image(wclogo, width=125)
+    with col2:
+        st.title("Winter Coalition Market Stats")
 
     # Sidebar filters
     st.sidebar.header("Filters")

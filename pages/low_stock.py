@@ -132,8 +132,14 @@ def create_days_remaining_chart(df):
 
 
 def main():
-       # Title
-    st.title("Winter Coalition Market Low Stock Alert")
+    # Title
+    col1, col2 = st.columns([0.2, 0.8], vertical_alignment="bottom")
+    with col1:
+        wclogo = "images/wclogo.png"
+        st.image(wclogo, width=125)
+    with col2:
+        st.title("Low Stock Tool")
+    
     st.markdown("""
     This page shows items that are running low on the market. The **Days Remaining** column shows how many days of sales
     can be sustained by the current stock based on historical average sales. Items with fewer days remaining need attention. The **Used In Fits** column shows the doctrine ships that use the item (if any) and the number of fits that the current market stock of the item can support.
@@ -203,6 +209,7 @@ def main():
         # Select and rename columns
         columns_to_show = ['type_id', 'type_name', 'price', 'days_remaining', 'total_volume_remain', 'avg_volume', 'category_name', 'group_name', 'ships']
         display_df = display_df[columns_to_show]
+
 
         numeric_formats = {
             'type_id': st.column_config.NumberColumn('Type ID', help='type ID of the item', width='small'),

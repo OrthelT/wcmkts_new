@@ -259,11 +259,9 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
 
         if selected_doctrine_id in exceptions:
             lead_fit_id = exceptions[selected_doctrine_id]
-            logger.info(f"Lead fit id: {lead_fit_id}")
         else:
             lead_fit_id = selected_data[selected_data['ship_id'] == lead_ship_id].fit_id.iloc[0]
-            logger.info(f"Lead fit id: {lead_fit_id}")
-        logger.info(f"Lead fit id: {lead_fit_id}")
+ 
 
 
         # Create two columns for display
@@ -402,15 +400,15 @@ def main():
     # Handle path properly for WSL environment
     image_path = pathlib.Path(__file__).parent.parent / "images" / "wclogo.png"
 
-    col1, col2 = st.columns([0.2, 0.8])
+    col1, col2 = st.columns([0.2, 0.8], vertical_alignment="bottom")
     with col1:
         if image_path.exists():
             st.image(str(image_path), width=150)
         else:
-            st.warning("Logo image not found")
+            logger.warning("Logo image not found")
     with col2:
         st.title("Doctrine Report")
-        st.text("Beta Version 0.1")
+        st.text("Market Status By Fleet Doctrine")
 
 
     # Fetch the data
@@ -435,16 +433,18 @@ def main():
 
     # Add Target Multiplier expander to sidebar
     st.sidebar.markdown("---")
-    with st.sidebar.expander("Target Multiplier", expanded=True):
-        target_multiplier = st.sidebar.slider(
+
+    target_multiplier = st.sidebar.slider(
             "Target Multiplier",
             min_value=0.5,
             max_value=2.0,
             value=st.session_state.target_multiplier,
-            step=0.1
+            step=0.1,
+            help="This is a multiplier that is applied to the target value for each fit. It is used to adjust the target value for each fit to be more or less aggressive. The default value is 1.0, which means that the target value is the same as the target value in the database."
         )
-        st.session_state.target_multiplier = target_multiplier
-        st.sidebar.markdown(f"Current Target Multiplier: {target_multiplier}")
+
+    st.session_state.target_multiplier = target_multiplier
+    st.sidebar.markdown(f"Current Target Multiplier: {target_multiplier}")
 
     # Create enhanced header with lead ship image
     # Get lead ship image for this doctrine

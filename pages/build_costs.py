@@ -789,13 +789,13 @@ def main():
     image_path = pathlib.Path(__file__).parent.parent / "images" / "wclogo.png"
 
     # App title and logo
-    col1, col2 = st.columns([0.2, 0.8])
+    col1, col2 = st.columns([0.2, 0.8], vertical_alignment="bottom")
 
     with col1:
         if image_path.exists():
             st.image(str(image_path), width=150)
         else:
-            st.warning("Logo image not found")
+            pass
     with col2:
         st.title("Build Cost Tool")
 
