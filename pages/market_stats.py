@@ -253,6 +253,33 @@ def display_sync_status():
     st.markdown("&nbsp;"*5)
     st.sidebar.markdown(f"<span style='font-size: 14px; color: lightgrey;'>*Last ESI update: {update_time}*</span>", unsafe_allow_html=True)
 
+def new_display_sync_status():
+    """Display sync status in the sidebar."""
+    if "local_update_status" not in st.session_state:
+        init_db()
+    update_time = st.session_state.local_update_status["updated"]
+    update_time = update_time.strftime("%Y-%m-%d | %H:%M UTC")
+    time_since_update = st.session_state.local_update_status["time_since"]
+    time_since_update = time_since_update.total_seconds()
+    time_since_update = f"{round((time_since_update / 3600),1)} hours"
+    st.markdown("&nbsp;"*5)
+
+    db = DatabaseConfig("wcmkt")
+    verify_sync = db.validate_sync()
+    if verify_sync:
+        sync_status = "✅"
+    else:
+        sync_status = "⌛⌛⌛"
+        st.toast("Syncing database...", icon="⌛⌛⌛")
+        logger.info("Syncing database...")
+        db.sync()
+        update_time = db.get_most_recent_update("marketstats", remote=True)
+        update_wcmkt_state()
+
+    st.sidebar.markdown(f"<span style='font-size: 14px; color: lightgrey;'>*Last ESI update: {update_time}*</span>", unsafe_allow_html=True)
+
+
+
 @st.fragment
 def dump_session_state():
     logger.info("*"*40)
@@ -758,7 +785,7 @@ def main():
         history_chart = create_history_chart(selected_item_id)
     else:
         history_chart = None
-    
+
     if st.session_state.selected_item_id is not None:
         selected_history = get_market_history(st.session_state.selected_item_id)
     else:
@@ -767,7 +794,7 @@ def main():
     if history_chart:
         logger.debug(f"Displaying history chart for {selected_item_id}")
         st.plotly_chart(history_chart, config={'width': 'content'})
-    
+
     if selected_history is not None and selected_history.empty is False:
         logger.info(f"Displaying history data for {selected_item_id}")
         logger.info(f"selected_history: {selected_history}")
@@ -820,7 +847,7 @@ def main():
 
     # Display sync status in sidebar
     with st.sidebar:
-        display_sync_status()
+        new_display_sync_status()
 
         st.sidebar.divider()
 

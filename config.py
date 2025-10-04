@@ -320,6 +320,10 @@ class DatabaseConfig:
                 if self.alias == "wcmkt2":
                     validation_test = self.validate_sync() if ok else False
                     st.session_state.sync_status = "Success" if validation_test else "Failed"
+                    if st.session_state.sync_status == "Success":
+                        st.toast("Database synced successfully", icon="✅")
+                    else:
+                        st.toast("Database sync failed", icon="❌")
                 st.session_state.sync_check = False
                 logger.debug(f"Write lock will be released for {self.alias}")
 
