@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from io import StringIO
 from db_handler import get_update_time, read_df
 from logging_config import setup_logging
 from config import DatabaseConfig
@@ -12,6 +13,7 @@ logger = setup_logging(__name__)
 mktdb = DatabaseConfig("wcmkt")
 sde_db = DatabaseConfig("sde")
 
+@st.cache_data(ttl=600)
 def get_filter_options(selected_categories=None):
     try:
         # Get data from marketstats table
@@ -206,12 +208,16 @@ def main():
         display_df = df.copy()
         display_df = display_df.drop(columns=['min_price', 'avg_price', 'category_id', 'group_id'])
 
-        # Select and rename columns
-        columns_to_show = ['type_id', 'type_name', 'price', 'days_remaining', 'total_volume_remain', 'avg_volume', 'category_name', 'group_name', 'ships']
+        # Select and rename columns - add checkbox column
+        columns_to_show = ['select', 'type_id', 'type_name', 'price', 'days_remaining', 'total_volume_remain', 'avg_volume', 'category_name', 'group_name', 'ships']
+
+        # Initialize checkbox column with False
+        display_df['select'] = False
         display_df = display_df[columns_to_show]
 
 
         numeric_formats = {
+            'select': st.column_config.CheckboxColumn('Select', help='Check items you want to include in the CSV download', default=False, width='small'),
             'type_id': st.column_config.NumberColumn('Type ID', help='type ID of the item', width='small'),
             'type_name': st.column_config.TextColumn('Item', help='name of the item', width='medium'),
             'total_volume_remain': st.column_config.NumberColumn('Volume Remaining',  format='localized', help='total items currently available on the market', width='small'),
@@ -258,7 +264,7 @@ def main():
                     # Create a list of empty strings for all columns
                     styles = [''] * len(row)
                     # Apply highlighting only to the "Item" column (index 0)
-                    styles[1] = 'background-color: #328fed'
+                    styles[2] = 'background-color: #328fed'
                     return styles
             except Exception:
                 pass
@@ -270,9 +276,34 @@ def main():
         # Add doctrine highlighting
         styled_df = styled_df.apply(highlight_doctrine, axis=1)
 
-        # Display the dataframe
+        # Display the dataframe with editable checkbox column
         st.subheader("Low Stock Items")
-        st.dataframe(styled_df, hide_index=True, column_config=numeric_formats)
+        edited_df = st.data_editor(
+            styled_df,
+            hide_index=True,
+            column_config=numeric_formats,
+            disabled=[col for col in display_df.columns if col != 'select'],
+            key='low_stock_editor'
+        )
+
+        # Download CSV button
+        selected_rows = edited_df[edited_df['select'] == True]
+        if len(selected_rows) > 0:
+            # Prepare CSV data - remove the select column
+            csv_df = selected_rows.drop(columns=['select'])
+
+            # Convert to CSV
+            csv_buffer = StringIO()
+            csv_df.to_csv(csv_buffer, index=False)
+            csv_data = csv_buffer.getvalue()
+
+            st.download_button(
+                label=f"Download {len(selected_rows)} selected items as CSV",
+                data=csv_data,
+                file_name="low_stock_items.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
 
         # Display charts
         st.subheader("Days Remaining by Item")
