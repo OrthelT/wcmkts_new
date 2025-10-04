@@ -5,6 +5,9 @@ SUPPORT: Join the Discord for support https://discord.gg/BxatJE572Y
 CONTRIBUTING: Contributors welcome. This project is fully open source under MIT License. Source code and full documentation available on GitHub: https://github.com/OrthelT/wcmkts_new
 
 ## UPDATES:
+*version 0.1.3*
+- low-stock items are now selectable for csv export
+
 *version 0.1.2*
 - moves to new versioning scheme to match python standard
 - feat: adds Jita price info for selected items
