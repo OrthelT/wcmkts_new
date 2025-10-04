@@ -22,8 +22,4 @@ st.set_page_config(
         layout="wide"
     )
 
-logger.info("*"*60)
-logger.info("-"*60)
-
-
 pg.run()

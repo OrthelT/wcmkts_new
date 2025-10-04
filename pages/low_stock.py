@@ -13,6 +13,7 @@ logger = setup_logging(__name__)
 mktdb = DatabaseConfig("wcmkt")
 sde_db = DatabaseConfig("sde")
 
+@st.cache_data(ttl=600)
 def get_filter_options(selected_categories=None):
     try:
         # Get data from marketstats table
