@@ -264,7 +264,7 @@ def main():
                     # Create a list of empty strings for all columns
                     styles = [''] * len(row)
                     # Apply highlighting only to the "Item" column (index 0)
-                    styles[1] = 'background-color: #328fed'
+                    styles[2] = 'background-color: #328fed'
                     return styles
             except Exception:
                 pass
