@@ -8,11 +8,12 @@ from logging_config import setup_logging
 from datetime import datetime, timedelta
 import millify
 from doctrines import get_target_from_fit_id
+import numpy as np
 
 logger = setup_logging(__name__)
 
 @st.cache_data(ttl=3600)
-def get_catagory_type_ids(selected_category=None)->list:
+def get_category_type_ids(selected_category=None)->list:
     sde_db = DatabaseConfig("sde")
     category_query = text("""
         SELECT typeID as type_id
@@ -57,7 +58,7 @@ def get_market_history_by_category(selected_category=None):
         # Return all market history if no category selected
         return get_all_market_history()
 
-    type_ids = get_catagory_type_ids(selected_category)
+    type_ids = get_category_type_ids(selected_category)
     if len(type_ids) == 0:
         return pd.DataFrame()
 
@@ -68,10 +69,32 @@ def get_market_history_by_category(selected_category=None):
 
 
 def wrap_top_n_items(df_7days: pd.DataFrame, df_30days: pd.DataFrame) -> pd.DataFrame | None:
-    """Calculate top N items based on session state pill selections."""
+    """
+      Calculate top N items based on session state pill selections.
+
+      Args:
+          df_7days: DataFrame with columns ['type_name', 'daily_isk_volume', 'volume']
+          df_30days: DataFrame with columns ['type_name', 'daily_isk_volume', 'volume']
+
+      Returns:
+          DataFrame with top N items or None if session state not initialized
+      """
+
     @st.fragment
     def top_n_items_fragment():
-        if "week_month_pill" in st.session_state and "daily_total_pill" in st.session_state and "isk_volume_pill" in st.session_state:
+        if "week_month_pill" in st.session_state and "daily_total_pill" in st.session_state and "isk_volume_pill" in st.session_state and "top_items_count" in st.session_state:
+            if df_7days.empty or df_30days.empty:
+                return None
+            else:
+                if st.session_state.week_month_pill == 0:
+                    top_n_items = df_7days.copy()
+                else:
+                    top_n_items = df_30days.copy()
+
+                if st.session_state.daily_total_pill == 0:
+                    top_n_items = top_n_items.groupby('type_name').agg({'daily_isk_volume': 'mean', 'volume': 'mean'})
+                else:
+                    top_n_items = top_n_items.groupby('type_name').agg({'daily_isk_volume': 'sum', 'volume': 'sum'})
 
             if st.session_state.week_month_pill == 0:
                 top_n_items = df_7days.copy()
@@ -104,10 +127,10 @@ def calculate_30day_metrics(selected_category=None, selected_item_id=None)->tupl
         selected_item_id: Specific item type_id to filter by (optional)
 
     Returns:
-        tuple: (avg_daily_volume, avg_daily_isk_value)
+        tuple: (avg_daily_volume, avg_daily_isk_value, vol_delta, isk_delta, df_30days, df_7days)
     """
     try:
-    # Get market history data based on filters
+        # Get market history data based on filters
         if selected_item_id:
             # Filter by specific item
             mkt_db = DatabaseConfig("wcmkt")
@@ -840,6 +863,7 @@ def render_current_market_status_ui(sell_data, stats, selected_item, sell_order_
             if cat_id == 6:
                 fits = fit_df['fit_id'].unique()
                 display_fits_on_mkt = f"{fits_on_mkt:,.0f}"
+                target = None
                 if len(fits) == 1:
                     target = get_target_from_fit_id(fits[0])
                     fits_on_mkt_delta = round(fits_on_mkt - target, 0)

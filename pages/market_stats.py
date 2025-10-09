@@ -17,7 +17,6 @@ from db_handler import new_get_market_data, get_all_mkt_orders, get_all_mkt_stat
 from init_db import init_db
 from sync_state import update_wcmkt_state
 from type_info import get_backup_type_id
-from datetime import datetime
 from market_metrics import render_ISK_volume_chart_ui, render_ISK_volume_table_ui, render_30day_metrics_ui, render_current_market_status_ui
 from utils import get_jita_price
 
@@ -540,6 +539,9 @@ def display_history_metrics(history_df):
     avgvol30 = history_df[:30].volume.mean()
     avgvol7 = history_df[:7].volume.mean()
 
+    if avgpr30 == 0 and avgvol30 == 0:
+        return
+
     prdelta = (avgpr7 - avgpr30) / avgpr30
     prdelta = round(prdelta * 100, 1)
     voldelta = (avgvol7 - avgvol30) / avgvol30
@@ -836,7 +838,7 @@ def main():
         selected_item_id = None
         st.session_state.selected_item_id = selected_item_id
 
-    if selected_item_id and selected_item_id is not None:
+    if selected_item_id:
         logger.debug(f"Displaying history chart for {selected_item_id}")
 
         history_chart = create_history_chart(selected_item_id)
