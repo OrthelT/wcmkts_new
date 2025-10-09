@@ -1,8 +1,7 @@
 import os
 import sys
 import time
-
-
+from datetime import datetime, timedelta
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 import pandas as pd
@@ -35,7 +34,7 @@ logger.info(f"streamlit version: {st.__version__}")
 logger.info("-"*100)
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=3600)
 def get_watchlist_type_ids()->list:
     # Get all type_ids from watchlist
     watchlist_query = """
@@ -47,7 +46,7 @@ def get_watchlist_type_ids()->list:
     logger.debug(f"type_ids: {len(type_ids)}")
     return type_ids
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=1800)
 def get_market_type_ids()->list:
     # Get all type_ids from market orders
     mkt_query = """
@@ -62,6 +61,7 @@ def get_market_type_ids()->list:
     return type_ids
 
 # Function to get unique categories and item names
+@st.cache_data(ttl=1800)
 def all_sde_info(type_ids: list = None)->pd.DataFrame:
     if not type_ids:
         type_ids = get_market_type_ids()
@@ -241,61 +241,30 @@ def create_history_chart(type_id):
 
     return fig
 
-def display_sync_status():
-    """Display sync status in the sidebar."""
-    if "local_update_status" not in st.session_state:
-        init_db()
-    update_time = st.session_state.local_update_status["updated"]
-    update_time = update_time.strftime("%Y-%m-%d | %H:%M UTC")
-    time_since_update = st.session_state.local_update_status["time_since"]
-    time_since_update = time_since_update.total_seconds()
-    time_since_update = f"{round((time_since_update / 3600),1)} hours"
-    st.markdown("&nbsp;"*5)
-    st.sidebar.markdown(f"<span style='font-size: 14px; color: lightgrey;'>*Last ESI update: {update_time}*</span>", unsafe_allow_html=True)
-
 def new_display_sync_status():
     """Display sync status in the sidebar."""
-    if "local_update_status" not in st.session_state:
-        init_db()
-    update_time = st.session_state.local_update_status["updated"]
-    update_time = update_time.strftime("%Y-%m-%d | %H:%M UTC")
-    time_since_update = st.session_state.local_update_status["time_since"]
-    time_since_update = time_since_update.total_seconds()
-    time_since_update = f"{round((time_since_update / 3600),1)} hours"
-    st.markdown("&nbsp;"*5)
-
-    db = DatabaseConfig("wcmkt")
-    verify_sync = db.validate_sync()
-    if verify_sync:
-        sync_status = "✅"
+    if "local_update_status" in st.session_state:
+        update_time = st.session_state.local_update_status["updated"]
+        logger.info(f"type of update_time: {type(update_time)}")
+        display_time = update_time.strftime("%Y-%m-%d | %H:%M UTC")
+        logger.info(f"display_time: {display_time}")
     else:
-        sync_status = "⌛⌛⌛"
-        st.toast("Syncing database...", icon="⌛⌛⌛")
-        logger.info("Syncing database...")
-        db.sync()
-        update_time = db.get_most_recent_update("marketstats", remote=True)
-        update_wcmkt_state()
+        update_time = None
+    if update_time is None:
+        try:
+            update_time = DatabaseConfig("wcmkt").get_most_recent_update("marketstats", remote=False)
+        except Exception as e:
+            logger.error(f"Error getting update time: {e}")
+            update_time = None
+            logger.info("update_time is None")
+    if update_time is not None:
+        display_time = update_time.strftime("%Y-%m-%d | %H:%M UTC")
+    else:
+        display_time = "N/A"
 
-    st.sidebar.markdown(f"<span style='font-size: 14px; color: lightgrey;'>*Last ESI update: {update_time}*</span>", unsafe_allow_html=True)
+    st.sidebar.markdown(f"<span style='font-size: 14px; color: lightgrey;'>*Last ESI update: {display_time}*</span>", unsafe_allow_html=True)
 
 
-
-@st.fragment
-def dump_session_state():
-    logger.info("*"*40)
-    logger.info("Dumping session state")
-    logger.info("*"*40)
-    for k,v in st.session_state.items():
-        if isinstance(v, dict):
-            logger.info(f"{k}")
-            logger.info("+++++")
-            for k2,v2 in v.items():
-                logger.info(f"{k2}")
-        else:
-            logger.info(f"{k, v}")
-        logger.info("-"*40)
-    logger.info("*"*40)
-    logger.info("="*40)
 
 @st.cache_data(ttl=1800)
 def check_for_db_updates()->tuple[bool, float]:
@@ -337,19 +306,17 @@ def check_db():
 def maybe_run_check():
     now = time.time()
     if "last_check" not in st.session_state:
-        check_db()
-        st.session_state["last_check"] = now
         logger.info("last_check not in st.session_state, setting to now")
+        check_db()
+        st.session_state["last_check"] = now
+        logger.info("last_check set to now")
 
-    last_run = st.session_state.get("last_check", 0)
-
-    if now - last_run > 600:   # 600 seconds = 10 minutes
-        logger.info("Running check_db()")
-        logger.info(f"now - last_run: {now - last_run}")
+    elif now - st.session_state.get("last_check", 0) > 600:   # 600 seconds = 10 minutes
+        logger.info(f"now - last_check={now - st.session_state.get('last_check', 0)}, running check_db()")
         check_db()
         st.session_state["last_check"] = now
 
-def get_fitting_col_config():
+def get_fitting_col_config()->dict:
     col_config = {
                 'fit_id': st.column_config.NumberColumn(
                     "Fit ID",
@@ -423,6 +390,20 @@ def get_fitting_col_config():
             }
     return col_config
 
+def get_display_formats()->dict:
+    display_formats = {
+        'type_id': st.column_config.NumberColumn("Type ID", help="Type ID of this item", width="small"),
+        'order_id': st.column_config.NumberColumn("Order ID", help="Order ID of this item", width="small"),
+        'type_name': st.column_config.TextColumn("Type Name", help="Type Name of this item", width="medium"),
+        'volume_remain': st.column_config.NumberColumn("Qty", help="Quantity of this item", format="localized", width="small"),
+        'price': st.column_config.NumberColumn("Price", help="Price of this item", format="localized"),
+        'duration': st.column_config.NumberColumn("Duration", help="Duration of this item", format="localized", width="small"),
+        'issued': st.column_config.DateColumn("Issued", help="Issued date of this item", format="YYYY-MM-DD"),
+        'expiry': st.column_config.DateColumn("Expires", help="Expiration date of this item", format="YYYY-MM-DD"),
+        'days_remaining': st.column_config.NumberColumn("Days Remaining", help="Days remaining of this item", format="plain", width="small"),
+    }
+    return display_formats
+
 def check_selected_item(selected_item: str)->str | None:
     if selected_item == "":
         st.session_state.selected_item = None
@@ -473,7 +454,7 @@ def check_selected_category(selected_category: str, show_all: bool)->list | None
         st.session_state.jita_price = None
         return None
 
-def main():
+def initialize_main_function():
     logger.info("*****************************************************")
     logger.info("Starting main function")
     logger.info("*****************************************************")
@@ -481,7 +462,6 @@ def main():
     if not st.session_state.get('db_initialized'):
         logger.info("-"*30)
         logger.info("Initializing database")
-
         result = init_db()
         if result:
             st.toast("Database initialized successfully", icon="✅")
@@ -492,8 +472,9 @@ def main():
     else:
         logger.info("Databases already initialized in session state")
     logger.info("*"*60)
+    st.session_state.db_init_time = datetime.now()
 
-    maybe_run_check()
+def render_headers():
     col1, col2 = st.columns([0.2, 0.8], vertical_alignment="bottom")
     with col1:
         wclogo = "images/wclogo.png"
@@ -501,16 +482,26 @@ def main():
     with col2:
         st.title("Winter Coalition Market Stats")
 
-    # Sidebar filters
-    st.sidebar.header("Filters")
+@st.fragment
+def display_downloads():
+        st.download_button("Download Market Orders", data=get_all_mkt_orders().to_csv(index=False), file_name="4H_market_orders.csv", mime="text/csv",type="tertiary", help="Download all 4H market orders as a CSV file",icon="📥")
+        st.download_button("Download Market Stats", data=get_all_mkt_stats().to_csv(index=False), file_name="4H_market_stats.csv", mime="text/csv",type="tertiary", help="Download aggregated 4H market statistics for commonly traded items as a CSV file",icon="📥")
+        st.download_button("Download Market History", data=get_all_market_history().to_csv(index=False), file_name="4H_market_history.csv", mime="text/csv",type="tertiary", help="Download 4H market history for commonly traded items as a CSV file",icon="📥")
 
-    # Show all option
+def main():
+    if 'db_init_time' not in st.session_state:
+        initialize_main_function()
+    elif datetime.now() - st.session_state.db_init_time > timedelta(hours=1):
+        initialize_main_function()
+
+    maybe_run_check()
+    render_headers()
+
+    st.sidebar.header("Filters")
     show_all = st.sidebar.checkbox("Show All Data", value=False)
 
-    # Get initial categories
     categories, all_items, _ = get_filter_options()
     logger.debug(f"categories: {len(categories)}")
-    # Category filter - changed to selectbox for single selection
     selected_category = st.sidebar.selectbox(
         "Select Category",
         options=[""] + categories,  # Add empty option to allow no selection
@@ -520,26 +511,9 @@ def main():
     )
 
     available_items = check_selected_category(selected_category, show_all)
-
     if not available_items:
         available_items = all_items
 
-    # if selected_category == "":
-    #     st.session_state.selected_category = None
-    #     st.session_state.selected_category_info = None
-    #     st.session_state.selected_item = None
-    #     st.session_state.selected_item_id = None
-    #     st.session_state.jita_price = None
-
-    # if selected_category and selected_category is not None:
-    #     logger.info(f"selected_category {selected_category}")
-    #     st.sidebar.text(f"Category: {selected_category}")
-    #     st.session_state.selected_category = selected_category
-    #     # Get filtered items based on selected category
-    #     _, available_items, cat_type_info = get_filter_options(selected_category if not show_all and selected_category else None)
-
-
-        # Item name filter - changed to selectbox for single selection
     selected_item = st.sidebar.selectbox(
         "Select Item",
         options=[""] + available_items,  # Add empty option to allow no selection
@@ -548,31 +522,7 @@ def main():
     )
     selected_item = check_selected_item(selected_item)
 
-    # if selected_item == "":
-    #     st.session_state.selected_item = None
-    #     st.session_state.selected_item_id = None
-    #     st.session_state.jita_price = None
-    #     st.session_state.current_price = None
-
-    # elif selected_item and selected_item is not None:
-    #     logger.info(f"selected_item: {selected_item}")
-    #     st.sidebar.text(f"Item: {selected_item}")
-    #     st.session_state.selected_item = selected_item
-    #     st.session_state.selected_item_id = get_backup_type_id(selected_item)
-    #     jita_price = get_jita_price(st.session_state.selected_item_id)
-    #     if jita_price:
-    #         st.session_state.jita_price = jita_price
-    #     else:
-    #         st.session_state.jita_price = None
-    #     logger.info(f"selected_item_id: {st.session_state.selected_item_id}")
-
-    # else:
-    #     selected_item = None
-    #     st.session_state.jita_price = None
-    #     st.session_state.current_price = None
-
     t1 = time.perf_counter()
-    # sell_data, buy_data, stats = get_market_data(show_all, selected_category, selected_items)
     sell_data, buy_data, stats = new_get_market_data(show_all)
     t2 = time.perf_counter()
     elapsed_time = (t2 - t1) * 1000
@@ -596,23 +546,26 @@ def main():
     if not sell_data.empty:
         if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
             selected_item = st.session_state.selected_item
-            if 'selected_item_id' in st.session_state:
-                selected_item_id = st.session_state.selected_item_id
-            else:
-                selected_item_id = get_backup_type_id(selected_item)
-                st.session_state.selected_item_id = selected_item_id
             sell_data = sell_data[sell_data['type_name'] == selected_item]
+
             if not buy_data.empty:
                 buy_data = buy_data[buy_data['type_name'] == selected_item]
             stats = stats[stats['type_name'] == selected_item]
+
+            if 'selected_item_id' in st.session_state:
+                selected_item_id = st.session_state.selected_item_id
+                logger.debug(f"selected_item_id in st.session_state: {selected_item_id}")
+            else:
+                logger.debug(f"selected_item_id not in st.session_state, getting backup type id")
+                selected_item_id = get_backup_type_id(selected_item)
+                st.session_state.selected_item_id = selected_item_id
+
             if selected_item_id:
                 try:
                     fit_df = get_fitting_data(selected_item_id)
                 except Exception:
                     logger.warning(f"Failed to get fitting data for {selected_item_id}")
                     fit_df = pd.DataFrame()
-            else:
-                fit_df = pd.DataFrame()
 
         elif show_all:
             selected_category = None
@@ -663,6 +616,7 @@ def main():
                 logger.info(f"No type_id or type_name found for {selected_item}")
                 image_id = None
                 type_name = None
+
             st.subheader(f"{type_name}", divider="blue")
             col1, col2 = st.columns(2)
             with col1:
@@ -718,78 +672,80 @@ def main():
             if not cat_label.endswith("s"):
                 cat_label = cat_label + "s"
             st.subheader(f"Sell Orders for {cat_label}", divider="blue")
-        elif show_all:
-            st.subheader("All Sell Orders", divider="green")
+
         else:
             st.subheader("All Sell Orders", divider="green")
 
         display_df.drop(columns='is_buy_order', inplace=True)
 
-        display_formats = {
-            'type_id': st.column_config.NumberColumn("Type ID", help="Type ID of this item", width="small"),
-            'order_id': st.column_config.NumberColumn("Order ID", help="Order ID of this item", width="small"),
-            'type_name': st.column_config.TextColumn("Type Name", help="Type Name of this item", width="medium"),
-            'volume_remain': st.column_config.NumberColumn("Qty", help="Quantity of this item", format="localized", width="small"),
-            'price': st.column_config.NumberColumn("Price", help="Price of this item", format="localized"),
-            'duration': st.column_config.NumberColumn("Duration", help="Duration of this item", format="localized", width="small"),
-            'issued': st.column_config.DateColumn("Issued", help="Issued date of this item", format="YYYY-MM-DD"),
-            'expiry': st.column_config.DateColumn("Expires", help="Expiration date of this item", format="YYYY-MM-DD"),
-            'days_remaining': st.column_config.NumberColumn("Days Remaining", help="Days remaining of this item", format="plain", width="small"),
-        }
+        display_formats = get_display_formats()
 
         st.dataframe(display_df, hide_index=True, column_config=display_formats)
 
-        # Display buy orders if they exist
-        if not buy_data.empty:
-            if show_all:
-                st.subheader("All Buy Orders", divider="orange")
-            else:
-                    # Display buy orders header
-                if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
-                    selected_item = st.session_state.selected_item
-                    type_name = selected_item
-                    st.subheader(f"Buy Orders for {type_name}", divider="orange")
-                elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
-                    selected_category = st.session_state.selected_category
-                    cat_label = selected_category
-                    if cat_label.endswith("s"):
-                        cat_label = cat_label
-                    else:
-                        cat_label = cat_label + "s"
-                    st.subheader(f"Buy Orders for {cat_label}", divider="orange")
-
-                else:
-                    st.subheader("All Buy Orders", divider="orange")
-
-            # Display buy orders metrics
-            col1, col2 = st.columns(2)
-            with col1:
-                if buy_total_value > 0:
-                    st.metric("Market Value (buy orders)", f"{millify.millify(buy_total_value, precision=2)} ISK")
-                else:
-                    st.metric("Market Value (buy orders)", "0 ISK")
-
-            with col2:
-                if buy_order_count > 0:
-                    st.metric("Total Buy Orders", f"{buy_order_count:,.0f}")
-                else:
-                    st.metric("Total Buy Orders", "0")
-
-            # Format buy orders for display
-            buy_display_df = buy_data.copy()
-            buy_display_df.type_id = buy_display_df.type_id
-            buy_display_df.order_id = buy_display_df.order_id
-            buy_display_df.drop(columns='is_buy_order', inplace=True)
-
-            st.dataframe(buy_display_df, hide_index=True, column_config=display_formats)
-
-        if selected_item is None or selected_item == "":
-            logger.debug("No item selected")
-            pass
+    # Display buy orders if they exist
+    if not buy_data.empty:
+        if show_all:
+            st.subheader("All Buy Orders", divider="orange")
         else:
-            st.subheader("Market Order Distribution")
-            price_vol_chart = create_price_volume_chart(sell_data)
-            st.plotly_chart(price_vol_chart, config={'width': 'content'})
+                # Display buy orders header
+            if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
+                selected_item = st.session_state.selected_item
+                type_name = selected_item
+                st.subheader(f"Buy Orders for {type_name}", divider="orange")
+            elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
+                selected_category = st.session_state.selected_category
+                cat_label = selected_category
+                if cat_label.endswith("s"):
+                    cat_label = cat_label
+                else:
+                    cat_label = cat_label + "s"
+                st.subheader(f"Buy Orders for {cat_label}", divider="orange")
+
+            else:
+                st.subheader("All Buy Orders", divider="orange")
+
+        # Display buy orders metrics
+        col1, col2 = st.columns(2)
+        with col1:
+            if buy_total_value > 0:
+                st.metric("Market Value (buy orders)", f"{millify.millify(buy_total_value, precision=2)} ISK")
+            else:
+                st.metric("Market Value (buy orders)", "0 ISK")
+
+        with col2:
+            if buy_order_count > 0:
+                st.metric("Total Buy Orders", f"{buy_order_count:,.0f}")
+            else:
+                st.metric("Total Buy Orders", "0")
+
+        # Format buy orders for display
+        buy_display_df = buy_data.copy()
+        buy_display_df.type_id = buy_display_df.type_id
+        buy_display_df.order_id = buy_display_df.order_id
+        buy_display_df.drop(columns='is_buy_order', inplace=True)
+
+        st.dataframe(buy_display_df, hide_index=True, column_config=display_formats)
+
+    elif not sell_data.empty:
+        if st.session_state.selected_item is not None:
+            st.write(f"No current buy orders found for {st.session_state.selected_item}")
+        else:
+            pass
+    else:
+        if st.session_state.selected_item is not None:
+            st.write(f"No current market orders found for {st.session_state.selected_item}")
+        else:
+            pass
+
+
+    if selected_item is None or selected_item == "":
+        logger.debug("No item selected")
+        pass
+
+    else:
+        st.subheader("Market Order Distribution")
+        price_vol_chart = create_price_volume_chart(sell_data)
+        st.plotly_chart(price_vol_chart, config={'width': 'content'})
 
         st.divider()
 
@@ -825,11 +781,6 @@ def main():
             except Exception as e:
                 logger.error(f"Error: {e}")
                 selected_item_id = None
-    else:
-        if st.session_state.selected_item is not None:
-            st.write(f"No current market orders found for {st.session_state.selected_item}")
-        else:
-            pass
 
     if st.session_state.selected_item_id is not None:
         selected_item_id = st.session_state.selected_item_id
@@ -923,9 +874,8 @@ def main():
         if db_check:
             check_db()
         st.sidebar.divider()
-        st.download_button("Download Market Orders", data=get_all_mkt_orders().to_csv(index=False), file_name="4H_market_orders.csv", mime="text/csv",type="tertiary", help="Download all 4H market orders as a CSV file",icon="📥")
-        st.download_button("Download Market Stats", data=get_all_mkt_stats().to_csv(index=False), file_name="4H_market_stats.csv", mime="text/csv",type="tertiary", help="Download aggregated 4H market statistics for commonly traded items as a CSV file",icon="📥")
-        st.download_button("Download Market History", data=get_all_market_history().to_csv(index=False), file_name="4H_market_history.csv", mime="text/csv",type="tertiary", help="Download 4H market history for commonly traded items as a CSV file",icon="📥")
+
+        display_downloads()
 
 if __name__ == "__main__":
     main()

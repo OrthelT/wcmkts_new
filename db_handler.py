@@ -315,7 +315,7 @@ def get_market_history(type_id: int)->pd.DataFrame:
         with mkt_db.engine.connect() as conn:
             return pd.read_sql_query(text(query), conn, params={"type_id": type_id})
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=3600)
 def get_all_market_history()->pd.DataFrame:
     query = """
         SELECT * FROM market_history
@@ -344,7 +344,6 @@ def get_update_time()->str:
     else:
         update_time = None
     return update_time
-
 
 def get_module_fits(type_id):
     with mkt_db.local_access():

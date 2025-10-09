@@ -38,7 +38,6 @@ def init_db():
             if verify_db_path(db_path):
                 logger.info(f"DB path exists: {db_path}✔️")
                 status = {key: "success initialized🟢" if verify_db_path(db_path) else "failed🔴"}
-
             else:
                 logger.warning(f"DB path does not exist: {db_path}⚠️")
                 logger.info("syncing db")
@@ -59,8 +58,8 @@ def init_db():
     elapsed_time = round((end_time-start_time)*1000, 2)
     logger.info(f"TIME init_db() = {elapsed_time} ms")
     logger.info("-"*100)
-
     update_wcmkt_state()
+
 
     return True
 

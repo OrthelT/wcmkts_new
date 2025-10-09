@@ -26,7 +26,6 @@ def update_wcmkt_state()-> None:
     remote_update_status['updated'] = remote_update
     remote_update_status['time_since'] = now - remote_update
     remote_update_status['needs_update'] = remote_update_status['time_since'] > timedelta(hours=2)
-
     logger.info("-"*60)
     st.session_state.local_update_status = local_update_status
     logger.info("local_status saved to session state:")
@@ -38,7 +37,6 @@ def update_wcmkt_state()-> None:
     for k,v in remote_update_status.items():
         logger.info(f"{k}: {v}🕧")
     logger.info("-"*60)
-
     end_time = perf_counter()
     elapsed_time = round((end_time-start_time)*1000, 2)
     logger.info(f"TIME update_wcmkt_state() = {elapsed_time} ms")

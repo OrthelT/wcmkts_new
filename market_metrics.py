@@ -10,35 +10,24 @@ import millify
 
 logger = setup_logging(__name__)
 
-@st.cache_data(ttl=600)
-def get_market_history_by_category(selected_category=None):
-    """
-    Get market history data filtered by category
-
-    Args:
-        selected_category: Category name to filter by (optional)
-
-    Returns:
-        pandas DataFrame: Market history data, optionally filtered by category
-    """
-    if selected_category is None:
-        # Return all market history if no category selected
-        return get_all_market_history()
-
-    # Get type_ids for the selected category from SDE
+@st.cache_data(ttl=3600)
+def get_catagory_type_ids(selected_category=None)->list:
     sde_db = DatabaseConfig("sde")
     category_query = text("""
         SELECT typeID as type_id
         FROM sdetypes
         WHERE categoryName = :category_name
     """)
-
     type_ids_df = read_df(sde_db, category_query, {'category_name': selected_category})
+
     if type_ids_df.empty:
-        return pd.DataFrame()  # Return empty if no types found for category
+        return []  # Return empty if no types found for category
 
     type_ids = type_ids_df['type_id'].tolist()
+    return type_ids
 
+@st.cache_data(ttl=1800)
+def get_market_history_by_type_ids(type_ids: list)->pd.DataFrame:
     # Get market history for those type_ids
     mkt_db = DatabaseConfig("wcmkt")
     # Convert type_ids to strings since the DB stores them as VARCHAR
@@ -53,6 +42,27 @@ def get_market_history_by_category(selected_category=None):
         type_ids_joined = ','.join(f"'{tid}'" for tid in type_ids_str)
         history_query = text(f"SELECT * FROM market_history WHERE type_id IN ({type_ids_joined})")
         history_df = read_df(mkt_db, history_query)
+    return history_df
+
+def get_market_history_by_category(selected_category=None):
+    """
+    Get market history data filtered by category
+    Args:
+        selected_category: Category name to filter by (optional)
+    Returns:
+        pandas DataFrame: Market history data, optionally filtered by category
+    """
+    if selected_category is None:
+        # Return all market history if no category selected
+        return get_all_market_history()
+
+    type_ids = get_catagory_type_ids(selected_category)
+    if len(type_ids) == 0:
+        return pd.DataFrame()
+
+    history_df = get_market_history_by_type_ids(type_ids)
+    if history_df.empty:
+        return pd.DataFrame()
     return history_df
 
 def calculate_30day_metrics(selected_category=None, selected_item_id=None):
@@ -579,7 +589,6 @@ def render_30day_metrics_ui():
             st.metric("Avg Daily ISK Value (30d)", f"{display_avg_isk} ISK")
         else:
             st.metric("Avg Daily ISK Value (30d)", "0 ISK")
-
 
     with col_m2:
         if avg_daily_volume > 0:
