@@ -7,11 +7,13 @@ from sqlalchemy import text
 from logging_config import setup_logging
 from datetime import datetime, timedelta
 import millify
+from doctrines import get_target_from_fit_id
+import numpy as np
 
 logger = setup_logging(__name__)
 
 @st.cache_data(ttl=3600)
-def get_catagory_type_ids(selected_category=None)->list:
+def get_category_type_ids(selected_category=None)->list:
     sde_db = DatabaseConfig("sde")
     category_query = text("""
         SELECT typeID as type_id
@@ -56,7 +58,7 @@ def get_market_history_by_category(selected_category=None):
         # Return all market history if no category selected
         return get_all_market_history()
 
-    type_ids = get_catagory_type_ids(selected_category)
+    type_ids = get_category_type_ids(selected_category)
     if len(type_ids) == 0:
         return pd.DataFrame()
 
@@ -65,7 +67,58 @@ def get_market_history_by_category(selected_category=None):
         return pd.DataFrame()
     return history_df
 
-def calculate_30day_metrics(selected_category=None, selected_item_id=None):
+
+def wrap_top_n_items(df_7days: pd.DataFrame, df_30days: pd.DataFrame) -> pd.DataFrame | None:
+    """
+      Calculate top N items based on session state pill selections.
+
+      Args:
+          df_7days: DataFrame with columns ['type_name', 'daily_isk_volume', 'volume']
+          df_30days: DataFrame with columns ['type_name', 'daily_isk_volume', 'volume']
+
+      Returns:
+          DataFrame with top N items or None if session state not initialized
+      """
+
+    @st.fragment
+    def top_n_items_fragment():
+        if "week_month_pill" in st.session_state and "daily_total_pill" in st.session_state and "isk_volume_pill" in st.session_state and "top_items_count" in st.session_state:
+            if df_7days.empty or df_30days.empty:
+                return None
+            else:
+                if st.session_state.week_month_pill == 0:
+                    top_n_items = df_7days.copy()
+                else:
+                    top_n_items = df_30days.copy()
+
+                if st.session_state.daily_total_pill == 0:
+                    top_n_items = top_n_items.groupby('type_name').agg({'daily_isk_volume': 'mean', 'volume': 'mean'})
+                else:
+                    top_n_items = top_n_items.groupby('type_name').agg({'daily_isk_volume': 'sum', 'volume': 'sum'})
+
+            if st.session_state.week_month_pill == 0:
+                top_n_items = df_7days.copy()
+            else:
+                top_n_items = df_30days.copy()
+
+            if st.session_state.daily_total_pill == 0:
+                top_n_items = top_n_items.groupby('type_name').agg({'daily_isk_volume': 'mean', 'volume': 'mean'})
+            else:
+                top_n_items = top_n_items.groupby('type_name').agg({'daily_isk_volume': 'sum', 'volume': 'sum'})
+
+            if st.session_state.isk_volume_pill == 0:
+                top_n_items = top_n_items.sort_values('daily_isk_volume', ascending=False).head(st.session_state.top_items_count)
+            else:
+                top_n_items = top_n_items.sort_values('volume', ascending=False).head(st.session_state.top_items_count)
+
+            return top_n_items
+        else:
+            return None
+    top_n_items = top_n_items_fragment()
+    return top_n_items
+
+
+def calculate_30day_metrics(selected_category=None, selected_item_id=None)->tuple:
     """
     Calculate average daily sales and total daily ISK value for the last 30 days
 
@@ -74,7 +127,7 @@ def calculate_30day_metrics(selected_category=None, selected_item_id=None):
         selected_item_id: Specific item type_id to filter by (optional)
 
     Returns:
-        tuple: (avg_daily_volume, avg_daily_isk_value)
+        tuple: (avg_daily_volume, avg_daily_isk_value, vol_delta, isk_delta, df_30days, df_7days)
     """
     try:
         # Get market history data based on filters
@@ -91,36 +144,52 @@ def calculate_30day_metrics(selected_category=None, selected_item_id=None):
             df = get_all_market_history()
 
         if df.empty:
-            return 0, 0
+            return 0, 0, 0, 0, 0, 0
 
         # Convert date column to datetime
         df['date'] = pd.to_datetime(df['date'])
 
         # Get last 30 days of data
-        cutoff_date = datetime.now() - timedelta(days=30)
-        df_30days = df[df['date'] >= cutoff_date].copy()
+        month_cutoff_date = datetime.now() - timedelta(days=30)
+        week_cutoff_date = datetime.now() - timedelta(days=7)
+        df_30days = df[df['date'] >= month_cutoff_date].copy()
+        df_7days = df[df['date'] >= week_cutoff_date].copy()
 
         if df_30days.empty:
-            return 0, 0
+            return 0, 0, 0, 0, 0, 0
 
         # Calculate daily metrics
         df_30days['daily_isk_volume'] = df_30days['average'] * df_30days['volume']
+        df_7days['daily_isk_volume'] = df_7days['average'] * df_7days['volume']
 
         # Group by date and sum
-        daily_metrics = df_30days.groupby('date').agg({
+        daily_metrics_30days = df_30days.groupby('date').agg({
+            'volume': 'sum',
+            'daily_isk_volume': 'sum'
+        }).reset_index()
+
+        daily_metrics_7days = df_7days.groupby('date').agg({
             'volume': 'sum',
             'daily_isk_volume': 'sum'
         }).reset_index()
 
         # Calculate averages
-        avg_daily_volume = daily_metrics['volume'].mean()
-        avg_daily_isk_value = daily_metrics['daily_isk_volume'].mean()
+        avg_daily_volume = daily_metrics_30days['volume'].mean()
+        avg_daily_isk_value = daily_metrics_30days['daily_isk_volume'].mean()
 
-        return avg_daily_volume, avg_daily_isk_value
+        avg_daily_volume_7days = daily_metrics_7days['volume'].mean()
+        avg_daily_isk_value_7days = daily_metrics_7days['daily_isk_volume'].mean()
 
+
+        vol_delta = (avg_daily_volume_7days - avg_daily_volume) / avg_daily_volume if avg_daily_volume > 0 else 0
+        isk_delta = (avg_daily_isk_value_7days - avg_daily_isk_value) / avg_daily_isk_value if avg_daily_isk_value > 0 else 0
+        vol_delta = round(vol_delta * 100, 1)
+        isk_delta = round(isk_delta * 100, 1)
+
+        return avg_daily_volume, avg_daily_isk_value, vol_delta, isk_delta, df_30days, df_7days
     except Exception as e:
         logger.error(f"Error calculating 30-day metrics: {e}")
-        return 0, 0
+        return 0, 0, 0, 0, 0, 0
 
 def calculate_daily_ISK_volume():
     df = get_all_market_history()
@@ -188,7 +257,7 @@ def calculate_ISK_volume_by_period(date_period='daily', start_date=None, end_dat
 
     return df_grouped
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=3600)
 def get_available_date_range(selected_category=None):
     """
     Get the min and max dates available in the market history data
@@ -551,6 +620,72 @@ def render_ISK_volume_table_ui():
     else:
         st.dataframe(table, width='content', column_config=data_table_config)
 
+def configure_top_n_items_ui()->None:
+    """configure the top n items ui, allowing the user to select the top items for the last week or the last month, in order of ISK or Volume, and based on average daily stats or total amount and the number of items to display between 1 and 10"""
+    colp1, colp2, colp3 = st.columns(3)
+    with colp1:
+        week_month_map = {
+            0: "Week",
+            1: "Month"
+        }
+        st.pills(label="Week/Month", options=week_month_map.keys(), default=0, key="week_month_pill", format_func=lambda x: week_month_map[x], help="Select top items for the last week or the last month")
+    with colp2:
+        isk_volume_map = {
+            0: "ISK",
+            1: "Volume"
+        }
+        st.pills(label="ISK/Volume", options=isk_volume_map.keys(), default=0, key="isk_volume_pill", help="Select top items in order of ISK or Volume", format_func=lambda x: isk_volume_map[x])
+    with colp3:
+        daily_total_map = {
+            0: "Daily",
+            1: "Total"
+        }
+        st.pills(label="Daily/Total", options=daily_total_map.keys(), default=0, key="daily_total_pill", format_func=lambda x: daily_total_map[x], help="Select top items based on average daily stats or total amount")
+    st.number_input(label="Top Items", value=5, min_value=1, max_value=10, step=1, key="top_items_count", help="Select the number of top items to display")
+
+def render_top_n_items_ui(df_7days,df_30days)->None:
+
+    configure_top_n_items_ui()
+    top_n_items = wrap_top_n_items(df_7days, df_30days)
+
+    if top_n_items is not None:
+
+        period = "this week" if st.session_state.week_month_pill == 0 else "this month"
+        total = "total" if st.session_state.daily_total_pill == 1 else "daily"
+        isk_volume = "ISK" if st.session_state.isk_volume_pill == 0 else "Volume"
+        num_items = st.session_state.top_items_count
+
+        if 'selected_category' in st.session_state and st.session_state.selected_category is not None:
+            metric_name = st.session_state.selected_category + "s"
+        else:
+            metric_name = "Items"
+
+        st.markdown(f"Top <span style='color: orange;'>{num_items}</span> {metric_name} <span style='color: orange;'>{period}</span> by <span style='color: orange;'>{total}</span> <span style='color: orange;'>{isk_volume}</span>", unsafe_allow_html=True)
+        # st.write(f"Top 5 Items {period} by {total} {isk_volume}:")
+
+        colconfig = {
+            'type_name': st.column_config.TextColumn(
+                "Type Name",
+                help="Type Name",
+                width="medium",
+            ),
+            'daily_isk_volume': st.column_config.NumberColumn(
+                "Daily ISK Volume",
+                help="Daily ISK Volume",
+                format="compact",
+                width="small",
+            ),
+            'volume': st.column_config.NumberColumn(
+                "Avg Volume",
+                help="Average Volume",
+                format="compact",
+                width="small",
+            ),
+        }
+        st.dataframe(top_n_items, column_config=colconfig)
+    else:
+        st.warning("Insufficient data recorded for this item")
+
 def render_30day_metrics_ui():
     """
     Render the 30-day market performance metrics section
@@ -568,55 +703,73 @@ def render_30day_metrics_ui():
     elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
         metrics_category = st.session_state.selected_category
 
+    if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
+        metrics_label = st.session_state.selected_item
+    elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
+        metrics_label = st.session_state.selected_category
+    else:
+        metrics_label = "All Items"
+
+    st.subheader(f"30-Day Market Stats ({metrics_label})", divider="gray")
+
     # Calculate 30-day metrics
-    avg_daily_volume, avg_daily_isk_value = calculate_30day_metrics(
-        selected_category=metrics_category,
-        selected_item_id=metrics_item_id
-    )
+    avg_daily_volume, avg_daily_isk_value, vol_delta, isk_delta, df_7days, df_30days = calculate_30day_metrics(
+            selected_category=metrics_category,
+            selected_item_id=metrics_item_id,
+        )
 
     # Only show metrics if we have actual history data
     if avg_daily_volume == 0 and avg_daily_isk_value == 0:
-        return  st.write("No history data recorded for this item") # Don't show metrics section if no history data
+        logger.warning("Insufficient data recorded for this item")
+        st.warning("Insufficient data recorded for this item") # Don't show metrics section if no history data
+        return
 
-    st.subheader("30-Day Market Performance", divider="gray")
+    colma1, colma2 = st.columns(2)
+    with colma1:
+        with st.container(border=True):
+            col_m1, col_m2 = st.columns(2)
 
-    # Display 30-day metrics
-    col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+            with col_m1:
+                if avg_daily_isk_value > 0:
+                    display_avg_isk = millify.millify(avg_daily_isk_value, precision=2)
+                    st.metric("Avg Daily ISK (30d)", f"{display_avg_isk} ISK", delta=f"{isk_delta}% this week")
+                else:
+                    st.metric("Avg Daily ISK (30d)", "0 ISK")
 
-    with col_m1:
-        if avg_daily_isk_value > 0:
-            display_avg_isk = millify.millify(avg_daily_isk_value, precision=2)
-            st.metric("Avg Daily ISK Value (30d)", f"{display_avg_isk} ISK")
+                if avg_daily_volume > 0:
+                    if avg_daily_volume < 1000:
+                        display_avg_volume = f"{avg_daily_volume:,.0f}"
+                    else:
+                        display_avg_volume = millify.millify(avg_daily_volume, precision=1)
+                    st.metric("Avg Daily Items (30d)", f"{display_avg_volume}", delta=f"{vol_delta}% this week")
+                else:
+                    st.metric("Avg Daily Items (30d)", "0")
+
+            with col_m2:
+
+                # Calculate total 30-day ISK value
+                total_30d_isk = avg_daily_isk_value * 30 if avg_daily_isk_value > 0 else 0
+                if total_30d_isk > 0:
+                    display_total_isk = millify.millify(total_30d_isk, precision=2)
+                    st.metric("Total Value (30d)", f"{display_total_isk} ISK")
+                else:
+                    st.metric("Total 30d Value", "0 ISK")
+
+                # Calculate total 30-day volume
+                total_30d_volume = avg_daily_volume * 30 if avg_daily_volume > 0 else 0
+                if total_30d_volume > 0:
+                    display_total_volume = millify.millify(total_30d_volume, precision=2)
+                    st.metric("Total Volume (30d)", f"{display_total_volume}")
+                else:
+                    st.metric("Total 30d Volume", "0")
+
+    with colma2:
+        if st.session_state.selected_item is None:
+            with st.container(border=True):
+                render_top_n_items_ui(df_7days=df_7days,df_30days=df_30days)
         else:
-            st.metric("Avg Daily ISK Value (30d)", "0 ISK")
+            pass
 
-    with col_m2:
-        if avg_daily_volume > 0:
-            if avg_daily_volume < 1000:
-                display_avg_volume = f"{avg_daily_volume:,.0f}"
-            else:
-                display_avg_volume = millify.millify(avg_daily_volume, precision=1)
-            st.metric("Avg Daily Sales (30d)", f"{display_avg_volume}")
-        else:
-            st.metric("Avg Daily Sales (30d)", "0")
-
-    with col_m3:
-        # Calculate total 30-day ISK value
-        total_30d_isk = avg_daily_isk_value * 30 if avg_daily_isk_value > 0 else 0
-        if total_30d_isk > 0:
-            display_total_isk = millify.millify(total_30d_isk, precision=2)
-            st.metric("Total ISK Value (30d)", f"{display_total_isk} ISK")
-        else:
-            st.metric("Total 30d ISK Value", "0 ISK")
-
-    with col_m4:
-        # Calculate total 30-day volume
-        total_30d_volume = avg_daily_volume * 30 if avg_daily_volume > 0 else 0
-        if total_30d_volume > 0:
-            display_total_volume = millify.millify(total_30d_volume, precision=2)
-            st.metric("Total Volume (30d)", f"{display_total_volume}")
-        else:
-            st.metric("Total 30d Volume", "0")
 
 
     st.divider()
@@ -661,7 +814,7 @@ def render_current_market_status_ui(sell_data, stats, selected_item, sell_order_
                     st.session_state.current_price = min_price
                     display_min_price = millify.millify(min_price, precision=2)
                     if delta_price is not None:
-                        st.metric("4-HWWF Sell Price", f"{display_min_price} ISK", delta=f"{round(100*delta_price, 1)}%", delta_color="inverse")
+                        st.metric("4-HWWF Sell Price", f"{display_min_price} ISK", delta=f"{round(100*delta_price, 1)}% Jita")
                     else:
                         st.metric("4-HWWF Sell Price", f"{display_min_price} ISK")
 
@@ -708,8 +861,27 @@ def render_current_market_status_ui(sell_data, stats, selected_item, sell_order_
     with col4:
         if fit_df is not None and fit_df.empty is False and fits_on_mkt is not None:
             if cat_id == 6:
+                fits = fit_df['fit_id'].unique()
                 display_fits_on_mkt = f"{fits_on_mkt:,.0f}"
-                st.metric("Fits on Market", f"{display_fits_on_mkt}")
+                target = None
+                if len(fits) == 1:
+                    target = get_target_from_fit_id(fits[0])
+                    fits_on_mkt_delta = round(fits_on_mkt - target, 0)
+                    st.metric("Fits on Market", f"{display_fits_on_mkt}", delta=f"{fits_on_mkt_delta}")
+                elif len(fits) > 1:
+                    try:
+                        for fit in fits:
+                            target = get_target_from_fit_id(fit)
+                            fits_on_mkt_delta = fits_on_mkt - target
+                            st.write(f"Fit: {fit}, Target: {target}, Fits on Market: {fits_on_mkt}, Delta: {fits_on_mkt_delta}")
+                    except Exception as e:
+                        logger.error(f"Error getting target from fit_id: {fit}: {e}")
+                else:
+                    st.metric("Fits on Market", f"{display_fits_on_mkt}")
+
+                if target is not None:
+                    st.write(f"Target: {target}")
+
         else:
             pass
 

@@ -17,7 +17,6 @@ from db_handler import new_get_market_data, get_all_mkt_orders, get_all_mkt_stat
 from init_db import init_db
 from sync_state import update_wcmkt_state
 from type_info import get_backup_type_id
-from datetime import datetime
 from market_metrics import render_ISK_volume_chart_ui, render_ISK_volume_table_ui, render_30day_metrics_ui, render_current_market_status_ui
 from utils import get_jita_price
 
@@ -143,6 +142,10 @@ def create_history_chart(type_id):
     df = get_market_history(type_id)
     if df.empty:
         return None
+
+    # Calculate 14-day moving average
+    df['ma_14'] = df['average'].rolling(window=14).mean()
+
     fig = go.Figure()
     # Create subplots: 2 rows, 1 column, shared x-axis
     fig = make_subplots(
@@ -165,6 +168,17 @@ def create_history_chart(type_id):
         row=1, col=1
     )
 
+    # Add 14-day moving average to the top subplot (row 1)
+    fig.add_trace(
+        go.Scatter(
+            x=df['date'],
+            y=df['ma_14'],
+            name='14-Day MA',
+            line=dict(color='#b87fe3', width=2, dash='dot')  # Orange dashed line
+        ),
+        row=1, col=1
+    )
+
     # Add volume bars to the bottom subplot (row 2)
     fig.add_trace(
         go.Bar(
@@ -174,18 +188,14 @@ def create_history_chart(type_id):
             opacity=0.5,
             marker_color='#00B5F7',
             base=0,
-
-
               # Bright blue bars
         ),
         row=2, col=1
     )
 
-    # Calculate ranges (not used currently)
-
     # Update layout for both subplots
     fig.update_layout(
-        title='Market History',
+        title = st.session_state.selected_item,
         paper_bgcolor='#0F1117',  # Dark background
         plot_bgcolor='#0F1117',   # Dark background
         legend=dict(
@@ -204,7 +214,6 @@ def create_history_chart(type_id):
         autosize=True,
     )
 
-
     fig.update_yaxes(
         title=dict(text='Price (ISK)', font=dict(color='white', size=10), standoff=5),
         gridcolor='rgba(128,128,128,0.2)',
@@ -212,8 +221,6 @@ def create_history_chart(type_id):
         tickformat=",",
         row=1, col=1,
         automargin = True
-
-
     )
 
     # Update axes for the volume subplot (bottom)
@@ -223,7 +230,8 @@ def create_history_chart(type_id):
         tickfont=dict(color='white'),
         tickformat=",",
         row=2, col=1,
-        automargin = True
+        automargin = True,
+        color='white',
     )
 
     # Update shared x-axis
@@ -238,7 +246,19 @@ def create_history_chart(type_id):
         showticklabels=False,
         row=1, col=1
     )
-
+    # Add background color for row 2 (volume subplot)
+    fig.add_shape(
+        type="rect",
+        xref="paper",  # Use paper coordinates (0 to 1)
+        yref="paper",
+        x0=0,
+        y0=0,
+        x1=1,
+        y1=0.3,  # Matches your row_heights=[0.7, 0.3]
+        fillcolor="#1a1a2e",  # Your custom color here
+        layer="below",
+        line_width=0,
+    )
     return fig
 
 def new_display_sync_status():
@@ -263,8 +283,6 @@ def new_display_sync_status():
         display_time = "N/A"
 
     st.sidebar.markdown(f"<span style='font-size: 14px; color: lightgrey;'>*Last ESI update: {display_time}*</span>", unsafe_allow_html=True)
-
-
 
 @st.cache_data(ttl=1800)
 def check_for_db_updates()->tuple[bool, float]:
@@ -484,9 +502,58 @@ def render_headers():
 
 @st.fragment
 def display_downloads():
-        st.download_button("Download Market Orders", data=get_all_mkt_orders().to_csv(index=False), file_name="4H_market_orders.csv", mime="text/csv",type="tertiary", help="Download all 4H market orders as a CSV file",icon="📥")
-        st.download_button("Download Market Stats", data=get_all_mkt_stats().to_csv(index=False), file_name="4H_market_stats.csv", mime="text/csv",type="tertiary", help="Download aggregated 4H market statistics for commonly traded items as a CSV file",icon="📥")
-        st.download_button("Download Market History", data=get_all_market_history().to_csv(index=False), file_name="4H_market_history.csv", mime="text/csv",type="tertiary", help="Download 4H market history for commonly traded items as a CSV file",icon="📥")
+    st.download_button("Download Market Orders", data=get_all_mkt_orders().to_csv(index=False), file_name="4H_market_orders.csv", mime="text/csv",type="tertiary", help="Download all 4H market orders as a CSV file",icon="📥")
+    st.download_button("Download Market Stats", data=get_all_mkt_stats().to_csv(index=False), file_name="4H_market_stats.csv", mime="text/csv",type="tertiary", help="Download aggregated 4H market statistics for commonly traded items as a CSV file",icon="📥")
+    st.download_button("Download Market History", data=get_all_market_history().to_csv(index=False), file_name="4H_market_history.csv", mime="text/csv",type="tertiary", help="Download 4H market history for commonly traded items as a CSV file",icon="📥")
+
+def display_history_data(history_df):
+
+    history_df.date = pd.to_datetime(history_df.date).dt.strftime("%Y-%m-%d")
+    history_df.average = round(history_df.average.astype(float), 2)
+    history_df = history_df.sort_values(by='date', ascending=False)
+    history_df.volume = history_df.volume.astype(int)
+    hist_col_config = {
+        "date": st.column_config.DateColumn(
+            "Date",
+            help="Date of the history data",
+            format="localized"
+        ),
+        "average": st.column_config.NumberColumn(
+            "Average Price",
+            help="Average price of the item",
+            format="localized"
+        ),
+        "volume": st.column_config.NumberColumn(
+            "Volume",
+            help="Volume of the item",
+            format="localized"
+        ),
+    }
+    st.dataframe(history_df, hide_index=True, column_config=hist_col_config, width=600)
+    return history_df
+
+def display_history_metrics(history_df):
+    avgpr30 = history_df[:30].average.mean()
+    avgpr7 = history_df[:7].average.mean()
+
+    avgvol30 = history_df[:30].volume.mean()
+    avgvol7 = history_df[:7].volume.mean()
+
+    if avgpr30 == 0 and avgvol30 == 0:
+        return
+
+    prdelta = (avgpr7 - avgpr30) / avgpr30
+    prdelta = round(prdelta * 100, 1)
+    voldelta = (avgvol7 - avgvol30) / avgvol30
+    voldelta = round(voldelta * 100, 1)
+    col1h1,col1h2 = st.columns(2, border=True)
+    with col1h1:
+        st.metric("Average Price (7 days)", f"{millify.millify(avgpr7, precision=2)} ISK", delta=f"{prdelta}% this week")
+        st.metric("Average Volume (7 days)", f"{millify.millify(avgvol7, precision=0)}", delta=f"{voldelta}% this week")
+    with col1h2:
+        st.metric("Average Price (30 days)", f"{millify.millify(avgpr30, precision=2)} ISK")
+        st.metric("Average Volume (30 days)", f"{millify.millify(avgvol30, precision=0)}")
+
 
 def main():
     if 'db_init_time' not in st.session_state:
@@ -520,6 +587,7 @@ def main():
         index=0,
         format_func=lambda x: "All Items" if x == "" else x
     )
+
     selected_item = check_selected_item(selected_item)
 
     t1 = time.perf_counter()
@@ -543,6 +611,7 @@ def main():
         buy_total_value = (buy_data['price'] * buy_data['volume_remain']).sum()
 
     fit_df = pd.DataFrame()
+
     if not sell_data.empty:
         if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
             selected_item = st.session_state.selected_item
@@ -654,7 +723,8 @@ def main():
         )
 
         # 30-Day Historical Metrics Section
-        with st.expander("30-Day Market Performance (expand to view metrics)", expanded=False):
+
+        with st.expander("30-Day Market Stats (expand to view metrics)", expanded=False):
             render_30day_metrics_ui()
 
         st.divider()
@@ -737,18 +807,9 @@ def main():
         else:
             pass
 
-
-    if selected_item is None or selected_item == "":
-        logger.debug("No item selected")
-        pass
-
+    if st.session_state.get('selected_item') is not None:
+        st.subheader("Market History - " + st.session_state.get('selected_item'), divider="blue")
     else:
-        st.subheader("Market Order Distribution")
-        price_vol_chart = create_price_volume_chart(sell_data)
-        st.plotly_chart(price_vol_chart, config={'width': 'content'})
-
-        st.divider()
-
         if st.session_state.get('selected_category') is not None:
             filter_info = f"Category: {st.session_state.get('selected_category')}"
             suffix = "s"
@@ -756,89 +817,50 @@ def main():
             filter_info = "All Items"
             suffix = ""
 
-        st.subheader("Price History - " + filter_info + suffix)
-        if selected_item is None or selected_item == "":
-            logger.debug("No item selected")
-            render_ISK_volume_chart_ui()
-            with st.expander("Expand to view Market History Data"):
-                render_ISK_volume_table_ui()
-        elif selected_item and selected_item is not None:
+        st.subheader("Price History - " + filter_info + suffix, divider="blue")
+        render_ISK_volume_chart_ui()
+        with st.expander("Expand to view Market History Data"):
+            render_ISK_volume_table_ui()
+
+    # Get selected_item from session state if available
+    if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
+        selected_item = st.session_state.selected_item
+        if 'selected_item_id' in st.session_state and st.session_state.selected_item_id is not None:
+            selected_item_id = st.session_state.selected_item_id
+        else:
             try:
-                if 'selected_item_id' in st.session_state:
-                    selected_item_id = st.session_state.selected_item_id
+                selected_item_id = get_backup_type_id(selected_item)
             except Exception as e:
                 logger.error(f"Error: {e}")
                 selected_item_id = None
+            st.session_state.selected_item_id = selected_item_id
+    else:
+        selected_item_id = None
+        st.session_state.selected_item_id = selected_item_id
 
-            try:
-                # Get selected_item from session state if available
-                if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
-                    selected_item = st.session_state.selected_item
-                    selected_item_id = get_backup_type_id(selected_item)
-                    st.session_state.selected_item_id = selected_item_id
-                else:
-                    selected_item_id = None
-            except Exception as e:
-                logger.error(f"Error: {e}")
-                selected_item_id = None
-
-    if st.session_state.selected_item_id is not None:
-        selected_item_id = st.session_state.selected_item_id
+    if selected_item_id:
         logger.debug(f"Displaying history chart for {selected_item_id}")
+
         history_chart = create_history_chart(selected_item_id)
-    else:
-        history_chart = None
+        selected_history = get_market_history(selected_item_id)
 
-    if st.session_state.selected_item_id is not None:
-        selected_history = get_market_history(st.session_state.selected_item_id)
-    else:
-        selected_history = None
+        if history_chart:
+            logger.debug(f"Displaying history chart for {selected_item_id}")
+            st.plotly_chart(history_chart, config={'width': 'content'})
 
-    if history_chart:
-        logger.debug(f"Displaying history chart for {selected_item_id}")
-        st.plotly_chart(history_chart, config={'width': 'content'})
+        if selected_history is not None and selected_history.empty is False:
+            logger.info(f"Displaying history data for {selected_item_id}")
+            colh1, colh2 = st.columns(2)
+            with colh1:
+                # Display history data
+                history_df = display_history_data(selected_history)
 
-    if selected_history is not None and selected_history.empty is False:
-        logger.info(f"Displaying history data for {selected_item_id}")
-        colh1, colh2 = st.columns(2)
-        with colh1:
-
-            # Display history data
-            st.subheader("History Data")
-            history_df = get_market_history(selected_item_id)
-            history_df.date = pd.to_datetime(history_df.date).dt.strftime("%Y-%m-%d")
-            history_df.average = round(history_df.average.astype(float), 2)
-            history_df = history_df.sort_values(by='date', ascending=False)
-            history_df.volume = history_df.volume.astype(int)
-            hist_col_config = {
-                "date": st.column_config.DateColumn(
-                    "Date",
-                    help="Date of the history data",
-                    format="YYYY-MM-DD"
-                ),
-                "average": st.column_config.NumberColumn(
-                    "Average Price",
-                    help="Average price of the item",
-                    format="compact"
-                ),
-                "volume": st.column_config.NumberColumn(
-                    "Volume",
-                    help="Volume of the item",
-                    format="localized"
-                ),
-            }
-            st.dataframe(history_df, hide_index=True, column_config=hist_col_config)
-
-        with colh2:
-            avgpr30 = history_df[:30].average.mean()
-            avgvol30 = history_df[:30].volume.mean()
-            st.subheader(f"{selected_item}",divider=True)
-            st.metric("Average Price (30 days)", f"{avgpr30:,.2f} ISK")
-            st.metric("Average Volume (30 days)", f"{avgvol30:,.0f}")
-    else:
-        st.write("No history data recorded for this item")
+            with colh2:
+                if not history_df.empty:
+                    display_history_metrics(history_df)
 
         st.divider()
+
     if fit_df is None:
         fit_df = pd.DataFrame()
     if fit_df.empty is False and fit_df is not None:
@@ -862,7 +884,6 @@ def main():
         if isship:
             column_config = get_fitting_col_config()
             st.dataframe(fit_df, hide_index=True, column_config=column_config, width='content')
-
 
     # Display sync status in sidebar
     with st.sidebar:
