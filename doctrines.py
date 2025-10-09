@@ -53,6 +53,11 @@ def get_target_value(ship_name):
     # Look up in the targets dictionary, default to 20 if not found
     return SHIP_TARGETS.get(ship_name, SHIP_TARGETS['default'])
 
+def get_target_from_fit_id(fit_id):
+    """Get the target value for a fit id"""
+    df = new_read_df(mktdb, text("SELECT * FROM ship_targets WHERE fit_id = :fit_id"), {"fit_id": fit_id})
+    return df.loc[0, 'ship_target']
+
 def get_target_values_batch(ship_names):
     """Get target values for multiple ship types efficiently"""
     if USE_DB_TARGETS:

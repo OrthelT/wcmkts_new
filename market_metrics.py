@@ -7,6 +7,7 @@ from sqlalchemy import text
 from logging_config import setup_logging
 from datetime import datetime, timedelta
 import millify
+from doctrines import get_target_from_fit_id
 
 logger = setup_logging(__name__)
 
@@ -91,32 +92,49 @@ def calculate_30day_metrics(selected_category=None, selected_item_id=None):
             df = get_all_market_history()
 
         if df.empty:
-            return 0, 0
+            return 0, 0, 0, 0
 
         # Convert date column to datetime
         df['date'] = pd.to_datetime(df['date'])
 
         # Get last 30 days of data
-        cutoff_date = datetime.now() - timedelta(days=30)
-        df_30days = df[df['date'] >= cutoff_date].copy()
+        month_cutoff_date = datetime.now() - timedelta(days=30)
+        week_cutoff_date = datetime.now() - timedelta(days=7)
+        df_30days = df[df['date'] >= month_cutoff_date].copy()
+        df_7days = df[df['date'] >= week_cutoff_date].copy()
 
         if df_30days.empty:
-            return 0, 0
+            return 0, 0, 0, 0
 
         # Calculate daily metrics
         df_30days['daily_isk_volume'] = df_30days['average'] * df_30days['volume']
+        df_7days['daily_isk_volume'] = df_7days['average'] * df_7days['volume']
 
         # Group by date and sum
-        daily_metrics = df_30days.groupby('date').agg({
+        daily_metrics_30days = df_30days.groupby('date').agg({
+            'volume': 'sum',
+            'daily_isk_volume': 'sum'
+        }).reset_index()
+
+        daily_metrics_7days = df_7days.groupby('date').agg({
             'volume': 'sum',
             'daily_isk_volume': 'sum'
         }).reset_index()
 
         # Calculate averages
-        avg_daily_volume = daily_metrics['volume'].mean()
-        avg_daily_isk_value = daily_metrics['daily_isk_volume'].mean()
+        avg_daily_volume = daily_metrics_30days['volume'].mean()
+        avg_daily_isk_value = daily_metrics_30days['daily_isk_volume'].mean()
 
-        return avg_daily_volume, avg_daily_isk_value
+        avg_daily_volume_7days = daily_metrics_7days['volume'].mean()
+        avg_daily_isk_value_7days = daily_metrics_7days['daily_isk_volume'].mean()
+
+        vol_delta = (avg_daily_volume_7days - avg_daily_volume) / avg_daily_volume
+        isk_delta = (avg_daily_isk_value_7days - avg_daily_isk_value) / avg_daily_isk_value
+
+        vol_delta = round(vol_delta * 100, 1)
+        isk_delta = round(isk_delta * 100, 1)
+
+        return avg_daily_volume, avg_daily_isk_value, vol_delta, isk_delta
 
     except Exception as e:
         logger.error(f"Error calculating 30-day metrics: {e}")
@@ -188,7 +206,7 @@ def calculate_ISK_volume_by_period(date_period='daily', start_date=None, end_dat
 
     return df_grouped
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=3600)
 def get_available_date_range(selected_category=None):
     """
     Get the min and max dates available in the market history data
@@ -569,7 +587,7 @@ def render_30day_metrics_ui():
         metrics_category = st.session_state.selected_category
 
     # Calculate 30-day metrics
-    avg_daily_volume, avg_daily_isk_value = calculate_30day_metrics(
+    avg_daily_volume, avg_daily_isk_value, vol_delta, isk_delta = calculate_30day_metrics(
         selected_category=metrics_category,
         selected_item_id=metrics_item_id
     )
@@ -586,9 +604,9 @@ def render_30day_metrics_ui():
     with col_m1:
         if avg_daily_isk_value > 0:
             display_avg_isk = millify.millify(avg_daily_isk_value, precision=2)
-            st.metric("Avg Daily ISK Value (30d)", f"{display_avg_isk} ISK")
+            st.metric("Avg Daily ISK (30d)", f"{display_avg_isk} ISK", delta=f"{isk_delta}%")
         else:
-            st.metric("Avg Daily ISK Value (30d)", "0 ISK")
+            st.metric("Avg Daily ISK (30d)", "0 ISK")
 
     with col_m2:
         if avg_daily_volume > 0:
@@ -596,7 +614,7 @@ def render_30day_metrics_ui():
                 display_avg_volume = f"{avg_daily_volume:,.0f}"
             else:
                 display_avg_volume = millify.millify(avg_daily_volume, precision=1)
-            st.metric("Avg Daily Sales (30d)", f"{display_avg_volume}")
+            st.metric("Avg Daily Sales (30d)", f"{display_avg_volume}", delta=f"{vol_delta}%")
         else:
             st.metric("Avg Daily Sales (30d)", "0")
 
@@ -605,9 +623,9 @@ def render_30day_metrics_ui():
         total_30d_isk = avg_daily_isk_value * 30 if avg_daily_isk_value > 0 else 0
         if total_30d_isk > 0:
             display_total_isk = millify.millify(total_30d_isk, precision=2)
-            st.metric("Total ISK Value (30d)", f"{display_total_isk} ISK")
+            st.metric("Total Value (30d)", f"{display_total_isk} ISK")
         else:
-            st.metric("Total 30d ISK Value", "0 ISK")
+            st.metric("Total 30d Value", "0 ISK")
 
     with col_m4:
         # Calculate total 30-day volume
@@ -661,7 +679,7 @@ def render_current_market_status_ui(sell_data, stats, selected_item, sell_order_
                     st.session_state.current_price = min_price
                     display_min_price = millify.millify(min_price, precision=2)
                     if delta_price is not None:
-                        st.metric("4-HWWF Sell Price", f"{display_min_price} ISK", delta=f"{round(100*delta_price, 1)}%", delta_color="inverse")
+                        st.metric("4-HWWF Sell Price", f"{display_min_price} ISK", delta=f"{round(100*delta_price, 1)}% Jita")
                     else:
                         st.metric("4-HWWF Sell Price", f"{display_min_price} ISK")
 
@@ -708,8 +726,26 @@ def render_current_market_status_ui(sell_data, stats, selected_item, sell_order_
     with col4:
         if fit_df is not None and fit_df.empty is False and fits_on_mkt is not None:
             if cat_id == 6:
+                fits = fit_df['fit_id'].unique()
                 display_fits_on_mkt = f"{fits_on_mkt:,.0f}"
-                st.metric("Fits on Market", f"{display_fits_on_mkt}")
+                if len(fits) == 1:
+                    target = get_target_from_fit_id(fits[0])
+                    fits_on_mkt_delta = round(fits_on_mkt - target, 0)
+                    st.metric("Fits on Market", f"{display_fits_on_mkt}", delta=f"{fits_on_mkt_delta}")
+                elif len(fits) > 1:
+                    try:
+                        for fit in fits:
+                            target = get_target_from_fit_id(fit)
+                            fits_on_mkt_delta = fits_on_mkt - target
+                            st.write(f"Fit: {fit}, Target: {target}, Fits on Market: {fits_on_mkt}, Delta: {fits_on_mkt_delta}")
+                    except Exception as e:
+                        logger.error(f"Error getting target from fit_id: {fit}: {e}")
+                else:
+                    st.metric("Fits on Market", f"{display_fits_on_mkt}")
+
+                if target is not None:
+                    st.write(f"Target: {target}")
+
         else:
             pass
 

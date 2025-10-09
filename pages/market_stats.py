@@ -484,9 +484,55 @@ def render_headers():
 
 @st.fragment
 def display_downloads():
-        st.download_button("Download Market Orders", data=get_all_mkt_orders().to_csv(index=False), file_name="4H_market_orders.csv", mime="text/csv",type="tertiary", help="Download all 4H market orders as a CSV file",icon="📥")
-        st.download_button("Download Market Stats", data=get_all_mkt_stats().to_csv(index=False), file_name="4H_market_stats.csv", mime="text/csv",type="tertiary", help="Download aggregated 4H market statistics for commonly traded items as a CSV file",icon="📥")
-        st.download_button("Download Market History", data=get_all_market_history().to_csv(index=False), file_name="4H_market_history.csv", mime="text/csv",type="tertiary", help="Download 4H market history for commonly traded items as a CSV file",icon="📥")
+    st.download_button("Download Market Orders", data=get_all_mkt_orders().to_csv(index=False), file_name="4H_market_orders.csv", mime="text/csv",type="tertiary", help="Download all 4H market orders as a CSV file",icon="📥")
+    st.download_button("Download Market Stats", data=get_all_mkt_stats().to_csv(index=False), file_name="4H_market_stats.csv", mime="text/csv",type="tertiary", help="Download aggregated 4H market statistics for commonly traded items as a CSV file",icon="📥")
+    st.download_button("Download Market History", data=get_all_market_history().to_csv(index=False), file_name="4H_market_history.csv", mime="text/csv",type="tertiary", help="Download 4H market history for commonly traded items as a CSV file",icon="📥")
+
+def display_history_data(history_df):
+
+    history_df.date = pd.to_datetime(history_df.date).dt.strftime("%Y-%m-%d")
+    history_df.average = round(history_df.average.astype(float), 2)
+    history_df = history_df.sort_values(by='date', ascending=False)
+    history_df.volume = history_df.volume.astype(int)
+    hist_col_config = {
+        "date": st.column_config.DateColumn(
+            "Date",
+            help="Date of the history data",
+            format="localized"
+        ),
+        "average": st.column_config.NumberColumn(
+            "Average Price",
+            help="Average price of the item",
+            format="localized"
+        ),
+        "volume": st.column_config.NumberColumn(
+            "Volume",
+            help="Volume of the item",
+            format="localized"
+        ),
+    }
+    st.dataframe(history_df, hide_index=True, column_config=hist_col_config, width=600)
+    return history_df
+
+def display_history_metrics(history_df):
+    avgpr30 = history_df[:30].average.mean()
+    avgpr7 = history_df[:7].average.mean()
+
+    avgvol30 = history_df[:30].volume.mean()
+    avgvol7 = history_df[:7].volume.mean()
+
+    prdelta = (avgpr7 - avgpr30) / avgpr30
+    prdelta = round(prdelta * 100, 1)
+    voldelta = (avgvol7 - avgvol30) / avgvol30
+    voldelta = round(voldelta * 100, 1)
+    col1h1,col1h2 = st.columns(2, border=True)
+    with col1h1:
+        st.metric("Average Price (7 days)", f"{millify.millify(avgpr7, precision=2)} ISK", delta=f"{prdelta}%")
+        st.metric("Average Volume (7 days)", f"{millify.millify(avgvol7, precision=0)}", delta=f"{voldelta}%")
+    with col1h2:
+        st.metric("Average Price (30 days)", f"{millify.millify(avgpr30, precision=2)} ISK")
+        st.metric("Average Volume (30 days)", f"{millify.millify(avgvol30, precision=0)}")
+
 
 def main():
     if 'db_init_time' not in st.session_state:
@@ -749,96 +795,60 @@ def main():
 
         st.divider()
 
-        if st.session_state.get('selected_category') is not None:
-            filter_info = f"Category: {st.session_state.get('selected_category')}"
-            suffix = "s"
-        else:
-            filter_info = "All Items"
-            suffix = ""
+    if st.session_state.get('selected_category') is not None:
+        filter_info = f"Category: {st.session_state.get('selected_category')}"
+        suffix = "s"
+    else:
+        filter_info = "All Items"
+        suffix = ""
 
+
+    if selected_item is None or selected_item == "":
         st.subheader("Price History - " + filter_info + suffix)
-        if selected_item is None or selected_item == "":
-            logger.debug("No item selected")
-            render_ISK_volume_chart_ui()
-            with st.expander("Expand to view Market History Data"):
-                render_ISK_volume_table_ui()
-        elif selected_item and selected_item is not None:
-            try:
-                if 'selected_item_id' in st.session_state:
-                    selected_item_id = st.session_state.selected_item_id
-            except Exception as e:
-                logger.error(f"Error: {e}")
-                selected_item_id = None
+        logger.debug("No item selected")
+        render_ISK_volume_chart_ui()
+        with st.expander("Expand to view Market History Data"):
+            render_ISK_volume_table_ui()
 
-            try:
-                # Get selected_item from session state if available
-                if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
-                    selected_item = st.session_state.selected_item
-                    selected_item_id = get_backup_type_id(selected_item)
-                    st.session_state.selected_item_id = selected_item_id
-                else:
-                    selected_item_id = None
-            except Exception as e:
-                logger.error(f"Error: {e}")
-                selected_item_id = None
 
-    if st.session_state.selected_item_id is not None:
-        selected_item_id = st.session_state.selected_item_id
+    # Get selected_item from session state if available
+    elif 'selected_item' in st.session_state and st.session_state.selected_item is not None:
+        selected_item = st.session_state.selected_item
+        if 'selected_item_id' in st.session_state and st.session_state.selected_item_id is not None:
+            selected_item_id = st.session_state.selected_item_id
+        else:
+            selected_item_id = get_backup_type_id(selected_item)
+            st.session_state.selected_item_id = selected_item_id
+    else:
+        selected_item_id = None
+
+
+    if selected_item_id is not None:
+        selected_item_id = selected_item_id
         logger.debug(f"Displaying history chart for {selected_item_id}")
-        history_chart = create_history_chart(selected_item_id)
-    else:
-        history_chart = None
+        if selected_item_id is not None:
+            history_chart = create_history_chart(selected_item_id)
+            selected_history = get_market_history(selected_item_id)
 
-    if st.session_state.selected_item_id is not None:
-        selected_history = get_market_history(st.session_state.selected_item_id)
-    else:
-        selected_history = None
+        if history_chart:
+            logger.debug(f"Displaying history chart for {selected_item_id}")
+            st.plotly_chart(history_chart, config={'width': 'content'})
 
-    if history_chart:
-        logger.debug(f"Displaying history chart for {selected_item_id}")
-        st.plotly_chart(history_chart, config={'width': 'content'})
+        if selected_history is not None and selected_history.empty is False:
+            logger.info(f"Displaying history data for {selected_item_id}")
+            colh1, colh2 = st.columns(2)
+            with colh1:
+                # Display history data
+                st.subheader("History Data")
+                history_df = display_history_data(selected_history)
 
-    if selected_history is not None and selected_history.empty is False:
-        logger.info(f"Displaying history data for {selected_item_id}")
-        colh1, colh2 = st.columns(2)
-        with colh1:
-
-            # Display history data
-            st.subheader("History Data")
-            history_df = get_market_history(selected_item_id)
-            history_df.date = pd.to_datetime(history_df.date).dt.strftime("%Y-%m-%d")
-            history_df.average = round(history_df.average.astype(float), 2)
-            history_df = history_df.sort_values(by='date', ascending=False)
-            history_df.volume = history_df.volume.astype(int)
-            hist_col_config = {
-                "date": st.column_config.DateColumn(
-                    "Date",
-                    help="Date of the history data",
-                    format="YYYY-MM-DD"
-                ),
-                "average": st.column_config.NumberColumn(
-                    "Average Price",
-                    help="Average price of the item",
-                    format="compact"
-                ),
-                "volume": st.column_config.NumberColumn(
-                    "Volume",
-                    help="Volume of the item",
-                    format="localized"
-                ),
-            }
-            st.dataframe(history_df, hide_index=True, column_config=hist_col_config)
-
-        with colh2:
-            avgpr30 = history_df[:30].average.mean()
-            avgvol30 = history_df[:30].volume.mean()
-            st.subheader(f"{selected_item}",divider=True)
-            st.metric("Average Price (30 days)", f"{avgpr30:,.2f} ISK")
-            st.metric("Average Volume (30 days)", f"{avgvol30:,.0f}")
-    else:
-        st.write("No history data recorded for this item")
+            with colh2:
+                st.subheader(f"{selected_item}",divider=True)
+                if not history_df.empty:
+                    display_history_metrics(history_df)
 
         st.divider()
+
     if fit_df is None:
         fit_df = pd.DataFrame()
     if fit_df.empty is False and fit_df is not None:
@@ -862,7 +872,6 @@ def main():
         if isship:
             column_config = get_fitting_col_config()
             st.dataframe(fit_df, hide_index=True, column_config=column_config, width='content')
-
 
     # Display sync status in sidebar
     with st.sidebar:
