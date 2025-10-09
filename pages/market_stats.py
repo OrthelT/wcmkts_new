@@ -143,6 +143,10 @@ def create_history_chart(type_id):
     df = get_market_history(type_id)
     if df.empty:
         return None
+
+    # Calculate 14-day moving average
+    df['ma_14'] = df['average'].rolling(window=14).mean()
+
     fig = go.Figure()
     # Create subplots: 2 rows, 1 column, shared x-axis
     fig = make_subplots(
@@ -165,6 +169,17 @@ def create_history_chart(type_id):
         row=1, col=1
     )
 
+    # Add 14-day moving average to the top subplot (row 1)
+    fig.add_trace(
+        go.Scatter(
+            x=df['date'],
+            y=df['ma_14'],
+            name='14-Day MA',
+            line=dict(color='#b87fe3', width=2, dash='dot')  # Orange dashed line
+        ),
+        row=1, col=1
+    )
+
     # Add volume bars to the bottom subplot (row 2)
     fig.add_trace(
         go.Bar(
@@ -174,18 +189,14 @@ def create_history_chart(type_id):
             opacity=0.5,
             marker_color='#00B5F7',
             base=0,
-
-
               # Bright blue bars
         ),
         row=2, col=1
     )
 
-    # Calculate ranges (not used currently)
-
     # Update layout for both subplots
     fig.update_layout(
-        title='Market History',
+        title = st.session_state.selected_item,
         paper_bgcolor='#0F1117',  # Dark background
         plot_bgcolor='#0F1117',   # Dark background
         legend=dict(
@@ -204,7 +215,6 @@ def create_history_chart(type_id):
         autosize=True,
     )
 
-
     fig.update_yaxes(
         title=dict(text='Price (ISK)', font=dict(color='white', size=10), standoff=5),
         gridcolor='rgba(128,128,128,0.2)',
@@ -212,8 +222,6 @@ def create_history_chart(type_id):
         tickformat=",",
         row=1, col=1,
         automargin = True
-
-
     )
 
     # Update axes for the volume subplot (bottom)
@@ -223,7 +231,8 @@ def create_history_chart(type_id):
         tickfont=dict(color='white'),
         tickformat=",",
         row=2, col=1,
-        automargin = True
+        automargin = True,
+        color='white',
     )
 
     # Update shared x-axis
@@ -238,7 +247,19 @@ def create_history_chart(type_id):
         showticklabels=False,
         row=1, col=1
     )
-
+    # Add background color for row 2 (volume subplot)
+    fig.add_shape(
+        type="rect",
+        xref="paper",  # Use paper coordinates (0 to 1)
+        yref="paper",
+        x0=0,
+        y0=0,
+        x1=1,
+        y1=0.3,  # Matches your row_heights=[0.7, 0.3]
+        fillcolor="#1a1a2e",  # Your custom color here
+        layer="below",
+        line_width=0,
+    )
     return fig
 
 def new_display_sync_status():
@@ -263,8 +284,6 @@ def new_display_sync_status():
         display_time = "N/A"
 
     st.sidebar.markdown(f"<span style='font-size: 14px; color: lightgrey;'>*Last ESI update: {display_time}*</span>", unsafe_allow_html=True)
-
-
 
 @st.cache_data(ttl=1800)
 def check_for_db_updates()->tuple[bool, float]:
@@ -527,8 +546,8 @@ def display_history_metrics(history_df):
     voldelta = round(voldelta * 100, 1)
     col1h1,col1h2 = st.columns(2, border=True)
     with col1h1:
-        st.metric("Average Price (7 days)", f"{millify.millify(avgpr7, precision=2)} ISK", delta=f"{prdelta}%")
-        st.metric("Average Volume (7 days)", f"{millify.millify(avgvol7, precision=0)}", delta=f"{voldelta}%")
+        st.metric("Average Price (7 days)", f"{millify.millify(avgpr7, precision=2)} ISK", delta=f"{prdelta}% this week")
+        st.metric("Average Volume (7 days)", f"{millify.millify(avgvol7, precision=0)}", delta=f"{voldelta}% this week")
     with col1h2:
         st.metric("Average Price (30 days)", f"{millify.millify(avgpr30, precision=2)} ISK")
         st.metric("Average Volume (30 days)", f"{millify.millify(avgvol30, precision=0)}")
@@ -566,6 +585,7 @@ def main():
         index=0,
         format_func=lambda x: "All Items" if x == "" else x
     )
+
     selected_item = check_selected_item(selected_item)
 
     t1 = time.perf_counter()
@@ -589,6 +609,7 @@ def main():
         buy_total_value = (buy_data['price'] * buy_data['volume_remain']).sum()
 
     fit_df = pd.DataFrame()
+
     if not sell_data.empty:
         if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
             selected_item = st.session_state.selected_item
@@ -700,7 +721,8 @@ def main():
         )
 
         # 30-Day Historical Metrics Section
-        with st.expander("30-Day Market Performance (expand to view metrics)", expanded=False):
+
+        with st.expander("30-Day Market Stats (expand to view metrics)", expanded=False):
             render_30day_metrics_ui()
 
         st.divider()
@@ -783,52 +805,42 @@ def main():
         else:
             pass
 
-
-    if selected_item is None or selected_item == "":
-        logger.debug("No item selected")
-        pass
-
+    if st.session_state.get('selected_item') is not None:
+        st.subheader("Market History - " + st.session_state.get('selected_item'), divider="blue")
     else:
-        st.subheader("Market Order Distribution")
-        price_vol_chart = create_price_volume_chart(sell_data)
-        st.plotly_chart(price_vol_chart, config={'width': 'content'})
+        if st.session_state.get('selected_category') is not None:
+            filter_info = f"Category: {st.session_state.get('selected_category')}"
+            suffix = "s"
+        else:
+            filter_info = "All Items"
+            suffix = ""
 
-        st.divider()
-
-    if st.session_state.get('selected_category') is not None:
-        filter_info = f"Category: {st.session_state.get('selected_category')}"
-        suffix = "s"
-    else:
-        filter_info = "All Items"
-        suffix = ""
-
-
-    if selected_item is None or selected_item == "":
-        st.subheader("Price History - " + filter_info + suffix)
-        logger.debug("No item selected")
+        st.subheader("Price History - " + filter_info + suffix, divider="blue")
         render_ISK_volume_chart_ui()
         with st.expander("Expand to view Market History Data"):
             render_ISK_volume_table_ui()
 
-
     # Get selected_item from session state if available
-    elif 'selected_item' in st.session_state and st.session_state.selected_item is not None:
+    if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
         selected_item = st.session_state.selected_item
         if 'selected_item_id' in st.session_state and st.session_state.selected_item_id is not None:
             selected_item_id = st.session_state.selected_item_id
         else:
-            selected_item_id = get_backup_type_id(selected_item)
+            try:
+                selected_item_id = get_backup_type_id(selected_item)
+            except Exception as e:
+                logger.error(f"Error: {e}")
+                selected_item_id = None
             st.session_state.selected_item_id = selected_item_id
     else:
         selected_item_id = None
-
+        st.session_state.selected_item_id = selected_item_id
 
     if selected_item_id is not None:
-        selected_item_id = selected_item_id
         logger.debug(f"Displaying history chart for {selected_item_id}")
-        if selected_item_id is not None:
-            history_chart = create_history_chart(selected_item_id)
-            selected_history = get_market_history(selected_item_id)
+
+        history_chart = create_history_chart(selected_item_id)
+        selected_history = get_market_history(selected_item_id)
 
         if history_chart:
             logger.debug(f"Displaying history chart for {selected_item_id}")
@@ -839,11 +851,9 @@ def main():
             colh1, colh2 = st.columns(2)
             with colh1:
                 # Display history data
-                st.subheader("History Data")
                 history_df = display_history_data(selected_history)
 
             with colh2:
-                st.subheader(f"{selected_item}",divider=True)
                 if not history_df.empty:
                     display_history_metrics(history_df)
 
