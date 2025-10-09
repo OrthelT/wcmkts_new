@@ -836,7 +836,7 @@ def main():
         selected_item_id = None
         st.session_state.selected_item_id = selected_item_id
 
-    if selected_item_id is not None:
+    if selected_item_id and selected_item_id is not None:
         logger.debug(f"Displaying history chart for {selected_item_id}")
 
         history_chart = create_history_chart(selected_item_id)
