@@ -297,7 +297,7 @@ def dump_session_state():
     logger.info("*"*40)
     logger.info("="*40)
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=1800)
 def check_for_db_updates()->tuple[bool, float]:
     db = DatabaseConfig("wcmkt")
     check = db.validate_sync()
@@ -423,6 +423,55 @@ def get_fitting_col_config():
             }
     return col_config
 
+def check_selected_item(selected_item: str)->str | None:
+    if selected_item == "":
+        st.session_state.selected_item = None
+        st.session_state.selected_item_id = None
+        st.session_state.jita_price = None
+        st.session_state.current_price = None
+        return None
+
+    elif selected_item and selected_item is not None:
+        logger.info(f"selected_item: {selected_item}")
+        st.sidebar.text(f"Item: {selected_item}")
+        st.session_state.selected_item = selected_item
+        st.session_state.selected_item_id = get_backup_type_id(selected_item)
+        jita_price = get_jita_price(st.session_state.selected_item_id)
+        if jita_price:
+            st.session_state.jita_price = jita_price
+        else:
+            st.session_state.jita_price = None
+        logger.info(f"selected_item_id: {st.session_state.selected_item_id}")
+        return selected_item
+
+    else:
+        selected_item = None
+        st.session_state.jita_price = None
+        st.session_state.current_price = None
+
+def check_selected_category(selected_category: str, show_all: bool)->list | None:
+    if selected_category == "":
+        st.session_state.selected_category = None
+        st.session_state.selected_category_info = None
+        st.session_state.selected_item = None
+        st.session_state.selected_item_id = None
+        st.session_state.jita_price = None
+        return None
+
+    if selected_category and selected_category is not None:
+        logger.info(f"selected_category {selected_category}")
+        st.sidebar.text(f"Category: {selected_category}")
+        st.session_state.selected_category = selected_category
+        # Get filtered items based on selected category
+        _, available_items, _ = get_filter_options(selected_category if not show_all and selected_category else None)
+        return available_items
+    else:
+        st.session_state.selected_category = None
+        st.session_state.selected_category_info = None
+        st.session_state.selected_item = None
+        st.session_state.selected_item_id = None
+        st.session_state.jita_price = None
+        return None
 
 def main():
     logger.info("*****************************************************")
@@ -459,7 +508,7 @@ def main():
     show_all = st.sidebar.checkbox("Show All Data", value=False)
 
     # Get initial categories
-    categories, available_items, _ = get_filter_options()
+    categories, all_items, _ = get_filter_options()
     logger.debug(f"categories: {len(categories)}")
     # Category filter - changed to selectbox for single selection
     selected_category = st.sidebar.selectbox(
@@ -469,19 +518,25 @@ def main():
         key="selected_category_choice",
         format_func=lambda x: "All Categories" if x == "" else x
     )
-    if selected_category == "":
-        st.session_state.selected_category = None
-        st.session_state.selected_category_info = None
-        st.session_state.selected_item = None
-        st.session_state.selected_item_id = None
-        st.session_state.jita_price = None
 
-    if selected_category and selected_category is not None:
-        logger.info(f"selected_category {selected_category}")
-        st.sidebar.text(f"Category: {selected_category}")
-        st.session_state.selected_category = selected_category
-        # Get filtered items based on selected category
-        _, available_items, cat_type_info = get_filter_options(selected_category if not show_all and selected_category else None)
+    available_items = check_selected_category(selected_category, show_all)
+
+    if not available_items:
+        available_items = all_items
+
+    # if selected_category == "":
+    #     st.session_state.selected_category = None
+    #     st.session_state.selected_category_info = None
+    #     st.session_state.selected_item = None
+    #     st.session_state.selected_item_id = None
+    #     st.session_state.jita_price = None
+
+    # if selected_category and selected_category is not None:
+    #     logger.info(f"selected_category {selected_category}")
+    #     st.sidebar.text(f"Category: {selected_category}")
+    #     st.session_state.selected_category = selected_category
+    #     # Get filtered items based on selected category
+    #     _, available_items, cat_type_info = get_filter_options(selected_category if not show_all and selected_category else None)
 
 
         # Item name filter - changed to selectbox for single selection
@@ -491,28 +546,34 @@ def main():
         index=0,
         format_func=lambda x: "All Items" if x == "" else x
     )
+    selected_item = check_selected_item(selected_item)
 
-    if selected_item == "":
-        st.session_state.selected_item = None
-        st.session_state.selected_item_id = None
+    # if selected_item == "":
+    #     st.session_state.selected_item = None
+    #     st.session_state.selected_item_id = None
+    #     st.session_state.jita_price = None
+    #     st.session_state.current_price = None
 
-    elif selected_item and selected_item is not None:
-        logger.info(f"selected_item: {selected_item}")
-        st.sidebar.text(f"Item: {selected_item}")
-        st.session_state.selected_item = selected_item
-        st.session_state.selected_item_id = get_backup_type_id(selected_item)
-        st.session_state.jita_price = get_jita_price(st.session_state.selected_item_id)
-        logger.info(f"selected_item_id: {st.session_state.selected_item_id}")
+    # elif selected_item and selected_item is not None:
+    #     logger.info(f"selected_item: {selected_item}")
+    #     st.sidebar.text(f"Item: {selected_item}")
+    #     st.session_state.selected_item = selected_item
+    #     st.session_state.selected_item_id = get_backup_type_id(selected_item)
+    #     jita_price = get_jita_price(st.session_state.selected_item_id)
+    #     if jita_price:
+    #         st.session_state.jita_price = jita_price
+    #     else:
+    #         st.session_state.jita_price = None
+    #     logger.info(f"selected_item_id: {st.session_state.selected_item_id}")
 
-    else:
-        selected_item = None
+    # else:
+    #     selected_item = None
+    #     st.session_state.jita_price = None
+    #     st.session_state.current_price = None
 
     t1 = time.perf_counter()
-
     # sell_data, buy_data, stats = get_market_data(show_all, selected_category, selected_items)
     sell_data, buy_data, stats = new_get_market_data(show_all)
-
-    # Main content
     t2 = time.perf_counter()
     elapsed_time = (t2 - t1) * 1000
     logger.info(f"new_get_market_data elapsed: {elapsed_time:.2f} ms")
@@ -533,7 +594,6 @@ def main():
 
     fit_df = pd.DataFrame()
     if not sell_data.empty:
-
         if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
             selected_item = st.session_state.selected_item
             if 'selected_item_id' in st.session_state:
@@ -643,9 +703,7 @@ def main():
         with st.expander("30-Day Market Performance (expand to view metrics)", expanded=False):
             render_30day_metrics_ui()
 
-
         st.divider()
-
 
         # Format the DataFrame for display with null handling
         display_df = sell_data.copy()
@@ -665,22 +723,21 @@ def main():
         else:
             st.subheader("All Sell Orders", divider="green")
 
-        display_df.type_id = display_df.type_id.astype(str)
-        display_df.order_id = display_df.order_id.astype(str)
         display_df.drop(columns='is_buy_order', inplace=True)
-        # Format numeric columns safely
-        numeric_formats = {
-            'volume_remain': '{:,.0f}',
-            'price': '{:,.2f}',
-            'min_price': '{:,.2f}',
-            'avg_of_avg_price': '{:,.2f}',
+
+        display_formats = {
+            'type_id': st.column_config.NumberColumn("Type ID", help="Type ID of this item", width="small"),
+            'order_id': st.column_config.NumberColumn("Order ID", help="Order ID of this item", width="small"),
+            'type_name': st.column_config.TextColumn("Type Name", help="Type Name of this item", width="medium"),
+            'volume_remain': st.column_config.NumberColumn("Qty", help="Quantity of this item", format="localized", width="small"),
+            'price': st.column_config.NumberColumn("Price", help="Price of this item", format="localized"),
+            'duration': st.column_config.NumberColumn("Duration", help="Duration of this item", format="localized", width="small"),
+            'issued': st.column_config.DateColumn("Issued", help="Issued date of this item", format="YYYY-MM-DD"),
+            'expiry': st.column_config.DateColumn("Expires", help="Expiration date of this item", format="YYYY-MM-DD"),
+            'days_remaining': st.column_config.NumberColumn("Days Remaining", help="Days remaining of this item", format="plain", width="small"),
         }
 
-        for col, format_str in numeric_formats.items():
-            if col in display_df.columns:  # Only format if column exists
-                display_df[col] = display_df[col].apply(lambda x: safe_format(x, format_str))
-
-        st.dataframe(display_df, hide_index=True)
+        st.dataframe(display_df, hide_index=True, column_config=display_formats)
 
         # Display buy orders if they exist
         if not buy_data.empty:
@@ -720,16 +777,11 @@ def main():
 
             # Format buy orders for display
             buy_display_df = buy_data.copy()
-            buy_display_df.type_id = buy_display_df.type_id.astype(str)
-            buy_display_df.order_id = buy_display_df.order_id.astype(str)
+            buy_display_df.type_id = buy_display_df.type_id
+            buy_display_df.order_id = buy_display_df.order_id
             buy_display_df.drop(columns='is_buy_order', inplace=True)
 
-            # Format numeric columns safely
-            for col, format_str in numeric_formats.items():
-                if col in buy_display_df.columns:  # Only format if column exists
-                    buy_display_df[col] = buy_display_df[col].apply(lambda x: safe_format(x, format_str))
-
-            st.dataframe(buy_display_df, hide_index=True)
+            st.dataframe(buy_display_df, hide_index=True, column_config=display_formats)
 
         if selected_item is None or selected_item == "":
             logger.debug("No item selected")
@@ -797,7 +849,6 @@ def main():
 
     if selected_history is not None and selected_history.empty is False:
         logger.info(f"Displaying history data for {selected_item_id}")
-        logger.info(f"selected_history: {selected_history}")
         colh1, colh2 = st.columns(2)
         with colh1:
 
@@ -808,7 +859,24 @@ def main():
             history_df.average = round(history_df.average.astype(float), 2)
             history_df = history_df.sort_values(by='date', ascending=False)
             history_df.volume = history_df.volume.astype(int)
-            st.dataframe(history_df, hide_index=True)
+            hist_col_config = {
+                "date": st.column_config.DateColumn(
+                    "Date",
+                    help="Date of the history data",
+                    format="YYYY-MM-DD"
+                ),
+                "average": st.column_config.NumberColumn(
+                    "Average Price",
+                    help="Average price of the item",
+                    format="compact"
+                ),
+                "volume": st.column_config.NumberColumn(
+                    "Volume",
+                    help="Volume of the item",
+                    format="localized"
+                ),
+            }
+            st.dataframe(history_df, hide_index=True, column_config=hist_col_config)
 
         with colh2:
             avgpr30 = history_df[:30].average.mean()

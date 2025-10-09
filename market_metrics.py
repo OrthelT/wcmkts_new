@@ -2,7 +2,6 @@ from db_handler import get_all_market_history, read_df, get_price_from_mkt_order
 from config import DatabaseConfig
 import pandas as pd
 import plotly.graph_objects as go
-import numpy as np
 import streamlit as st
 from sqlalchemy import text
 from logging_config import setup_logging
@@ -591,7 +590,7 @@ def render_30day_metrics_ui():
             st.metric("Avg Daily Sales (30d)", f"{display_avg_volume}")
         else:
             st.metric("Avg Daily Sales (30d)", "0")
-    
+
     with col_m3:
         # Calculate total 30-day ISK value
         total_30d_isk = avg_daily_isk_value * 30 if avg_daily_isk_value > 0 else 0
@@ -636,23 +635,38 @@ def render_current_market_status_ui(sell_data, stats, selected_item, sell_order_
         col2, col3, col4 = st.columns(3)
 
     if selected_item:
+        try:
+            jita_price = float(st.session_state.jita_price)
+        except Exception:
+            jita_price = None
+
         with col1:
             if not sell_data.empty:
                 min_price = stats['min_price'].min()
+                if jita_price is not None:
+                    delta_price = (min_price - jita_price) / jita_price
+                else: delta_price = None
+
+
                 if pd.notna(min_price) and selected_item:
+                    st.session_state.current_price = min_price
                     display_min_price = millify.millify(min_price, precision=2)
-                    st.metric("4-HWWF Sell Price", f"{display_min_price} ISK")
+                    if delta_price is not None:
+                        st.metric("4-HWWF Sell Price", f"{display_min_price} ISK", delta=f"{round(100*delta_price, 1)}%", delta_color="inverse")
+                    else:
+                        st.metric("4-HWWF Sell Price", f"{display_min_price} ISK")
+
                 elif selected_item and st.session_state.selected_item_id is not None:
                     try:
                         display_min_price = millify.millify(get_price_from_mkt_orders(st.session_state.selected_item_id), precision=2)
                         st.metric("4-HWWF Sell Price", f"{display_min_price} ISK")
-                    
+
                     except Exception:
                         pass
-                    
+
                 else:
                     pass
-                
+
             if st.session_state.jita_price is not None:
                 display_jita_price = millify.millify(st.session_state.jita_price, precision=2)
                 st.metric("Jita Price", f"{display_jita_price} ISK")
