@@ -806,7 +806,7 @@ def render_current_market_status_ui(sell_data, stats, selected_item, sell_order_
             if not sell_data.empty:
                 min_price = stats['min_price'].min()
                 if jita_price is not None:
-                    delta_price = (min_price - jita_price) / jita_price
+                    delta_price = (min_price - jita_price) / jita_price if jita_price > 0 else None
                 else: delta_price = None
 
 
