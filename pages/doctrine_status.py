@@ -47,7 +47,7 @@ def get_fit_summary()->pd.DataFrame:
         # Get basic information
         ship_id = first_row['ship_id']
         ship_name = first_row['ship_name']
-        hulls = first_row['hulls']
+        hulls = first_row['hulls'] if pd.notna(first_row['hulls']) else 0
 
         # Extract ship group from the data
         ship_group = "Ungrouped"  # Default
@@ -67,6 +67,9 @@ def get_fit_summary()->pd.DataFrame:
         # Calculate minimum fits (how many complete fits can be made)
         try:
             min_fits = fit_data['fits_on_mkt'].min()
+            # Handle NaN values
+            if pd.isna(min_fits):
+                min_fits = 0
         except Exception as e:
             logger.error(f"Error getting min_fits for fit_id: {fit_id}: {e}")
             continue
@@ -89,7 +92,7 @@ def get_fit_summary()->pd.DataFrame:
         for _, row in lowest_modules.iterrows():
             module_name = row['type_name']
             module_stock = row['fits_on_mkt']
-            if not pd.isna(module_name):
+            if not pd.isna(module_name) and not pd.isna(module_stock):
                 lowest_modules_list.append(f"{module_name} ({int(module_stock)})")
 
         # Get daily average volume if available
@@ -153,7 +156,7 @@ def get_module_stock_list(module_names: list):
                 """
             )
             df = read_df(mkt_db, query, {"module_name": module_name})
-            if not df.empty and pd.notna(df.loc[0, 'total_stock']):
+            if not df.empty and pd.notna(df.loc[0, 'total_stock']) and pd.notna(df.loc[0, 'fits_on_mkt']) and pd.notna(df.loc[0, 'type_id']):
                 module_info = f"{module_name} (Total: {int(df.loc[0, 'total_stock'])} | Fits: {int(df.loc[0, 'fits_on_mkt'])})"
                 csv_module_info = f"{module_name},{int(df.loc[0, 'type_id'])},{int(df.loc[0, 'total_stock'])},{int(df.loc[0, 'fits_on_mkt'])}\n"
             else:
@@ -195,7 +198,7 @@ def get_ship_stock_list(ship_names: list):
                 """
             )
             df = read_df(mkt_db, query, params)
-            if not df.empty and pd.notna(df.loc[0, 'total_stock']):
+            if not df.empty and pd.notna(df.loc[0, 'total_stock']) and pd.notna(df.loc[0, 'type_id']) and pd.notna(df.loc[0, 'fits_on_mkt']):
                 ship_id = int(df.loc[0, 'type_id'])
                 ship_stock = int(df.loc[0, 'total_stock'])
                 ship_fits = int(df.loc[0, 'fits_on_mkt'])
@@ -363,9 +366,9 @@ def main():
             col1, col2, col3 = st.columns([1, 3, 2])
 
             target_pct = row['target_percentage']
-            target = int(row['target'])
-            fits = int(row['fits'])
-            hulls = int(row['hulls'])
+            target = int(row['target']) if pd.notna(row['target']) else 0
+            fits = int(row['fits']) if pd.notna(row['fits']) else 0
+            hulls = int(row['hulls']) if pd.notna(row['hulls']) else 0
 
             with col1:
                 # Ship image and ID info

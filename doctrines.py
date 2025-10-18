@@ -172,4 +172,6 @@ def get_all_fit_data()->pd.DataFrame:
     return df
 
 if __name__ == "__main__":
-    pass
+    df = get_all_fit_data()
+    df = df[df['fit_id'] == 496]
+    print(df)

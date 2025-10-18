@@ -40,7 +40,7 @@ def get_module_stock_list(module_names: list):
                 """
             )
             df = read_df(mktdb, query, {"module_name": module_name})
-            if not df.empty and pd.notna(df.loc[0, 'total_stock']):
+            if not df.empty and pd.notna(df.loc[0, 'total_stock']) and pd.notna(df.loc[0, 'fits_on_mkt']) and pd.notna(df.loc[0, 'type_id']):
                 module_info = f"{module_name} (Total: {int(df.loc[0, 'total_stock'])} | Fits: {int(df.loc[0, 'fits_on_mkt'])})"
                 csv_module_info = f"{module_name},{int(df.loc[0, 'type_id'])},{int(df.loc[0, 'total_stock'])},{int(df.loc[0, 'fits_on_mkt'])}\n"
             else:
@@ -56,7 +56,8 @@ def get_doctrine_lead_ship(doctrine_id: int) -> int:
     df = read_df(mktdb, query, {"doctrine_id": doctrine_id})
     if df.empty:
         return None
-    return int(df.loc[0, 'lead_ship'])
+    lead_ship = df.loc[0, 'lead_ship']
+    return int(lead_ship) if pd.notna(lead_ship) else None
 
 def get_fit_name_from_db(fit_id: int) -> str:
     """Get the fit name from the ship_targets table using fit_id."""
@@ -179,14 +180,17 @@ def display_categorized_doctrine_data(selected_data):
 
             with col1:
                 total_fits = role_data['fits'].sum() if 'fits' in role_data.columns else 0
+                total_fits = 0 if pd.isna(total_fits) else total_fits
                 st.metric("Total Fits Available", f"{int(total_fits)}")
 
             with col2:
                 total_hulls = role_data['hulls'].sum() if 'hulls' in role_data.columns else 0
+                total_hulls = 0 if pd.isna(total_hulls) else total_hulls
                 st.metric("Total Hulls", f"{int(total_hulls)}")
 
             with col3:
                 avg_target_pct = role_data['target_percentage'].mean() if 'target_percentage' in role_data.columns else 0
+                avg_target_pct = 0 if pd.isna(avg_target_pct) else avg_target_pct
                 st.metric("Avg Target %", f"{int(avg_target_pct)}%")
 
 
@@ -318,10 +322,10 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
                     fit_name = get_fit_name_from_db(fit_id)
 
                     ship_target = fit_summary[fit_summary['fit_id'] == fit_id]['ship_target'].iloc[0]
-                    try:
+                    if pd.notna(ship_target):
                         ship_target = int(ship_target * st.session_state.target_multiplier)
-                    except Exception:
-                        ship_target = ship_target
+                    else:
+                        ship_target = 0
 
                     st.subheader(ship_name,divider="orange")
                     st.markdown(f"{fit_name}  (**Target: {ship_target}**)")
@@ -338,8 +342,8 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
                         target = 20  # Default target
 
                     module_name = module_row['type_name']
-                    stock = int(module_row['fits_on_mkt'])
-                    module_target = int(target)
+                    stock = int(module_row['fits_on_mkt']) if pd.notna(module_row['fits_on_mkt']) else 0
+                    module_target = int(target) if pd.notna(target) else 0
                     module_key = f"ship_module_{fit_id}_{module_name}_{stock}_{module_target}"
 
                     # Determine module status based on target comparison with new tier system
