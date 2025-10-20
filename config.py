@@ -150,16 +150,20 @@ class DatabaseConfig:
 
     @property
     def remote_engine(self):
-        eng = DatabaseConfig._remote_engines.get(self.alias)
-        if eng is None:
-            turso_url = self._db_turso_urls[f"{self.alias}_turso"]
-            auth_token = self._db_turso_auth_tokens[f"{self.alias}_turso"]
-            eng = create_engine(
-                f"sqlite+{turso_url}?secure=true",
-                connect_args={"auth_token": auth_token},
-            )
-            DatabaseConfig._remote_engines[self.alias] = eng
-        return eng
+        #AWS outage mitigation
+        engine = self.engine
+        return engine
+
+        # eng = DatabaseConfig._remote_engines.get(self.alias)
+        # if eng is None:
+        #     turso_url = self._db_turso_urls[f"{self.alias}_turso"]
+        #     auth_token = self._db_turso_auth_tokens[f"{self.alias}_turso"]
+        #     eng = create_engine(
+        #         f"sqlite+{turso_url}?secure=true",
+        #         connect_args={"auth_token": auth_token},
+        #     )
+        #     DatabaseConfig._remote_engines[self.alias] = eng
+        # return eng
 
     @property
     def libsql_local_connect(self):
@@ -171,6 +175,10 @@ class DatabaseConfig:
 
     @property
     def libsql_sync_connect(self):
+        #AWS outage mitigation
+        logger.warning(f"libsql_sync_connect() disabled for now. AWS outage mitigation")
+        return self.libsql_local_connect
+
         conn = DatabaseConfig._libsql_sync_connects.get(self.alias)
         if conn is None:
             conn = libsql.connect(self.path, sync_url=self.turso_url, auth_token=self.token)
@@ -267,6 +275,10 @@ class DatabaseConfig:
 
         Returns True if the result is 'ok', False otherwise or on error.
         """
+        logger.warning(f"integrity_check() disabled for now. AWS outage mitigation")
+        #AWS outage mitigation
+        return True
+
         try:
             # Use a short-lived connection
             with self.engine.connect() as conn:
@@ -287,87 +299,94 @@ class DatabaseConfig:
         minimal disruption to concurrent reads after sync completes.
         """
         # Acquire write lock to block all access during sync
-        lock = self._get_local_lock()
-        with lock.write_lock():
-            with _SYNC_LOCK:
-                self._dispose_local_connections()
-                logger.debug("Disposing local connections and syncing database…")
-                conn = None
-                try:
-                    st.cache_data.clear()
-                    st.cache_resource.clear()
-                    # Explicitly manage connection lifecycle; avoid relying on context manager
-                    conn = libsql.connect(self.path, sync_url=self.turso_url, auth_token=self.token)
-                    conn.sync()
-                except Exception as e:
-                    logger.error(f"Database sync failed: {e}")
-                    raise
-                finally:
-                    if conn is not None:
-                        with suppress(Exception):
-                            conn.close()
-                            logger.info("Connection closed")
 
-                update_time = datetime.now(timezone.utc)
-                logger.info(f"Database synced at {update_time} UTC")
+        logger.warning(f"sync() disabled for now")
+        return
+        # lock = self._get_local_lock()
+        # with lock.write_lock():
+        #     with _SYNC_LOCK:
+        #         self._dispose_local_connections()
+        #         logger.debug("Disposing local connections and syncing database…")
+        #         conn = None
+        #         try:
+        #             st.cache_data.clear()
+        #             st.cache_resource.clear()
+        #             # Explicitly manage connection lifecycle; avoid relying on context manager
+        #             conn = libsql.connect(self.path, sync_url=self.turso_url, auth_token=self.token)
+        #             conn.sync()
+        #         except Exception as e:
+        #             logger.error(f"Database sync failed: {e}")
+        #             raise
+        #         finally:
+        #             if conn is not None:
+        #                 with suppress(Exception):
+        #                     conn.close()
+        #                     logger.info("Connection closed")
 
-                # Post-sync integrity validation
-                ok = self.integrity_check()
-                if not ok:
-                    logger.error("Post-sync integrity check failed.")
+        #         update_time = datetime.now(timezone.utc)
+        #         logger.info(f"Database synced at {update_time} UTC")
 
-                # For market DBs, also validate last_update parity if integrity ok
-                if self.alias == "wcmkt2":
-                    validation_test = self.validate_sync() if ok else False
-                    st.session_state.sync_status = "Success" if validation_test else "Failed"
-                    if st.session_state.sync_status == "Success":
-                        st.toast("Database synced successfully", icon="✅")
-                    else:
-                        st.toast("Database sync failed", icon="❌")
-                st.session_state.sync_check = False
-                logger.debug(f"Write lock will be released for {self.alias}")
+        #         # Post-sync integrity validation
+        #         ok = self.integrity_check()
+        #         if not ok:
+        #             logger.error("Post-sync integrity check failed.")
+
+        #         # For market DBs, also validate last_update parity if integrity ok
+        #         if self.alias == "wcmkt2":
+        #             validation_test = self.validate_sync() if ok else False
+        #             st.session_state.sync_status = "Success" if validation_test else "Failed"
+        #             if st.session_state.sync_status == "Success":
+        #                 st.toast("Database synced successfully", icon="✅")
+        #             else:
+        #                 st.toast("Database sync failed", icon="❌")
+        #         st.session_state.sync_check = False
+        #         logger.debug(f"Write lock will be released for {self.alias}")
 
     def validate_sync(self)-> bool:
-        alias = self.alias
-        with self.remote_engine.connect() as conn:
-            result = conn.execute(text("SELECT MAX(last_update) FROM marketstats")).fetchone()
-            remote_last_update = result[0]
-            conn.close()
-        with self.engine.connect() as conn:
-            result = conn.execute(text("SELECT MAX(last_update) FROM marketstats")).fetchone()
-            local_last_update = result[0]
-            conn.close()
-        logger.info("-"*40)
-        logger.info(f"alias: {alias} validate_sync()")
-        timestamp = datetime.now(timezone.utc)
-        local_timestamp = datetime.now()
-        logger.info(f"time: {local_timestamp.strftime('%Y-%m-%d %H:%M:%S')} (local); {timestamp.strftime('%Y-%m-%d %H:%M:%S')} (utc)")
-        logger.info(f"remote_last_update: {remote_last_update}")
-        logger.info(f"local_last_update: {local_last_update}")
-        logger.info("-"*40)
-        validation_test = remote_last_update == local_last_update
-        logger.info(f"validation_test: {validation_test}")
-        return validation_test
+        #AWS outage mitigation
+        logger.warning(f"validate_sync() disabled for now. AWS outage mitigation")
+        return True
 
-    def get_table_list(self, local_only: bool = True)-> list[tuple]:
-        if local_only:
-            engine = self.engine
-            with engine.connect() as conn:
-                stmt = text("PRAGMA table_list")
-                result = conn.execute(stmt)
-                tables = result.fetchall()
-                table_list = [table.name for table in tables if "sqlite" not in table.name]
-                conn.close()
-                return table_list
-        else:
-            engine = self.remote_engine
-            with engine.connect() as conn:
-                stmt = text("PRAGMA table_list")
-                result = conn.execute(stmt)
-                tables = result.fetchall()
-                table_list = [table.name for table in tables if "sqlite" not in table.name]
-                conn.close()
-                return table_list
+    #     alias = self.alias
+    #     with self.remote_engine.connect() as conn:
+    #         result = conn.execute(text("SELECT MAX(last_update) FROM marketstats")).fetchone()
+    #         remote_last_update = result[0]
+    #         conn.close()
+    #     with self.engine.connect() as conn:
+    #         result = conn.execute(text("SELECT MAX(last_update) FROM marketstats")).fetchone()
+    #         local_last_update = result[0]
+    #         conn.close()
+    #     logger.info("-"*40)
+    #     logger.info(f"alias: {alias} validate_sync()")
+    #     timestamp = datetime.now(timezone.utc)
+    #     local_timestamp = datetime.now()
+    #     logger.info(f"time: {local_timestamp.strftime('%Y-%m-%d %H:%M:%S')} (local); {timestamp.strftime('%Y-%m-%d %H:%M:%S')} (utc)")
+    #     logger.info(f"remote_last_update: {remote_last_update}")
+    #     logger.info(f"local_last_update: {local_last_update}")
+    #     logger.info("-"*40)
+    #     validation_test = remote_last_update == local_last_update
+    #     logger.info(f"validation_test: {validation_test}")
+    #     return validation_test
+
+    # def get_table_list(self, local_only: bool = True)-> list[tuple]:
+    #     if local_only:
+    #         engine = self.engine
+    #         with engine.connect() as conn:
+    #             stmt = text("PRAGMA table_list")
+    #             result = conn.execute(stmt)
+    #             tables = result.fetchall()
+    #             table_list = [table.name for table in tables if "sqlite" not in table.name]
+    #             conn.close()
+    #             return table_list
+    #     else:
+    #         engine = self.remote_engine
+    #         with engine.connect() as conn:
+    #             stmt = text("PRAGMA table_list")
+    #             result = conn.execute(stmt)
+    #             tables = result.fetchall()
+    #             table_list = [table.name for table in tables if "sqlite" not in table.name]
+    #             conn.close()
+    #             return table_list
 
     def get_table_columns(self, table_name: str, local_only: bool = True, full_info: bool = False) -> list[dict]:
         """
@@ -380,6 +399,10 @@ class DatabaseConfig:
         Returns:
             List of dictionaries containing column information
         """
+        #AWS outage mitigation
+        logger.warning(f"get_table_columns() set to local_only for now. AWS outage mitigation")
+        Local_only = True
+
         if local_only:
             engine = self.engine
         else:
@@ -416,6 +439,10 @@ class DatabaseConfig:
         Returns:
             The most recent update time for the table
         """
+        #AWS outage mitigation
+        logger.warning(f"get_most_recent_update() set to local_only for now. AWS outage mitigation")
+        return datetime.now(timezone.utc)
+
         engine = self.remote_engine if remote else self.engine
         session = Session(bind=engine)
         with session.begin():
