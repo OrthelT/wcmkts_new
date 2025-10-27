@@ -266,10 +266,13 @@ def new_display_sync_status():
     if "local_update_status" in st.session_state:
         update_time = st.session_state.local_update_status["updated"]
         logger.info(f"type of update_time: {type(update_time)}")
-        display_time = update_time.strftime("%Y-%m-%d | %H:%M UTC")
+        display_time = update_time.strftime("%m-%d | %H:%M UTC")
         logger.info(f"display_time: {display_time}")
+        time_since = st.session_state.local_update_status["time_since"]
+        logger.info(f"time_since: {time_since} | type: {type(time_since)}")
     else:
         update_time = None
+        time_since = None
     if update_time is None:
         try:
             update_time = DatabaseConfig("wcmkt").get_most_recent_update("marketstats", remote=False)
@@ -277,12 +280,21 @@ def new_display_sync_status():
             logger.error(f"Error getting update time: {e}")
             update_time = None
             logger.info("update_time is None")
-    if update_time is not None:
-        display_time = update_time.strftime("%Y-%m-%d | %H:%M UTC")
     else:
-        display_time = "N/A"
+        display_time = update_time.strftime("%m-%d | %H:%M UTC")
 
-    st.sidebar.markdown(f"<span style='font-size: 14px; color: lightgrey;'>*Last ESI update: {display_time}*</span>", unsafe_allow_html=True)
+    if time_since is None:
+        try:
+            time_since = DatabaseConfig("wcmkt").get_time_since_update("marketstats", remote=False)
+            display_time_since = round(time_since.total_seconds() / 60, 0)
+            display_time_since = f"{display_time_since} minutes"
+        except Exception as e:
+            logger.error(f"Error getting time since update: {e}")
+            time_since = None
+    else:
+        display_time_since = int(time_since.total_seconds() / 60)
+
+    st.sidebar.markdown(f"<span style='font-size: 14px; color: lightgrey;'>*Last ESI update: {display_time}*</span> <p style='margin: 0;'> <span style='font-size: 14px; color: lightgrey;'>*Time since update: {display_time_since} minutes*</span>", unsafe_allow_html=True)
 
 @st.cache_data(ttl=1800)
 def check_for_db_updates()->tuple[bool, float]:
@@ -291,7 +303,12 @@ def check_for_db_updates()->tuple[bool, float]:
     local_time = datetime.now()
     return check, local_time
 
-def check_db():
+def check_db(manual_override: bool = False):
+    if manual_override:
+        check_for_db_updates.clear()
+        logger.info("*****************************************************")
+        logger.info("check_for_db_updates() cache cleared for manual override")
+        logger.info("*****************************************************")
     check, local_time = check_for_db_updates()
     now = time.time()
     logger.info(f"check_db() check: {check}, time: {local_time}")
@@ -888,12 +905,11 @@ def main():
     # Display sync status in sidebar
     with st.sidebar:
         new_display_sync_status()
-
         st.sidebar.divider()
 
         db_check = st.sidebar.button("Check DB State", width='content')
         if db_check:
-            check_db()
+            check_db(manual_override=True)
         st.sidebar.divider()
 
         display_downloads()
