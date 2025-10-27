@@ -1403,6 +1403,7 @@ dependencies = [
     { name = "sqlalchemy-libsql" },
     { name = "streamlit", extra = ["charts"] },
     { name = "typing" },
+    { name = "tzdata" },
 ]
 
 [package.dev-dependencies]
@@ -1427,6 +1428,7 @@ requires-dist = [
     { name = "sqlalchemy-libsql", specifier = ">=0.2.0" },
     { name = "streamlit", extras = ["charts"], specifier = "==1.50.0" },
     { name = "typing", specifier = ">=3.10.0.0" },
+    { name = "tzdata", specifier = ">=2025.2" },
 ]
 
 [package.metadata.requires-dev]

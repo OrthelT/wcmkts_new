@@ -5,6 +5,7 @@ import libsql
 from logging_config import setup_logging
 import sqlite3 as sql
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session
 from models import UpdateLog
 import threading
@@ -331,19 +332,19 @@ class DatabaseConfig:
         alias = self.alias
         with self.remote_engine.connect() as conn:
             result = conn.execute(text("SELECT MAX(last_update) FROM marketstats")).fetchone()
-            remote_last_update = result[0]
+            remote_last_update = datetime.strptime(result[0], '%Y-%m-%d %H:%M:%S.%f').replace(tzinfo=timezone.utc)
             conn.close()
         with self.engine.connect() as conn:
             result = conn.execute(text("SELECT MAX(last_update) FROM marketstats")).fetchone()
-            local_last_update = result[0]
+            local_last_update = datetime.strptime(result[0], '%Y-%m-%d %H:%M:%S.%f').replace(tzinfo=timezone.utc)
             conn.close()
         logger.info("-"*40)
         logger.info(f"alias: {alias} validate_sync()")
-        timestamp = datetime.now(timezone.utc)
-        local_timestamp = datetime.now()
+        timestamp = datetime.now(tz=timezone.utc)
+        local_timestamp = datetime.now(tz=ZoneInfo('US/Eastern'))
         logger.info(f"time: {local_timestamp.strftime('%Y-%m-%d %H:%M:%S')} (local); {timestamp.strftime('%Y-%m-%d %H:%M:%S')} (utc)")
-        logger.info(f"remote_last_update: {remote_last_update}")
-        logger.info(f"local_last_update: {local_last_update}")
+        logger.info(f"REMOTE LAST UPDATE: {remote_last_update.strftime('%Y-%m-%d %H:%M')} | Minutes ago: {round((timestamp-remote_last_update).total_seconds() / 60, 0)}")
+        logger.info(f"LOCAL LAST UPDATE: {local_last_update.strftime('%Y-%m-%d %H:%M')} | Minutes ago: {round((timestamp-local_last_update).total_seconds() / 60, 0)}")
         logger.info("-"*40)
         validation_test = remote_last_update == local_last_update
         logger.info(f"validation_test: {validation_test}")
@@ -421,7 +422,6 @@ class DatabaseConfig:
         with session.begin():
             updates = select(UpdateLog.timestamp).where(UpdateLog.table_name == table_name).order_by(UpdateLog.timestamp.desc())
             result = session.execute(updates).fetchone()
-
             update_time = result[0] if result is not None else None
             update_time = update_time.replace(tzinfo=timezone.utc) if update_time is not None else None
         session.close()
@@ -430,10 +430,10 @@ class DatabaseConfig:
 
     def get_time_since_update(self, table_name: str = "marketstats", remote: bool = False):
         status = self.get_most_recent_update(table_name, remote=remote)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(tz=timezone.utc)
         time_since = now - status
-        logger.info(f"update_time: {status} utc")
-        logger.info(f"time_since: {time_since}")
+        logger.info(f"update_time: {status.strftime('%Y-%m-%d %H:%M')}")
+        logger.info(f"time_since: {round(time_since.total_seconds() / 60, 1)} minutes")
         return time_since if time_since is not None else None
 
 
