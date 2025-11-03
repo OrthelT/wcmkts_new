@@ -343,6 +343,10 @@ def get_update_time()->str:
         update_time = update_time.strftime("%Y-%m-%d | %H:%M UTC")
     else:
         update_time = None
+    if update_time is None:
+        update_time = DatabaseConfig("wcmkt").get_most_recent_update("marketstats", remote=False)
+        update_time = update_time.strftime("%Y-%m-%d | %H:%M UTC")
+        st.session_state.local_update_status["updated"] = update_time
     return update_time
 
 def get_module_fits(type_id):

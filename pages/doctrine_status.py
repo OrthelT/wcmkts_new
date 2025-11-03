@@ -10,7 +10,7 @@ from sqlalchemy import text
 from millify import millify
 from logging_config import setup_logging
 from db_handler import get_update_time, read_df
-from doctrines import create_fit_df, get_all_fit_data
+from doctrines import create_fit_df, get_all_fit_data, calculate_jita_fit_cost_and_delta
 from config import DatabaseConfig
 # Insert centralized logging configuration
 logger = setup_logging(__name__, log_file="doctrine_status.log")
@@ -102,7 +102,7 @@ def get_fit_summary()->pd.DataFrame:
         # Get fit name from the ship_targets table if available
         fit_name = get_fit_name(fit_id)
 
-        # Add to summary list
+        # Add to summary list (Jita delta will be calculated separately for performance)
         fit_summary.append({
             'fit_id': fit_id,
             'ship_id': ship_id,
@@ -260,6 +260,60 @@ def get_ship_target(ship_id: int, fit_id: int) -> int:
 def get_tgt_from_fit_summary(fit_summary: pd.DataFrame, fit_id: int) -> int:
     """Get the target for a given fit id from the fit summary"""
     return fit_summary[fit_summary['fit_id'] == fit_id]['target'].iloc[0]
+
+def calculate_all_jita_deltas(force_refresh: bool = False):
+    """
+    Calculate Jita price deltas for all fits in the background.
+    Stores results in session state for display.
+    
+    Args:
+        force_refresh: If True, bypasses cache check and fetches fresh prices
+    """
+    import datetime
+    
+    # Check if already calculated and cache is still valid
+    if not force_refresh and 'jita_deltas_calculated' in st.session_state and st.session_state.jita_deltas_calculated:
+        # Check cache age (1 hour = 3600 seconds)
+        if 'jita_deltas_timestamp' in st.session_state:
+            cache_age = (datetime.datetime.now() - st.session_state.jita_deltas_timestamp).total_seconds()
+            if cache_age < 3600:  # Less than 1 hour old
+                logger.info(f"Using cached Jita deltas (age: {cache_age:.0f} seconds)")
+                return  # Use cached data
+    
+    if 'jita_deltas' not in st.session_state:
+        st.session_state.jita_deltas = {}
+    
+    # Get the raw fit data
+    all_fits_df, summary_df = create_fit_df()
+    
+    if all_fits_df.empty:
+        st.session_state.jita_deltas_calculated = True
+        st.session_state.jita_deltas_timestamp = datetime.datetime.now()
+        return
+    
+    fit_ids = all_fits_df['fit_id'].unique()
+    
+    with st.spinner("Calculating Jita price deltas..."):
+        for fit_id in fit_ids:
+            try:
+                fit_data = all_fits_df[all_fits_df['fit_id'] == fit_id]
+                fit_summary_data = summary_df[summary_df['fit_id'] == fit_id]
+                
+                if not fit_summary_data.empty:
+                    total_cost = fit_summary_data['total_cost'].iloc[0] if pd.notna(fit_summary_data['total_cost'].iloc[0]) else 0
+                    
+                    # Calculate delta
+                    jita_fit_cost, jita_cost_delta = calculate_jita_fit_cost_and_delta(fit_data, total_cost)
+                    
+                    # Store in session state
+                    st.session_state.jita_deltas[fit_id] = jita_cost_delta
+            except Exception as e:
+                logger.error(f"Error calculating Jita delta for fit_id {fit_id}: {e}")
+                st.session_state.jita_deltas[fit_id] = None
+    
+    st.session_state.jita_deltas_calculated = True
+    st.session_state.jita_deltas_timestamp = datetime.datetime.now()
+    logger.info(f"Calculated Jita deltas for {len(st.session_state.jita_deltas)} fits at {st.session_state.jita_deltas_timestamp}")
 
 def main():
     # App title and logo
@@ -436,8 +490,18 @@ def main():
                         st.metric(label="Target", value="0")
 
                 with metric_cols[3]:
-                    if fit_cost:
-                        st.metric(label="Fit Cost", value=f"{fit_cost}")
+                    if fit_cost and fit_cost != 'N/A':
+                        # Get the Jita cost delta from session state
+                        jita_delta = None
+                        if 'jita_deltas' in st.session_state and row['fit_id'] in st.session_state.jita_deltas:
+                            jita_delta = st.session_state.jita_deltas[row['fit_id']]
+                        
+                        if jita_delta is not None and pd.notna(jita_delta):
+                            # Format delta as percentage with 2 decimal places
+                            delta_str = f"{jita_delta:.2f}%"
+                            st.metric(label="Fit Cost", value=f"{fit_cost}", delta=delta_str)
+                        else:
+                            st.metric(label="Fit Cost", value=f"{fit_cost}")
                     else:
                         st.metric(label="Fit Cost", value="N/A")
                         
@@ -673,9 +737,57 @@ def main():
     else:
         st.sidebar.info("Select ships and modules to export by checking the boxes next to them.")
 
-     # Display last update timestamp
+
+    
+    # Jita Price Delta Section
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Jita Price Comparison")
+    
+    jita_calculated = st.session_state.get('jita_deltas_calculated', False)
+    
+    if not jita_calculated:
+        if st.sidebar.button("📊 Calculate Jita Price Deltas", help="Compare fit costs to Jita prices. Requires an external API call, so we calculate on demand to for performance."):
+            calculate_all_jita_deltas()
+            st.rerun()
+        st.sidebar.info("Click to calculate price comparison with Jita market. Only calculated on demand for performance.")
+    else:
+        st.sidebar.success(f"✓ Jita deltas calculated for {len(st.session_state.get('jita_deltas', {}))} fits")
+        
+        # Show when prices were last updated
+        if 'jita_deltas_timestamp' in st.session_state:
+            import datetime
+            timestamp = st.session_state.jita_deltas_timestamp
+            cache_age = (datetime.datetime.now() - timestamp).total_seconds()
+            
+            # Show last updated time
+            time_str = timestamp.strftime("%H:%M:%S")
+            st.sidebar.caption(f"Last updated: {time_str}")
+            
+            # Calculate when refresh will be available
+            cache_remaining = max(0, 3600 - cache_age)  # 1 hour = 3600 seconds
+            
+            if cache_remaining > 0:
+                # Cache still valid - show countdown
+                minutes_remaining = int(cache_remaining / 60)
+                seconds_remaining = int(cache_remaining % 60)
+                st.sidebar.caption(f"Cache expires in: {minutes_remaining}m {seconds_remaining}s")
+                
+                # Disabled refresh button with info
+                st.sidebar.button(
+                    "🔄 Refresh Jita Prices", 
+                    help=f"Prices cached for 1 hour. Try again in {minutes_remaining}m {seconds_remaining}s",
+                    disabled=True
+                )
+            else:
+                # Cache expired - allow refresh
+                if st.sidebar.button("🔄 Refresh Jita Prices", help="Fetch latest Jita prices (cache expired)"):
+                    # Force refresh to get new prices
+                    st.session_state.jita_deltas_calculated = False
+                    st.session_state.jita_deltas = {}
+                    calculate_all_jita_deltas(force_refresh=True)
+                    st.rerun()
+    # Display last update timestamp
     st.sidebar.markdown("---")
     st.sidebar.write(f"Last ESI update: {get_update_time()}")
-
 if __name__ == "__main__":
     main()
