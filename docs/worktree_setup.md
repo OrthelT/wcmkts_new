@@ -57,6 +57,50 @@ for wt in ~/.cursor/worktrees/wcmkts_north/*/; do ./scripts/setup_worktree_symli
 - **Database files not found**: Ensure database files exist in project root
 - **Permission denied**: Ensure the script is executable: `chmod +x scripts/setup_worktree_symlinks.sh`
 
+## Navigating Worktrees by Branch Name
+
+Instead of remembering full paths, you can navigate to worktrees using branch names:
+
+### Using the Script Directly
+```bash
+# Navigate by full branch name
+./scripts/wt.sh docs-worktree-setup-3mRY9
+
+# Navigate by unique suffix (just the ID part)
+./scripts/wt.sh 3mRY9
+
+# Navigate by partial match
+./scripts/wt.sh docs-worktree-setup
+```
+
+### Using Git Alias
+A Git alias is configured for convenience:
+```bash
+# From anywhere in the repo
+git wt docs-worktree-setup-3mRY9
+git wt 3mRY9
+```
+
+### Using as a Bash Function (Auto-Navigate)
+To automatically change directory when finding a worktree, add this to your `~/.bashrc` or `~/.zshrc`:
+```bash
+alias wt='source /path/to/wcmkts_north/scripts/wt.sh'
+```
+
+Then use it like:
+```bash
+wt 3mRY9  # Automatically cd's to the worktree
+```
+
+### List All Worktrees
+```bash
+# Simple list
+git worktree list
+
+# Using the script (shows available worktrees if pattern not found)
+./scripts/wt.sh
+```
+
 ## Notes
 
 - Symlinks point to files in the project root, so all worktrees share the same databases and secrets

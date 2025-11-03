@@ -174,6 +174,16 @@ Quick setup for all existing worktrees:
 ./scripts/setup_all_worktrees.sh
 ```
 
+Navigate to worktrees by branch name:
+```bash
+# Using Git alias
+git wt docs-worktree-setup-3mRY9
+git wt 3mRY9  # Just the unique ID
+
+# Or directly
+./scripts/wt.sh 3mRY9
+```
+
 ## Usage
 
 1. **Filtering Data**
