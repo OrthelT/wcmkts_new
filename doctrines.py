@@ -121,10 +121,10 @@ def create_fit_df()->pd.DataFrame:
             type_name = row.get('type_name', f'type_id {type_id}')
             fit_id = row['fit_id']
             logger.warning(f"Null price found for {type_name} (type_id: {type_id}) in fit_id {fit_id}")
-
+        
         # Get unique type_ids with null prices
         null_type_ids = df[null_price_mask]['type_id'].unique().tolist()
-
+        
         # Try to get avg_price from marketstats table
         if null_type_ids:
             placeholders = ','.join(['?'] * len(null_type_ids))
@@ -140,7 +140,7 @@ def create_fit_df()->pd.DataFrame:
                 avg_price_map = {}
         else:
             avg_price_map = {}
-
+        
         # Fill null prices with avg_price where available
         for type_id in null_type_ids:
             if type_id in avg_price_map:
@@ -150,7 +150,7 @@ def create_fit_df()->pd.DataFrame:
                     type_mask = (df['type_id'] == type_id) & df['price'].isna()
                     df.loc[type_mask, 'price'] = avg_price
                     logger.info(f"Filled null price for type_id {type_id} with avg_price: {avg_price}")
-
+        
         # For remaining null prices, try Jita price
         remaining_nulls = df['price'].isna()
         if remaining_nulls.any():
@@ -165,19 +165,23 @@ def create_fit_df()->pd.DataFrame:
                         logger.info(f"Filled null price for type_id {type_id} with Jita price: {jita_price}")
                     else:
                         logger.warning(f"Could not get Jita price for type_id {type_id}, using 0")
+                        st.warning(f"Could not get Jita price for type_id {type_id}, using 0")
                         type_mask = (df['type_id'] == type_id) & df['price'].isna()
                         df.loc[type_mask, 'price'] = 0
                 except Exception as e:
                     logger.error(f"Error fetching Jita price for type_id {type_id}: {e}")
                     type_mask = (df['type_id'] == type_id) & df['price'].isna()
                     df.loc[type_mask, 'price'] = 0
-
+                    st.warning(f"Error fetching Jita price for type_id {type_id}: {e}, using 0")
+        
         # Fill any remaining nulls with 0 as final fallback
         if df['price'].isna().any():
             logger.warning("Still have null prices after filling with Jita price")
+            st.warning("Still have null prices after filling with Jita price")
             null_type_ids = df[df['price'].isna()]['type_id'].unique().tolist()
             for type_id in null_type_ids:
                 logger.warning(f"Null price for type_id {type_id}")
+                st.warning(f"Null price for type_id {type_id}")
             df['price'] = df['price'].fillna(0)
 
     # Calculate total cost per fit (sum of fit_qty * price for all items in the fit)
@@ -218,7 +222,7 @@ def create_fit_df()->pd.DataFrame:
 
     # Select final columns in the expected order
     summary_columns = ['fit_id', 'ship_name', 'ship_id', 'hulls', 'fits',
-                      'ship_group', 'price', 'ship_target', 'target_percentage', 'daily_avg']
+                      'ship_group', 'price', 'total_cost', 'ship_target', 'target_percentage', 'daily_avg']
     fit_summary = fit_summary[summary_columns]
 
     return df, fit_summary

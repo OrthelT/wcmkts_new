@@ -176,7 +176,7 @@ def display_categorized_doctrine_data(selected_data):
             expanded=True
         ):
             # Create columns for metrics summary
-            col1, col2, col3 = st.columns(3)
+            col1, col2, col3 = st.columns(3, gap="small", width=500)
 
             with col1:
                 total_fits = role_data['fits'].sum() if 'fits' in role_data.columns else 0
@@ -242,12 +242,17 @@ def display_categorized_doctrine_data(selected_data):
                     ),
                     'price': st.column_config.NumberColumn(
                         "Price",
-                        format="localized",
-                        help="Price of the item"
+                        format="compact",
+                        help="Price of the ship"
+                    ),
+                    'total_cost': st.column_config.NumberColumn(
+                        "Total Cost",
+                        format="compact",
+                        help="Total cost of the fit"
                     )
 
                 },
-                width='stretch',
+                width='content',
                 hide_index=True
             )
 
