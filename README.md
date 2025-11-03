@@ -1,14 +1,33 @@
-# Winter Coalition Market App (v.0.64)
+# Winter Coalition Market App (v.0.1.4)
 A Streamlit application for viewing EVE Online market statistics for Winter Coalition. This tool provides real-time market data analysis, historical price tracking, and fitting information for various items in EVE Online markets.
 
 SUPPORT: Join the Discord for support https://discord.gg/BxatJE572Y
 CONTRIBUTING: Contributors welcome. This project is fully open source under MIT License. Source code and full documentation available on GitHub: https://github.com/OrthelT/wcmkts_new
 
-## UPDATES:
-*version 0.1.3*
+
+
+# UPDATES:
+## version 0.1.4 WCMKTS_North
+### Fit Detail View
+  - New expandable section showing all items in selected fits
+  - Sortable columns with category and stock visibility
+  - Helps identify bottleneck items quickly
+### Improved Reporting
+  - Better table formatting on Doctrine Report with compact number display
+  - Role-based categorization (DPS, Logi, Links, Tackle)
+  - Enhanced metrics display with proper width constraints
+### Enhanced Fit Cost Analysis
+  - Total fit cost calculation including all modules and components
+  - Multi-level null price handling:
+  - Display total cost alongside ship hull cost on Doctrine Status page
+  - Optional Jita price delta available through Calculate Jita Price Delta Button
+### Display Capital Utilization Ration
+- Calculate and display capital utilization ratio in market stats display for a selected ship
+
+## version 0.1.3
 - low-stock items are now selectable for csv export
 
-*version 0.1.2*
+## version 0.1.2
 - moves to new versioning scheme to match python standard
 - feat: adds Jita price info for selected items
 - refactored data displays to handle items when missing from the market
