@@ -165,6 +165,15 @@ token = "..."
 
 `.env` variables may be used for other tooling, but the app resolves secrets via Streamlit.
 
+### Cursor Agent Worktrees
+
+When using multiple Cursor Agents, worktrees are automatically configured with symlinks for `secrets.toml` and database files. See [docs/worktree_setup.md](docs/worktree_setup.md) for details.
+
+Quick setup for all existing worktrees:
+```bash
+./scripts/setup_all_worktrees.sh
+```
+
 ## Usage
 
 1. **Filtering Data**
