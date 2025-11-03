@@ -9,7 +9,7 @@ import pandas as pd
 from sqlalchemy import text
 from millify import millify
 from logging_config import setup_logging
-from db_handler import get_update_time, read_df
+from db_handler import get_update_time, read_df, get_all_fitting_data
 from doctrines import create_fit_df, get_all_fit_data, calculate_jita_fit_cost_and_delta
 from config import DatabaseConfig
 # Insert centralized logging configuration
@@ -260,6 +260,112 @@ def get_ship_target(ship_id: int, fit_id: int) -> int:
 def get_tgt_from_fit_summary(fit_summary: pd.DataFrame, fit_id: int) -> int:
     """Get the target for a given fit id from the fit summary"""
     return fit_summary[fit_summary['fit_id'] == fit_id]['target'].iloc[0]
+
+def get_fit_detail_data(fit_id: int) -> pd.DataFrame:
+    """
+    Get detailed fitting data for a specific fit_id.
+    Returns a DataFrame with all modules/items for the fit.
+    """
+    try:
+        df = get_all_fitting_data()
+        if df.empty:
+            return pd.DataFrame()
+        
+        # Filter by fit_id
+        fit_df = df[df['fit_id'] == fit_id].copy()
+        
+        if fit_df.empty:
+            return pd.DataFrame()
+        
+        # Drop unnecessary columns (keep category_id for sorting)
+        columns_to_drop = ['ship_id', 'hulls', 'group_id', 'category_name', 'id', 'timestamp']
+        fit_df.drop(columns=[col for col in columns_to_drop if col in fit_df.columns], inplace=True)
+        
+        # Format numeric columns
+        fit_df['type_id'] = round(fit_df['type_id'], 0).astype(int)
+        fit_df['fit_id'] = round(fit_df['fit_id'], 0).astype(int)
+        
+        # Rename for better display
+        if 'fits_on_mkt' in fit_df.columns:
+            fit_df.rename(columns={'fits_on_mkt': 'Fits on Market'}, inplace=True)
+        
+        # Sort by category_id first (ships are category 6, lowest used, so ship hull appears first)
+        # Then by fits on market (ascending) to show bottlenecks
+        if 'category_id' in fit_df.columns and 'Fits on Market' in fit_df.columns:
+            fit_df = fit_df.sort_values(by=['category_id', 'Fits on Market'], ascending=[True, True])
+        elif 'Fits on Market' in fit_df.columns:
+            fit_df = fit_df.sort_values(by='Fits on Market', ascending=True)
+        
+        fit_df.reset_index(drop=True, inplace=True)
+        
+        return fit_df
+        
+    except Exception as e:
+        logger.error(f"Error getting fit detail data for fit_id {fit_id}: {e}")
+        return pd.DataFrame()
+
+def get_fitting_column_config() -> dict:
+    """Get column configuration for fitting data display"""
+    return {
+        'fit_id': st.column_config.NumberColumn(
+            "Fit ID",
+            help="WC Doctrine Fit ID"
+        ),
+        'ship_name': st.column_config.TextColumn(
+            "Ship Name",
+            help="Ship Name",
+            width="medium"
+        ),
+        'type_id': st.column_config.NumberColumn(
+            "Type ID",
+            help="Type ID"
+        ),
+        'type_name': st.column_config.TextColumn(
+            "Type Name",
+            help="Type Name",
+            width="medium"
+        ),
+        'fit_qty': st.column_config.NumberColumn(
+            "Qty/fit",
+            help="Quantity of this item per fit",
+            width="small"
+        ),
+        'Fits on Market': st.column_config.NumberColumn(
+            "Fits",
+            help="Total fits available on market for this item",
+            width="small"
+        ),
+        'total_stock': st.column_config.NumberColumn(
+            "Stock",
+            help="Total stock of this item",
+            width="small"
+        ),
+        'price': st.column_config.NumberColumn(
+            "Price",
+            help="Price of this item",
+            format="localized"
+        ),
+        'avg_vol': st.column_config.NumberColumn(
+            "Avg Vol",
+            help="Average volume over the last 30 days",
+            width="small"
+        ),
+        'days': st.column_config.NumberColumn(
+            "Days",
+            help="Days remaining (based on historical average)",
+            width="small"
+        ),
+        'group_name': st.column_config.Column(
+            "Group",
+            help="Group of this item",
+            width="small"
+        ),
+        'category_id': st.column_config.NumberColumn(
+            "Category ID",
+            help="Category ID (ships are 6)",
+            width="small"
+        ),
+    }
 
 def calculate_all_jita_deltas(force_refresh: bool = False):
     """
@@ -525,6 +631,51 @@ def main():
                     """,
                     unsafe_allow_html=True
                 )
+                
+                # Add expandable fitting details section
+                with st.expander("📋 View Full Fitting Details", expanded=False):
+                    with st.spinner("Loading fitting data..."):
+                        fit_detail_df = get_fit_detail_data(row['fit_id'])
+                        
+                        if not fit_detail_df.empty:
+                            # Display summary info
+                            fit_info_col1, fit_info_col2, fit_info_col3 = st.columns(3)
+                            
+                            with fit_info_col1:
+                                st.metric("Total Items", len(fit_detail_df))
+                            
+                            with fit_info_col2:
+                                if 'total_stock' in fit_detail_df.columns:
+                                    total_value = (fit_detail_df['price'] * fit_detail_df['total_stock']).sum()
+                                    st.metric("Total Stock Value", f"{millify(total_value, precision=2)}")
+                            
+                            with fit_info_col3:
+                                if 'Fits on Market' in fit_detail_df.columns:
+                                    bottleneck = fit_detail_df['Fits on Market'].min()
+                                    st.metric("Bottleneck (Min Fits)", int(bottleneck))
+                            
+                            st.markdown("---")
+                            
+                            # Display the fitting dataframe
+                            col_config = get_fitting_column_config()
+                            st.dataframe(
+                                fit_detail_df,
+                                hide_index=True,
+                                column_config=col_config,
+                                width='stretch'
+                            )
+                            
+                            # Download button for this specific fit
+                            csv = fit_detail_df.to_csv(index=False)
+                            st.download_button(
+                                label=f"📥 Download Fit {row['fit_id']} Data",
+                                data=csv,
+                                file_name=f"fit_{row['fit_id']}_{row['ship_name'].replace(' ', '_')}.csv",
+                                mime="text/csv",
+                                key=f"download_fit_{row['fit_id']}"
+                            )
+                        else:
+                            st.info("No detailed fitting data available for this fit.")
 
             with col3:
                 # Low stock modules with selection checkboxes
