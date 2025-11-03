@@ -7,6 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 import pandas as pd
 from sqlalchemy import text
+from millify import millify
 from logging_config import setup_logging
 from db_handler import get_update_time, read_df
 from doctrines import create_fit_df, get_all_fit_data
@@ -21,7 +22,7 @@ def get_fit_summary()->pd.DataFrame:
     logger.info("Getting fit summary")
 
     # Get the raw data with all fit details
-    all_fits_df, _ = create_fit_df()
+    all_fits_df, summary_df = create_fit_df()
 
     if all_fits_df.empty:
         return pd.DataFrame()
@@ -36,7 +37,7 @@ def get_fit_summary()->pd.DataFrame:
         # Filter data for this fit
         try:
             fit_data = all_fits_df[all_fits_df['fit_id'] == fit_id]
-
+            fit_summary_data = summary_df[summary_df['fit_id'] == fit_id]
         except Exception as e:
             st.error("Error getting fit data for fit_id: " + fit_id + " " + str(e))
             logger.error(f"Error: {e}")
@@ -48,7 +49,7 @@ def get_fit_summary()->pd.DataFrame:
         ship_id = first_row['ship_id']
         ship_name = first_row['ship_name']
         hulls = first_row['hulls'] if pd.notna(first_row['hulls']) else 0
-
+        total_cost = fit_summary_data['total_cost'].iloc[0] if pd.notna(fit_summary_data['total_cost'].iloc[0]) else 0
         # Extract ship group from the data
         ship_group = "Ungrouped"  # Default
 
@@ -114,7 +115,8 @@ def get_fit_summary()->pd.DataFrame:
             'target_percentage': target_percentage,
             'lowest_modules': lowest_modules_list,
             'daily_avg': daily_avg,
-            'ship_group': ship_group
+            'ship_group': ship_group,
+            'total_cost': total_cost
         })
 
     return pd.DataFrame(fit_summary)
@@ -369,6 +371,7 @@ def main():
             target = int(row['target']) if pd.notna(row['target']) else 0
             fits = int(row['fits']) if pd.notna(row['fits']) else 0
             hulls = int(row['hulls']) if pd.notna(row['hulls']) else 0
+            fit_cost = millify(int(row['total_cost']), precision=2) if pd.notna(row['total_cost']) else 'N/A'
 
             with col1:
                 # Ship image and ID info
@@ -409,7 +412,7 @@ def main():
                     st.markdown(f"### {row['ship_name']}")
 
                 # Display metrics in a single row
-                metric_cols = st.columns(3)
+                metric_cols = st.columns(4)
                 fits_delta = fits-target
                 hulls_delta = hulls-target
 
@@ -432,6 +435,12 @@ def main():
                     else:
                         st.metric(label="Target", value="0")
 
+                with metric_cols[3]:
+                    if fit_cost:
+                        st.metric(label="Fit Cost", value=f"{fit_cost}")
+                    else:
+                        st.metric(label="Fit Cost", value="N/A")
+                        
                 # Progress bar for target percentage
                 target_pct = row['target_percentage']
                 color = "green" if target_pct >= 90 else "orange" if target_pct >= 50 else "red"
