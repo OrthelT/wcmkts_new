@@ -9,6 +9,7 @@ from logging_config import setup_logging
 import time
 from sqlalchemy import text
 from db_handler import read_df, new_read_df
+from utils import get_jita_price, get_multi_item_jita_price
 
 # Insert centralized logging configuration
 logger = setup_logging(__name__)
@@ -146,6 +147,64 @@ def create_fit_df()->pd.DataFrame:
     fit_summary = fit_summary[summary_columns]
 
     return df, fit_summary
+
+def calculate_jita_fit_cost_and_delta(fit_data: pd.DataFrame, current_fit_cost: float) -> tuple[float, float | None]:
+    """
+    Calculate the fit cost at Jita prices and the percentage delta compared to current market prices.
+    
+    Args:
+        fit_data: DataFrame containing fit items with columns: type_id, fit_qty
+        current_fit_cost: The current fit cost at market prices
+    
+    Returns:
+        tuple: (jita_fit_cost, percentage_delta)
+            - jita_fit_cost: Total cost of the fit at Jita prices
+            - percentage_delta: Percentage difference from Jita price (fit_cost - jita_fit_cost)/jita_fit_cost * 100,
+              or None if calculation is not possible (e.g., jita_fit_cost is 0)
+    """
+    if fit_data.empty:
+        return 0.0, None
+    
+    # Get unique type_ids from the fit
+    type_ids = fit_data['type_id'].unique().tolist()
+    
+    # Fetch all Jita prices at once
+    jita_prices = get_multi_item_jita_price(type_ids)
+    
+    if not jita_prices:
+        logger.warning("Could not fetch any Jita prices for fit items")
+        return 0.0, None
+    
+    jita_fit_cost = 0.0
+    missing_prices = []
+    
+    # Calculate Jita cost for each item in the fit
+    for _, row in fit_data.iterrows():
+        type_id = row['type_id']
+        fit_qty = row['fit_qty']
+        
+        if type_id in jita_prices:
+            jita_price = jita_prices[type_id]
+            if jita_price > 0:
+                jita_fit_cost += fit_qty * jita_price
+            else:
+                logger.warning(f"Jita price for type_id {type_id} is not positive: {jita_price}")
+        else:
+            missing_prices.append(type_id)
+    
+    if missing_prices:
+        logger.warning(f"Missing Jita prices for {len(missing_prices)} items: {missing_prices[:5]}{'...' if len(missing_prices) > 5 else ''}")
+    
+    # Calculate percentage delta: (fit_cost - jita_fit_cost)/jita_fit_cost * 100
+    if jita_fit_cost > 0:
+        percentage_delta = ((current_fit_cost - jita_fit_cost) / jita_fit_cost) * 100
+    else:
+        percentage_delta = None
+        if current_fit_cost > 0:
+            logger.warning(f"Jita fit cost is 0 but current fit cost is {current_fit_cost}, cannot calculate delta. "
+                          f"This may indicate missing Jita prices for some items in the fit.")
+    
+    return jita_fit_cost, percentage_delta
 
 @st.cache_data(ttl=600)
 def get_all_fit_data()->pd.DataFrame:
