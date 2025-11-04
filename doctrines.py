@@ -112,6 +112,81 @@ def create_fit_df()->pd.DataFrame:
     # Rename columns to match expected output
     fit_summary = fit_summary.rename(columns={'fits_on_mkt': 'fits'})
 
+    # Handle null prices: log warnings and fill with avg_price or Jita price
+    null_price_mask = df['price'].isna()
+    if null_price_mask.any():
+        null_price_items = df[null_price_mask][['type_id', 'type_name', 'fit_id']].drop_duplicates()
+        for _, row in null_price_items.iterrows():
+            type_id = row['type_id']
+            type_name = row.get('type_name', f'type_id {type_id}')
+            fit_id = row['fit_id']
+            logger.warning(f"Null price found for {type_name} (type_id: {type_id}) in fit_id {fit_id}")
+
+        # Get unique type_ids with null prices
+        null_type_ids = df[null_price_mask]['type_id'].unique().tolist()
+
+        # Try to get avg_price from marketstats table
+        if null_type_ids:
+            placeholders = ','.join(['?'] * len(null_type_ids))
+            avg_price_query = f"SELECT type_id, avg_price FROM marketstats WHERE type_id IN ({placeholders})"
+            try:
+                with mktdb.local_access():
+                    with mktdb.engine.connect() as conn:
+                        avg_price_df = pd.read_sql_query(avg_price_query, conn, params=tuple(null_type_ids))
+                # Create a mapping of type_id to avg_price
+                avg_price_map = dict(zip(avg_price_df['type_id'], avg_price_df['avg_price']))
+            except Exception as e:
+                logger.error(f"Error fetching avg_price from marketstats: {e}")
+                avg_price_map = {}
+        else:
+            avg_price_map = {}
+
+        # Fill null prices with avg_price where available
+        for type_id in null_type_ids:
+            if type_id in avg_price_map:
+                avg_price = avg_price_map[type_id]
+                if pd.notna(avg_price) and avg_price > 0:
+                    # Update rows where type_id matches and price is still null
+                    type_mask = (df['type_id'] == type_id) & df['price'].isna()
+                    df.loc[type_mask, 'price'] = avg_price
+                    logger.info(f"Filled null price for type_id {type_id} with avg_price: {avg_price}")
+
+        # For remaining null prices, try Jita price
+        remaining_nulls = df['price'].isna()
+        if remaining_nulls.any():
+            remaining_type_ids = df[remaining_nulls]['type_id'].unique().tolist()
+            for type_id in remaining_type_ids:
+                try:
+                    jita_price = get_jita_price(type_id)
+                    if jita_price is not None and jita_price > 0:
+                        # Update rows where type_id matches and price is still null
+                        type_mask = (df['type_id'] == type_id) & df['price'].isna()
+                        df.loc[type_mask, 'price'] = jita_price
+                        logger.info(f"Filled null price for type_id {type_id} with Jita price: {jita_price}")
+                    else:
+                        logger.warning(f"Could not get Jita price for type_id {type_id}, using 0")
+                        type_mask = (df['type_id'] == type_id) & df['price'].isna()
+                        df.loc[type_mask, 'price'] = 0
+                except Exception as e:
+                    logger.error(f"Error fetching Jita price for type_id {type_id}: {e}")
+                    type_mask = (df['type_id'] == type_id) & df['price'].isna()
+                    df.loc[type_mask, 'price'] = 0
+
+        # Fill any remaining nulls with 0 as final fallback
+        if df['price'].isna().any():
+            logger.warning("Still have null prices after filling with Jita price")
+            null_type_ids = df[df['price'].isna()]['type_id'].unique().tolist()
+            for type_id in null_type_ids:
+                logger.warning(f"Null price for type_id {type_id}")
+            df['price'] = df['price'].fillna(0)
+
+    # Calculate total cost per fit (sum of fit_qty * price for all items in the fit)
+    df['item_cost'] = df['fit_qty'] * df['price']
+    fit_cost = df.groupby('fit_id')['item_cost'].sum().reset_index()
+    fit_cost = fit_cost.rename(columns={'item_cost': 'total_cost'})
+    fit_summary = fit_summary.merge(fit_cost, on='fit_id', how='left')
+    fit_summary['total_cost'] = fit_summary['total_cost'].fillna(0)
+
     # Get target values for all ships at once (batch operation)
     t2 = time.perf_counter()
     targets_df = new_get_targets()
