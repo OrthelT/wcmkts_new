@@ -195,20 +195,24 @@ def display_categorized_doctrine_data(selected_data):
 
 
             # Display the data table for this role (without the role column)
-            display_columns = [col for col in role_data.columns if col != 'role']
+            # display_columns = [col for col in role_data.columns if col != 'role']
 
-            df = role_data[display_columns].copy()
+            # df = role_data[display_columns].copy()
+            df = role_data.copy()
+            df = df.drop(columns=['role']).reset_index(drop=True)
             df['ship_target'] = df['ship_target'] * st.session_state.target_multiplier
             df['target_percentage'] = round(df['fits'] / df['ship_target'], 2)
+            logger.info(f"DF: {df.head()}")
+            logger.info(f"DF columns: {df.columns}")
 
 
             st.dataframe(
-                df,
+                df, 
                 column_config={
                     'target_percentage': st.column_config.ProgressColumn(
                         "Target %",
                         format="percent",
-                        width="small",
+                        width="medium",
 
                     ),
                     'ship_target': st.column_config.Column(
@@ -216,19 +220,16 @@ def display_categorized_doctrine_data(selected_data):
                         help="Number of fits required for stock",
 
                     ),
-                    'daily_avg': st.column_config.Column(
+                    'daily_avg': st.column_config.NumberColumn(
                         "Daily Sales",
-                        width="small",
-                        help="Average daily sa,les over the last 30 days"
+                        help="Average daily sales over the last 30 days"
                     ),
                     'ship_group': st.column_config.Column(
                         "Group",
-                        width="small",
                         help="Ship group"
                     ),
                     'ship_name': st.column_config.Column(
                         "Ship",
-                        width="small",
                         help="Ship name"
                     ),
                     'ship_id': st.column_config.Column(
