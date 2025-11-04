@@ -431,9 +431,6 @@ def yield_structure():
         yield structure
 
 
-
-
-
 def is_valid_image_url(url: str) -> bool:
     """Check if the URL returns a valid image."""
     try:
