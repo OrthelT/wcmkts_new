@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from models import UpdateLog
 import threading
 from contextlib import suppress, contextmanager
-
+from time import perf_counter
 
 logger = setup_logging(__name__)
 
@@ -287,6 +287,10 @@ class DatabaseConfig:
         connections to prevent corruption. Read-only engine is preserved for
         minimal disruption to concurrent reads after sync completes.
         """
+        sync_start = perf_counter()
+        logger.info("-"*40)
+        logger.info(f"sync() starting for {self.alias} at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
+
         # Acquire write lock to block all access during sync
         lock = self._get_local_lock()
         with lock.write_lock():
@@ -300,6 +304,10 @@ class DatabaseConfig:
                     # Explicitly manage connection lifecycle; avoid relying on context manager
                     conn = libsql.connect(self.path, sync_url=self.turso_url, auth_token=self.token)
                     conn.sync()
+                    sync_end = perf_counter()
+                    sync_time = round((sync_end - sync_start)*1000, 2)
+                    logger.info(f"sync() completed for {self.alias} in {sync_time} ms at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
+                    logger.info("-"*40)
                 except Exception as e:
                     logger.error(f"Database sync failed: {e}")
                     raise
