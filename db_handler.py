@@ -372,6 +372,10 @@ def get_groups_for_category(category_id: int)->pd.DataFrame:
     if category_id == 17:
         df = pd.read_csv("build_commodity_groups.csv")
         return df
+    elif category_id == 4:
+        query = """
+            SELECT DISTINCT groupID, groupName FROM invGroups WHERE categoryID = :category_id AND groupID = 1136
+        """
     else:
         query = """
             SELECT DISTINCT groupID, groupName FROM invGroups WHERE categoryID = :category_id
