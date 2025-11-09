@@ -1178,11 +1178,11 @@ def main():
                         - *Jita Sell* - the minimum price of sale orders in Jita.
                         - *Jita Buy* - the maximum price of buy orders in Jita.
                     - <span style="font-weight: bold; color: orange;">Structure:</span> The structure to compare the cost to build versus. (optional)
+                    - <span style="font-weight: bold; color: orange;">Skills:</span> All skills are assumed to be at level 5.
                     """,
             unsafe_allow_html=True,
         )
 
 
 if __name__ == "__main__":
-
     main()
