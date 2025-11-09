@@ -176,7 +176,7 @@ def display_categorized_doctrine_data(selected_data):
             expanded=True
         ):
             # Create columns for metrics summary
-            col1, col2, col3 = st.columns(3)
+            col1, col2, col3 = st.columns(3, gap="small", width=500)
 
             with col1:
                 total_fits = role_data['fits'].sum() if 'fits' in role_data.columns else 0
@@ -195,20 +195,24 @@ def display_categorized_doctrine_data(selected_data):
 
 
             # Display the data table for this role (without the role column)
-            display_columns = [col for col in role_data.columns if col != 'role']
+            # display_columns = [col for col in role_data.columns if col != 'role']
 
-            df = role_data[display_columns].copy()
+            # df = role_data[display_columns].copy()
+            df = role_data.copy()
+            df = df.drop(columns=['role']).reset_index(drop=True)
             df['ship_target'] = df['ship_target'] * st.session_state.target_multiplier
             df['target_percentage'] = round(df['fits'] / df['ship_target'], 2)
+            logger.info(f"DF: {df.head()}")
+            logger.info(f"DF columns: {df.columns}")
 
 
             st.dataframe(
-                df,
+                df, 
                 column_config={
                     'target_percentage': st.column_config.ProgressColumn(
                         "Target %",
                         format="percent",
-                        width="small",
+                        width="medium",
 
                     ),
                     'ship_target': st.column_config.Column(
@@ -216,19 +220,16 @@ def display_categorized_doctrine_data(selected_data):
                         help="Number of fits required for stock",
 
                     ),
-                    'daily_avg': st.column_config.Column(
+                    'daily_avg': st.column_config.NumberColumn(
                         "Daily Sales",
-                        width="small",
-                        help="Average daily sa,les over the last 30 days"
+                        help="Average daily sales over the last 30 days"
                     ),
                     'ship_group': st.column_config.Column(
                         "Group",
-                        width="small",
                         help="Ship group"
                     ),
                     'ship_name': st.column_config.Column(
                         "Ship",
-                        width="small",
                         help="Ship name"
                     ),
                     'ship_id': st.column_config.Column(
@@ -241,12 +242,17 @@ def display_categorized_doctrine_data(selected_data):
                     ),
                     'price': st.column_config.NumberColumn(
                         "Price",
-                        format="localized",
-                        help="Price of the item"
+                        format="compact",
+                        help="Price of the ship"
+                    ),
+                    'total_cost': st.column_config.NumberColumn(
+                        "Total Cost",
+                        format="compact",
+                        help="Total cost of the fit"
                     )
 
                 },
-                width='stretch',
+                width='content',
                 hide_index=True
             )
 
@@ -412,7 +418,7 @@ def main():
             logger.warning("Logo image not found")
     with col2:
         st.title("Doctrine Report")
-        st.text("Market Status By Fleet Doctrine")
+        st.text("4-HWWF Market Status By Fleet Doctrine")
 
 
     # Fetch the data

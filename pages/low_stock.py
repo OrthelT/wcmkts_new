@@ -140,7 +140,7 @@ def main():
         wclogo = "images/wclogo.png"
         st.image(wclogo, width=125)
     with col2:
-        st.title("Low Stock Tool")
+        st.title("4-HWWF Low Stock Tool")
     
     st.markdown("""
     This page shows items that are running low on the market. The **Days Remaining** column shows how many days of sales
