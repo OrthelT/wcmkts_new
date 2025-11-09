@@ -58,7 +58,6 @@ def init_db():
     elapsed_time = round((end_time-start_time)*1000, 2)
     logger.info(f"TIME init_db() = {elapsed_time} ms")
     logger.info("-"*100)
-    update_wcmkt_state()
 
 
     return True

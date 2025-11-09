@@ -264,7 +264,11 @@ def create_history_chart(type_id):
 def new_display_sync_status():
     """Display sync status in the sidebar."""
     if "local_update_status" in st.session_state:
-        update_time = st.session_state.local_update_status["updated"]
+        if st.session_state.local_update_status["updated"] is None:
+            update_time = DatabaseConfig("wcmkt").get_most_recent_update("marketstats", remote=False)
+            st.session_state.local_update_status["updated"] = update_time
+        else:
+            update_time = st.session_state.local_update_status["updated"]
         logger.info(f"type of update_time: {type(update_time)}")
         display_time = update_time.strftime("%m-%d | %H:%M UTC")
         logger.info(f"display_time: {display_time}")
@@ -515,7 +519,7 @@ def render_headers():
         wclogo = "images/wclogo.png"
         st.image(wclogo, width=125)
     with col2:
-        st.title("Winter Coalition Market Stats")
+        st.title("Winter Coalition Market Stats - 4-HWWF Market")
 
 @st.fragment
 def display_downloads():
@@ -574,10 +578,16 @@ def display_history_metrics(history_df):
 
 def main():
     if 'db_init_time' not in st.session_state:
-        initialize_main_function()
+        init_result = initialize_main_function()
     elif datetime.now() - st.session_state.db_init_time > timedelta(hours=1):
-        initialize_main_function()
-
+        init_result = initialize_main_function()
+    else:
+        init_result = True
+        
+    if init_result:
+        update_wcmkt_state()
+    
+    
     maybe_run_check()
     render_headers()
 
