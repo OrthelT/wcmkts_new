@@ -515,7 +515,7 @@ def render_headers():
         wclogo = "images/wclogo.png"
         st.image(wclogo, width=125)
     with col2:
-        st.title("Winter Coalition Market Stats")
+        st.title("Winter Coalition Market Stats - 4-HWWF Market")
 
 @st.fragment
 def display_downloads():
