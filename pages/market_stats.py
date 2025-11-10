@@ -534,6 +534,7 @@ def initialize_main_function():
         logger.info("Databases already initialized in session state")
     logger.info("*"*60)
     st.session_state.db_init_time = datetime.now()
+    return True
 
 def render_headers():
     col1, col2 = st.columns([0.2, 0.8], vertical_alignment="bottom")
