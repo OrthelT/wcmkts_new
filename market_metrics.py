@@ -836,11 +836,9 @@ def render_current_market_status_ui(sell_data, stats, selected_item, sell_order_
     with col2:
         if not sell_data.empty:
             volume = sell_data['volume_remain'].sum()
-            if pd.notna(volume):
+            if pd.notna(volume) and 'selected_item' in st.session_state and st.session_state.selected_item is not None:
                 display_volume = millify.millify(volume, precision=2)
                 st.metric("Market Stock (sell orders)", f"{display_volume}")
-        else:
-            st.metric("Market Stock (sell orders)", "0")
         if sell_total_value > 0:
             display_sell_total_value = millify.millify(sell_total_value, precision=2)
             st.metric("Sell Orders Value", f"{display_sell_total_value} ISK")
