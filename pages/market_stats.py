@@ -606,11 +606,11 @@ def main():
         init_result = initialize_main_function()
     else:
         init_result = True
-        
+
     if init_result:
         update_wcmkt_state()
-    
-    
+
+
     maybe_run_check()
     render_headers()
 
@@ -659,6 +659,9 @@ def main():
     if not buy_data.empty:
         buy_order_count = buy_data['order_id'].nunique()
         buy_total_value = (buy_data['price'] * buy_data['volume_remain']).sum()
+
+    # Initialize display formats for dataframes (used by both sell and buy orders)
+    display_formats = get_display_formats()
 
     fit_df = pd.DataFrame()
 
@@ -797,8 +800,6 @@ def main():
             st.subheader("All Sell Orders", divider="green")
 
         display_df.drop(columns='is_buy_order', inplace=True)
-
-        display_formats = get_display_formats()
 
         st.dataframe(display_df, hide_index=True, column_config=display_formats)
 
