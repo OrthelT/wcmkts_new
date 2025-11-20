@@ -373,6 +373,7 @@ def get_module_fits(type_id):
 
 
 def get_groups_for_category(category_id: int)->pd.DataFrame:
+    sde2_db = DatabaseConfig("sde")
     if category_id == 17:
         df = pd.read_csv("build_commodity_groups.csv")
         return df
@@ -384,7 +385,7 @@ def get_groups_for_category(category_id: int)->pd.DataFrame:
         query = """
             SELECT DISTINCT groupID, groupName FROM invGroups WHERE categoryID = :category_id
         """
-    with sde_db.engine.connect() as conn:
+    with sde2_db.engine.connect() as conn:
         df = pd.read_sql_query(text(query), conn, params={"category_id": category_id})
     return df
 
