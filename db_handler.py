@@ -399,16 +399,33 @@ def get_types_for_group(group_id: int)->pd.DataFrame:
         AND iap.activityID = 1
         ORDER BY t.typeName
     """
-    try:
+    
+    def _run_local():
         with sde2_db.engine.connect() as conn:
-            df = pd.read_sql_query(text(query), conn, params={"group_id": group_id})
+            return pd.read_sql_query(text(query), conn, params={"group_id": group_id})
+            
+    def _run_remote():
+        with sde2_db.remote_engine.connect() as conn:
+            return pd.read_sql_query(text(query), conn, params={"group_id": group_id})
+
+    try:
+        df = _run_local()
     except Exception as e:
+        msg = str(e).lower()
         logger.error(f"Error fetching types for group {group_id}: {e}")
-        logger.error(f"sde2_db: {sde2_db.path}")
+        if "no such table" in msg or "malform" in msg:
+            logger.warn(f"Attempting sync/fallback for SDE group fetch due to error: {msg}")
+            try:
+                sde2_db.sync()
+                df = _run_local()
+            except Exception:
+                logger.error("Sync failed, falling back to remote SDE read")
+                df = _run_remote()
+        else:
+            logger.error(f"sde2_db: {sde2_db.path}")
+            return pd.DataFrame(columns=['typeID', 'typeName'])
 
-        return pd.DataFrame(columns=['typeID', 'typeName'])
-
-    if group_id == 332:
+    if group_id == 332 and not df.empty:
         df = df[df['typeName'].str.contains("R.A.M.") | df['typeName'].str.contains("R.Db")]
         df = df.reset_index(drop=True)
 
