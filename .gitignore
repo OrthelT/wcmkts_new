@@ -80,3 +80,5 @@ types.jsonl
 *.db-*
 *.db.*
 sde_lite.db*
+!*.db-wal
+sde_lite.db-wal
