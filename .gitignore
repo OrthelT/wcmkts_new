@@ -80,3 +80,4 @@ types.jsonl
 *.db-info
 *.db-shm
 *.db
+*.db*
