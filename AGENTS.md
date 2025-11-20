@@ -111,7 +111,7 @@ All pages follow consistent patterns with Streamlit best practices:
 
 **Primary Databases:**
 - **`wcmkt2.db`**: Market orders and statistics (synced from Turso via backend repo)
-- **`sde_lite.db`**: EVE Online Static Data Export (lightweight version)
+- **`sdelite2.db`**: EVE Online Static Data Export (lightweight version)
 - **`buildcost.db`**: Manufacturing and structure data
 
 **Database Tables:**
@@ -131,7 +131,7 @@ All pages follow consistent patterns with Streamlit best practices:
 - `nakah_watchlist`: Nakah-specific watchlist
 - `updatelog`: Database update tracking
 
-*sde_lite.db tables:*
+*sdelite2.db tables:*
 - `invTypes`: EVE Online item definitions
 - `invGroups`: Item group classifications
 - `invCategories`: High-level item categories
@@ -163,7 +163,7 @@ All pages follow consistent patterns with Streamlit best practices:
 ### Turso Embedded Replica Pattern
 
 The application uses Turso's embedded-replica feature for optimal performance:
-- Local SQLite databases (`wcmkt2.db`, `sde_lite.db`) provide fast reads
+- Local SQLite databases (`wcmkt2.db`, `sdelite2.db`) provide fast reads
 - Automatic synchronization with remote Turso database via libsql
 - Background sync managed by DatabaseConfig with RWLock concurrency control
 - Integrity checks with `PRAGMA integrity_check` before and after sync
@@ -188,7 +188,7 @@ from config import DatabaseConfig
 db = DatabaseConfig()
 # Access engines
 mkt_engine = db.mkt_engine  # wcmkt2.db
-sde_engine = db.sde_engine  # sde_lite.db
+sde_engine = db.sde_engine  # sdelite2.db
 bc_engine = db.bc_engine    # buildcost.db
 
 # Sync from remote
@@ -212,7 +212,7 @@ SDE_AUTH_TOKEN = "your_sde_auth_token"
 ```
 
 ### Local Development Notes
-- Ensure local database files exist: `wcmkt2.db`, `sde_lite.db`, `buildcost.db`
+- Ensure local database files exist: `wcmkt2.db`, `sdelite2.db`, `buildcost.db`
 - The application will use local SQLite files if sync credentials are not available
 - Database files are git-ignored (*.db, *.db-shm, *.db-wal)
 - Logs are stored in `logs/` directory (git-ignored)

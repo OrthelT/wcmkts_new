@@ -7,11 +7,11 @@ from logging_config import setup_logging
 logger = setup_logging(__name__)
 
 def get_type_name(type_id: int) -> str:
-    # Prefer sde_lite.db; fall back to sde.db if present
-    if os.path.exists("sde_lite.db"):
-        sde = "sqlite+libsql:///sde_lite.db"
+    # Prefer sdelite2.db; fall back to sde.db if present
+    if os.path.exists("sdelite2.db"):
+        sde = "sqlite+libsql:///sdelite2.db"
     else:
-        logger.error("No SDE database found (expected sde_lite.db)")
+        logger.error("No SDE database found (expected sdelite2.db)")
         return None
     sdee_engine = create_engine(sde)
     with Session(bind=sdee_engine) as session:
@@ -24,10 +24,10 @@ def get_type_name(type_id: int) -> str:
             logger.error(f"Error getting type name for type_id={type_id}: {e}")
             return None
 def get_type_id_from_sde(type_name: str) -> int:
-    if os.path.exists("sde_lite.db"):
-        sde = "sqlite+libsql:///sde_lite.db"
+    if os.path.exists("sdelite2.db"):
+        sde = "sqlite+libsql:///sdelite2.db"
     else:
-        logger.error("No SDE database found (expected sde_lite.db)")
+        logger.error("No SDE database found (expected sdelite2.db)")
         return None
     sdee_engine = create_engine(sde)
     with Session(bind=sdee_engine) as session:
