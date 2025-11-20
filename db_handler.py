@@ -390,6 +390,7 @@ def get_groups_for_category(category_id: int)->pd.DataFrame:
     return df
 
 def get_types_for_group(group_id: int)->pd.DataFrame:
+    sde2_db = DatabaseConfig("sde")
     query = """
         SELECT DISTINCT t.typeID, t.typeName 
         FROM invTypes t
@@ -399,10 +400,12 @@ def get_types_for_group(group_id: int)->pd.DataFrame:
         ORDER BY t.typeName
     """
     try:
-        with sde_db.engine.connect() as conn:
+        with sde2_db.engine.connect() as conn:
             df = pd.read_sql_query(text(query), conn, params={"group_id": group_id})
     except Exception as e:
         logger.error(f"Error fetching types for group {group_id}: {e}")
+        logger.error(f"sde2_db: {sde2_db.path}")
+
         return pd.DataFrame(columns=['typeID', 'typeName'])
 
     if group_id == 332:
