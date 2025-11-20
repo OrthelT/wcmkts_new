@@ -865,7 +865,7 @@ def main():
         selected_category = st.sidebar.selectbox("Select a category", categories, index=index)
         category_id = df[df["category"] == selected_category]["id"].values[0]
         group_id = 1012
-        st.rerun()
+        
 
     # Only proceed if we have valid data
     if 'selected_item' in locals() and 'type_names_list' in locals() and 'types_df' in locals():

@@ -8,7 +8,6 @@ backup/
 .vscode/
 # Database files
 market_data.*
-*.db*
 
 # Python
 __pycache__/
@@ -68,7 +67,6 @@ nakah_hfi.json
 dev_files/
 proj_config.py
 archive/
-*.db*
 todos_hurricane_fleet_issue.txt
 depreciated-code/
 doctrine_status_performance.md
@@ -79,3 +77,6 @@ dev.py
 dev/
 types.jsonl
 .cursor/
+*.db-*
+*.db.*
+sde_lite.db*

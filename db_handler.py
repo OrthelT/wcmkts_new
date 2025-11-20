@@ -385,16 +385,25 @@ def get_groups_for_category(category_id: int)->pd.DataFrame:
     return df
 
 def get_types_for_group(group_id: int)->pd.DataFrame:
-    df = pd.read_csv("industry_types.csv")
-    df = df[df['groupID'] == group_id]
-    df = df.drop_duplicates(subset=['typeID'])
-    df2 = df.copy()
-    df2 = df2.sort_values(by='typeName')
+    query = """
+        SELECT DISTINCT t.typeID, t.typeName 
+        FROM invTypes t
+        JOIN industryActivityProducts iap ON t.typeID = iap.productTypeID
+        WHERE t.groupID = :group_id 
+        AND iap.activityID = 1
+        ORDER BY t.typeName
+    """
+    try:
+        with sde_db.engine.connect() as conn:
+            df = pd.read_sql_query(text(query), conn, params={"group_id": group_id})
+    except Exception as e:
+        logger.error(f"Error fetching types for group {group_id}: {e}")
+        return pd.DataFrame(columns=['typeID', 'typeName'])
+
     if group_id == 332:
-        df2 = df2[df2['typeName'].str.contains("R.A.M.") | df2['typeName'].str.contains("R.Db")]
-    df2 = df2[['typeID', 'typeName']]
-    df2.reset_index(drop=True, inplace=True)
-    df = df2
+        df = df[df['typeName'].str.contains("R.A.M.") | df['typeName'].str.contains("R.Db")]
+        df = df.reset_index(drop=True)
+
     return df
 
 def get_4H_price(type_id):
