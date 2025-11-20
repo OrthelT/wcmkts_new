@@ -79,3 +79,4 @@ types.jsonl
 .cursor/
 *.db-info
 *.db-shm
+*.db
