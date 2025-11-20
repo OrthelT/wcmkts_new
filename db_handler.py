@@ -415,12 +415,13 @@ def get_types_for_group(group_id: int)->pd.DataFrame:
         logger.error(f"Error fetching types for group {group_id}: {e}")
         if "no such table" in msg or "malform" in msg:
             logger.warn(f"Attempting sync/fallback for SDE group fetch due to error: {msg}")
+            # Use remote ONLY to avoid infinite sync loops on persistent local errors
             try:
-                sde2_db.sync()
-                df = _run_local()
-            except Exception:
-                logger.error("Sync failed, falling back to remote SDE read")
+                logger.info("Skipping sync and falling back directly to remote SDE read to prevent loops")
                 df = _run_remote()
+            except Exception as e_remote:
+                logger.error(f"Remote fallback also failed: {e_remote}")
+                return pd.DataFrame(columns=['typeID', 'typeName'])
         else:
             logger.error(f"sde2_db: {sde2_db.path}")
             return pd.DataFrame(columns=['typeID', 'typeName'])
