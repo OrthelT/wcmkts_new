@@ -62,9 +62,11 @@ def read_df(
     except Exception as e:
         msg = str(e).lower()
         if fallback_remote_on_malformed and (
-            "malform" in msg or "database disk image is malformed" in msg
+            "malform" in msg 
+            or "database disk image is malformed" in msg
+            or "no such table" in msg
         ):
-            logger.error("Local DB malformed; syncing and retrying, with remote fallback…")
+            logger.error(f"Local DB error ('{msg}'); syncing and retrying, with remote fallback…")
             try:
                 db.sync()
                 return _run_local()
@@ -145,8 +147,8 @@ def get_all_mkt_orders()->pd.DataFrame:
     except Exception as e:
         # Handle on-the-fly corruption by resyncing and retrying once
         msg = str(e).lower()
-        if "malform" in msg or "database disk image is malformed" in msg:
-            logger.error("Detected malformed DB during read; resyncing and retrying once…")
+        if "malform" in msg or "database disk image is malformed" in msg or "no such table" in msg:
+            logger.error(f"Detected DB error ('{msg}') during read; resyncing and retrying once…")
             try:
                 mkt_db.sync()
                 df = _read_all()
@@ -274,8 +276,8 @@ def get_stats(stats_query=None):
                 stats = pd.read_sql_query(stats_query, conn)
     except Exception as e:
         msg = str(e).lower()
-        if "malform" in msg or "database disk image is malformed" in msg:
-            logger.error("Malformed DB during stats read; syncing and falling back to remote if needed…")
+        if "malform" in msg or "database disk image is malformed" in msg or "no such table" in msg:
+            logger.error(f"DB error ('{msg}') during stats read; syncing and falling back to remote if needed…")
             try:
                 mkt_db.sync()
                 with mkt_db.engine.connect() as conn:
@@ -332,8 +334,10 @@ def get_all_market_history()->pd.DataFrame:
             mkt_db.sync()
             df = _read_all()
         except Exception as e2:
-            logger.error(f"Failed to get market history after sync: {e2}")
-            raise
+            logger.error(f"Failed to get market history after sync: {e2}. Falling back to remote.")
+            with mkt_db.remote_engine.connect() as conn:
+                df = pd.read_sql_query(query, conn)
+            # If remote also fails, we let it raise
     df = df.reset_index(drop=True)
     return df
 
