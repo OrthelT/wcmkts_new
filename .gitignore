@@ -77,8 +77,5 @@ dev.py
 dev/
 types.jsonl
 .cursor/
-*.db-*
-*.db.*
-sde_lite.db*
-!*.db-wal
-sde_lite.db-wal
+*.db-info
+*.db-shm
