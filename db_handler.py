@@ -481,4 +481,4 @@ def get_chart_table_data()->pd.DataFrame:
     return df
 
 if __name__ == "__main__":
-    get_market_history(1296)
+    pass

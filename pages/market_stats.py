@@ -715,8 +715,16 @@ def main():
         cat_id = None
 
         if fit_df is not None and fit_df.empty is False:
-            cat_id = stats['category_id'].iloc[0]
-            fits_on_mkt = fit_df['Fits on Market'].min()
+            try:
+                cat_id = stats['category_id'].iloc[0]
+            except Exception as e:
+                logger.error(f"Error: {e}")
+                cat_id = None
+            try:
+                fits_on_mkt = fit_df['Fits on Market'].min()
+            except Exception as e:
+                logger.error(f"Error: {e}")
+                fits_on_mkt = None
             if cat_id == 6:
                 isship = True
 
