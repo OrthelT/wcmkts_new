@@ -81,3 +81,4 @@ types.jsonl
 *.db-shm
 *.db
 *.db*
+FRONTEND_UPDATE_PLAN.md
