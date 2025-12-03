@@ -9,7 +9,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from sqlalchemy import text,bindparam
-from db_handler import safe_format, get_market_history, get_fitting_data, get_module_fits, read_df
+from db_handler import safe_format, get_market_history, get_fitting_data, get_module_fits, read_df, extract_sde_info
 from logging_config import setup_logging
 import millify
 from config import DatabaseConfig
@@ -550,6 +550,15 @@ def display_downloads():
     st.download_button("Download Market Stats", data=get_all_mkt_stats().to_csv(index=False), file_name="4H_market_stats.csv", mime="text/csv",type="tertiary", help="Download aggregated 4H market statistics for commonly traded items as a CSV file",icon="📥")
     st.download_button("Download Market History", data=get_all_market_history().to_csv(index=False), file_name="4H_market_history.csv", mime="text/csv",type="tertiary", help="Download 4H market history for commonly traded items as a CSV file",icon="📥")
 
+@st.fragment
+def display_sde_table_download():
+    db = DatabaseConfig("sde")
+    tables = db.get_table_list()
+    default_table = "sdetypes"
+    selected_table = st.selectbox("Select an SDE table to download", options=tables, index=tables.index(default_table), help="Select an SDE table to download as a CSV file. Note: sdetypes provides the most commonly used fields and is probably what you want. ")
+    st.download_button("Download Table", data=extract_sde_info("sde", params={"table_name": selected_table}).to_csv(index=False), file_name=f"{selected_table}.csv", mime="text/csv",type="tertiary", help="Download the selected table as a CSV file",icon="🗃")
+    logger.info(f"downloaded {selected_table} to {f"{selected_table}.csv"}")
+    
 def display_history_data(history_df):
 
     history_df.date = pd.to_datetime(history_df.date).dt.strftime("%Y-%m-%d")
@@ -955,6 +964,9 @@ def main():
         st.sidebar.divider()
 
         display_downloads()
-
+        st.sidebar.divider()
+        st.markdown("### Download SDE Tables")
+        st.markdown("Use this to download a Static Data Export (SDE) table as a CSV file. We have created the **sdetypes** table which combines the most commonly used fields and is probably the one you want.")
+        display_sde_table_download()
 if __name__ == "__main__":
     main()
