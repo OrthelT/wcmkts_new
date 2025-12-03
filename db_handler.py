@@ -44,13 +44,14 @@ def read_df(
     """
 
     def _run_local() -> pd.DataFrame:
-        with db.local_access():
-            with db.engine.connect() as conn:
-                sql = query
-                return pd.read_sql_query(sql, conn, params=params)
+        engine = db.engine
+        with engine.connect() as conn:
+            sql = query
+            return pd.read_sql_query(sql, conn, params=params)
 
     def _run_remote() -> pd.DataFrame:
-        with db.remote_engine.connect() as conn:
+        engine = db.remote_engine
+        with engine.connect() as conn:
             sql = query
             return pd.read_sql_query(sql, conn, params=params)
 
@@ -59,6 +60,7 @@ def read_df(
 
     try:
         return _run_local()
+
     except Exception as e:
         msg = str(e).lower()
         if fallback_remote_on_malformed and (
@@ -480,5 +482,27 @@ def get_chart_table_data()->pd.DataFrame:
     df = df.reset_index(drop=True)
     return df
 
-if __name__ == "__main__":
-    pass
+def extract_sde_info(sde_table: str, table_name: str = None, params: dict = None, query: str = None,local: bool = True, fallback_remote: bool = True)->pd.DataFrame:
+    db = DatabaseConfig("sde")
+    
+    if table_name is None and params and "table_name" in params:
+        table_name = params["table_name"]
+        
+    if query is None:
+        if not table_name:
+            raise ValueError("Table name is required")
+        query = f"SELECT * FROM {table_name}"
+        
+    # Remove table_name from params if it exists, as we've handled it via string injection
+    # and table names cannot be bound as parameters
+    run_params = params.copy() if params else {}
+    if "table_name" in run_params:
+        del run_params["table_name"]
+    
+    # If params is empty dict, pass None to avoid driver issues with empty dict vs tuple
+    if not run_params:
+        run_params = None
+        
+    df = new_read_df(db, query, params=run_params)
+    df = df.reset_index(drop=True)
+    return df
