@@ -1,5 +1,5 @@
 [project]
-name = "wcmkts-production"
+name = "wcmkts-staging"
 version = "0.1.3"
 description = "Add your description here"
 readme = "README.md"

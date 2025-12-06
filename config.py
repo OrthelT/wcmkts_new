@@ -87,28 +87,28 @@ class RWLock:
 
 class DatabaseConfig:
 
-    wcdbmap = "wcmkt4" #master config variable for the database to use
+    wcdbmap = "wcmktprod" #master config variable for the database to use
 
     _db_paths = {
-        "wcmkt4": "wcmkt4.db", #production database
+        "wcmktprod": "wcmktprod.db", #production database
         "sde": "sdelite2.db",
         "build_cost": "buildcost.db",
-        "wcmkt3": "wcmkt3.db" #testing db
+        "wcmkttest": "wcmkttest.db" #testing db
 
     }
 
     _db_turso_urls = {
-        "wcmkt4_turso": st.secrets.wcmkt4_turso.url,
+        "wcmktprod_turso": st.secrets.wcmktprod_turso.url,
         "sde_turso": st.secrets.sdelite2_turso.url,
         "build_cost_turso": st.secrets.buildcost_turso.url,
-        "wcmkt3_turso": st.secrets.wcmkt3_turso.url,
+        "wcmkttest_turso": st.secrets.wcmkttest_turso.url,
     }
 
     _db_turso_auth_tokens = {
-        "wcmkt4_turso": st.secrets.wcmkt4_turso.token,
+        "wcmktprod_turso": st.secrets.wcmktprod_turso.token,
         "sde_turso": st.secrets.sdelite2_turso.token,
         "build_cost_turso": st.secrets.buildcost_turso.token,
-        "wcmkt3_turso": st.secrets.wcmkt3_turso.token,
+        "wcmkttest_turso": st.secrets.wcmkttest_turso.token,
     }
 
     # Shared handles per-alias to avoid multiple simultaneous connections to the same file
