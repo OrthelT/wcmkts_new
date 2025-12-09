@@ -14,61 +14,12 @@ from utils import get_jita_price, get_multi_item_jita_price
 # Insert centralized logging configuration
 logger = setup_logging(__name__)
 
-# Import target handling functions if set_targets.py exists
-try:
-    from set_targets import get_target_from_db
-    USE_DB_TARGETS = True
-except ImportError:
-    USE_DB_TARGETS = False
-
-# Targets for different ship types (for front-end display)
-# In production, consider moving this to a database table
-SHIP_TARGETS = {
-    'Flycatcher': 20,
-    'Griffin': 20,
-    'Guardian': 25,
-    'Harpy': 100,
-    'Heretic': 20,
-    'Hound': 50,
-    'Huginn': 20,
-    'Hurricane': 100,
-    # Add more ships as needed
-    'default': 20  # Default target if ship not found
-}
-
 mktdb = DatabaseConfig("wcmkt")
-
-def get_target_value(ship_name):
-    """Get the target value for a ship type"""
-    # First try to get from database if available
-    if USE_DB_TARGETS:
-        try:
-            return get_target_from_db(ship_name)
-        except Exception as e:
-            logger.error(f"Error getting target from database: {e}")
-            # Fall back to dictionary if database lookup fails
-
-    # Convert to title case for standardized lookup in dictionary
-    ship_name = ship_name.title() if isinstance(ship_name, str) else ''
-
-    # Look up in the targets dictionary, default to 20 if not found
-    return SHIP_TARGETS.get(ship_name, SHIP_TARGETS['default'])
 
 def get_target_from_fit_id(fit_id):
     """Get the target value for a fit id"""
     df = new_read_df(mktdb, text("SELECT * FROM ship_targets WHERE fit_id = :fit_id"), {"fit_id": fit_id})
     return df.loc[0, 'ship_target']
-
-def get_target_values_batch(ship_names):
-    """Get target values for multiple ship types efficiently"""
-    if USE_DB_TARGETS:
-        # If using DB, still call individual functions for now
-        # TODO: Implement batch DB lookup if needed
-        return [get_target_value(name) for name in ship_names]
-
-    # For dictionary lookup, use vectorized pandas operations
-    ship_names_title = pd.Series(ship_names).str.title().fillna('')
-    return ship_names_title.map(SHIP_TARGETS).fillna(SHIP_TARGETS['default']).tolist()
 
 def new_get_targets():
     df = new_read_df(mktdb, text("SELECT * FROM ship_targets"))
