@@ -344,12 +344,15 @@ def get_all_market_history()->pd.DataFrame:
     return df
 
 def get_update_time()->str:
+    """Return last local update time as formatted string, handling stale/bool state."""
     if "local_update_status" in st.session_state:
-        update_time = st.session_state.local_update_status["updated"]
-        update_time = update_time.strftime("%Y-%m-%d | %H:%M UTC")
-    else:
-        update_time = None
-    return update_time
+        status = st.session_state.local_update_status
+        if isinstance(status, dict) and status.get("updated"):
+            try:
+                return status["updated"].strftime("%Y-%m-%d | %H:%M UTC")
+            except Exception as e:
+                logger.error(f"Failed to format local_update_status.updated: {e}")
+    return None
 
 def get_module_fits(type_id):
     with mkt_db.local_access():

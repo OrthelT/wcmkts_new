@@ -115,7 +115,7 @@ def get_janice_price(type_id: int) -> float:
         logger.error(f"Error fetching price for {type_id}: {response.status_code}")
         return None
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=3600)
 def get_multi_item_jita_price(type_ids: list[int]) -> dict[int, float]:
     """
     Fetch Jita prices for multiple items at once using Fuzzwork API.
