@@ -1,6 +1,10 @@
 # Winter Coalition Market Stats Settings
 # This file contains configuration for ship role categorization and other settings
 
+[outliers]
+    # Method: none, remove, cap
+    default_method = 'none'
+
 [ship_roles]
     # DPS - Primary damage dealers
     dps = [

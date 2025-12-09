@@ -12,6 +12,11 @@ import numpy as np
 
 logger = setup_logging(__name__)
 
+import tomllib
+with open("settings.toml", "rb") as f:
+    settings = tomllib.load(f)
+default_outliers_method = settings['outliers']['default_method']
+
 @st.cache_data(ttl=3600)
 def get_category_type_ids(selected_category=None)->list:
     sde_db = DatabaseConfig("sde")
@@ -301,7 +306,7 @@ def detect_outliers(series, method='iqr', threshold=1.5):
     else:
         raise ValueError("Method must be 'iqr' or 'zscore'")
 
-def handle_outliers(series, method='cap', outlier_threshold=1.5, cap_percentile=95):
+def handle_outliers(series, method=default_outliers_method, outlier_threshold=1.5, cap_percentile=95):
     """
     Handle outliers in a pandas Series
 
@@ -314,6 +319,7 @@ def handle_outliers(series, method='cap', outlier_threshold=1.5, cap_percentile=
     Returns:
         pandas Series: data with outliers handled
     """
+    logger.info(f"Handling outliers with method: {method}")
     if method == 'none':
         return series
 
@@ -332,7 +338,7 @@ def handle_outliers(series, method='cap', outlier_threshold=1.5, cap_percentile=
         raise ValueError("Method must be 'remove', 'cap', or 'none'")
 
 def create_ISK_volume_chart(moving_avg_period=14, date_period='daily', start_date=None, end_date=None,
-                           outlier_method='cap', outlier_threshold=1.5, cap_percentile=95, selected_category=None):
+                            outlier_method=default_outliers_method, outlier_threshold=1.5, cap_percentile=95, selected_category=None):
     """
     Create an interactive ISK volume chart with moving average and outlier handling
 
@@ -349,6 +355,7 @@ def create_ISK_volume_chart(moving_avg_period=14, date_period='daily', start_dat
     Returns:
         plotly.graph_objects.Figure: The chart figure
     """
+    logger.info(f"Creating ISK volume chart with outlier method: {outlier_method}")
     # Get the data based on selected parameters
     df = calculate_ISK_volume_by_period(date_period, start_date, end_date, selected_category)
 
@@ -518,10 +525,18 @@ def render_ISK_volume_chart_ui():
             col5, col6, col7 = st.columns(3)
 
             with col5:
+                if default_outliers_method == 'none':
+                    index = 2
+                elif default_outliers_method == 'remove':
+                    index = 1
+                elif default_outliers_method == 'cap':
+                    index = 0
+                else:
+                    index = 0
                 outlier_method = st.selectbox(
                     "Outlier Method",
                     options=['cap', 'remove', 'none'],
-                    index=0,  # Default to 'cap'
+                    index=index,
                     format_func=lambda x: {
                         'cap': 'Cap Outliers',
                         'remove': 'Remove Outliers',
