@@ -36,17 +36,19 @@ tests/
 ├── test_clean_mkt_data.py           # Data cleaning utilities
 ├── test_fetch_industry_indices.py   # Industry index functions
 ├── test_logging_config.py           # Logging configuration
-└── test_safe_format.py              # Number formatting utilities
+├── test_safe_format.py              # Number formatting utilities
+└── test_settings_toml.py            # Configuration file validation
 ```
 
 ## Current Test Coverage
 
-**24 tests** covering core functionality:
+**34 tests** (24 unit tests + 10 config validation tests) covering core functionality:
 
 - **Success cases**: Normal function operation
 - **Data validation**: Return types and structure
 - **Edge cases**: Empty inputs, missing data
 - **API contracts**: Function signatures and behavior
+- **Configuration validation**: TOML structure and schema compliance
 
 ## Testing Approach
 
@@ -55,6 +57,7 @@ tests/
 - ✅ **Data types** - Are return types correct?
 - ✅ **Edge cases** - Empty results, missing inputs
 - ✅ **API contracts** - Function signatures
+- ✅ **Configuration files** - TOML structure, required fields, data types
 
 ### What We Don't Test
 - ❌ **Implementation details** - Internal error handling
@@ -108,10 +111,37 @@ The project uses `.coveragerc` to configure code coverage:
 - **Minimum coverage**: 40% (focused on tested core functions)
 - **Current coverage**: ~50% of core modules
 
+## Configuration Testing
+
+### settings.toml Validation
+
+The `test_settings_toml.py` suite ensures `settings.toml` maintains proper structure:
+
+**Validates:**
+- File parsing (TOML syntax)
+- Required sections (`ship_roles`)
+- Required categories (`dps`, `logi`, `links`, `support`, `special_cases`)
+- Data types (lists of strings, nested dictionaries)
+- Non-empty role lists
+- Special cases structure (ship_name -> fit_id -> role mapping)
+- No duplicate ships across categories
+- Compatibility with code usage patterns
+
+**Benefits:**
+- Catches configuration errors before runtime
+- Prevents breaking changes during manual edits
+- Validates structure matches code expectations
+- Ensures role assignments are consistent
+
+**Run configuration tests:**
+```bash
+uv run pytest tests/test_settings_toml.py -v
+```
+
 ## Key Metrics
 
-- **Total tests**: 24
-- **Test types**: Unit tests focused on function behavior
+- **Total tests**: 34 (24 unit + 10 config validation)
+- **Test types**: Unit tests and configuration validation
 - **Run time**: ~0.7 seconds
 - **Success rate**: 100%
 - **Coverage**: 50.5% of core modules (40%+ required)

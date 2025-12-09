@@ -1,4 +1,8 @@
+# Winter Coalition Market Stats Settings
+# This file contains configuration for ship role categorization and other settings
+
 [ship_roles]
+    # DPS - Primary damage dealers
     dps = [
         'Hurricane', 'Hurricane Fleet Issue', 'Ferox', 'Zealot', 'Purifier', 'Tornado', 'Oracle',
         'Harbinger', 'Brutix', 'Myrmidon', 'Talos', 'Naga', 'Rokh',
@@ -6,16 +10,19 @@
         'Raven Navy Issue', 'Typhoon', 'Tempest', 'Maelstrom', 'Abaddon',
         'Apocalypse', 'Armageddon', 'Rifter', 'Punisher', 'Merlin', 'Incursus',
         'Bellicose', 'Nightmare', 'Retribution', 'Vengeance', 'Exequror Navy Issue',
-        'Hound', 'Nemesis', 'Manticore', 'Moa', 'Harpy', 'Tempest Fleet Issue', 'Cyclone Fleet Issue', 'Kikimora'
+        'Hound', 'Nemesis', 'Manticore', 'Moa', 'Harpy', 'Tempest Fleet Issue',
+        'Cyclone Fleet Issue', 'Kikimora', 'Apocalypse Navy Issue'
     ]
+
     # Logi - Logistics/healing ships
     logi = [
         'Osprey', 'Guardian', 'Basilisk', 'Scimitar', 'Oneiros',
         'Burst', 'Bantam', 'Inquisitor', 'Navitas', 'Zarmazd', 'Deacon', 'Thalia', 'Kirin'
     ]
+
     # Links - Command ships and fleet booster ships
     links = [
-        'Claymore', 'Devoter', 'Drake', 'Cyclone', 'Sleipnir', 'Nighthawk',
+        'Claymore', 'Cyclone', 'Sleipnir', 'Nighthawk',
         'Damnation', 'Astarte', 'Command Destroyer', 'Bifrost', 'Pontifex',
         'Stork', 'Magus', 'Hecate', 'Confessor', 'Jackdaw', 'Eos'
     ]
@@ -27,8 +34,20 @@
         'Griffin', 'Maulus', 'Crucifier', 'Heretic', 'Flycatcher',
         'Eris', 'Dictor', 'Hictor', 'Broadsword', 'Phobos', 'Onyx',
         'Crow', 'Claw', 'Crusader', 'Taranis', 'Atron', 'Slasher',
-        'Executioner', 'Condor', 'Svipul'
+        'Executioner', 'Condor', 'Svipul', 'Porpoise', 'Nereus', 'Devoter'
     ]
 
-    # Special cases - ships that don't fit into the above categories
-    special_cases = {Vulture={369='DPS', 475='Links'}, Deimos={202='DPS', 330='Support'}}
+    # Special cases: Map Ship Name -> { Fit ID -> Role }
+    # Some ships can serve different roles depending on their fitting
+    [ship_roles.special_cases.Vulture]
+        "369" = "DPS"
+        "475" = "Links"
+
+    [ship_roles.special_cases.Deimos]
+        "202" = "DPS"
+        "330" = "Support"
+    
+    [ship_roles.special_cases.Drake]
+        "39" = "Links"
+        "114" = "Links"
+        "288" = "Support"
