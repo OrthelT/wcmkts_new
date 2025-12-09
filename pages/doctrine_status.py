@@ -11,6 +11,7 @@ from millify import millify
 from logging_config import setup_logging
 from db_handler import get_update_time, read_df, get_all_fitting_data
 from doctrines import create_fit_df, get_all_fit_data, calculate_jita_fit_cost_and_delta
+from utils import get_multi_item_jita_price
 from config import DatabaseConfig
 # Insert centralized logging configuration
 logger = setup_logging(__name__, log_file="doctrine_status.log")
@@ -158,12 +159,63 @@ def get_module_stock_list(module_names: list):
                 """
             )
             df = read_df(mkt_db, query, {"module_name": module_name})
+
+            # Get module usage information
+            usage_display = ""
+            try:
+                usage_query = text(
+                    """
+                    SELECT st.ship_name, st.ship_target, d.fit_qty
+                    FROM doctrines d
+                    JOIN ship_targets st ON d.fit_id = st.fit_id
+                    WHERE d.type_name = :module_name
+                    """
+                )
+                usage_df = read_df(mkt_db, usage_query, {"module_name": module_name})
+                if not usage_df.empty:
+                    grouped_usage = (
+                        usage_df
+                        .fillna({"ship_target": 0, "fit_qty": 0})
+                        .groupby(["ship_name", "ship_target"], dropna=False)["fit_qty"]
+                        .sum()
+                        .reset_index()
+                    )
+                    usage_parts = []
+                    for _, usage_row in grouped_usage.iterrows():
+                        fit_name = (
+                            str(usage_row["ship_name"])
+                            if pd.notna(usage_row["ship_name"])
+                            else "Unknown Fit"
+                        )
+                        ship_target = (
+                            int(usage_row["ship_target"])
+                            if pd.notna(usage_row["ship_target"])
+                            else 0
+                        )
+                        fit_qty = (
+                            int(usage_row["fit_qty"])
+                            if pd.notna(usage_row["fit_qty"])
+                            else 0
+                        )
+                        modules_needed = ship_target * fit_qty
+                        usage_parts.append(f"{fit_name}({modules_needed})")
+                    usage_display = ", ".join(usage_parts)
+            except Exception as e:
+                logger.error(f"Error getting fit usage for {module_name}: {e}")
+
             if not df.empty and pd.notna(df.loc[0, 'total_stock']) and pd.notna(df.loc[0, 'fits_on_mkt']) and pd.notna(df.loc[0, 'type_id']):
-                module_info = f"{module_name} (Total: {int(df.loc[0, 'total_stock'])} | Fits: {int(df.loc[0, 'fits_on_mkt'])})"
-                csv_module_info = f"{module_name},{int(df.loc[0, 'type_id'])},{int(df.loc[0, 'total_stock'])},{int(df.loc[0, 'fits_on_mkt'])}\n"
+                stock = int(df.loc[0, 'total_stock'])
+                fits = int(df.loc[0, 'fits_on_mkt'])
+                type_id = int(df.loc[0, 'type_id'])
+                module_info = f"{module_name} (Total: {stock} | Fits: {fits})"
+                if usage_display:
+                    module_info = f"{module_info} | Used in: {usage_display}"
+                csv_module_info = f"{module_name},{type_id},{stock},{fits},,{usage_display}\n"
             else:
                 module_info = f"{module_name}"
-                csv_module_info = f"{module_name},0,0,0\n"
+                if usage_display:
+                    module_info = f"{module_info} | Used in: {usage_display}"
+                csv_module_info = f"{module_name},0,0,0,,{usage_display}\n"
 
             st.session_state.module_list_state[module_name] = module_info
             st.session_state.csv_module_list_state[module_name] = csv_module_info
@@ -206,10 +258,10 @@ def get_ship_stock_list(ship_names: list):
                 ship_fits = int(df.loc[0, 'fits_on_mkt'])
                 ship_target = get_ship_target(ship_id, 0)
                 ship_info = f"{ship} (Qty: {ship_stock} | Fits: {ship_fits} | Target: {ship_target})"
-                csv_ship_info = f"{ship},{ship_id},{ship_stock},{ship_fits},{ship_target}\n"
+                csv_ship_info = f"{ship},{ship_id},{ship_stock},{ship_fits},{ship_target},\n"
             else:
                 ship_info = ship
-                csv_ship_info = f"{ship},0,0,0,0\n"
+                csv_ship_info = f"{ship},0,0,0,0,\n"
 
             st.session_state.ship_list_state[ship] = ship_info
             st.session_state.csv_ship_list_state[ship] = csv_ship_info
@@ -367,59 +419,74 @@ def get_fitting_column_config() -> dict:
         ),
     }
 
+@st.cache_data(ttl=3600, show_spinner="Fetching Jita prices...")
+def fetch_jita_prices_for_types(type_ids: tuple[int, ...]) -> dict[int, float]:
+    """
+    Fetch Jita prices for a set of type_ids using a single API call.
+    Cached for 1 hour to reduce external requests.
+    """
+    if not type_ids:
+        return {}
+    return get_multi_item_jita_price(list(type_ids))
+
 def calculate_all_jita_deltas(force_refresh: bool = False):
     """
     Calculate Jita price deltas for all fits in the background.
     Stores results in session state for display.
-    
+
     Args:
-        force_refresh: If True, bypasses cache check and fetches fresh prices
+        force_refresh: If True, bypasses cache and fetches fresh prices
     """
     import datetime
-    
-    # Check if already calculated and cache is still valid
-    if not force_refresh and 'jita_deltas_calculated' in st.session_state and st.session_state.jita_deltas_calculated:
-        # Check cache age (1 hour = 3600 seconds)
-        if 'jita_deltas_timestamp' in st.session_state:
-            cache_age = (datetime.datetime.now() - st.session_state.jita_deltas_timestamp).total_seconds()
-            if cache_age < 3600:  # Less than 1 hour old
-                logger.info(f"Using cached Jita deltas (age: {cache_age:.0f} seconds)")
-                return  # Use cached data
-    
+
     if 'jita_deltas' not in st.session_state:
         st.session_state.jita_deltas = {}
-    
+
     # Get the raw fit data
     all_fits_df, summary_df = create_fit_df()
-    
+
     if all_fits_df.empty:
-        st.session_state.jita_deltas_calculated = True
-        st.session_state.jita_deltas_timestamp = datetime.datetime.now()
+        st.session_state.jita_deltas = {}
+        st.session_state.jita_deltas_last_updated = datetime.datetime.now()
         return
-    
+
     fit_ids = all_fits_df['fit_id'].unique()
-    
+
+    # Fetch ALL unique type_ids in one batch
+    unique_type_ids = tuple(
+        sorted({int(tid) for tid in all_fits_df['type_id'].dropna().unique().tolist()})
+    )
+
+    if force_refresh:
+        fetch_jita_prices_for_types.clear()
+
     with st.spinner("Calculating Jita price deltas..."):
-        for fit_id in fit_ids:
-            try:
-                fit_data = all_fits_df[all_fits_df['fit_id'] == fit_id]
-                fit_summary_data = summary_df[summary_df['fit_id'] == fit_id]
-                
-                if not fit_summary_data.empty:
-                    total_cost = fit_summary_data['total_cost'].iloc[0] if pd.notna(fit_summary_data['total_cost'].iloc[0]) else 0
-                    
-                    # Calculate delta
-                    jita_fit_cost, jita_cost_delta = calculate_jita_fit_cost_and_delta(fit_data, total_cost)
-                    
-                    # Store in session state
-                    st.session_state.jita_deltas[fit_id] = jita_cost_delta
-            except Exception as e:
-                logger.error(f"Error calculating Jita delta for fit_id {fit_id}: {e}")
-                st.session_state.jita_deltas[fit_id] = None
-    
-    st.session_state.jita_deltas_calculated = True
-    st.session_state.jita_deltas_timestamp = datetime.datetime.now()
-    logger.info(f"Calculated Jita deltas for {len(st.session_state.jita_deltas)} fits at {st.session_state.jita_deltas_timestamp}")
+        jita_price_map = fetch_jita_prices_for_types(unique_type_ids)
+
+        if not jita_price_map:
+            logger.warning("No Jita prices fetched; skipping delta calculation.")
+            st.session_state.jita_deltas = {fit_id: None for fit_id in fit_ids}
+        else:
+            for fit_id in fit_ids:
+                try:
+                    fit_data = all_fits_df[all_fits_df['fit_id'] == fit_id]
+                    fit_summary_data = summary_df[summary_df['fit_id'] == fit_id]
+
+                    if not fit_summary_data.empty:
+                        total_cost = fit_summary_data['total_cost'].iloc[0] if pd.notna(fit_summary_data['total_cost'].iloc[0]) else 0
+
+                        # Pass shared price map to avoid redundant API calls
+                        jita_fit_cost, jita_cost_delta = calculate_jita_fit_cost_and_delta(
+                            fit_data, total_cost, jita_price_map
+                        )
+
+                        st.session_state.jita_deltas[fit_id] = jita_cost_delta
+                except Exception as e:
+                    logger.error(f"Error calculating Jita delta for fit_id {fit_id}: {e}")
+                    st.session_state.jita_deltas[fit_id] = None
+
+    st.session_state.jita_deltas_last_updated = datetime.datetime.now()
+    logger.info(f"Calculated Jita deltas for {len(st.session_state.jita_deltas)} fits at {st.session_state.jita_deltas_last_updated}")
 
 def main():
     # App title and logo
@@ -856,7 +923,7 @@ def main():
 
         if st.session_state.selected_ships:
             export_text += "SHIPS:\n" + "\n".join(ship_list)
-            csv_export += "Type,TypeID,Quantity,Fits,Target\n"  # Updated CSV header
+            csv_export += "Type,TypeID,Quantity,Fits,Target,Usage\n"
             csv_export += "".join(csv_ship_list)
 
             if st.session_state.selected_modules:
@@ -870,7 +937,7 @@ def main():
             export_text += "MODULES:\n" + "\n".join(module_list)
 
             if not st.session_state.selected_ships:
-                csv_export += "Type,TypeID,Quantity,Fits,Target\n"
+                csv_export += "Type,TypeID,Quantity,Fits,Target,Usage\n"
             csv_export += "".join(csv_module_list)
 
         # Download button
@@ -893,50 +960,28 @@ def main():
     # Jita Price Delta Section
     st.sidebar.markdown("---")
     st.sidebar.subheader("Jita Price Comparison")
-    
-    jita_calculated = st.session_state.get('jita_deltas_calculated', False)
-    
-    if not jita_calculated:
-        if st.sidebar.button("📊 Calculate Jita Price Deltas", help="Compare fit costs to Jita prices. Requires an external API call, so we calculate on demand to for performance."):
+
+    jita_deltas = st.session_state.get('jita_deltas', {})
+
+    if not jita_deltas:
+        if st.sidebar.button(
+            "📊 Calculate Jita Price Deltas",
+            help="Compare fit costs to Jita prices. Cached for 1 hour via the API response.",
+        ):
             calculate_all_jita_deltas()
             st.rerun()
-        st.sidebar.info("Click to calculate price comparison with Jita market. Only calculated on demand for performance.")
     else:
-        st.sidebar.success(f"✓ Jita deltas calculated for {len(st.session_state.get('jita_deltas', {}))} fits")
-        
-        # Show when prices were last updated
-        if 'jita_deltas_timestamp' in st.session_state:
-            import datetime
-            timestamp = st.session_state.jita_deltas_timestamp
-            cache_age = (datetime.datetime.now() - timestamp).total_seconds()
-            
-            # Show last updated time
+        st.sidebar.success(f"✓ Jita deltas calculated for {len(jita_deltas)} fits")
+
+        if 'jita_deltas_last_updated' in st.session_state:
+            timestamp = st.session_state.jita_deltas_last_updated
             time_str = timestamp.strftime("%H:%M:%S")
             st.sidebar.caption(f"Last updated: {time_str}")
-            
-            # Calculate when refresh will be available
-            cache_remaining = max(0, 3600 - cache_age)  # 1 hour = 3600 seconds
-            
-            if cache_remaining > 0:
-                # Cache still valid - show countdown
-                minutes_remaining = int(cache_remaining / 60)
-                seconds_remaining = int(cache_remaining % 60)
-                st.sidebar.caption(f"Cache expires in: {minutes_remaining}m {seconds_remaining}s")
-                
-                # Disabled refresh button with info
-                st.sidebar.button(
-                    "🔄 Refresh Jita Prices", 
-                    help=f"Prices cached for 1 hour. Try again in {minutes_remaining}m {seconds_remaining}s",
-                    disabled=True
-                )
-            else:
-                # Cache expired - allow refresh
-                if st.sidebar.button("🔄 Refresh Jita Prices", help="Fetch latest Jita prices (cache expired)"):
-                    # Force refresh to get new prices
-                    st.session_state.jita_deltas_calculated = False
-                    st.session_state.jita_deltas = {}
-                    calculate_all_jita_deltas(force_refresh=True)
-                    st.rerun()
+
+        if st.sidebar.button("🔄 Refresh Jita Prices", help="Fetch latest Jita prices (bypasses cache)"):
+            st.session_state.jita_deltas = {}
+            calculate_all_jita_deltas(force_refresh=True)
+            st.rerun()
     # Display last update timestamp
     st.sidebar.markdown("---")
     st.sidebar.write(f"Last ESI update: {get_update_time()}")

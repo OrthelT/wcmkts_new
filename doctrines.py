@@ -174,14 +174,19 @@ def create_fit_df()->pd.DataFrame:
 
     return df, fit_summary
 
-def calculate_jita_fit_cost_and_delta(fit_data: pd.DataFrame, current_fit_cost: float) -> tuple[float, float | None]:
+def calculate_jita_fit_cost_and_delta(
+    fit_data: pd.DataFrame,
+    current_fit_cost: float,
+    jita_price_map: dict[int, float] | None = None
+) -> tuple[float, float | None]:
     """
     Calculate the fit cost at Jita prices and the percentage delta compared to current market prices.
-    
+
     Args:
         fit_data: DataFrame containing fit items with columns: type_id, fit_qty
         current_fit_cost: The current fit cost at market prices
-    
+        jita_price_map: Optional pre-fetched mapping of type_id -> price to avoid repeat API calls
+
     Returns:
         tuple: (jita_fit_cost, percentage_delta)
             - jita_fit_cost: Total cost of the fit at Jita prices
@@ -190,12 +195,12 @@ def calculate_jita_fit_cost_and_delta(fit_data: pd.DataFrame, current_fit_cost: 
     """
     if fit_data.empty:
         return 0.0, None
-    
+
     # Get unique type_ids from the fit
     type_ids = fit_data['type_id'].unique().tolist()
-    
-    # Fetch all Jita prices at once
-    jita_prices = get_multi_item_jita_price(type_ids)
+
+    # Fetch all Jita prices at once (use provided map or fetch new)
+    jita_prices = jita_price_map or get_multi_item_jita_price(type_ids)
     
     if not jita_prices:
         logger.warning("Could not fetch any Jita prices for fit items")
