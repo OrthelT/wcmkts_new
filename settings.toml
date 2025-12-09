@@ -1,0 +1,34 @@
+[ship_roles]
+    dps = [
+        'Hurricane', 'Hurricane Fleet Issue', 'Ferox', 'Zealot', 'Purifier', 'Tornado', 'Oracle',
+        'Harbinger', 'Brutix', 'Myrmidon', 'Talos', 'Naga', 'Rokh',
+        'Megathron', 'Hyperion', 'Dominix', 'Raven', 'Scorpion Navy Issue',
+        'Raven Navy Issue', 'Typhoon', 'Tempest', 'Maelstrom', 'Abaddon',
+        'Apocalypse', 'Armageddon', 'Rifter', 'Punisher', 'Merlin', 'Incursus',
+        'Bellicose', 'Nightmare', 'Retribution', 'Vengeance', 'Exequror Navy Issue',
+        'Hound', 'Nemesis', 'Manticore', 'Moa', 'Harpy', 'Tempest Fleet Issue', 'Cyclone Fleet Issue', 'Kikimora'
+    ]
+    # Logi - Logistics/healing ships
+    logi = [
+        'Osprey', 'Guardian', 'Basilisk', 'Scimitar', 'Oneiros',
+        'Burst', 'Bantam', 'Inquisitor', 'Navitas', 'Zarmazd', 'Deacon', 'Thalia', 'Kirin'
+    ]
+    # Links - Command ships and fleet booster ships
+    links = [
+        'Claymore', 'Devoter', 'Drake', 'Cyclone', 'Sleipnir', 'Nighthawk',
+        'Damnation', 'Astarte', 'Command Destroyer', 'Bifrost', 'Pontifex',
+        'Stork', 'Magus', 'Hecate', 'Confessor', 'Jackdaw', 'Eos'
+    ]
+
+    # Support - EWAR, tackle, interdiction, etc.
+    support = [
+        'Sabre', 'Stiletto', 'Malediction', 'Huginn', 'Rapier', 'Falcon',
+        'Blackbird', 'Celestis', 'Arbitrator', 'Vigil',
+        'Griffin', 'Maulus', 'Crucifier', 'Heretic', 'Flycatcher',
+        'Eris', 'Dictor', 'Hictor', 'Broadsword', 'Phobos', 'Onyx',
+        'Crow', 'Claw', 'Crusader', 'Taranis', 'Atron', 'Slasher',
+        'Executioner', 'Condor', 'Svipul'
+    ]
+
+    # Special cases - ships that don't fit into the above categories
+    special_cases = {Vulture={369='DPS', 475='Links'}, Deimos={202='DPS', 330='Support'}}

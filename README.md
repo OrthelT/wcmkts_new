@@ -7,6 +7,16 @@ CONTRIBUTING: Contributors welcome. This project is fully open source under MIT 
 
 
 # UPDATES:
+## version 0.1.5
+### Ship Role Configuration
+- Moved ship role definitions to `settings.toml` for easier management without code changes
+- Added support for fit-specific role assignment (e.g. Vulture can be DPS or Links depending on fit)
+### SDE Data Access
+- Added CSV download capability for SDE data in Market Stats
+### Database Updates
+- Migrated production market database to `wcmktprod.db`
+- Updated database configuration to use `wcmktprod` alias
+
 ## version 0.1.4 WCMKTS_North
 ### Fit Detail View
   - New expandable section showing all items in selected fits

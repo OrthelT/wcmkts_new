@@ -72,49 +72,22 @@ def get_fit_name_from_db(fit_id: int) -> str:
         logger.error(f"Error: {e}")
         return "Unknown Fit"
 
-def categorize_ship_by_role(ship_name: str) -> str:
-    """Categorize ships by their primary fleet role."""
-
-    # DPS - Primary damage dealers
-    dps_ships = {
-        'Hurricane', 'Hurricane Fleet Issue', 'Ferox', 'Zealot', 'Purifier', 'Tornado', 'Oracle',
-        'Harbinger', 'Brutix', 'Myrmidon', 'Talos', 'Naga', 'Rokh',
-        'Megathron', 'Hyperion', 'Dominix', 'Raven', 'Scorpion Navy Issue',
-        'Raven Navy Issue', 'Typhoon', 'Tempest', 'Maelstrom', 'Abaddon',
-        'Apocalypse', 'Armageddon', 'Rifter', 'Punisher', 'Merlin', 'Incursus',
-        'Bellicose', 'Deimos', 'Nightmare', 'Retribution', 'Vengeance', 'Exequror Navy Issue',
-        'Hound', 'Nemesis', 'Manticore', 'Vulture', 'Moa', 'Harpy', 'Tempest Fleet Issue', 'Cyclone Fleet Issue', 'Kikimora'
-    }
-
-    # Logi - Logistics/healing ships
-    logi_ships = {
-        'Osprey', 'Guardian', 'Basilisk', 'Scimitar', 'Oneiros',
-        'Burst', 'Bantam', 'Inquisitor', 'Navitas', 'Zarmazd', 'Deacon', 'Thalia', 'Kirin'
-    }
-
-    # Links - Command ships and fleet booster ships
-    links_ships = {
-        'Claymore', 'Devoter', 'Drake', 'Cyclone', 'Sleipnir', 'Nighthawk',
-        'Damnation', 'Astarte', 'Command Destroyer', 'Bifrost', 'Pontifex',
-        'Stork', 'Magus', 'Hecate', 'Confessor', 'Jackdaw',
-    }
-
-    # Support - EWAR, tackle, interdiction, etc.
-    support_ships = {
-        'Sabre', 'Stiletto', 'Malediction', 'Huginn', 'Rapier', 'Falcon',
-        'Blackbird', 'Celestis', 'Arbitrator', 'Vigil',
-        'Griffin', 'Maulus', 'Crucifier', 'Heretic', 'Flycatcher',
-        'Eris', 'Dictor', 'Hictor', 'Broadsword', 'Phobos', 'Onyx',
-        'Crow', 'Claw', 'Crusader', 'Taranis', 'Atron', 'Slasher',
-        'Executioner', 'Condor', 'Svipul'
-    }
+def categorize_ship_by_role(ship_name: str, fit_id: int) -> str:
+    fit_id = str(fit_id)
+    import tomllib
+    with open("settings.toml", "rb") as f:
+        settings = tomllib.load(f)
+    dps_ships = settings['ship_roles']['dps']
+    logi_ships = settings['ship_roles']['logi']
+    links_ships = settings['ship_roles']['links']
+    support_ships = settings['ship_roles']['support']
+    special_cases = settings['ship_roles']['special_cases']
 
     # Check each category
-    if ship_name in dps_ships:
-        if ship_name == 'Vulture':
-            return "DPS"
-        else:
-            return "DPS"
+    if ship_name in special_cases and fit_id in special_cases[ship_name]:
+        return special_cases[ship_name][fit_id]
+    elif ship_name in dps_ships:
+        return "DPS"
     elif ship_name in logi_ships:
         return "Logi"
     elif ship_name in links_ships:
@@ -141,13 +114,10 @@ def display_categorized_doctrine_data(selected_data):
 
     # Create a proper copy of the DataFrame to avoid SettingWithCopyWarning
     selected_data_with_roles = selected_data.copy()
-    selected_data_with_roles['role'] = selected_data_with_roles['ship_name'].apply(categorize_ship_by_role)
-
-    # Handle special case for Vulture ships based on fit_id
-    vulture_mask = selected_data_with_roles['ship_name'] == 'Vulture'
-    if vulture_mask.any():
-        selected_data_with_roles.loc[vulture_mask & (selected_data_with_roles['fit_id'] == 369), 'role'] = 'DPS'
-        selected_data_with_roles.loc[vulture_mask & (selected_data_with_roles['fit_id'] != 369), 'role'] = 'Links'
+    selected_data_with_roles['role'] = selected_data_with_roles.apply(
+        lambda row: categorize_ship_by_role(row['ship_name'], row['fit_id']), 
+        axis=1
+    )
 
     # Remove fit_id 474 using loc
     selected_data_with_roles = selected_data_with_roles.loc[selected_data_with_roles['fit_id'] != 474]
@@ -202,9 +172,9 @@ def display_categorized_doctrine_data(selected_data):
             df = df.drop(columns=['role']).reset_index(drop=True)
             df['ship_target'] = df['ship_target'] * st.session_state.target_multiplier
             df['target_percentage'] = round(df['fits'] / df['ship_target'], 2)
-            logger.info(f"DF: {df.head()}")
-            logger.info(f"DF columns: {df.columns}")
 
+            # padding for the dataframe to avoid cutting off the bottom of small dataframes
+            static_height = len(df) * 40 + 50 if len(df) < 10 else 'auto'
 
             st.dataframe(
                 df, 
@@ -253,7 +223,8 @@ def display_categorized_doctrine_data(selected_data):
 
                 },
                 width='content',
-                hide_index=True
+                hide_index=True,
+                height=static_height
             )
 
 def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.DataFrame, selected_fit_ids: list, fit_summary: pd.DataFrame, lead_ship_id: int, selected_doctrine_id: int):
