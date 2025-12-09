@@ -82,7 +82,7 @@ All pages follow consistent patterns with Streamlit best practices:
 **Database Layer:**
 - **`config.py`**: DatabaseConfig class managing SQLite/LibSQL connections with Turso cloud sync
   - Implements custom RWLock for concurrent read/write access (multiple readers, exclusive writer)
-  - Manages 3 databases: wcmkt2 (market), sde_lite (static data), buildcost (manufacturing)
+  - Manages 3 databases: wcmktprod (market), sde_lite (static data), buildcost (manufacturing)
   - Methods: `integrity_check()`, `sync()`, `validate_sync()`, `get_most_recent_update()`
   - Automatic malformed database detection and recovery
 - **`db_handler.py`**: Database query layer with `read_df()` and `new_read_df()` functions
@@ -110,13 +110,13 @@ All pages follow consistent patterns with Streamlit best practices:
 ### Local Databases
 
 **Primary Databases:**
-- **`wcmkt2.db`**: Market orders and statistics (synced from Turso via backend repo)
+- **`wcmktprod.db`**: Market orders and statistics (synced from Turso via backend repo)
 - **`sdelite2.db`**: EVE Online Static Data Export (lightweight version)
 - **`buildcost.db`**: Manufacturing and structure data
 
 **Database Tables:**
 
-*wcmkt2.db tables:*
+*wcmktprod.db tables:*
 - `marketorders`: Individual buy/sell orders
 - `marketstats`: Aggregated market statistics
 - `market_history`: Historical price/volume data
@@ -144,6 +144,7 @@ All pages follow consistent patterns with Streamlit best practices:
 ### Configuration Files
 
 - **`config.toml`**: Streamlit theme and UI configuration
+- **`settings.toml`**: Application settings including ship role definitions and special cases
 - **`.streamlit/secrets.toml`**: Turso credentials (local only, git-ignored)
 - **`pyproject.toml`**: Project metadata, dependencies, dev tools config
 - **`last_sync_state.json`**: Database sync status and scheduling state
@@ -187,7 +188,7 @@ from config import DatabaseConfig
 
 db = DatabaseConfig()
 # Access engines
-mkt_engine = db.mkt_engine  # wcmkt2.db
+mkt_engine = db.mkt_engine  # wcmktprod.db
 sde_engine = db.sde_engine  # sdelite2.db
 bc_engine = db.bc_engine    # buildcost.db
 
@@ -212,7 +213,7 @@ SDE_AUTH_TOKEN = "your_sde_auth_token"
 ```
 
 ### Local Development Notes
-- Ensure local database files exist: `wcmkt2.db`, `sdelite2.db`, `buildcost.db`
+- Ensure local database files exist: `wcmktprod.db`, `sdelite2.db`, `buildcost.db`
 - The application will use local SQLite files if sync credentials are not available
 - Database files are git-ignored (*.db, *.db-shm, *.db-wal)
 - Logs are stored in `logs/` directory (git-ignored)
@@ -386,13 +387,13 @@ Include in PR description:
                          ▼
 ┌─────────────────────────────────────────────────────────────┐
 │              DatabaseConfig (config.py)                     │
-│              RWLock Concurrency Control                     │
-│  ┌──────────┬──────────┬──────────┐                        │
-│  │ wcmkt2   │ sde_lite │buildcost │                        │
-│  │ .db      │ .db      │.db       │                        │
-│  └────┬─────┴──────────┴──────────┘                        │
-│       │ Sync (libsql)                                       │
-└───────┼─────────────────────────────────────────────────────┘
+   │              RWLock Concurrency Control                     │
+   │  ┌──────────┬──────────┬──────────┐                        │
+   │  │ wcmktprod│ sde_lite │buildcost │                        │
+   │  │ .db      │ .db      │.db       │                        │
+   │  └────┬─────┴──────────┴──────────┘                        │
+   │       │ Sync (libsql)                                       │
+   └───────┼─────────────────────────────────────────────────────┘
         │
         ▼
 ┌─────────────────────────────────────────────────────────────┐
@@ -420,7 +421,7 @@ Include in PR description:
 
 ## Version Information
 
-- **Current version**: 0.1.3
+- **Current version**: 0.1.5
 - **Python version**: 3.12+
 - **Package manager**: uv (preferred)
 - **Main branch**: main
