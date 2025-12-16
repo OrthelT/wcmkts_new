@@ -824,7 +824,6 @@ def render_current_market_status_ui(sell_data, stats, selected_item, sell_order_
                     delta_price = (min_price - jita_price) / jita_price if jita_price > 0 else None
                 else: delta_price = None
 
-
                 if pd.notna(min_price) and selected_item:
                     st.session_state.current_price = min_price
                     display_min_price = millify.millify(min_price, precision=2)
@@ -846,7 +845,7 @@ def render_current_market_status_ui(sell_data, stats, selected_item, sell_order_
 
             if st.session_state.jita_price is not None:
                 display_jita_price = millify.millify(st.session_state.jita_price, precision=2)
-                st.metric("Jita Price", f"{display_jita_price} ISK")
+                st.metric("Jita Sell Price", f"{display_jita_price} ISK")
 
     with col2:
         if not sell_data.empty:

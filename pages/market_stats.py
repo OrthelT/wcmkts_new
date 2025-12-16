@@ -330,6 +330,8 @@ def check_for_db_updates()->tuple[bool, float]:
     return check, local_time
 
 def check_db(manual_override: bool = False):
+    """Check for database updates and sync if needed"""
+
     if manual_override:
         check_for_db_updates.clear()
         logger.info("*****************************************************")
@@ -466,6 +468,8 @@ def get_display_formats()->dict:
     return display_formats
 
 def check_selected_item(selected_item: str)->str | None:
+    """check if selected item is valid and set the session state"""
+    
     if selected_item == "":
         st.session_state.selected_item = None
         st.session_state.selected_item_id = None
@@ -536,7 +540,8 @@ def initialize_main_function():
     st.session_state.db_init_time = datetime.now()
     return True
 
-def render_headers():
+def render_title_headers():
+    """Render the title headers for the market stats page"""
     col1, col2 = st.columns([0.2, 0.8], vertical_alignment="bottom")
     with col1:
         wclogo = "images/wclogo.png"
@@ -546,12 +551,14 @@ def render_headers():
 
 @st.fragment
 def display_downloads():
+    """Display the download buttons for the market stats page"""
     st.download_button("Download Market Orders", data=get_all_mkt_orders().to_csv(index=False), file_name="4H_market_orders.csv", mime="text/csv",type="tertiary", help="Download all 4H market orders as a CSV file",icon="📥")
     st.download_button("Download Market Stats", data=get_all_mkt_stats().to_csv(index=False), file_name="4H_market_stats.csv", mime="text/csv",type="tertiary", help="Download aggregated 4H market statistics for commonly traded items as a CSV file",icon="📥")
     st.download_button("Download Market History", data=get_all_market_history().to_csv(index=False), file_name="4H_market_history.csv", mime="text/csv",type="tertiary", help="Download 4H market history for commonly traded items as a CSV file",icon="📥")
 
 @st.fragment
 def display_sde_table_download():
+    """Display the SDE table download buttons for the market stats page"""
     db = DatabaseConfig("sde")
     tables = db.get_table_list()
     default_table = "sdetypes"
@@ -607,25 +614,29 @@ def display_history_metrics(history_df):
         st.metric("Average Price (30 days)", f"{millify.millify(avgpr30, precision=2)} ISK")
         st.metric("Average Volume (30 days)", f"{millify.millify(avgvol30, precision=0)}")
 
-
 def main():
+    """Main function for the market stats page"""
+    # Initialize databases if needed
     if 'db_init_time' not in st.session_state:
         init_result = initialize_main_function()
     elif datetime.now() - st.session_state.db_init_time > timedelta(hours=1):
         init_result = initialize_main_function()
     else:
         init_result = True
-
     if init_result:
         update_wcmkt_state()
 
-
+    # Check for database updates and sync if needed
     maybe_run_check()
-    render_headers()
-
+    
+    # Render maintitle headers
+    render_title_headers()
+    
+    # Render sidebar filters
     st.sidebar.header("Filters")
     show_all = st.sidebar.checkbox("Show All Data", value=False)
 
+    # Generate the category and item filters
     categories, all_items, _ = get_filter_options()
     logger.debug(f"categories: {len(categories)}")
     selected_category = st.sidebar.selectbox(
@@ -646,18 +657,19 @@ def main():
         index=0,
         format_func=lambda x: "All Items" if x == "" else x
     )
-
     selected_item = check_selected_item(selected_item)
 
+    # Get the market data with performance timing
     t1 = time.perf_counter()
     sell_data, buy_data, stats = new_get_market_data(show_all)
     t2 = time.perf_counter()
-    elapsed_time = (t2 - t1) * 1000
-    logger.info(f"new_get_market_data elapsed: {elapsed_time:.2f} ms")
+    elapsed_time = round((t2 - t1)*1000, 2)
+    logger.info(f"new_get_market_data elapsed: {elapsed_time} ms")
 
-    # # Process sell orders
+    # Process sell orders
     sell_order_count = 0
     sell_total_value = 0
+    # Count the number of sell orders and calculate the total value
     if not sell_data.empty:
         sell_order_count = sell_data['order_id'].nunique()
         sell_total_value = (sell_data['price'] * sell_data['volume_remain']).sum()
@@ -665,6 +677,7 @@ def main():
     # Process buy orders
     buy_order_count = 0
     buy_total_value = 0
+    # Count the number of buy orders and calculate the total value
     if not buy_data.empty:
         buy_order_count = buy_data['order_id'].nunique()
         buy_total_value = (buy_data['price'] * buy_data['volume_remain']).sum()
@@ -672,6 +685,7 @@ def main():
     # Initialize display formats for dataframes (used by both sell and buy orders)
     display_formats = get_display_formats()
 
+    # Initialize the fitting dataframe
     fit_df = pd.DataFrame()
 
     if not sell_data.empty:
@@ -692,6 +706,7 @@ def main():
                 st.session_state.selected_item_id = selected_item_id
 
             if selected_item_id:
+                # Get the fitting data for the selected item
                 try:
                     fit_df = get_fitting_data(selected_item_id)
                 except Exception:
@@ -769,9 +784,11 @@ def main():
                 try:
                     if fits_on_mkt is not None and fits_on_mkt:
                         st.subheader("Winter Co. Doctrine", divider="orange")
+                        # if the item is a module, charge, etc. display the fits that use the module
                         if cat_id in [7,8,18]:
                             st.write(get_module_fits(selected_item_id))
                         else:
+                            # otherwise we will display the group name for the item
                             st.write(fit_df[fit_df['type_id'] == selected_item_id]['group_name'].iloc[0])
                 except Exception as e:
                     logger.error(f"Error: {e}")
