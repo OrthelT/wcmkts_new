@@ -8,7 +8,6 @@ import sqlite3 as sql
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session
-from models import UpdateLog
 import threading
 from contextlib import suppress, contextmanager
 from time import perf_counter
@@ -426,6 +425,8 @@ class DatabaseConfig:
         Returns:
             The most recent update time for the table
         """
+        from models import UpdateLog
+
         engine = self.remote_engine if remote else self.engine
         session = Session(bind=engine)
         with session.begin():
@@ -444,7 +445,6 @@ class DatabaseConfig:
         logger.info(f"update_time: {status.strftime('%Y-%m-%d %H:%M')}")
         logger.info(f"time_since: {round(time_since.total_seconds() / 60, 1)} minutes")
         return time_since if time_since is not None else None
-
 
 if __name__ == "__main__":
     pass

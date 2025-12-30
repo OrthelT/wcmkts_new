@@ -39,20 +39,20 @@ def create_fit_df()->pd.DataFrame:
 
     # Use vectorized operations instead of iterating through each fit
     logger.info("Processing fit data with vectorized operations")
-
+    
     # Group by fit_id and aggregate data efficiently
     fit_summary = df.groupby('fit_id').agg({
         'ship_name': 'first',
         'ship_id': 'first',
         'hulls': 'first',
         'fits_on_mkt': 'min',
-        'avg_vol': 'first' if 'avg_vol' in df.columns else lambda x: 0
     }).reset_index()
-
-    # Get ship group and price data efficiently
+   
+        # Get ship group and price data efficiently
     ship_data = df[df['type_id'] == df['ship_id']].groupby('fit_id').agg({
         'group_name': 'first',
-        'price': 'first'
+        'price': 'first',
+        'avg_vol': 'first',
     }).reset_index()
 
     # Merge the data
