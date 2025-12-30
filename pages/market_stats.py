@@ -16,7 +16,7 @@ from config import DatabaseConfig
 from db_handler import new_get_market_data, get_all_mkt_orders, get_all_mkt_stats, get_all_market_history
 from init_db import init_db
 from sync_state import update_wcmkt_state
-from type_info import get_backup_type_id
+from type_info import get_type_id_with_fallback
 from market_metrics import render_ISK_volume_chart_ui, render_ISK_volume_table_ui, render_30day_metrics_ui, render_current_market_status_ui
 from utils import get_jita_price
 
@@ -481,7 +481,7 @@ def check_selected_item(selected_item: str)->str | None:
         logger.info(f"selected_item: {selected_item}")
         st.sidebar.text(f"Item: {selected_item}")
         st.session_state.selected_item = selected_item
-        st.session_state.selected_item_id = get_backup_type_id(selected_item)
+        st.session_state.selected_item_id = get_type_id_with_fallback(selected_item)
         jita_price = get_jita_price(st.session_state.selected_item_id)
         if jita_price:
             st.session_state.jita_price = jita_price
@@ -702,7 +702,7 @@ def main():
                 logger.debug(f"selected_item_id in st.session_state: {selected_item_id}")
             else:
                 logger.debug(f"selected_item_id not in st.session_state, getting backup type id")
-                selected_item_id = get_backup_type_id(selected_item)
+                selected_item_id = get_type_id_with_fallback(selected_item)
                 st.session_state.selected_item_id = selected_item_id
 
             if selected_item_id:
@@ -760,7 +760,7 @@ def main():
             if 'selected_item_id' in st.session_state:
                 selected_item_id = st.session_state.selected_item_id
             else:
-                selected_item_id = get_backup_type_id(selected_item)
+                selected_item_id = get_type_id_with_fallback(selected_item)
                 st.session_state.selected_item_id = selected_item_id
             try:
                 image_id = selected_item_id
@@ -914,7 +914,7 @@ def main():
             selected_item_id = st.session_state.selected_item_id
         else:
             try:
-                selected_item_id = get_backup_type_id(selected_item)
+                selected_item_id = get_type_id_with_fallback(selected_item)
             except Exception as e:
                 logger.error(f"Error: {e}")
                 selected_item_id = None
@@ -958,7 +958,7 @@ def main():
         if 'selected_item_id' in st.session_state and st.session_state.selected_item_id is not None:
             selected_item_id = st.session_state.selected_item_id
         else:
-            selected_item_id = get_backup_type_id(selected_item)
+            selected_item_id = get_type_id_with_fallback(selected_item)
         try:
             fit_id = fit_df['fit_id'].iloc[0]
         except Exception as e:
