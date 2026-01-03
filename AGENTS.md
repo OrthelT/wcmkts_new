@@ -147,7 +147,6 @@ All pages follow consistent patterns with Streamlit best practices:
 - **`settings.toml`**: Application settings including ship role definitions and special cases
 - **`.streamlit/secrets.toml`**: Turso credentials (local only, git-ignored)
 - **`pyproject.toml`**: Project metadata, dependencies, dev tools config
-- **`last_sync_state.json`**: Database sync status and scheduling state
 - **`sync_log_dict.json`**: Detailed sync operation logs
 
 ### Other Directories
@@ -293,7 +292,6 @@ df = get_all_mkt_stats()  # Returns cached pandas DataFrame
 
 - **Manual sync**: Available via sidebar button in Streamlit UI
 - **Automatic sync**: Scheduled for 13:00 UTC daily (managed by sync scheduler)
-- **Sync status**: Tracked in `last_sync_state.json` and displayed in UI
 - **Programmatic sync**: Use `DatabaseConfig.sync()` method
 - **Integrity validation**: Automatic PRAGMA integrity_check before/after sync
 - **Remote fallback**: Auto-fallback to remote queries if local DB is malformed
@@ -359,7 +357,6 @@ Include in PR description:
 - **Concurrent access**: RWLock handles this automatically, but check logs for contention
 
 ### Data Quality Issues
-- **Stale data**: Verify last sync timestamp in UI or `last_sync_state.json`
 - **Missing data**: Check if backend repository (mkts_backend) is running and updating remote DB
 - **Incorrect prices**: Verify Jita prices are current, check Fuzzworks API fallback
 - **Missing types**: Check SDE database is current and complete

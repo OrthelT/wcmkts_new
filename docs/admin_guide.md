@@ -45,7 +45,6 @@ Development environments can use a `.env` file as described in the README.
 
 Database synchronization is configured in `db_handler.py` and `db_utils.py`:
 - Automatic sync occurs daily at 13:00 UTC (configurable in `schedule_db_sync()`)
-- Sync state is stored in `last_sync_state.json`
 - Manual sync via sidebar button calls `sync_db()` function
 - Cache TTL is set to 60 seconds in various functions
 
