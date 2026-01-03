@@ -83,3 +83,4 @@ types.jsonl
 *.db*
 FRONTEND_UPDATE_PLAN.md
 settings.toml.bak
+refactorprompt.md
