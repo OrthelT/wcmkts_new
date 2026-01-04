@@ -124,3 +124,50 @@ class ShipRole(Enum):
     def display_order(cls) -> list["ShipRole"]:
         """Return roles in logical display order."""
         return [cls.DPS, cls.LOGI, cls.LINKS, cls.SUPPORT]
+
+    @classmethod
+    def from_string(cls, role_name: str) -> "ShipRole":
+        """
+        Convert role name string to ShipRole enum.
+
+        Args:
+            role_name: Role name as string (case-insensitive)
+                      Accepts: "DPS", "Logi", "Links", "Support"
+
+        Returns:
+            Corresponding ShipRole enum value
+
+        Raises:
+            ValueError: If role_name doesn't match a valid role
+
+        Example:
+            >>> ShipRole.from_string("DPS")
+            <ShipRole.DPS: 1>
+            >>> ShipRole.from_string("logi")
+            <ShipRole.LOGI: 2>
+        """
+        role_upper = role_name.upper()
+        mapping = {
+            "DPS": cls.DPS,
+            "LOGI": cls.LOGI,
+            "LINKS": cls.LINKS,
+            "SUPPORT": cls.SUPPORT,
+        }
+
+        if role_upper not in mapping:
+            raise ValueError(
+                f"Invalid role name: {role_name}. "
+                f"Must be one of: {', '.join(mapping.keys())}"
+            )
+
+        return mapping[role_upper]
+
+    @property
+    def display_name(self) -> str:
+        """Return human-readable role name matching original string format."""
+        return {
+            ShipRole.DPS: "DPS",
+            ShipRole.LOGI: "Logi",
+            ShipRole.LINKS: "Links",
+            ShipRole.SUPPORT: "Support",
+        }[self]

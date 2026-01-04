@@ -48,6 +48,18 @@ from services.doctrine_service import (
     create_fit_df,
 )
 
+from services.categorization import (
+    # Main service
+    ConfigBasedCategorizer,
+    get_ship_role_categorizer,
+
+    # Configuration
+    ShipRoleConfig,
+
+    # Backwards compatibility
+    categorize_ship_by_role,
+)
+
 __all__ = [
     # Price Service
     'PriceService',
@@ -71,4 +83,10 @@ __all__ = [
     'FitBuildResult',
     'BuildMetadata',
     'create_fit_df',
+
+    # Categorization Service
+    'ConfigBasedCategorizer',
+    'get_ship_role_categorizer',
+    'ShipRoleConfig',
+    'categorize_ship_by_role',
 ]
