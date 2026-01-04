@@ -178,17 +178,59 @@ def get_jita_price(type_id: int) -> float:
     return get_price_service().get_jita_price(type_id).price
 ```
 
+### `domain/` Package (✅ Complete)
+
+Domain models providing typed, immutable structures to replace raw DataFrame rows.
+
+**Files Created:**
+- `domain/__init__.py` - Package exports
+- `domain/enums.py` - Status and role enumerations
+- `domain/models.py` - Core domain dataclasses
+
+**Key Components:**
+
+| Component | Type | Purpose |
+|-----------|------|---------|
+| `StockStatus` | Enum | Stock levels (CRITICAL, NEEDS_ATTENTION, GOOD) with display helpers |
+| `ShipRole` | Enum | Ship roles (DPS, LOGI, LINKS, SUPPORT) with styling metadata |
+| `FitItem` | Dataclass | Individual item in a fit (module, hull, ammo) |
+| `FitSummary` | Dataclass | Aggregated fit summary with computed properties |
+| `ModuleStock` | Dataclass | Module with stock levels and usage info |
+| `ModuleUsage` | Dataclass | Where a module is used (ship_name, qty) |
+| `Doctrine` | Dataclass | Fleet doctrine grouping multiple fits |
+
+**Design Principles Applied:**
+- `frozen=True` for immutability and hashability (safe for caching)
+- Factory methods (`from_dataframe_row`) for clean construction from pandas
+- Computed properties encapsulate business logic (e.g., `target_percentage`, `status`)
+- Type aliases (`TypeID`, `FitID`, `Price`) for code clarity
+
+**Example Usage:**
+```python
+from domain import FitSummary, StockStatus
+
+# Create from DataFrame row
+summary = FitSummary.from_dataframe_row(row, lowest_modules=['Module A', 'Module B'])
+
+# Access computed properties
+print(f"Status: {summary.status.display_name}")  # "Needs Attention"
+print(f"Color: {summary.status.display_color}")  # "orange"
+
+# Apply target multiplier (returns new immutable instance)
+adjusted = summary.with_target_multiplier(1.5)
+```
+
 ---
 
 ## Next Steps (Priority Order)
 
-### Phase 1: Domain Models
+### Phase 1: Domain Models ✅ COMPLETE
 Create `domain/models.py` with:
-- [ ] `FitItem` dataclass
-- [ ] `FitSummary` dataclass
-- [ ] `ModuleStock` dataclass
-- [ ] `Doctrine` dataclass
-- [ ] Factory methods (`from_dataframe_row`)
+- [x] `FitItem` dataclass
+- [x] `FitSummary` dataclass
+- [x] `ModuleStock` dataclass
+- [x] `Doctrine` dataclass
+- [x] Factory methods (`from_dataframe_row`)
 
 ### Phase 2: Repository Layer
 Create `repositories/doctrine_repo.py` with:
@@ -236,6 +278,8 @@ Update Streamlit pages to use facade:
 When continuing this work, read these files for context:
 
 ```
+domain/models.py             # Domain models (FitItem, FitSummary, etc.)
+domain/enums.py              # Status and role enums
 services/price_service.py    # Completed example of all patterns
 doctrines.py                 # Main target for refactoring
 pages/doctrine_status.py     # Consumer of doctrine data
