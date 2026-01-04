@@ -470,8 +470,14 @@ def main():
                 with ship_cols[0]:
                     # Add checkbox next to ship name with unique key using fit_id and ship_name
                     unique_key = f"ship_{row['fit_id']}_{row['ship_name']}"
-                    ship_selected = st.checkbox("x", key=unique_key,
-                                             value=row['ship_name'] in st.session_state.selected_ships, label_visibility="hidden")
+
+                    # Initialize checkbox state from selected_ships if not already set
+                    if unique_key not in st.session_state:
+                        st.session_state[unique_key] = row['ship_name'] in st.session_state.selected_ships
+
+                    ship_selected = st.checkbox("x", key=unique_key, label_visibility="hidden")
+
+                    # Sync checkbox state with selected_ships list
                     if ship_selected and row['ship_name'] not in st.session_state.selected_ships:
                         st.session_state.selected_ships.append(row['ship_name'])
                     elif not ship_selected and row['ship_name'] in st.session_state.selected_ships:
@@ -594,7 +600,7 @@ def main():
                     module_name = module.split(" (")[0]
                     # Make each key unique by adding fit_id and index to avoid duplicates
                     module_key = f"{row['fit_id']}_{i}_{module_name}_{module_qty}"
-                    display_key = f"{module_name}"
+                    display_key = f"{module_name}_{module_qty}"
 
                     # Determine module status
                     if int(module_qty) <= row['target'] * 0.2:
@@ -613,8 +619,13 @@ def main():
 
                     col_a, col_b = st.columns([0.1, 0.9])
                     with col_a:
-                        is_selected = st.checkbox("1", key=module_key, label_visibility="hidden",
-                                               value=display_key in st.session_state.selected_modules)
+                        # Initialize checkbox state from selected_modules if not already set
+                        if module_key not in st.session_state:
+                            st.session_state[module_key] = display_key in st.session_state.selected_modules
+
+                        is_selected = st.checkbox("1", key=module_key, label_visibility="hidden")
+
+                        # Sync checkbox state with selected_modules list
                         if is_selected and display_key not in st.session_state.selected_modules:
                             st.session_state.selected_modules.append(display_key)
                         elif not is_selected and display_key in st.session_state.selected_modules:
@@ -645,6 +656,10 @@ def main():
     # Add "Select All Ships" button
     if ship_col1.button("📋 Select All Ships", width='content'):
         st.session_state.selected_ships = st.session_state.displayed_ships.copy()
+        # Clear all ship checkbox states so they reinitialize on next render
+        keys_to_clear = [key for key in st.session_state.keys() if key.startswith("ship_")]
+        for key in keys_to_clear:
+            del st.session_state[key]
         st.rerun()
 
     # Add "Clear Ship Selection" button
@@ -652,6 +667,10 @@ def main():
         st.session_state.selected_ships = []
         st.session_state.ship_list_state = {}
         st.session_state.csv_ship_list_state = {}
+        # Clear all ship checkbox states
+        keys_to_clear = [key for key in st.session_state.keys() if key.startswith("ship_")]
+        for key in keys_to_clear:
+            del st.session_state[key]
         logger.info("Cleared ship selection and session state")
         logger.info(f"Session state ship list: {st.session_state.ship_list_state}")
         logger.info(f"Session state csv ship list: {st.session_state.csv_ship_list_state}")
@@ -703,6 +722,12 @@ def main():
             st.session_state.selected_modules = list(set(low_stock_modules))
         else:
             st.session_state.selected_modules = list(set(visible_modules))
+        # Clear all module checkbox states so they reinitialize on next render
+        keys_to_clear = [key for key in st.session_state.keys() if "_" in key and key.split("_")[0].isdigit()]
+        for key in keys_to_clear:
+            # Only clear keys that look like module checkboxes (fit_id_index_module_qty pattern)
+            if len(key.split("_")) >= 3:
+                del st.session_state[key]
         st.rerun()
 
     # Clear module selection button
@@ -710,6 +735,12 @@ def main():
         st.session_state.selected_modules = []
         st.session_state.module_list_state = {}
         st.session_state.csv_module_list_state = {}
+        # Clear all module checkbox states
+        keys_to_clear = [key for key in st.session_state.keys() if "_" in key and key.split("_")[0].isdigit()]
+        for key in keys_to_clear:
+            # Only clear keys that look like module checkboxes (fit_id_index_module_qty pattern)
+            if len(key.split("_")) >= 3:
+                del st.session_state[key]
         logger.info("Cleared module selection and session state")
         logger.info(f"Session state module list: {st.session_state.module_list_state}")
         logger.info(f"Session state csv module list: {st.session_state.csv_module_list_state}")
