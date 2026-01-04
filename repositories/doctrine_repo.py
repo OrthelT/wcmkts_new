@@ -31,7 +31,34 @@ class DoctrineRepository:
     multiple files, eliminating duplication and providing a single
     source of truth for data access patterns.
 
-    Example usage:
+    ## Attributes:
+    - `db`: DatabaseConfig instance for the market database
+    - `logger`: Optional logger instance
+
+    ## Helper Methods:
+    - `get_methods(print_methods: bool = False)`: Get all methods of the DoctrineRepository class
+
+    ## All Methods:
+    - `get_all_fits()`: Get all fit data from the doctrines table
+    - `get_fit_by_id(fit_id)`: Get all items for a specific fit
+    - `get_fits_by_type_id(type_id)`: Get all fits containing a specific type
+    - `get_all_targets()`: Get all ship targets
+    - `get_target_by_fit_id(fit_id)`: Get target stock level for a specific fit
+    - `get_target_by_ship_id(ship_id)`: Get target stock level for a specific ship type
+    - `get_fit_name(fit_id)`: Get the display name for a fit
+    - `get_all_doctrine_compositions()`: Get all doctrine compositions
+    - `get_doctrine_fit_ids(doctrine_name)`: Get all fit IDs belonging to a specific doctrine
+    - `get_doctrine_lead_ship(doctrine_id)`: Get the lead ship type ID for a doctrine
+    - `get_module_stock_info(module_name)`: Get stock information for a specific module
+    - `get_module_usage(module_name)`: Get usage information for a module
+    - `get_module_stock(module_name)`: Get complete module stock information as a domain model
+    - `get_multiple_module_stocks(module_names)`: Get stock information for multiple modules
+    - `get_avg_prices(type_ids)`: Get average prices for multiple type IDs from marketstats
+    - `get_fit_items(fit_id)`: Get all items for a fit as domain models
+    - `get_doctrine(doctrine_name)`: Get a complete Doctrine domain model
+
+    ## Example usage:
+    ```python
         db = DatabaseConfig("wcmkt")
         repo = DoctrineRepository(db)
 
@@ -76,7 +103,7 @@ class DoctrineRepository:
         try:
             with self._db.local_access():
                 with self._db.engine.connect() as conn:
-                    return pd.read_sql_query(query, conn)
+                    return pd.read_sql_query(query, conn,index_col='id')
         except Exception as e:
             self._logger.error(f"Failed to get all fits: {e}")
             # Try sync and retry
@@ -84,7 +111,7 @@ class DoctrineRepository:
                 self._db.sync()
                 with self._db.local_access():
                     with self._db.engine.connect() as conn:
-                        return pd.read_sql_query(query, conn)
+                        return pd.read_sql_query(query, conn,index_col='id')
             except Exception as e2:
                 self._logger.error(f"Failed after sync: {e2}")
                 return pd.DataFrame()
@@ -494,7 +521,24 @@ class DoctrineRepository:
             fit_ids=fit_ids,
             lead_ship_id=lead_ship_id
         )
+    def get_methods(print_methods: bool = False) -> list[str]:
+        """
+        Get all methods of the DoctrineRepository class.
+        """
+        methods: list[dict[str, str]] = []
 
+        _dir = dir(DoctrineRepository)
+        for method in _dir:
+            if method.startswith("_"):
+                continue
+            methods.append(method)
+
+        if print_methods:
+            for method in methods:
+                print(f"{method}: {getattr(DoctrineRepository, method).__doc__ if getattr(DoctrineRepository, method).__doc__ else 'No documentation'}")
+                print("----------------------------------------")
+        else:
+            return methods
 
 # =============================================================================
 # Streamlit Integration
@@ -520,3 +564,5 @@ def get_doctrine_repository() -> DoctrineRepository:
         st.session_state.doctrine_repository = DoctrineRepository(db)
 
     return st.session_state.doctrine_repository
+
+

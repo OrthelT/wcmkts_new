@@ -1,5 +1,32 @@
 # Doctrine Module Refactoring Plan
 
+## Quick Resume Guide
+
+**Current Status:** Phases 1-3 complete, ready for Phase 4 (Categorization)
+
+**Completed Packages:**
+```
+domain/           # Dataclasses: FitItem, FitSummary, ModuleStock, Doctrine
+  ├── enums.py    # StockStatus, ShipRole enums
+  └── models.py   # Domain model dataclasses
+
+repositories/     # Database access layer
+  └── doctrine_repo.py  # DoctrineRepository (17 methods)
+
+services/         # Business logic layer
+  ├── price_service.py     # PriceService (already existed)
+  └── doctrine_service.py  # DoctrineService + FitDataBuilder + BuildMetadata
+```
+
+**To continue, read these files:**
+1. `services/doctrine_service.py` - Latest work (Builder pattern, metadata)
+2. `pages/doctrine_report.py:75-107` - `categorize_ship_by_role()` to refactor next
+3. `settings.toml` - Ship role configuration
+
+**Next task:** Create `services/categorization.py` with `ShipRoleCategorizer`
+
+---
+
 ## Project Overview
 
 This document summarizes the architectural analysis and refactoring work for the doctrine-related modules in the `wcmkts_new` Streamlit application. The goal is to transform scattered, tightly-coupled code into a clean, maintainable architecture using advanced Python patterns.
@@ -267,6 +294,105 @@ doctrine = repo.get_doctrine("SUBS - WC Hurricane")  # Returns Doctrine
 module = repo.get_module_stock("Damage Control II")  # Returns ModuleStock
 ```
 
+### `services/doctrine_service.py` (✅ Complete)
+
+Business logic layer using Builder pattern for complex data aggregation.
+
+**Key Components:**
+
+| Component | Type | Purpose |
+|-----------|------|---------|
+| `BuildMetadata` | Dataclass | Tracks timing, counts, and price-fill statistics |
+| `FitBuildResult` | Dataclass | Build output with raw_df, summary_df, domain models, and metadata |
+| `FitDataBuilder` | Class | Builder pattern for step-by-step DataFrame construction |
+| `DoctrineService` | Class | Main service orchestrating repository + price service |
+| `get_doctrine_service()` | Function | Streamlit session state integration |
+| `create_fit_df()` | Function | Backwards-compatible wrapper |
+
+**Builder Pipeline (replaces 175-line `create_fit_df()`):**
+```python
+result = (FitDataBuilder(repo, price_service, logger)
+    .load_raw_data()        # Step 1: Fetch from repository
+    .fill_null_prices()     # Step 2: avg_price -> Jita -> 0 fallback
+    .aggregate_summaries()  # Step 3: Group by fit_id
+    .calculate_costs()      # Step 4: Sum item costs
+    .merge_targets()        # Step 5: Join ship_targets
+    .finalize_columns()     # Step 6: Select output columns
+    .build())               # Returns FitBuildResult with metadata
+```
+
+**BuildMetadata Fields:**
+```python
+@dataclass
+class BuildMetadata:
+    build_started_at: datetime      # When build started
+    build_completed_at: datetime    # When build completed
+    total_duration_ms: float        # Total time in milliseconds
+    steps_executed: list[str]       # ['load_raw_data', 'fill_null_prices', ...]
+    step_durations_ms: dict         # {'load_raw_data': 20.9, 'build': 153.1, ...}
+    raw_row_count: int              # 2026
+    summary_row_count: int          # 107
+    unique_fit_count: int           # 107
+    unique_type_count: int          # 577
+    null_prices_found: int          # Count of null prices detected
+    prices_filled_from_avg: int     # Filled from marketstats.avg_price
+    prices_filled_from_jita: int    # Filled from Jita API
+    prices_defaulted_to_zero: int   # Defaulted to 0
+    has_price_service: bool         # Whether PriceService was available
+```
+
+**FitBuildResult Methods:**
+| Method | Returns | Purpose |
+|--------|---------|---------|
+| `get_metadata()` | BuildMetadata | Access the metadata object |
+| `get_metadata_dict()` | dict | JSON-serializable metadata |
+| `print_metadata()` | None | Print human-readable summary |
+| `get_columns(type)` | list[str] | Get column names ("summary" or "raw") |
+
+**DoctrineService Methods:**
+
+| Method | Returns | Purpose |
+|--------|---------|---------|
+| `build_fit_data()` | FitBuildResult | Full pipeline with caching |
+| `get_all_fit_summaries()` | list[FitSummary] | All fits as domain models |
+| `get_fit_summary(id)` | FitSummary | Single fit by ID |
+| `get_fits_by_status(status)` | list[FitSummary] | Filter by StockStatus |
+| `get_critical_fits()` | list[FitSummary] | Shortcut for critical status |
+| `calculate_all_jita_deltas()` | dict[int, float] | Batch Jita comparison |
+| `clear_cache()` | None | Clear cached build result |
+| `refresh()` | FitBuildResult | Force rebuild, bypassing cache |
+
+**Verification:** Output matches original `create_fit_df()` exactly:
+- Same row counts (2026 raw, 107 summaries)
+- Same columns in same order
+- Same values (0% cost difference)
+
+**Example Usage:**
+```python
+from services import get_doctrine_service, StockStatus
+
+service = get_doctrine_service()
+
+# Get all summaries as domain models
+summaries = service.get_all_fit_summaries()
+
+# Filter by status
+critical = service.get_fits_by_status(StockStatus.CRITICAL)
+
+# Get specific fit with computed properties
+fit = service.get_fit_summary(473)
+print(f"{fit.ship_name}: {fit.target_percentage}% ({fit.status.display_name})")
+
+# Access build metadata
+result = service.build_fit_data()
+result.print_metadata()
+# Output:
+# Build completed in 184.6ms
+#   Raw data: 2026 rows, 577 unique types
+#   Summaries: 107 fits
+#   Steps: load_raw_data -> fill_null_prices -> aggregate_summaries -> ...
+```
+
 ---
 
 ## Next Steps (Priority Order)
@@ -285,11 +411,11 @@ Create `repositories/doctrine_repo.py` with:
 - [x] Methods: `get_all_fits()`, `get_fit_by_id()`, `get_targets()`, `get_fit_name()`, `get_module_stock()`
 - [x] Consolidate duplicate queries from `doctrine_status.py` and `doctrine_report.py`
 
-### Phase 3: Service Layer
+### Phase 3: Service Layer ✅ COMPLETE
 Create `services/doctrine_service.py` with:
-- [ ] `DoctrineService` class
-- [ ] Business logic from `create_fit_df()` refactored into Builder pattern
-- [ ] Integration with `PriceService` for cost calculations
+- [x] `DoctrineService` class
+- [x] Business logic from `create_fit_df()` refactored into Builder pattern
+- [x] Integration with `PriceService` for cost calculations
 
 ### Phase 4: Categorization
 Create `services/categorization.py` with:
@@ -325,15 +451,15 @@ Update Streamlit pages to use facade:
 When continuing this work, read these files for context:
 
 ```
-domain/models.py             # Domain models (FitItem, FitSummary, etc.)
-domain/enums.py              # Status and role enums
+domain/models.py              # Domain models (FitItem, FitSummary, etc.)
+domain/enums.py               # Status and role enums
 repositories/doctrine_repo.py # Repository for doctrine DB access
-services/price_service.py    # Completed example of all patterns
-doctrines.py                 # Main target for refactoring
-pages/doctrine_status.py     # Consumer of doctrine data
-pages/doctrine_report.py     # Consumer of doctrine data
-config.py                    # DatabaseConfig class (dependency)
-db_handler.py                # Existing DB access patterns
+services/price_service.py     # Price fetching with fallback chain
+services/doctrine_service.py  # Business logic with Builder pattern
+doctrines.py                  # Original code (being replaced)
+pages/doctrine_status.py      # Consumer of doctrine data
+pages/doctrine_report.py      # Consumer of doctrine data
+config.py                     # DatabaseConfig class (dependency)
 ```
 
 ---
