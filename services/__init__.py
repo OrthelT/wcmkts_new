@@ -34,25 +34,41 @@ from services.price_service import (
     calculate_jita_fit_cost_and_delta,
 )
 
-__all__ = [
+from services.doctrine_service import (
     # Main service
+    DoctrineService,
+    get_doctrine_service,
+
+    # Builder
+    FitDataBuilder,
+    FitBuildResult,
+    BuildMetadata,
+
+    # Backwards compatibility
+    create_fit_df,
+)
+
+__all__ = [
+    # Price Service
     'PriceService',
     'get_price_service',
-
-    # Domain models
     'PriceResult',
     'BatchPriceResult',
     'FitCostAnalysis',
     'PriceSource',
-
-    # Providers
     'FuzzworkProvider',
     'JaniceProvider',
     'LocalMarketProvider',
     'FallbackPriceProvider',
-
-    # Backwards compatibility
     'get_jita_price',
     'get_multi_item_jita_price',
     'calculate_jita_fit_cost_and_delta',
+
+    # Doctrine Service
+    'DoctrineService',
+    'get_doctrine_service',
+    'FitDataBuilder',
+    'FitBuildResult',
+    'BuildMetadata',
+    'create_fit_df',
 ]
