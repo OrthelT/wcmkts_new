@@ -81,9 +81,9 @@ def get_module_stock_list(module_names: list):
             if module_stock:
                 # Format usage information
                 usage_parts = []
-                for usage in module_stock.usages:
-                    modules_needed = usage.ship_target * usage.fit_qty
-                    usage_parts.append(f"{usage.ship_name}({modules_needed})")
+                for usage_item in module_stock.usage:
+                    modules_needed = usage_item.ship_target * usage_item.fit_qty
+                    usage_parts.append(f"{usage_item.ship_name}({modules_needed})")
                 usage_display = ", ".join(usage_parts) if usage_parts else ""
 
                 # Format display info
