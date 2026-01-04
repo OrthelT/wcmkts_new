@@ -220,6 +220,53 @@ print(f"Color: {summary.status.display_color}")  # "orange"
 adjusted = summary.with_target_multiplier(1.5)
 ```
 
+### `repositories/` Package (✅ Complete)
+
+Repository layer encapsulating all doctrine-related database access.
+
+**Files Created:**
+- `repositories/__init__.py` - Package exports
+- `repositories/doctrine_repo.py` - DoctrineRepository class
+
+**Consolidated Queries From:**
+- `doctrines.py` - `get_all_fit_data()`, `get_target_from_fit_id()`, `new_get_targets()`
+- `doctrine_status.py` - `get_fit_name()`, `get_ship_target()`, `get_module_stock_list()`
+- `doctrine_report.py` - `get_fit_name_from_db()`, `get_doctrine_lead_ship()`, `get_module_stock_list()`
+
+**Key Methods (17 total):**
+
+| Method | Purpose | Replaces |
+|--------|---------|----------|
+| `get_all_fits()` | All doctrine fit data | `doctrines.get_all_fit_data()` |
+| `get_fit_by_id(fit_id)` | Items for specific fit | Direct queries |
+| `get_all_targets()` | All ship targets | `doctrines.new_get_targets()` |
+| `get_target_by_fit_id(fit_id)` | Target for a fit | Duplicate queries in both pages |
+| `get_fit_name(fit_id)` | Display name for fit | `get_fit_name()` in both pages |
+| `get_all_doctrine_compositions()` | Fleet doctrines | `doctrine_report.py` query |
+| `get_doctrine_lead_ship(id)` | Lead ship for doctrine | `get_doctrine_lead_ship()` |
+| `get_module_stock(name)` | Module stock as domain model | `get_module_stock_list()` in both pages |
+| `get_fit_items(fit_id)` | Items as `list[FitItem]` | N/A (new) |
+| `get_doctrine(name)` | Complete `Doctrine` model | N/A (new) |
+
+**Example Usage:**
+```python
+from repositories import get_doctrine_repository
+
+repo = get_doctrine_repository()
+
+# Raw DataFrame access
+fits_df = repo.get_all_fits()  # 2026 rows, 107 unique fits
+
+# Simple lookups
+target = repo.get_target_by_fit_id(473)  # Returns 50
+name = repo.get_fit_name(473)  # Returns "WC-EN Shield DPS FNI v1.0"
+
+# Domain model access
+items = repo.get_fit_items(473)  # Returns list[FitItem]
+doctrine = repo.get_doctrine("SUBS - WC Hurricane")  # Returns Doctrine
+module = repo.get_module_stock("Damage Control II")  # Returns ModuleStock
+```
+
 ---
 
 ## Next Steps (Priority Order)
@@ -232,11 +279,11 @@ Create `domain/models.py` with:
 - [x] `Doctrine` dataclass
 - [x] Factory methods (`from_dataframe_row`)
 
-### Phase 2: Repository Layer
+### Phase 2: Repository Layer ✅ COMPLETE
 Create `repositories/doctrine_repo.py` with:
-- [ ] `DoctrineRepository` class
-- [ ] Methods: `get_all_fits()`, `get_fit_by_id()`, `get_targets()`, `get_fit_name()`, `get_module_stock()`
-- [ ] Consolidate duplicate queries from `doctrine_status.py` and `doctrine_report.py`
+- [x] `DoctrineRepository` class
+- [x] Methods: `get_all_fits()`, `get_fit_by_id()`, `get_targets()`, `get_fit_name()`, `get_module_stock()`
+- [x] Consolidate duplicate queries from `doctrine_status.py` and `doctrine_report.py`
 
 ### Phase 3: Service Layer
 Create `services/doctrine_service.py` with:
@@ -280,6 +327,7 @@ When continuing this work, read these files for context:
 ```
 domain/models.py             # Domain models (FitItem, FitSummary, etc.)
 domain/enums.py              # Status and role enums
+repositories/doctrine_repo.py # Repository for doctrine DB access
 services/price_service.py    # Completed example of all patterns
 doctrines.py                 # Main target for refactoring
 pages/doctrine_status.py     # Consumer of doctrine data
