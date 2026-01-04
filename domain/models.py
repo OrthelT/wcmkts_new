@@ -17,6 +17,7 @@ from typing import Optional
 import pandas as pd
 
 from domain.enums import StockStatus, ShipRole
+from domain.converters import safe_int, safe_float, safe_str
 
 
 # Type aliases for clarity
@@ -71,7 +72,8 @@ class FitItem:
         """
         Factory method to create FitItem from a DataFrame row.
 
-        Handles missing/null values gracefully with sensible defaults.
+        Handles missing/null values gracefully with sensible defaults using
+        safe conversion utilities from domain.converters.
 
         Args:
             row: A pandas Series representing a row from the doctrines table
@@ -79,21 +81,6 @@ class FitItem:
         Returns:
             A new FitItem instance
         """
-        def safe_int(value, default: int = 0) -> int:
-            if pd.isna(value):
-                return default
-            return int(value)
-
-        def safe_float(value, default: float = 0.0) -> float:
-            if pd.isna(value):
-                return default
-            return float(value)
-
-        def safe_str(value, default: str = "") -> str:
-            if pd.isna(value):
-                return default
-            return str(value)
-
         return cls(
             fit_id=safe_int(row.get('fit_id')),
             type_id=safe_int(row.get('type_id')),
@@ -173,21 +160,6 @@ class FitSummary:
         Returns:
             A new FitSummary instance
         """
-        def safe_int(value, default: int = 0) -> int:
-            if pd.isna(value):
-                return default
-            return int(value)
-
-        def safe_float(value, default: float = 0.0) -> float:
-            if pd.isna(value):
-                return default
-            return float(value)
-
-        def safe_str(value, default: str = "") -> str:
-            if pd.isna(value):
-                return default
-            return str(value)
-
         return cls(
             fit_id=safe_int(row.get('fit_id')),
             ship_id=safe_int(row.get('ship_id')),
@@ -330,16 +302,6 @@ class ModuleStock:
         Returns:
             A new ModuleStock instance
         """
-        def safe_int(value, default: int = 0) -> int:
-            if pd.isna(value):
-                return default
-            return int(value)
-
-        def safe_str(value, default: str = "") -> str:
-            if pd.isna(value):
-                return default
-            return str(value)
-
         usage_list = []
         if usage_df is not None and not usage_df.empty:
             # Group by ship_name and ship_target, sum fit_qty

@@ -2,7 +2,7 @@
 
 ## Quick Resume Guide
 
-**Current Status:** Phases 1-4 complete, ready for Phase 5 (Facade)
+**Current Status:** Phases 1-5 complete, ready for Phase 6 (Page Refactoring)
 
 **Completed Packages:**
 ```
@@ -17,16 +17,20 @@ services/         # Business logic layer
   ├── price_service.py        # PriceService (already existed)
   ├── doctrine_service.py     # DoctrineService + FitDataBuilder + BuildMetadata
   └── categorization.py       # ShipRoleCategorizer + ConfigBasedCategorizer
+
+facades/          # Simplified API layer
+  └── doctrine_facade.py      # DoctrineFacade + get_doctrine_facade()
 ```
 
 **To continue, read these files:**
-1. `services/categorization.py` - Latest work (cached categorization, Protocol pattern)
-2. `services/doctrine_service.py` - Business logic with Builder pattern
-3. `repositories/doctrine_repo.py` - All 17 repository methods
-4. `pages/doctrine_status.py` - Page to refactor with facade
-5. `pages/doctrine_report.py` - Page to refactor with facade
+1. `facades/doctrine_facade.py` - Latest work (unified API, session state integration)
+2. `services/categorization.py` - Cached categorization, Protocol pattern
+3. `services/doctrine_service.py` - Business logic with Builder pattern
+4. `repositories/doctrine_repo.py` - All 17 repository methods
+5. `pages/doctrine_status.py` - Page to refactor with facade
+6. `pages/doctrine_report.py` - Page to refactor with facade
 
-**Next task:** Create `facades/doctrine_facade.py` with simplified API for Streamlit
+**Next task:** Update Streamlit pages to use `DoctrineFacade` instead of direct DB/service calls
 
 ---
 
@@ -453,6 +457,153 @@ print(role_str)  # "DPS"
 - **Dependency Injection**: Factory function enables easy testing with mock configurations
 - **Configuration as Code**: Frozen dataclass makes config immutable and cacheable
 
+### `facades/doctrine_facade.py` (✅ Complete)
+
+**Phase 5 Goal:** Create a unified, simplified API that Streamlit pages can use without needing to understand the underlying service architecture.
+
+**Key Components:**
+
+| Component | Type | Purpose |
+|-----------|------|---------|
+| `DoctrineFacade` | Class | Unified interface orchestrating all doctrine services |
+| `get_doctrine_facade()` | Function | Factory function with Streamlit session state integration |
+
+**DoctrineFacade Methods (27 total):**
+
+| Method | Returns | Purpose |
+|--------|---------|---------|
+| **Fit Operations** | | |
+| `get_all_fit_summaries()` | list[FitSummary] | All fits as domain models |
+| `get_fit_summary(fit_id)` | FitSummary | Specific fit by ID |
+| `get_fits_by_status(status)` | list[FitSummary] | Filter by StockStatus |
+| `get_critical_fits()` | list[FitSummary] | Shortcut for critical fits |
+| `get_fit_name(fit_id)` | str | Display name for a fit |
+| `build_fit_data()` | FitBuildResult | Raw + summary DataFrames with metadata |
+| **Module Operations** | | |
+| `get_module_stock(name)` | ModuleStock | Single module stock info |
+| `get_modules_stock(names)` | dict[str, ModuleStock] | Multiple modules stock info |
+| **Doctrine Operations** | | |
+| `get_doctrine(name)` | Doctrine | Complete doctrine with fit IDs |
+| `get_all_doctrines()` | DataFrame | All doctrine compositions |
+| `get_doctrine_lead_ship(id)` | int | Lead ship type ID |
+| **Ship Categorization** | | |
+| `categorize_ship(ship, fit_id)` | ShipRole | Ship role (DPS/Logi/Links/Support) |
+| **Price Operations** | | |
+| `get_jita_price(type_id)` | float | Jita sell price |
+| `calculate_fit_jita_delta(fit_id)` | float | Fit cost vs Jita |
+| `calculate_all_jita_deltas()` | dict[int, float] | All fit deltas |
+| **Bulk Operations** | | |
+| `refresh_all_data()` | FitBuildResult | Force rebuild all caches |
+| `clear_caches()` | None | Clear all service caches |
+| **Utility** | | |
+| `get_fit_items(fit_id)` | list[FitItem] | All items in a fit |
+
+**Design Principles Applied:**
+
+1. **Facade Pattern** - Single entry point hiding complexity of 4 underlying services
+2. **Lazy Initialization** - Services created only when needed via @property
+3. **Dependency Injection** - Services can be injected for testing or auto-created
+4. **Session State Integration** - Factory function caches facade in st.session_state
+5. **Domain Model Returns** - All methods return typed objects, not raw DataFrames
+
+**Service Orchestration:**
+
+The facade orchestrates 4 services transparently:
+- **DoctrineRepository** - Database access (17 methods)
+- **DoctrineService** - Business logic with Builder pattern
+- **PriceService** - Price lookups with fallback chain
+- **ConfigBasedCategorizer** - Ship role categorization
+
+**Example Usage:**
+
+```python
+from facades import get_doctrine_facade
+
+# Get facade (cached in session state)
+facade = get_doctrine_facade()
+
+# Get all fit summaries with computed properties
+summaries = facade.get_all_fit_summaries()
+for fit in summaries:
+    print(f"{fit.ship_name}: {fit.target_percentage}% ({fit.status.display_name})")
+
+# Get critical fits
+critical = facade.get_critical_fits()
+print(f"Found {len(critical)} critical fits")
+
+# Get module stock
+module = facade.get_module_stock("Damage Control II")
+print(f"{module.type_name}: {module.total_stock} in stock")
+
+# Categorize ship
+role = facade.categorize_ship("Hurricane", 473)
+print(f"{role.display_emoji} {role.display_name}")
+
+# Get Jita price
+price = facade.get_jita_price(2048)
+print(f"Price: {price:,.2f} ISK")
+```
+
+**Verification Results:**
+
+All 7 test suites passed:
+- ✅ Facade instantiation - All services created successfully
+- ✅ Fit operations - 107 fits retrieved, filtering by status works
+- ✅ Module operations - Stock info retrieved for single and multiple modules
+- ✅ Doctrine operations - 19 doctrines with 196 fits
+- ✅ Ship categorization - 4/4 test cases passed (DPS, Logi, Links, Support)
+- ✅ Price operations - Jita prices and deltas calculated correctly
+- ✅ Bulk operations - Cache clearing and data refresh working
+
+**Benefits for Streamlit Pages:**
+
+1. **Simplified API** - One method call instead of coordinating multiple services
+2. **Type Safety** - Returns domain models with IntelliSense support
+3. **Performance** - Session state caching avoids recreating services
+4. **Maintainability** - Pages don't need to know about internal architecture changes
+5. **Testability** - Services can be mocked via dependency injection
+
+### Code Quality Improvements (✅ Complete)
+
+**Pre-Phase 6 Quick Wins** - Code simplification improvements based on analysis by code-simplification-analyst
+
+**1. Eliminated Duplicate Helper Functions** (Priority 1)
+- **Problem:** `safe_int()`, `safe_float()`, `safe_str()` duplicated **43 times** across 3 factory methods
+- **Solution:** Created `domain/converters.py` with centralized implementations
+- **Impact:** Single source of truth, DRY principle, easier to enhance
+- **Files Changed:**
+  - Created: `domain/converters.py` (103 lines)
+  - Updated: `domain/models.py` (removed 3x duplicate implementations)
+
+**2. Centralized DEFAULT_SHIP_TARGET** (Priority 2)
+- **Problem:** Magic number "20" hardcoded in 2 methods with no explanation
+- **Solution:** Created `DEFAULT_SHIP_TARGET = 20` constant in `config.py` with documentation
+- **Impact:** Clearer intent, single place to change default
+- **Files Changed:**
+  - Updated: `config.py` (added constant with explanation)
+  - Updated: `repositories/doctrine_repo.py` (2 methods now use constant)
+
+**3. Fixed Type Hints & Separated Concerns** (Priority 3)
+- **Problem:** `get_methods()` had incorrect type hints and mixed concerns (printing + returning)
+- **Solution:** Split into two functions with correct type annotations
+  - `get_methods() -> list[str]` - Returns method names
+  - `print_methods() -> None` - Prints methods with documentation
+- **Impact:** Better IDE support, clearer API, proper type checking
+- **Files Changed:**
+  - Updated: `repositories/doctrine_repo.py` (refactored utility methods)
+
+**Verification:**
+- ✅ All 7 test suites pass (test_facade.py)
+- ✅ No behavior changes - pure refactoring
+- ✅ 107 fits, 2026 items, all data integrity maintained
+- ✅ Build time: ~180ms (unchanged)
+
+**Total Changes:**
+- 1 new file created (`domain/converters.py`)
+- 3 files modified (`config.py`, `domain/models.py`, `repositories/doctrine_repo.py`)
+- ~50 lines added, ~43 duplicate lines removed
+- Net impact: Cleaner, more maintainable codebase
+
 ---
 
 ## Next Steps (Priority Order)
@@ -486,11 +637,14 @@ Create `services/categorization.py` with:
 - [x] Backwards-compatible wrapper `categorize_ship_by_role()`
 - [x] Verification: 18/18 test scenarios passed
 
-### Phase 5: Facade
+### Phase 5: Facade ✅ COMPLETE
 Create `facades/doctrine_facade.py` with:
-- [ ] `DoctrineFacade` class
-- [ ] Simplified API for Streamlit pages
-- [ ] Session state management
+- [x] `DoctrineFacade` class
+- [x] Simplified API for Streamlit pages (27 methods)
+- [x] Session state management via `get_doctrine_facade()`
+- [x] Orchestration of 4 underlying services
+- [x] Lazy initialization via @property decorators
+- [x] Comprehensive test suite (7/7 tests passed)
 
 ### Phase 6: Page Refactoring
 Update Streamlit pages to use facade:
@@ -514,14 +668,16 @@ Update Streamlit pages to use facade:
 When continuing this work, read these files for context:
 
 ```
-domain/models.py              # Domain models (FitItem, FitSummary, etc.)
-domain/enums.py               # Status and role enums
-repositories/doctrine_repo.py # Repository for doctrine DB access
-services/price_service.py     # Price fetching with fallback chain
-services/doctrine_service.py  # Business logic with Builder pattern
+facades/doctrine_facade.py    # Simplified unified API (Phase 5 ✅)
+services/categorization.py    # Ship role categorization (Phase 4 ✅)
+services/doctrine_service.py  # Business logic with Builder pattern (Phase 3 ✅)
+repositories/doctrine_repo.py # Repository for doctrine DB access (Phase 2 ✅)
+services/price_service.py     # Price fetching with fallback chain (Phase 0 ✅)
+domain/models.py              # Domain models (FitItem, FitSummary, etc.) (Phase 1 ✅)
+domain/enums.py               # Status and role enums (Phase 1 ✅)
+pages/doctrine_status.py      # Page to refactor (Phase 6 next)
+pages/doctrine_report.py      # Page to refactor (Phase 6 next)
 doctrines.py                  # Original code (being replaced)
-pages/doctrine_status.py      # Consumer of doctrine data
-pages/doctrine_report.py      # Consumer of doctrine data
 config.py                     # DatabaseConfig class (dependency)
 ```
 

@@ -15,6 +15,19 @@ from time import perf_counter
 
 logger = setup_logging(__name__)
 
+# =============================================================================
+# Doctrine Configuration Constants
+# =============================================================================
+
+# Default ship target stock level when not explicitly configured
+# This value is used as the fallback when a fit or ship doesn't have a
+# target defined in the ship_targets table
+DEFAULT_SHIP_TARGET = 20
+
+# =============================================================================
+# Database Configuration
+# =============================================================================
+
 # Global lock to serialize sync operations within the process
 _SYNC_LOCK = threading.Lock()
 
