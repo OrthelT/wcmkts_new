@@ -19,7 +19,7 @@ import logging
 import pandas as pd
 from sqlalchemy import text
 
-from config import DatabaseConfig
+from config import DatabaseConfig, DEFAULT_SHIP_TARGET
 from domain import FitItem, FitSummary, ModuleStock, ModuleUsage, Doctrine
 
 
@@ -181,7 +181,7 @@ class DoctrineRepository:
             self._logger.error(f"Failed to get targets: {e}")
             return pd.DataFrame()
 
-    def get_target_by_fit_id(self, fit_id: int, default: int = 20) -> int:
+    def get_target_by_fit_id(self, fit_id: int, default: int = DEFAULT_SHIP_TARGET) -> int:
         """
         Get target stock level for a specific fit.
 
@@ -211,7 +211,7 @@ class DoctrineRepository:
             self._logger.error(f"Failed to get target for fit {fit_id}: {e}")
             return default
 
-    def get_target_by_ship_id(self, ship_id: int, default: int = 20) -> int:
+    def get_target_by_ship_id(self, ship_id: int, default: int = DEFAULT_SHIP_TARGET) -> int:
         """
         Get target stock level for a specific ship type.
 
@@ -521,24 +521,40 @@ class DoctrineRepository:
             fit_ids=fit_ids,
             lead_ship_id=lead_ship_id
         )
-    def get_methods(print_methods: bool = False) -> list[str]:
+    def get_methods() -> list[str]:
         """
-        Get all methods of the DoctrineRepository class.
+        Get list of all public method names in the DoctrineRepository.
+
+        Returns:
+            List of method names (excluding private methods starting with '_')
+
+        Example:
+            >>> repo = DoctrineRepository(db)
+            >>> methods = repo.get_methods()
+            >>> print(methods)
+            ['get_all_fits', 'get_fit_by_id', 'get_all_targets', ...]
         """
-        methods: list[dict[str, str]] = []
+        return [attr for attr in dir(DoctrineRepository) if not attr.startswith("_")]
 
-        _dir = dir(DoctrineRepository)
-        for method in _dir:
-            if method.startswith("_"):
-                continue
-            methods.append(method)
+    def print_methods() -> None:
+        """
+        Print all public methods with their documentation.
 
-        if print_methods:
-            for method in methods:
-                print(f"{method}: {getattr(DoctrineRepository, method).__doc__ if getattr(DoctrineRepository, method).__doc__ else 'No documentation'}")
-                print("----------------------------------------")
-        else:
-            return methods
+        Useful for exploring the repository API.
+
+        Example:
+            >>> repo = DoctrineRepository(db)
+            >>> repo.print_methods()
+            get_all_fits: Get all fit data from the doctrines table...
+            ----------------------------------------
+            get_fit_by_id: Get all items for a specific fit...
+            ----------------------------------------
+        """
+        for method_name in self.get_methods():
+            method = getattr(DoctrineRepository, method_name)
+            doc = method.__doc__ if method.__doc__ else 'No documentation'
+            print(f"{method_name}: {doc}")
+            print("----------------------------------------")
 
 # =============================================================================
 # Streamlit Integration
