@@ -13,111 +13,45 @@ from db_handler import get_update_time, read_df, get_all_fitting_data
 from doctrines import create_fit_df, get_all_fit_data, calculate_jita_fit_cost_and_delta
 from utils import get_multi_item_jita_price
 from config import DatabaseConfig
+from facades import get_doctrine_facade
 # Insert centralized logging configuration
 logger = setup_logging(__name__, log_file="doctrine_status.log")
 mkt_db = DatabaseConfig("wcmkt")
 
-@st.cache_data(ttl=600, show_spinner="Loading cacheddoctrine fits...")
-def get_fit_summary()->pd.DataFrame:
-    """Get a summary of all doctrine fits"""
-    logger.info("Getting fit summary")
+# Initialize facade (cached in session state)
+facade = get_doctrine_facade()
 
-    # Get the raw data with all fit details
-    all_fits_df, summary_df = create_fit_df()
+@st.cache_data(ttl=600, show_spinner="Loading cached doctrine fits...")
+def get_fit_summary() -> pd.DataFrame:
+    """Get a summary of all doctrine fits using facade."""
+    logger.info("Getting fit summary via facade")
 
-    if all_fits_df.empty:
+    # Use facade to get all fit summaries as domain models
+    summaries = facade.get_all_fit_summaries()
+
+    if not summaries:
         return pd.DataFrame()
 
-    # Get unique fit_ids
-    fit_ids = all_fits_df['fit_id'].unique()
-
-    # Create a summary dataframe
+    # Convert domain models to DataFrame for compatibility with existing UI code
     fit_summary = []
+    for summary in summaries:
+        # lowest_modules is already a tuple of formatted strings
+        lowest_modules_list = list(summary.lowest_modules)
 
-    for fit_id in fit_ids:
-        # Filter data for this fit
-        try:
-            fit_data = all_fits_df[all_fits_df['fit_id'] == fit_id]
-            fit_summary_data = summary_df[summary_df['fit_id'] == fit_id]
-        except Exception as e:
-            st.error("Error getting fit data for fit_id: " + fit_id + " " + str(e))
-            logger.error(f"Error: {e}")
-            continue
-        # Get the first row for fit metadata
-        first_row = fit_data.iloc[0]
-
-        # Get basic information
-        ship_id = first_row['ship_id']
-        ship_name = first_row['ship_name']
-        hulls = first_row['hulls'] if pd.notna(first_row['hulls']) else 0
-        total_cost = fit_summary_data['total_cost'].iloc[0] if pd.notna(fit_summary_data['total_cost'].iloc[0]) else 0
-        # Extract ship group from the data
-        ship_group = "Ungrouped"  # Default
-
-        # Find the row that matches the ship_id
-        ship_rows = fit_data[fit_data['type_id'] == ship_id]
-
-        # Check if ship_rows is not empty and has a 'group_name' column
-        if not ship_rows.empty and 'group_name' in ship_rows.columns:
-            try:
-                # Get the first row's group_name value
-                ship_group = ship_rows['group_name'].iloc[0]
-            except Exception as e:
-                logger.error(f"Error getting group_name for fit_id: {fit_id}: {e}")
-                continue
-
-        # Calculate minimum fits (how many complete fits can be made)
-        try:
-            min_fits = fit_data['fits_on_mkt'].min()
-            # Handle NaN values
-            if pd.isna(min_fits):
-                min_fits = 0
-        except Exception as e:
-            logger.error(f"Error getting min_fits for fit_id: {fit_id}: {e}")
-            continue
-
-        # Get target value from database if available, otherwise use default
-        target = get_ship_target(0, fit_id)
-
-        # Calculate target percentage
-        if target > 0:
-            target_percentage = min(100, int((min_fits / target) * 100))
-        else:
-            target_percentage = 0
-
-        # Get the lowest stocked modules (exclude the ship itself)
-        ship_type_id = first_row['ship_id']
-        module_data = fit_data[fit_data['type_id'] != ship_type_id]
-        lowest_modules = module_data.sort_values('fits_on_mkt').head(3)
-
-        lowest_modules_list = []
-        for _, row in lowest_modules.iterrows():
-            module_name = row['type_name']
-            module_stock = row['fits_on_mkt']
-            if not pd.isna(module_name) and not pd.isna(module_stock):
-                lowest_modules_list.append(f"{module_name} ({int(module_stock)})")
-
-        # Get daily average volume if available
-        daily_avg = fit_data['avg_vol'].mean() if 'avg_vol' in fit_data.columns else 0
-
-        # Get fit name from the ship_targets table if available
-        fit_name = get_fit_name(fit_id)
-
-        # Add to summary list (Jita delta will be calculated separately for performance)
         fit_summary.append({
-            'fit_id': fit_id,
-            'ship_id': ship_id,
-            'ship_name': ship_name,
-            'fit': fit_name,
-            'ship': ship_name,
-            'fits': min_fits,
-            'hulls': hulls,
-            'target': target,
-            'target_percentage': target_percentage,
+            'fit_id': summary.fit_id,
+            'ship_id': summary.ship_id,
+            'ship_name': summary.ship_name,
+            'fit': summary.fit_name,
+            'ship': summary.ship_name,
+            'fits': summary.fits,
+            'hulls': summary.hulls,
+            'target': summary.ship_target,
+            'target_percentage': summary.target_percentage,
             'lowest_modules': lowest_modules_list,
-            'daily_avg': daily_avg,
-            'ship_group': ship_group,
-            'total_cost': total_cost
+            'daily_avg': summary.daily_avg,
+            'ship_group': summary.ship_group,
+            'total_cost': summary.total_cost
         })
 
     return pd.DataFrame(fit_summary)
@@ -128,20 +62,10 @@ def format_module_list(modules_list):
         return ""
     return "<br>".join(modules_list)
 
-def get_fit_name(fit_id: int) -> str:
-    """Get the fit name for a given fit id"""
-    try:
-        df = read_df(mkt_db, text("SELECT fit_name FROM ship_targets WHERE fit_id = :fit_id"), {"fit_id": fit_id})
-        return str(df.loc[0, 'fit_name']) if not df.empty else "Unknown Fit"
-    except Exception as e:
-        logger.error(f"Error getting fit name for fit_id: {fit_id}")
-        logger.error(f"Error: {e}")
-        return "Unknown Fit"
-
 def get_module_stock_list(module_names: list):
-    """Get lists of modules with their stock quantities for display and CSV export."""
+    """Get lists of modules with their stock quantities for display and CSV export using facade."""
 
-    #set the session state variables for the module list and csv module list
+    # Set the session state variables for the module list and csv module list
     if not st.session_state.get('module_list_state'):
         st.session_state.module_list_state = {}
     if not st.session_state.get('csv_module_list_state'):
@@ -149,79 +73,30 @@ def get_module_stock_list(module_names: list):
 
     for module_name in module_names:
         if module_name not in st.session_state.module_list_state:
-            logger.info(f"Querying database for {module_name}")
-            query = text(
-                """
-                SELECT type_name, type_id, total_stock, fits_on_mkt
-                FROM doctrines
-                WHERE type_name = :module_name
-                LIMIT 1
-                """
-            )
-            df = read_df(mkt_db, query, {"module_name": module_name})
+            logger.info(f"Querying database for {module_name} via facade")
 
-            # Get module usage information
-            usage_display = ""
-            try:
-                usage_query = text(
-                    """
-                    SELECT st.ship_name, st.ship_target, d.fit_qty
-                    FROM doctrines d
-                    JOIN ship_targets st ON d.fit_id = st.fit_id
-                    WHERE d.type_name = :module_name
-                    """
-                )
-                usage_df = read_df(mkt_db, usage_query, {"module_name": module_name})
-                if not usage_df.empty:
-                    grouped_usage = (
-                        usage_df
-                        .fillna({"ship_target": 0, "fit_qty": 0})
-                        .groupby(["ship_name", "ship_target"], dropna=False)["fit_qty"]
-                        .sum()
-                        .reset_index()
-                    )
-                    usage_parts = []
-                    for _, usage_row in grouped_usage.iterrows():
-                        fit_name = (
-                            str(usage_row["ship_name"])
-                            if pd.notna(usage_row["ship_name"])
-                            else "Unknown Fit"
-                        )
-                        ship_target = (
-                            int(usage_row["ship_target"])
-                            if pd.notna(usage_row["ship_target"])
-                            else 0
-                        )
-                        fit_qty = (
-                            int(usage_row["fit_qty"])
-                            if pd.notna(usage_row["fit_qty"])
-                            else 0
-                        )
-                        modules_needed = ship_target * fit_qty
-                        usage_parts.append(f"{fit_name}({modules_needed})")
-                    usage_display = ", ".join(usage_parts)
-            except Exception as e:
-                logger.error(f"Error getting fit usage for {module_name}: {e}")
+            # Use facade to get module stock info
+            module_stock = facade.get_module_stock(module_name)
 
-            if not df.empty and pd.notna(df.loc[0, 'total_stock']) and pd.notna(df.loc[0, 'fits_on_mkt']) and pd.notna(df.loc[0, 'type_id']):
-                stock = int(df.loc[0, 'total_stock'])
-                fits = int(df.loc[0, 'fits_on_mkt'])
-                type_id = int(df.loc[0, 'type_id'])
-                module_info = f"{module_name} (Total: {stock} | Fits: {fits})"
+            if module_stock:
+                # Format usage information
+                usage_parts = []
+                for usage in module_stock.usages:
+                    modules_needed = usage.ship_target * usage.fit_qty
+                    usage_parts.append(f"{usage.ship_name}({modules_needed})")
+                usage_display = ", ".join(usage_parts) if usage_parts else ""
+
+                # Format display info
+                module_info = f"{module_name} (Total: {module_stock.total_stock} | Fits: {module_stock.fits_on_mkt})"
                 if usage_display:
                     module_info = f"{module_info} | Used in: {usage_display}"
-                csv_module_info = f"{module_name},{type_id},{stock},{fits},,{usage_display}\n"
+                csv_module_info = f"{module_name},{module_stock.type_id},{module_stock.total_stock},{module_stock.fits_on_mkt},,{usage_display}\n"
             else:
                 module_info = f"{module_name}"
-                if usage_display:
-                    module_info = f"{module_info} | Used in: {usage_display}"
-                csv_module_info = f"{module_name},0,0,0,,{usage_display}\n"
+                csv_module_info = f"{module_name},0,0,0,,\n"
 
             st.session_state.module_list_state[module_name] = module_info
             st.session_state.csv_module_list_state[module_name] = csv_module_info
-
-        #with the session state variables, we can now return the lists by saving to the session state variables, we
-        #won't need to run the query again
 
 @st.cache_data(ttl=600, show_spinner="Loading cached ship stock list...")
 def get_ship_stock_list(ship_names: list):
@@ -256,7 +131,7 @@ def get_ship_stock_list(ship_names: list):
                 ship_id = int(df.loc[0, 'type_id'])
                 ship_stock = int(df.loc[0, 'total_stock'])
                 ship_fits = int(df.loc[0, 'fits_on_mkt'])
-                ship_target = get_ship_target(ship_id, 0)
+                ship_target = facade.get_target_by_ship_id(ship_id)
                 ship_info = f"{ship} (Qty: {ship_stock} | Fits: {ship_fits} | Target: {ship_target})"
                 csv_ship_info = f"{ship},{ship_id},{ship_stock},{ship_fits},{ship_target},\n"
             else:
@@ -275,39 +150,6 @@ def fitting_download_button():
 
     if st.download_button("Download Data", data=data.to_csv(index=False), file_name="wc_doctrine_fits.csv", help="Download all doctrine fit information as a CSV file", mime="text/csv"):
         st.toast("Data downloaded successfully", icon="✅")
-
-def get_ship_target(ship_id: int, fit_id: int) -> int:
-    """Get the target for a given ship id or fit id
-    if searching by ship_id, enter zero for fit_id
-    if searching by fit_id, enter zero for ship_id
-    """
-    if ship_id == 0 and fit_id == 0:
-        logger.error("Error: Both ship_id and fit_id are zero")
-        st.error("Error: Both ship_id and fit_id are zero")
-        return 20
-
-    elif ship_id == 0:
-        try:
-            df = read_df(mkt_db, text("SELECT ship_target FROM ship_targets WHERE fit_id = :fit_id"), {"fit_id": fit_id})
-            if not df.empty and pd.notna(df.loc[0, 'ship_target']):
-                return int(df.loc[0, 'ship_target'])
-            return 20
-        except Exception as e:
-            logger.error(f"Error getting target for fit_id: {fit_id}")
-            logger.error(f"Error: {e}")
-            st.sidebar.error(f"Did not find a target for fit_id: {fit_id}, we'll just use 20 as default")
-            return 20
-    else:
-        try:
-            df = read_df(mkt_db, text("SELECT ship_target FROM ship_targets WHERE ship_id = :ship_id"), {"ship_id": ship_id})
-            if not df.empty and pd.notna(df.loc[0, 'ship_target']):
-                return int(df.loc[0, 'ship_target'])
-            return 20
-        except Exception as e:
-            logger.error(f"Error getting target for ship_id: {ship_id}, using 20 as default")
-            logger.error(f"Error: {e}")
-            st.sidebar.error(f"Did not find a target for ship_id: {ship_id}, we'll just use 20 as default")
-            return 20
 
 def get_tgt_from_fit_summary(fit_summary: pd.DataFrame, fit_id: int) -> int:
     """Get the target for a given fit id from the fit summary"""
