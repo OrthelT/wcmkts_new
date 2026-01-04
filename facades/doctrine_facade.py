@@ -284,6 +284,42 @@ class DoctrineFacade:
         """
         return self.repository.get_fit_name(fit_id)
 
+    def get_target_by_fit_id(self, fit_id: int) -> int:
+        """
+        Get the ship target for a specific fit ID.
+
+        Args:
+            fit_id: The fit ID to look up
+
+        Returns:
+            Target quantity or DEFAULT_SHIP_TARGET (20) if not found
+
+        Example:
+            ```python
+            target = facade.get_target_by_fit_id(473)
+            print(f"Target: {target}")  # "Target: 50"
+            ```
+        """
+        return self.repository.get_target_by_fit_id(fit_id)
+
+    def get_target_by_ship_id(self, ship_id: int) -> int:
+        """
+        Get the ship target for a specific ship ID.
+
+        Args:
+            ship_id: The ship type ID to look up
+
+        Returns:
+            Target quantity or DEFAULT_SHIP_TARGET (20) if not found
+
+        Example:
+            ```python
+            target = facade.get_target_by_ship_id(638)  # Ferox
+            print(f"Target: {target}")
+            ```
+        """
+        return self.repository.get_target_by_ship_id(ship_id)
+
     def build_fit_data(self, use_cache: bool = True) -> FitBuildResult:
         """
         Build raw and summary DataFrames for all fits.
