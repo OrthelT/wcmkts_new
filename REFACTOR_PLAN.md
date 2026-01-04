@@ -2,28 +2,31 @@
 
 ## Quick Resume Guide
 
-**Current Status:** Phases 1-3 complete, ready for Phase 4 (Categorization)
+**Current Status:** Phases 1-4 complete, ready for Phase 5 (Facade)
 
 **Completed Packages:**
 ```
 domain/           # Dataclasses: FitItem, FitSummary, ModuleStock, Doctrine
-  ├── enums.py    # StockStatus, ShipRole enums
+  ├── enums.py    # StockStatus, ShipRole enums + from_string(), display_name
   └── models.py   # Domain model dataclasses
 
 repositories/     # Database access layer
   └── doctrine_repo.py  # DoctrineRepository (17 methods)
 
 services/         # Business logic layer
-  ├── price_service.py     # PriceService (already existed)
-  └── doctrine_service.py  # DoctrineService + FitDataBuilder + BuildMetadata
+  ├── price_service.py        # PriceService (already existed)
+  ├── doctrine_service.py     # DoctrineService + FitDataBuilder + BuildMetadata
+  └── categorization.py       # ShipRoleCategorizer + ConfigBasedCategorizer
 ```
 
 **To continue, read these files:**
-1. `services/doctrine_service.py` - Latest work (Builder pattern, metadata)
-2. `pages/doctrine_report.py:75-107` - `categorize_ship_by_role()` to refactor next
-3. `settings.toml` - Ship role configuration
+1. `services/categorization.py` - Latest work (cached categorization, Protocol pattern)
+2. `services/doctrine_service.py` - Business logic with Builder pattern
+3. `repositories/doctrine_repo.py` - All 17 repository methods
+4. `pages/doctrine_status.py` - Page to refactor with facade
+5. `pages/doctrine_report.py` - Page to refactor with facade
 
-**Next task:** Create `services/categorization.py` with `ShipRoleCategorizer`
+**Next task:** Create `facades/doctrine_facade.py` with simplified API for Streamlit
 
 ---
 
@@ -393,6 +396,63 @@ result.print_metadata()
 #   Steps: load_raw_data -> fill_null_prices -> aggregate_summaries -> ...
 ```
 
+### `services/categorization.py` (✅ Complete)
+
+Ship role categorization service using cached configuration and Strategy pattern.
+
+**Key Components:**
+
+| Component | Type | Purpose |
+|-----------|------|---------|
+| `ShipRoleConfig` | Dataclass | Immutable TOML configuration (frozen=True) |
+| `ShipRoleCategorizer` | Protocol | Interface for categorization strategies |
+| `ConfigBasedCategorizer` | Class | Config-based categorization with @cache |
+| `get_ship_role_categorizer()` | Function | Factory for categorizer instances |
+| `categorize_ship_by_role()` | Function | Backwards-compatible wrapper |
+
+**Categorization Priority:**
+1. **Special cases** - Ship + fit_id combinations (e.g., Vulture 369 → DPS, Vulture 475 → Links)
+2. **Configured lists** - Ship name in dps/logi/links/support lists from settings.toml
+3. **Keyword fallback** - Pattern matching on ship name (e.g., "hurricane" → DPS)
+
+**Performance Improvements:**
+- **Original**: Loaded settings.toml on every `categorize_ship_by_role()` call
+- **New**: Load once with `@cache` decorator, cache forever (process lifetime)
+- **Impact**: Eliminates repeated file I/O when categorizing hundreds of ships
+
+**ShipRole Enum Enhancements:**
+Added to `domain/enums.py`:
+- `from_string(role_name)` - Convert string to enum ("DPS" → ShipRole.DPS)
+- `display_name` property - Convert enum to string (ShipRole.DPS → "DPS")
+
+**Verification Results:**
+- ✅ 18/18 test scenarios passed
+- ✅ 4 configured ship tests (Hurricane, Osprey, Claymore, Sabre)
+- ✅ 7 special case tests (Vulture, Deimos, Drake with different fit IDs)
+- ✅ 4 keyword fallback tests (unconfigured ships)
+- ✅ 3 additional configured ship tests (Ferox, Guardian, Stiletto)
+
+**Example Usage:**
+```python
+from services import get_ship_role_categorizer
+from services.categorization import categorize_ship_by_role
+
+# Using the service
+categorizer = get_ship_role_categorizer()
+role = categorizer.categorize("Hurricane", 473)
+print(f"{role.display_emoji} {role.display_name}")  # "💥 DPS"
+print(role.description)  # "Primary DPS Ships"
+
+# Using backwards-compatible wrapper
+role_str = categorize_ship_by_role("Hurricane", 473)
+print(role_str)  # "DPS"
+```
+
+**Design Patterns:**
+- **Strategy Pattern**: Protocol-based abstraction allows multiple categorization strategies
+- **Dependency Injection**: Factory function enables easy testing with mock configurations
+- **Configuration as Code**: Frozen dataclass makes config immutable and cacheable
+
 ---
 
 ## Next Steps (Priority Order)
@@ -417,11 +477,14 @@ Create `services/doctrine_service.py` with:
 - [x] Business logic from `create_fit_df()` refactored into Builder pattern
 - [x] Integration with `PriceService` for cost calculations
 
-### Phase 4: Categorization
+### Phase 4: Categorization ✅ COMPLETE
 Create `services/categorization.py` with:
-- [ ] `ShipRoleCategorizer` protocol
-- [ ] `ConfigBasedCategorizer` with cached TOML loading
-- [ ] Move logic from `doctrine_report.py:categorize_ship_by_role()`
+- [x] `ShipRoleCategorizer` protocol
+- [x] `ConfigBasedCategorizer` with cached TOML loading
+- [x] Move logic from `doctrine_report.py:categorize_ship_by_role()`
+- [x] Add `ShipRole.from_string()` and `display_name` to enums
+- [x] Backwards-compatible wrapper `categorize_ship_by_role()`
+- [x] Verification: 18/18 test scenarios passed
 
 ### Phase 5: Facade
 Create `facades/doctrine_facade.py` with:
