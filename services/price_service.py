@@ -743,40 +743,327 @@ class PriceService:
 
 
 # =============================================================================
-# Streamlit Integration
+# Streamlit-Compatible Cached Functions
+# =============================================================================
+#
+# IMPORTANT: Streamlit's @st.cache_data requires all arguments to be hashable.
+# Instance methods fail because `self` is not hashable.
+#
+# Solution: Keep cached functions at MODULE LEVEL (no self), and have the
+# service class coordinate/wrap them.
+#
+# Pattern:
+#   1. Module-level function with @st.cache_data (stateless, hashable args)
+#   2. Service class method calls the cached function
+#   3. Service adds rich return types, error handling, logging
+#
+
+def _get_streamlit_cache():
+    """Lazy import to avoid issues when running outside Streamlit."""
+    try:
+        import streamlit as st
+        return st.cache_data
+    except Exception:
+        # Fallback: no-op decorator for non-Streamlit contexts (testing, scripts)
+        return lambda **kwargs: lambda fn: fn
+
+
+def _create_cached_functions():
+    """
+    Create cached versions of price fetching functions.
+
+    This factory pattern allows the cache decorator to be applied at import time
+    while handling the case where Streamlit isn't available.
+    """
+    cache_data = _get_streamlit_cache()
+
+    @cache_data(ttl=3600, show_spinner="Fetching Jita prices...")
+    def fetch_jita_prices_cached(type_ids: tuple[int, ...]) -> dict[int, float]:
+        """
+        Cached Jita price fetch - STATELESS function with HASHABLE arguments.
+
+        Args:
+            type_ids: TUPLE of type IDs (tuples are hashable, lists are not!)
+
+        Returns:
+            Simple dict mapping type_id -> price
+
+        Why tuple instead of list?
+            Lists are mutable and not hashable, so Streamlit can't cache them.
+            Always convert: tuple(sorted(set(type_ids)))
+        """
+        if not type_ids:
+            return {}
+
+        provider = FuzzworkProvider()
+        result = provider.get_prices(list(type_ids))
+
+        # Return simple dict - dataclasses aren't hashable for nested caching
+        return {tid: r.price for tid, r in result.prices.items() if r.success}
+
+    @cache_data(ttl=3600, show_spinner="Fetching Jita prices (backup)...")
+    def fetch_janice_prices_cached(
+        type_ids: tuple[int, ...],
+        api_key: str
+    ) -> dict[int, float]:
+        """Cached Janice price fetch as fallback."""
+        if not type_ids or not api_key:
+            return {}
+
+        provider = JaniceProvider(api_key)
+        result = provider.get_prices(list(type_ids))
+        return {tid: r.price for tid, r in result.prices.items() if r.success}
+
+    @cache_data(ttl=600, show_spinner="Loading local prices...")
+    def fetch_local_prices_cached(
+        type_ids: tuple[int, ...],
+        db_path: str  # Pass path string, not db object (strings are hashable)
+    ) -> dict[int, float]:
+        """
+        Cached local market price fetch.
+
+        Note: We pass db_path (string) instead of DatabaseConfig object
+        because strings are hashable but custom objects aren't.
+        """
+        if not type_ids:
+            return {}
+
+        from config import DatabaseConfig
+        # Reconstruct db config from path - small overhead, but enables caching
+        db = DatabaseConfig("wcmkt")
+
+        provider = LocalMarketProvider(db)
+        result = provider.get_prices(list(type_ids))
+        return {tid: r.price for tid, r in result.prices.items() if r.success}
+
+    return fetch_jita_prices_cached, fetch_janice_prices_cached, fetch_local_prices_cached
+
+
+# Create cached functions at module load time
+(
+    fetch_jita_prices_cached,
+    fetch_janice_prices_cached,
+    fetch_local_prices_cached
+) = _create_cached_functions()
+
+
+# =============================================================================
+# Cache-Aware Price Service
 # =============================================================================
 
-def get_price_service() -> PriceService:
+class CachedPriceService:
     """
-    Get or create a PriceService instance.
+    Streamlit-compatible price service that uses cached module-level functions.
 
-    Uses Streamlit session state for persistence across reruns.
-    This is the recommended way to get the service in Streamlit pages.
+    This class coordinates the cached functions and provides:
+    - Rich return types (BatchPriceResult instead of plain dict)
+    - Fallback logic between providers
+    - Logging and error handling
+    - Convenient API for Streamlit pages
 
     Example:
-        from services.price_service import get_price_service
-
         service = get_price_service()
-        prices = service.get_jita_prices([34, 35, 36])
-    """
-    import streamlit as st
-    from config import DatabaseConfig
 
-    if 'price_service' not in st.session_state:
-        # Get API key from secrets if available
-        janice_key = None
+        # Simple usage - returns dict
+        prices = service.get_jita_prices_dict([34, 35, 36])
+
+        # Rich usage - returns BatchPriceResult with metadata
+        result = service.get_jita_prices([34, 35, 36])
+        print(f"Got {result.success_count} prices")
+    """
+
+    def __init__(
+        self,
+        janice_api_key: Optional[str] = None,
+        db_path: Optional[str] = None,
+        logger: Optional[logging.Logger] = None
+    ):
+        self._janice_key = janice_api_key
+        self._db_path = db_path
+        self._logger = logger or logging.getLogger(__name__)
+
+    def get_jita_prices(self, type_ids: list[int]) -> BatchPriceResult:
+        """
+        Get Jita prices with automatic caching and fallback.
+
+        Returns rich BatchPriceResult with success/failure tracking.
+        """
+        if not type_ids:
+            return BatchPriceResult()
+
+        # Convert to hashable tuple for cache key
+        type_ids_tuple = tuple(sorted(set(type_ids)))
+
+        # Try Fuzzwork first (cached)
+        prices = fetch_jita_prices_cached(type_ids_tuple)
+
+        # Check for missing prices
+        missing = [tid for tid in type_ids if tid not in prices]
+
+        # Fallback to Janice for missing items
+        if missing and self._janice_key:
+            missing_tuple = tuple(sorted(missing))
+            janice_prices = fetch_janice_prices_cached(missing_tuple, self._janice_key)
+            prices.update(janice_prices)
+
+            still_missing = [tid for tid in missing if tid not in janice_prices]
+            if still_missing:
+                self._logger.warning(f"No prices found for {len(still_missing)} items")
+
+        # Convert to rich result
+        return self._dict_to_batch_result(prices, type_ids)
+
+    def get_jita_prices_dict(self, type_ids: list[int]) -> dict[int, float]:
+        """
+        Convenience method returning simple dict.
+
+        Use this for compatibility with existing code.
+        """
+        type_ids_tuple = tuple(sorted(set(type_ids)))
+        return fetch_jita_prices_cached(type_ids_tuple)
+
+    def get_local_prices(self, type_ids: list[int]) -> BatchPriceResult:
+        """Get prices from local market database."""
+        if not type_ids or not self._db_path:
+            return BatchPriceResult(source=PriceSource.LOCAL_MARKET)
+
+        type_ids_tuple = tuple(sorted(set(type_ids)))
+        prices = fetch_local_prices_cached(type_ids_tuple, self._db_path)
+        return self._dict_to_batch_result(prices, type_ids, PriceSource.LOCAL_MARKET)
+
+    def analyze_fit_cost(
+        self,
+        fit_data: pd.DataFrame,
+        local_cost: float,
+        jita_prices: Optional[dict[int, float]] = None
+    ) -> FitCostAnalysis:
+        """
+        Analyze fit cost compared to Jita.
+
+        This method doesn't need caching itself - it uses cached price data.
+        """
+        if fit_data.empty:
+            return FitCostAnalysis(fit_id=0, local_cost=local_cost, jita_cost=0.0)
+
+        fit_id = int(fit_data['fit_id'].iloc[0]) if 'fit_id' in fit_data.columns else 0
+
+        # Get Jita prices (cached internally)
+        if jita_prices is None:
+            type_ids = [int(tid) for tid in fit_data['type_id'].unique()]
+            jita_prices = self.get_jita_prices_dict(type_ids)
+
+        # Calculate cost
+        jita_cost = 0.0
+        missing = []
+
+        for _, row in fit_data.iterrows():
+            type_id = int(row['type_id'])
+            fit_qty = int(row.get('fit_qty', 1))
+
+            if type_id in jita_prices and jita_prices[type_id] > 0:
+                jita_cost += fit_qty * jita_prices[type_id]
+            else:
+                missing.append(type_id)
+
+        return FitCostAnalysis(
+            fit_id=fit_id,
+            local_cost=local_cost,
+            jita_cost=jita_cost,
+            missing_prices=missing
+        )
+
+    def fill_null_prices(
+        self,
+        df: pd.DataFrame,
+        price_col: str = 'price',
+        type_id_col: str = 'type_id'
+    ) -> pd.DataFrame:
+        """Fill null prices using cached Jita prices."""
+        df = df.copy()
+
+        null_mask = df[price_col].isna()
+        if not null_mask.any():
+            return df
+
+        null_ids = [int(tid) for tid in df.loc[null_mask, type_id_col].unique()]
+        prices = self.get_jita_prices_dict(null_ids)
+
+        for type_id, price in prices.items():
+            mask = (df[type_id_col] == type_id) & df[price_col].isna()
+            df.loc[mask, price_col] = price
+
+        # Fill remaining with 0
+        df[price_col] = df[price_col].fillna(0)
+        return df
+
+    def clear_cache(self):
+        """Clear all price caches."""
         try:
-            janice_key = st.secrets.janice.api_key
+            import streamlit as st
+            st.cache_data.clear()
+            self._logger.info("Price caches cleared")
         except Exception:
             pass
 
-        db_config = DatabaseConfig("wcmkt")
-        st.session_state.price_service = PriceService.create_default(
-            db_config=db_config,
-            janice_api_key=janice_key
-        )
+    def _dict_to_batch_result(
+        self,
+        prices: dict[int, float],
+        requested_ids: list[int],
+        source: PriceSource = PriceSource.JITA_FUZZWORK
+    ) -> BatchPriceResult:
+        """Convert simple dict to rich BatchPriceResult."""
+        results = {}
+        failed = []
 
-    return st.session_state.price_service
+        for type_id in requested_ids:
+            if type_id in prices:
+                results[type_id] = PriceResult.success_result(type_id, prices[type_id], source)
+            else:
+                failed.append(type_id)
+                results[type_id] = PriceResult.failure_result(type_id, "Not found")
+
+        return BatchPriceResult(prices=results, source=source, failed_ids=failed)
+
+
+# =============================================================================
+# Streamlit Service Factory
+# =============================================================================
+
+def get_price_service() -> CachedPriceService:
+    """
+    Get or create a CachedPriceService instance.
+
+    Uses @st.cache_resource to cache the SERVICE OBJECT itself.
+    The service's methods then use the module-level cached functions.
+
+    Example:
+        service = get_price_service()
+        prices = service.get_jita_prices([34, 35, 36])
+    """
+    try:
+        import streamlit as st
+
+        @st.cache_resource
+        def _create_service():
+            janice_key = None
+            try:
+                janice_key = st.secrets.janice.api_key
+            except Exception:
+                pass
+
+            from config import DatabaseConfig
+            db = DatabaseConfig("wcmkt")
+
+            return CachedPriceService(
+                janice_api_key=janice_key,
+                db_path=db.path
+            )
+
+        return _create_service()
+
+    except Exception:
+        # Non-Streamlit context
+        return CachedPriceService()
 
 
 # =============================================================================
