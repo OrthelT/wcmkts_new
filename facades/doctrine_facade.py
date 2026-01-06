@@ -345,6 +345,12 @@ class DoctrineFacade:
         else:
             return self.doctrine_service.refresh()
 
+    def get_all_fitting_data(self, fit_id: int) -> pd.DataFrame:
+        """
+        Get all fitting data for a specific fit.
+        """
+        return self.repository.get_fit_by_id(fit_id)
+   
     # =========================================================================
     # Module Operations
     # =========================================================================
@@ -392,6 +398,21 @@ class DoctrineFacade:
             ```
         """
         return self.repository.get_multiple_module_stocks(module_names)
+        
+    def get_all_targets(self) -> pd.DataFrame:
+        """
+        Get all ship targets from the database.
+
+        Returns:
+            DataFrame with columns: 
+            fit_id: int
+            fit_name: str
+            ship_id: int
+            ship_name: str
+            ship_target: int
+            created_at: datetime
+        """
+        return self.repository.get_all_targets()
 
     # =========================================================================
     # Doctrine Operations
