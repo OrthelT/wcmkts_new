@@ -22,6 +22,8 @@ from functools import lru_cache
 import logging
 import requests
 import pandas as pd
+import streamlit as st
+from config import DatabaseConfig
 
 # Type alias for clarity
 TypeID = int
@@ -759,8 +761,6 @@ def get_price_service() -> PriceService:
         service = get_price_service()
         prices = service.get_jita_prices([34, 35, 36])
     """
-    import streamlit as st
-    from config import DatabaseConfig
 
     if 'price_service' not in st.session_state:
         # Get API key from secrets if available

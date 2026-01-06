@@ -21,7 +21,9 @@ from sqlalchemy import text
 
 from config import DatabaseConfig, DEFAULT_SHIP_TARGET
 from domain import FitItem, FitSummary, ModuleStock, ModuleUsage, Doctrine
-
+import streamlit as st
+from logging_config import setup_logging
+logger = setup_logging(__name__, log_file="doctrine_repo.log")
 
 class DoctrineRepository:
     """
@@ -81,197 +83,32 @@ class DoctrineRepository:
             logger: Optional logger instance
         """
         self._db = db
-        self._logger = logger or logging.getLogger(__name__)
 
     # =========================================================================
     # Core Fit Data
     # =========================================================================
+    # Moved to outer scope to facilitate caching
 
     def get_all_fits(self) -> pd.DataFrame:
-        """
-        Get all fit data from the doctrines table.
-
-        Replaces: doctrines.py:get_all_fit_data()
-
-        Returns:
-            DataFrame with columns: fit_id, ship_id, ship_name, type_id,
-            type_name, fit_qty, total_stock, fits_on_mkt, price, avg_vol,
-            group_name, category_id, hulls, etc.
-        """
-        query = "SELECT * FROM doctrines"
-
-        try:
-            with self._db.local_access():
-                with self._db.engine.connect() as conn:
-                    return pd.read_sql_query(query, conn,index_col='id')
-        except Exception as e:
-            self._logger.error(f"Failed to get all fits: {e}")
-            # Try sync and retry
-            try:
-                self._db.sync()
-                with self._db.local_access():
-                    with self._db.engine.connect() as conn:
-                        return pd.read_sql_query(query, conn,index_col='id')
-            except Exception as e2:
-                self._logger.error(f"Failed after sync: {e2}")
-                return pd.DataFrame()
+        return get_all_fits_with_cache()
 
     def get_fit_by_id(self, fit_id: int) -> pd.DataFrame:
-        """
-        Get all items for a specific fit.
-
-        Args:
-            fit_id: The fit ID to retrieve
-
-        Returns:
-            DataFrame with all items belonging to the fit
-        """
-        query = text("SELECT * FROM doctrines WHERE fit_id = :fit_id")
-
-        try:
-            with self._db.local_access():
-                with self._db.engine.connect() as conn:
-                    return pd.read_sql_query(query, conn, params={"fit_id": fit_id})
-        except Exception as e:
-            self._logger.error(f"Failed to get fit {fit_id}: {e}")
-            return pd.DataFrame()
-
-    def get_fits_by_type_id(self, type_id: int) -> pd.DataFrame:
-        """
-        Get all fits containing a specific type.
-
-        Replaces: db_handler.py query for doctrines by type_id
-
-        Args:
-            type_id: The type ID to search for
-
-        Returns:
-            DataFrame of fits containing this type
-        """
-        query = text("SELECT * FROM doctrines WHERE type_id = :type_id")
-
-        try:
-            with self._db.local_access():
-                with self._db.engine.connect() as conn:
-                    return pd.read_sql_query(query, conn, params={"type_id": type_id})
-        except Exception as e:
-            self._logger.error(f"Failed to get fits for type {type_id}: {e}")
-            return pd.DataFrame()
-
-    # =========================================================================
-    # Targets
-    # =========================================================================
+        return get_fit_by_id_with_cache(fit_id)
 
     def get_all_targets(self) -> pd.DataFrame:
-        """
-        Get all ship targets.
-
-        Replaces: doctrines.py:new_get_targets()
-
-        Returns:
-            DataFrame with columns: fit_id, ship_id, ship_name, ship_target, fit_name
-        """
-        query = text("SELECT * FROM ship_targets")
-
-        try:
-            with self._db.local_access():
-                with self._db.engine.connect() as conn:
-                    return pd.read_sql_query(query, conn)
-        except Exception as e:
-            self._logger.error(f"Failed to get targets: {e}")
-            return pd.DataFrame()
+        return get_all_targets_with_cache()
 
     def get_target_by_fit_id(self, fit_id: int, default: int = DEFAULT_SHIP_TARGET) -> int:
-        """
-        Get target stock level for a specific fit.
-
-        Replaces:
-        - doctrines.py:get_target_from_fit_id()
-        - doctrine_status.py:get_ship_target(0, fit_id)
-
-        Args:
-            fit_id: The fit ID to look up
-            default: Default value if not found (default: 20)
-
-        Returns:
-            Target stock level, or default if not found
-        """
-        query = text("SELECT ship_target FROM ship_targets WHERE fit_id = :fit_id")
-
-        try:
-            with self._db.local_access():
-                with self._db.engine.connect() as conn:
-                    df = pd.read_sql_query(query, conn, params={"fit_id": fit_id})
-
-            if not df.empty and pd.notna(df.loc[0, 'ship_target']):
-                return int(df.loc[0, 'ship_target'])
-            return default
-
-        except Exception as e:
-            self._logger.error(f"Failed to get target for fit {fit_id}: {e}")
-            return default
+        return get_target_by_fit_id_with_cache(fit_id, default)
 
     def get_target_by_ship_id(self, ship_id: int, default: int = DEFAULT_SHIP_TARGET) -> int:
-        """
-        Get target stock level for a specific ship type.
-
-        Replaces: doctrine_status.py:get_ship_target(ship_id, 0)
-
-        Args:
-            ship_id: The ship type ID to look up
-            default: Default value if not found (default: 20)
-
-        Returns:
-            Target stock level, or default if not found
-        """
-        query = text("SELECT ship_target FROM ship_targets WHERE ship_id = :ship_id")
-
-        try:
-            with self._db.local_access():
-                with self._db.engine.connect() as conn:
-                    df = pd.read_sql_query(query, conn, params={"ship_id": ship_id})
-
-            if not df.empty and pd.notna(df.loc[0, 'ship_target']):
-                return int(df.loc[0, 'ship_target'])
-            return default
-
-        except Exception as e:
-            self._logger.error(f"Failed to get target for ship {ship_id}: {e}")
-            return default
-
+        return get_target_by_ship_id_with_cache(ship_id, default)
     # =========================================================================
     # Fit Names
     # =========================================================================
 
     def get_fit_name(self, fit_id: int, default: str = "Unknown Fit") -> str:
-        """
-        Get the display name for a fit.
-
-        Replaces:
-        - doctrine_status.py:get_fit_name()
-        - doctrine_report.py:get_fit_name_from_db()
-
-        Args:
-            fit_id: The fit ID to look up
-            default: Default name if not found
-
-        Returns:
-            Fit name string
-        """
-        query = text("SELECT fit_name FROM ship_targets WHERE fit_id = :fit_id")
-
-        try:
-            with self._db.local_access():
-                with self._db.engine.connect() as conn:
-                    df = pd.read_sql_query(query, conn, params={"fit_id": fit_id})
-
-            if not df.empty and pd.notna(df.loc[0, 'fit_name']):
-                return str(df.loc[0, 'fit_name'])
-            return default
-
-        except Exception as e:
-            self._logger.error(f"Failed to get fit name for {fit_id}: {e}")
-            return default
+        return get_fit_name_with_cache(fit_id, default)
 
     # =========================================================================
     # Doctrine Compositions
@@ -521,7 +358,7 @@ class DoctrineRepository:
             fit_ids=fit_ids,
             lead_ship_id=lead_ship_id
         )
-    def get_methods() -> list[str]:
+    def get_methods(self) -> list[str]:
         """
         Get list of all public method names in the DoctrineRepository.
 
@@ -536,7 +373,7 @@ class DoctrineRepository:
         """
         return [attr for attr in dir(DoctrineRepository) if not attr.startswith("_")]
 
-    def print_methods() -> None:
+    def print_methods(self) -> None:
         """
         Print all public methods with their documentation.
 
@@ -573,8 +410,6 @@ def get_doctrine_repository() -> DoctrineRepository:
         repo = get_doctrine_repository()
         fits = repo.get_all_fits()
     """
-    import streamlit as st
-
     if 'doctrine_repository' not in st.session_state:
         db = DatabaseConfig("wcmkt")
         st.session_state.doctrine_repository = DoctrineRepository(db)
@@ -582,3 +417,126 @@ def get_doctrine_repository() -> DoctrineRepository:
     return st.session_state.doctrine_repository
 
 
+# =============================================================================
+# Caching Functions
+# =============================================================================
+@st.cache_data(ttl=600, show_spinner="Getting all fits...")
+def get_all_fits_with_cache() -> pd.DataFrame:
+    logger.info("Getting all fits...")
+    """
+    Get all fit data from the doctrines table.
+
+    Replaces: doctrines.py:get_all_fit_data()
+
+    Returns:
+        DataFrame with columns: fit_id, ship_id, ship_name, type_id,
+        type_name, fit_qty, total_stock, fits_on_mkt, price, avg_vol,
+        group_name, category_id, hulls, etc.
+    """
+    query = "SELECT * FROM doctrines"
+    db = DatabaseConfig("wcmkt")
+    engine = db.engine
+    try:
+        with engine.connect() as conn:
+            df = pd.read_sql_query(query, conn,index_col='id')
+            return df
+    except Exception as e:
+        logger.error(f"Failed to get all fits: {e}")
+
+@st.cache_data(ttl=600, show_spinner="Getting fit {fit_id}...")
+def get_fit_by_id_with_cache(fit_id: int) -> pd.DataFrame:
+    logger.info(f"Getting fit {fit_id}...")
+    """
+    Get all items for a specific fit.
+
+    Args:
+        fit_id: The fit ID to retrieve
+
+    Returns:
+        DataFrame with all items belonging to the fit
+    """
+    query = text("SELECT * FROM doctrines WHERE fit_id = :fit_id")
+    engine = DatabaseConfig("wcmkt").engine
+    try:
+        with engine.connect() as conn:
+            df = pd.read_sql_query(query, conn, params={"fit_id": fit_id})
+            return df
+    except Exception as e:
+        logger.error(f"Failed to get fit {fit_id}: {e}")
+        return pd.DataFrame()
+
+@st.cache_data(ttl=600, show_spinner="Getting all ship targets...")
+def get_all_targets_with_cache() -> pd.DataFrame:
+    logger.info("Getting all ship targets...")
+    """
+    Get all ship targets.
+
+    Returns:
+        DataFrame with columns: fit_id, ship_id, ship_name, ship_target
+    """
+    query = text("SELECT * FROM ship_targets")
+    engine = DatabaseConfig("wcmkt").engine
+    try:
+        with engine.connect() as conn:
+            df = pd.read_sql_query(query, conn)
+            return df
+    except Exception as e:
+        logger.error(f"Failed to get all targets: {e}")
+        return pd.DataFrame()
+
+@st.cache_data(ttl=600, show_spinner="Getting target for fit {fit_id}...")
+def get_target_by_fit_id_with_cache(fit_id: int, default: int = DEFAULT_SHIP_TARGET) -> int:
+    logger.info(f"Getting target for fit {fit_id}...")
+    """
+    Get target stock level for a specific fit.
+
+    Returns:
+        Target stock level, or default if not found
+    """
+    query = text("SELECT ship_target FROM ship_targets WHERE fit_id = :fit_id")
+    engine = DatabaseConfig("wcmkt").engine
+    try:
+        with engine.connect() as conn:
+            df = pd.read_sql_query(query, conn, params={"fit_id": fit_id})
+            return df
+    except Exception as e:
+        logger.error(f"Failed to get target for fit {fit_id}: {e}")
+        return default
+
+@st.cache_data(ttl=600, show_spinner="Getting target for ship {ship_id}...")
+def get_target_by_ship_id_with_cache(ship_id: int, default: int = DEFAULT_SHIP_TARGET) -> int:
+    logger.info(f"Getting target for ship {ship_id}...")
+    """
+    Get target stock level for a specific ship type.
+
+    Returns:
+        Target stock level, or default if not found
+    """
+    query = text("SELECT ship_target FROM ship_targets WHERE ship_id = :ship_id")
+    engine = DatabaseConfig("wcmkt").engine
+    try:
+        with engine.connect() as conn:
+            df = pd.read_sql_query(query, conn, params={"ship_id": ship_id})    
+            return df
+    except Exception as e:
+        logger.error(f"Failed to get target for ship {ship_id}: {e}")
+        return default
+
+@st.cache_data(ttl=600, show_spinner="Getting fit name for {fit_id}...")
+def get_fit_name_with_cache(fit_id: int, default: str = "Unknown Fit") -> str:
+    logger.info(f"Getting fit name for {fit_id}...")
+    """
+    Get the display name for a fit.
+
+    Returns:
+        Fit name string
+    """
+    query = text("SELECT fit_name FROM ship_targets WHERE fit_id = :fit_id")
+    engine = DatabaseConfig("wcmkt").engine
+    try:
+        with engine.connect() as conn:
+            df = pd.read_sql_query(query, conn, params={"fit_id": fit_id})
+            return df
+    except Exception as e:
+        logger.error(f"Failed to get fit name for {fit_id}: {e}")
+        return default

@@ -10,18 +10,23 @@ from sqlalchemy import text
 from millify import millify
 from logging_config import setup_logging
 from db_handler import get_update_time, read_df, get_all_fitting_data
-from doctrines import create_fit_df, get_all_fit_data, calculate_jita_fit_cost_and_delta
+from doctrines import create_fit_df, calculate_jita_fit_cost_and_delta
 from utils import get_multi_item_jita_price
 from config import DatabaseConfig
 from facades import get_doctrine_facade
+from services.price_service import PriceService
+from repositories.doctrine_repo import DoctrineRepository
+
 # Insert centralized logging configuration
 logger = setup_logging(__name__, log_file="doctrine_status.log")
 mkt_db = DatabaseConfig("wcmkt")
 
 # Initialize facade (cached in session state)
 facade = get_doctrine_facade()
+fit_build_result = facade.build_fit_data()
+all_fits_df = fit_build_result.raw_df
+summary_df = fit_build_result.summary_df
 
-@st.cache_data(ttl=600, show_spinner="Loading cached doctrine fits...")
 def get_fit_summary() -> pd.DataFrame:
     """Get a summary of all doctrine fits using facade."""
     logger.info("Getting fit summary via facade")
@@ -98,7 +103,6 @@ def get_module_stock_list(module_names: list):
             st.session_state.module_list_state[module_name] = module_info
             st.session_state.csv_module_list_state[module_name] = csv_module_info
 
-@st.cache_data(ttl=600, show_spinner="Loading cached ship stock list...")
 def get_ship_stock_list(ship_names: list):
     if not st.session_state.get('ship_list_state'):
         st.session_state.ship_list_state = {}
@@ -140,20 +144,14 @@ def get_ship_stock_list(ship_names: list):
 
             st.session_state.ship_list_state[ship] = ship_info
             st.session_state.csv_ship_list_state[ship] = csv_ship_info
-@st.fragment
+
 def fitting_download_button():
-    data = get_all_fit_data()
-    _, summary_data = create_fit_df()
-    targets = summary_data[['fit_id', 'ship_target']]
-    data = data.merge(targets, on='fit_id', how='left')
+    targets = facade.get_all_targets()
+    data = all_fits_df.merge(targets, on='fit_id', how='left')
     data = data.reset_index(drop=True)
 
     if st.download_button("Download Data", data=data.to_csv(index=False), file_name="wc_doctrine_fits.csv", help="Download all doctrine fit information as a CSV file", mime="text/csv"):
         st.toast("Data downloaded successfully", icon="✅")
-
-def get_tgt_from_fit_summary(fit_summary: pd.DataFrame, fit_id: int) -> int:
-    """Get the target for a given fit id from the fit summary"""
-    return fit_summary[fit_summary['fit_id'] == fit_id]['target'].iloc[0]
 
 def get_fit_detail_data(fit_id: int) -> pd.DataFrame:
     """
@@ -161,7 +159,7 @@ def get_fit_detail_data(fit_id: int) -> pd.DataFrame:
     Returns a DataFrame with all modules/items for the fit.
     """
     try:
-        df = get_all_fitting_data()
+        df = facade.get_all_fitting_data()
         if df.empty:
             return pd.DataFrame()
         
@@ -261,7 +259,6 @@ def get_fitting_column_config() -> dict:
         ),
     }
 
-@st.cache_data(ttl=3600, show_spinner="Fetching Jita prices...")
 def fetch_jita_prices_for_types(type_ids: tuple[int, ...]) -> dict[int, float]:
     """
     Fetch Jita prices for a set of type_ids using a single API call.
@@ -269,7 +266,9 @@ def fetch_jita_prices_for_types(type_ids: tuple[int, ...]) -> dict[int, float]:
     """
     if not type_ids:
         return {}
-    return get_multi_item_jita_price(list(type_ids))
+    price_service = PriceService.create_default()
+    prices = price_service.get_jita_prices(list(type_ids))
+    return prices.prices
 
 def calculate_all_jita_deltas(force_refresh: bool = False):
     """
@@ -285,7 +284,8 @@ def calculate_all_jita_deltas(force_refresh: bool = False):
         st.session_state.jita_deltas = {}
 
     # Get the raw fit data
-    all_fits_df, summary_df = create_fit_df()
+    all_fits_df = facade.get_all_fits()
+    summary_df = facade.build_fit_data().summary_df()
 
     if all_fits_df.empty:
         st.session_state.jita_deltas = {}
@@ -302,7 +302,6 @@ def calculate_all_jita_deltas(force_refresh: bool = False):
     if force_refresh:
         fetch_jita_prices_for_types.clear()
 
-    with st.spinner("Calculating Jita price deltas..."):
         jita_price_map = fetch_jita_prices_for_types(unique_type_ids)
 
         if not jita_price_map:
@@ -547,11 +546,13 @@ def main():
                     unsafe_allow_html=True
                 )
                 
-                # Add expandable fitting details section
-                with st.expander("📋 View Full Fitting Details", expanded=False):
+                with st.popover("📋 View Full Fitting Details"):
                     with st.spinner("Loading fitting data..."):
-                        fit_detail_df = get_fit_detail_data(row['fit_id'])
+                        fit_detail_df = facade.get_all_fitting_data(fit_id=row['fit_id'])
                         
+                        if not fit_detail_df.empty:
+                            st.dataframe(fit_detail_df, hide_index=True, width='stretch')
+                            
                         if not fit_detail_df.empty:
                             # Display summary info
                             fit_info_col1, fit_info_col2, fit_info_col3 = st.columns(3)
@@ -568,8 +569,6 @@ def main():
                                 if 'Fits on Market' in fit_detail_df.columns:
                                     bottleneck = fit_detail_df['Fits on Market'].min()
                                     st.metric("Bottleneck (Min Fits)", int(bottleneck))
-                            
-                            st.markdown("---")
                             
                             # Display the fitting dataframe
                             col_config = get_fitting_column_config()
