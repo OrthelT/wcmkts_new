@@ -222,49 +222,6 @@ def clean_mkt_data(df):
 
     return df
 
-
-@st.cache_data(ttl=600)
-def get_all_fitting_data()->pd.DataFrame:
-    with mkt_db.local_access():
-        query = """
-                SELECT * FROM doctrines
-                """
-        try:
-            with mkt_db.engine.connect() as conn:
-                df = pd.read_sql_query(query, conn)
-            df = df.reset_index(drop=True)
-        except Exception as e:
-            logger.error(f"Failed to get doctrine data: {str(e)}")
-            raise
-    return df
-
-def get_fitting_data(type_id):
-    logger.debug("getting fitting data")
-    df = get_all_fitting_data()
-    if df.empty:
-        return None
-    else:
-        df2 = df.copy()
-        df2 = df2[df2['type_id'] == type_id]
-        df2.reset_index(drop=True, inplace=True)
-        try:
-            fit_id = df2.iloc[0]['fit_id']
-        except (IndexError, KeyError):
-            return None
-
-        df3 = df.copy()
-        df3 = df3[df3['fit_id'] == fit_id]
-        df3.reset_index(drop=True, inplace=True)
-
-        df3.drop(columns=['ship_id', 'hulls', 'group_id', 'category_name', 'id', 'timestamp'], inplace=True)
-
-        df3['type_id'] = round(df3['type_id'],0).astype(int)
-        df3['fit_id'] = round(df3['fit_id'],0).astype(int)
-        df3.rename(columns={'fits_on_mkt': 'Fits on Market'}, inplace=True)
-        df3 = df3.sort_values(by='Fits on Market', ascending=True)
-        df3.reset_index(drop=True, inplace=True)
-    return df3
-
 @st.cache_data(ttl=600)
 def get_stats(stats_query=None):
     if stats_query is None:
@@ -353,29 +310,6 @@ def get_update_time()->str:
             except Exception as e:
                 logger.error(f"Failed to format local_update_status.updated: {e}")
     return None
-
-def get_module_fits(type_id):
-    with mkt_db.local_access():
-        query = """
-            SELECT * FROM doctrines WHERE type_id = :type_id
-            """
-        try:
-            with mkt_db.engine.connect() as conn:
-                df = pd.read_sql_query(text(query), conn, params={'type_id': type_id})
-        except Exception as e:
-            logger.error(f"Failed to get data for type_id={type_id}: {str(e)}")
-            raise
-
-        df2 = df.copy()
-        try:
-            ships = df2['ship_name'].tolist()
-            fit_qty = df2['fit_qty'].tolist()
-            ships = [f"{ship} ({qty})" for ship, qty in zip(ships, fit_qty)]
-            ships = ', '.join(ships)
-            return ships
-        except (IndexError, KeyError):
-            return None
-
 
 def get_groups_for_category(category_id: int)->pd.DataFrame:
     sde2_db = DatabaseConfig("sde")
