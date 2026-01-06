@@ -776,6 +776,11 @@ class DoctrineService:
         # Cached build result
         self._cached_result: Optional[FitBuildResult] = None
 
+    @property
+    def repository(self) -> DoctrineRepository:
+        """Expose repository for direct access when needed."""
+        return self._repo
+
     @classmethod
     def create_default(cls) -> "DoctrineService":
         """
