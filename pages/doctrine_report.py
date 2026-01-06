@@ -7,19 +7,19 @@ import streamlit as st
 import pathlib
 from logging_config import setup_logging
 from db_handler import get_update_time
-from doctrines import create_fit_df
-from facades import get_doctrine_facade
+from services import get_doctrine_service
+from services.categorization import get_ship_role_categorizer
 
 logger = setup_logging(__name__, log_file="experiments.log")
 
-# Initialize facade (cached in session state)
-facade = get_doctrine_facade()
+# Initialize service (cached in session state)
+service = get_doctrine_service()
 
 icon_id = 0
 icon_url = f"https://images.evetech.net/types/{icon_id}/render?size=64"
 
 def get_module_stock_list(module_names: list):
-    """Get lists of modules with their stock quantities for display and CSV export using facade."""
+    """Get lists of modules with their stock quantities for display and CSV export using service."""
 
     # Set the session state variables for the module list and csv module list
     if not st.session_state.get('module_list_state'):
@@ -29,10 +29,10 @@ def get_module_stock_list(module_names: list):
 
     for module_name in module_names:
         if module_name not in st.session_state.module_list_state:
-            logger.info(f"Querying database for {module_name} via facade")
+            logger.info(f"Querying database for {module_name} via service")
 
-            # Use facade to get module stock info
-            module_stock = facade.get_module_stock(module_name)
+            # Use service repository to get module stock info
+            module_stock = service.repository.get_module_stock(module_name)
 
             if module_stock:
                 module_info = f"{module_name} (Total: {module_stock.total_stock} | Fits: {module_stock.fits_on_mkt})"
@@ -45,8 +45,9 @@ def get_module_stock_list(module_names: list):
             st.session_state.csv_module_list_state[module_name] = csv_module_info
 
 def categorize_ship_by_role(ship_name: str, fit_id: int) -> str:
-    """Categorize ship by role using facade (cached, no file I/O on every call)."""
-    role = facade.categorize_ship(ship_name, fit_id)
+    """Categorize ship by role using categorizer service (cached, no file I/O on every call)."""
+    categorizer = get_ship_role_categorizer()
+    role = categorizer.categorize(ship_name, fit_id)
     return role.display_name
 
 def display_categorized_doctrine_data(selected_data):
@@ -240,7 +241,7 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
 
                 with ship_col2:
                     # Get fit name from selected_data
-                    fit_name = facade.get_fit_name(fit_id)
+                    fit_name = service.repository.get_fit_name(fit_id)
 
                     ship_target = fit_summary[fit_summary['fit_id'] == fit_id]['ship_target'].iloc[0]
                     if pd.notna(ship_target):
@@ -336,14 +337,16 @@ def main():
         st.text("4-HWWF Market Status By Fleet Doctrine")
 
 
-    # Fetch the data
-    master_df, fit_summary = create_fit_df()
+    # Fetch the data using service
+    result = service.build_fit_data()
+    master_df = result.raw_df
+    fit_summary = result.summary_df
 
     if fit_summary.empty:
         st.warning("No doctrine fits found in the database.")
         return
 
-    df = facade.get_all_doctrines()
+    df = service.repository.get_all_doctrine_compositions()
 
     doctrine_names = df.doctrine_name.unique()
 
@@ -373,7 +376,7 @@ def main():
 
     # Create enhanced header with lead ship image
     # Get lead ship image for this doctrine
-    lead_ship_id = facade.get_doctrine_lead_ship(selected_doctrine_id)
+    lead_ship_id = service.repository.get_doctrine_lead_ship(selected_doctrine_id)
     lead_ship_image_url = f"https://images.evetech.net/types/{lead_ship_id}/render?size=256"
 
     # Create two-column layout for doctrine header
