@@ -83,6 +83,7 @@ class DoctrineRepository:
             logger: Optional logger instance
         """
         self._db = db
+        self._logger = logger or logging.getLogger(__name__)
 
     # =========================================================================
     # Core Fit Data
@@ -498,7 +499,9 @@ def get_target_by_fit_id_with_cache(fit_id: int, default: int = DEFAULT_SHIP_TAR
     try:
         with engine.connect() as conn:
             df = pd.read_sql_query(query, conn, params={"fit_id": fit_id})
-            return df
+            if not df.empty:
+                return int(df.iloc[0]['ship_target'])
+            return default
     except Exception as e:
         logger.error(f"Failed to get target for fit {fit_id}: {e}")
         return default
@@ -516,8 +519,10 @@ def get_target_by_ship_id_with_cache(ship_id: int, default: int = DEFAULT_SHIP_T
     engine = DatabaseConfig("wcmkt").engine
     try:
         with engine.connect() as conn:
-            df = pd.read_sql_query(query, conn, params={"ship_id": ship_id})    
-            return df
+            df = pd.read_sql_query(query, conn, params={"ship_id": ship_id})
+            if not df.empty:
+                return int(df.iloc[0]['ship_target'])
+            return default
     except Exception as e:
         logger.error(f"Failed to get target for ship {ship_id}: {e}")
         return default
@@ -536,7 +541,9 @@ def get_fit_name_with_cache(fit_id: int, default: str = "Unknown Fit") -> str:
     try:
         with engine.connect() as conn:
             df = pd.read_sql_query(query, conn, params={"fit_id": fit_id})
-            return df
+            if not df.empty:
+                return str(df.iloc[0]['fit_name'])
+            return default
     except Exception as e:
         logger.error(f"Failed to get fit name for {fit_id}: {e}")
         return default
