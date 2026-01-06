@@ -7,10 +7,13 @@ from sqlalchemy import text
 from logging_config import setup_logging
 from datetime import datetime, timedelta
 import millify
-from doctrines import get_target_from_fit_id
+from services import get_doctrine_service
 import numpy as np
 
 logger = setup_logging(__name__)
+
+# Initialize service (cached in session state)
+service = get_doctrine_service()
 
 import tomllib
 with open("settings.toml", "rb") as f:
@@ -879,13 +882,13 @@ def render_current_market_status_ui(sell_data, stats, selected_item, sell_order_
                 display_fits_on_mkt = f"{fits_on_mkt:,.0f}"
                 target = None
                 if len(fits) == 1:
-                    target = get_target_from_fit_id(fits[0])
+                    target = service.repository.get_target_by_fit_id(fits[0])
                     fits_on_mkt_delta = round(fits_on_mkt - target, 0)
                     st.metric("Fits on Market", f"{display_fits_on_mkt}", delta=f"{fits_on_mkt_delta}")
                 elif len(fits) > 1:
                     try:
                         for fit in fits:
-                            target = get_target_from_fit_id(fit)
+                            target = service.repository.get_target_by_fit_id(fit)
                             fits_on_mkt_delta = fits_on_mkt - target
                             st.write(f"Fit: {fit}, Target: {target}, Fits on Market: {fits_on_mkt}, Delta: {fits_on_mkt_delta}")
                     except Exception as e:
