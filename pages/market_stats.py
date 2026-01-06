@@ -9,10 +9,11 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from sqlalchemy import text,bindparam
-from db_handler import safe_format, get_market_history, get_fitting_data, get_module_fits, read_df, extract_sde_info
+from db_handler import safe_format, get_market_history, read_df, extract_sde_info
 from logging_config import setup_logging
 import millify
 from config import DatabaseConfig
+from services import get_doctrine_service
 from db_handler import new_get_market_data, get_all_mkt_orders, get_all_mkt_stats, get_all_market_history
 from init_db import init_db
 from sync_state import update_wcmkt_state
@@ -26,6 +27,9 @@ build_cost_db = DatabaseConfig("build_cost")
 
 # Insert centralized logging configuration
 logger = setup_logging(__name__)
+
+# Initialize service (cached in session state)
+service = get_doctrine_service()
 
 # Log application start
 logger.info("Application started")
@@ -708,7 +712,8 @@ def main():
             if selected_item_id:
                 # Get the fitting data for the selected item
                 try:
-                    fit_df = get_fitting_data(selected_item_id)
+                    all_fits = service.repository.get_all_fits()
+                    fit_df = all_fits[all_fits['type_id'] == selected_item_id]
                 except Exception:
                     logger.warning(f"Failed to get fitting data for {selected_item_id}")
                     fit_df = pd.DataFrame()
@@ -786,7 +791,9 @@ def main():
                         st.subheader("Winter Co. Doctrine", divider="orange")
                         # if the item is a module, charge, etc. display the fits that use the module
                         if cat_id in [7,8,18]:
-                            st.write(get_module_fits(selected_item_id))
+                            all_fits = service.repository.get_all_fits()
+                            module_fits = all_fits[all_fits['type_id'] == selected_item_id]
+                            st.write(module_fits[['fit_id', 'ship_name', 'fit_qty']].drop_duplicates())
                         else:
                             # otherwise we will display the group name for the item
                             st.write(fit_df[fit_df['type_id'] == selected_item_id]['group_name'].iloc[0])
