@@ -9,30 +9,28 @@ import pandas as pd
 from sqlalchemy import text
 from millify import millify
 from logging_config import setup_logging
-from db_handler import get_update_time, read_df, get_all_fitting_data
-from doctrines import create_fit_df, calculate_jita_fit_cost_and_delta
+from db_handler import get_update_time  # Keep only non-doctrine utilities
 from utils import get_multi_item_jita_price
 from config import DatabaseConfig
-from facades import get_doctrine_facade
-from services.price_service import PriceService
-from repositories.doctrine_repo import DoctrineRepository
+from services import get_doctrine_service, get_price_service
+from services.categorization import get_ship_role_categorizer
 
 # Insert centralized logging configuration
 logger = setup_logging(__name__, log_file="doctrine_status.log")
 mkt_db = DatabaseConfig("wcmkt")
 
-# Initialize facade (cached in session state)
-facade = get_doctrine_facade()
-fit_build_result = facade.build_fit_data()
+# Initialize service (cached in session state)
+service = get_doctrine_service()
+fit_build_result = service.build_fit_data()
 all_fits_df = fit_build_result.raw_df
 summary_df = fit_build_result.summary_df
 
 def get_fit_summary() -> pd.DataFrame:
-    """Get a summary of all doctrine fits using facade."""
-    logger.info("Getting fit summary via facade")
+    """Get a summary of all doctrine fits using service."""
+    logger.info("Getting fit summary via service")
 
-    # Use facade to get all fit summaries as domain models
-    summaries = facade.get_all_fit_summaries()
+    # Use service to get all fit summaries as domain models
+    summaries = service.get_all_fit_summaries()
 
     if not summaries:
         return pd.DataFrame()
@@ -68,7 +66,7 @@ def format_module_list(modules_list):
     return "<br>".join(modules_list)
 
 def get_module_stock_list(module_names: list):
-    """Get lists of modules with their stock quantities for display and CSV export using facade."""
+    """Get lists of modules with their stock quantities for display and CSV export using service."""
 
     # Set the session state variables for the module list and csv module list
     if not st.session_state.get('module_list_state'):
@@ -78,10 +76,10 @@ def get_module_stock_list(module_names: list):
 
     for module_name in module_names:
         if module_name not in st.session_state.module_list_state:
-            logger.info(f"Querying database for {module_name} via facade")
+            logger.info(f"Querying database for {module_name} via service")
 
-            # Use facade to get module stock info
-            module_stock = facade.get_module_stock(module_name)
+            # Use service repository to get module stock info
+            module_stock = service.repository.get_module_stock(module_name)
 
             if module_stock:
                 # Format usage information
@@ -135,7 +133,7 @@ def get_ship_stock_list(ship_names: list):
                 ship_id = int(df.loc[0, 'type_id'])
                 ship_stock = int(df.loc[0, 'total_stock'])
                 ship_fits = int(df.loc[0, 'fits_on_mkt'])
-                ship_target = facade.get_target_by_ship_id(ship_id)
+                ship_target = service.repository.get_target_by_ship_id(ship_id)
                 ship_info = f"{ship} (Qty: {ship_stock} | Fits: {ship_fits} | Target: {ship_target})"
                 csv_ship_info = f"{ship},{ship_id},{ship_stock},{ship_fits},{ship_target},\n"
             else:
@@ -146,7 +144,7 @@ def get_ship_stock_list(ship_names: list):
             st.session_state.csv_ship_list_state[ship] = csv_ship_info
 
 def fitting_download_button():
-    targets = facade.get_all_targets()
+    targets = service.repository.get_all_targets()
     data = all_fits_df.merge(targets, on='fit_id', how='left')
     data = data.reset_index(drop=True)
 
@@ -159,7 +157,7 @@ def get_fit_detail_data(fit_id: int) -> pd.DataFrame:
     Returns a DataFrame with all modules/items for the fit.
     """
     try:
-        df = facade.get_all_fitting_data()
+        df = service.repository.get_all_fits()
         if df.empty:
             return pd.DataFrame()
         
@@ -283,51 +281,15 @@ def calculate_all_jita_deltas(force_refresh: bool = False):
     if 'jita_deltas' not in st.session_state:
         st.session_state.jita_deltas = {}
 
-    # Get the raw fit data
-    all_fits_df = facade.get_all_fits()
-    summary_df = facade.build_fit_data().summary_df()
-
-    if all_fits_df.empty:
+    # Use service to calculate all jita deltas
+    try:
+        st.session_state.jita_deltas = service.calculate_all_jita_deltas()
+        st.session_state.jita_deltas_last_updated = datetime.datetime.now()
+        logger.info(f"Calculated Jita deltas for {len(st.session_state.jita_deltas)} fits at {st.session_state.jita_deltas_last_updated}")
+    except Exception as e:
+        logger.error(f"Error calculating Jita deltas: {e}")
         st.session_state.jita_deltas = {}
         st.session_state.jita_deltas_last_updated = datetime.datetime.now()
-        return
-
-    fit_ids = all_fits_df['fit_id'].unique()
-
-    # Fetch ALL unique type_ids in one batch
-    unique_type_ids = tuple(
-        sorted({int(tid) for tid in all_fits_df['type_id'].dropna().unique().tolist()})
-    )
-
-    if force_refresh:
-        fetch_jita_prices_for_types.clear()
-
-        jita_price_map = fetch_jita_prices_for_types(unique_type_ids)
-
-        if not jita_price_map:
-            logger.warning("No Jita prices fetched; skipping delta calculation.")
-            st.session_state.jita_deltas = {fit_id: None for fit_id in fit_ids}
-        else:
-            for fit_id in fit_ids:
-                try:
-                    fit_data = all_fits_df[all_fits_df['fit_id'] == fit_id]
-                    fit_summary_data = summary_df[summary_df['fit_id'] == fit_id]
-
-                    if not fit_summary_data.empty:
-                        total_cost = fit_summary_data['total_cost'].iloc[0] if pd.notna(fit_summary_data['total_cost'].iloc[0]) else 0
-
-                        # Pass shared price map to avoid redundant API calls
-                        jita_fit_cost, jita_cost_delta = calculate_jita_fit_cost_and_delta(
-                            fit_data, total_cost, jita_price_map
-                        )
-
-                        st.session_state.jita_deltas[fit_id] = jita_cost_delta
-                except Exception as e:
-                    logger.error(f"Error calculating Jita delta for fit_id {fit_id}: {e}")
-                    st.session_state.jita_deltas[fit_id] = None
-
-    st.session_state.jita_deltas_last_updated = datetime.datetime.now()
-    logger.info(f"Calculated Jita deltas for {len(st.session_state.jita_deltas)} fits at {st.session_state.jita_deltas_last_updated}")
 
 def main():
     # App title and logo
@@ -548,7 +510,7 @@ def main():
                 
                 with st.popover("📋 View Full Fitting Details"):
                     with st.spinner("Loading fitting data..."):
-                        fit_detail_df = facade.get_all_fitting_data(fit_id=row['fit_id'])
+                        fit_detail_df = service.repository.get_fit_by_id(fit_id=row['fit_id'])
                         
                         if not fit_detail_df.empty:
                             st.dataframe(fit_detail_df, hide_index=True, width='stretch')
