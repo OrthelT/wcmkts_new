@@ -399,6 +399,7 @@ class DoctrineRepository:
 # =============================================================================
 
 def get_doctrine_repository() -> DoctrineRepository:
+    logger.debug("Getting DoctrineRepository")
     """
     Get or create a DoctrineRepository instance.
 
@@ -412,6 +413,7 @@ def get_doctrine_repository() -> DoctrineRepository:
         fits = repo.get_all_fits()
     """
     if 'doctrine_repository' not in st.session_state:
+        logger.debug("Creating DoctrineRepository instance in session state")
         db = DatabaseConfig("wcmkt")
         st.session_state.doctrine_repository = DoctrineRepository(db)
 
@@ -423,7 +425,7 @@ def get_doctrine_repository() -> DoctrineRepository:
 # =============================================================================
 @st.cache_data(ttl=600, show_spinner="Getting all fits...")
 def get_all_fits_with_cache() -> pd.DataFrame:
-    logger.info("Getting all fits...")
+    logger.info("Getting all fits...with cache")
     """
     Get all fit data from the doctrines table.
 
@@ -446,7 +448,7 @@ def get_all_fits_with_cache() -> pd.DataFrame:
 
 @st.cache_data(ttl=600, show_spinner="Getting fit {fit_id}...")
 def get_fit_by_id_with_cache(fit_id: int) -> pd.DataFrame:
-    logger.info(f"Getting fit {fit_id}...")
+    logger.debug(f"Getting fit {fit_id}...with cache")
     """
     Get all items for a specific fit.
 
@@ -468,7 +470,7 @@ def get_fit_by_id_with_cache(fit_id: int) -> pd.DataFrame:
 
 @st.cache_data(ttl=600, show_spinner="Getting all ship targets...")
 def get_all_targets_with_cache() -> pd.DataFrame:
-    logger.info("Getting all ship targets...")
+    logger.debug("Getting all ship targets...")
     """
     Get all ship targets.
 
@@ -487,7 +489,7 @@ def get_all_targets_with_cache() -> pd.DataFrame:
 
 @st.cache_data(ttl=600, show_spinner="Getting target for fit {fit_id}...")
 def get_target_by_fit_id_with_cache(fit_id: int, default: int = DEFAULT_SHIP_TARGET) -> int:
-    logger.info(f"Getting target for fit {fit_id}...")
+    logger.debug(f"Getting target for fit {fit_id}...")
     """
     Get target stock level for a specific fit.
 
@@ -508,7 +510,7 @@ def get_target_by_fit_id_with_cache(fit_id: int, default: int = DEFAULT_SHIP_TAR
 
 @st.cache_data(ttl=600, show_spinner="Getting target for ship {ship_id}...")
 def get_target_by_ship_id_with_cache(ship_id: int, default: int = DEFAULT_SHIP_TARGET) -> int:
-    logger.info(f"Getting target for ship {ship_id}...")
+    logger.debug(f"Getting target for ship {ship_id}...")
     """
     Get target stock level for a specific ship type.
 
@@ -529,7 +531,7 @@ def get_target_by_ship_id_with_cache(ship_id: int, default: int = DEFAULT_SHIP_T
 
 @st.cache_data(ttl=600, show_spinner="Getting fit name for {fit_id}...")
 def get_fit_name_with_cache(fit_id: int, default: str = "Unknown Fit") -> str:
-    logger.info(f"Getting fit name for {fit_id}...")
+    logger.debug(f"Getting fit name for {fit_id}...")
     """
     Get the display name for a fit.
 

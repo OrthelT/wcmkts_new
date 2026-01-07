@@ -26,6 +26,7 @@ import pandas as pd
 from domain import FitItem, FitSummary, StockStatus
 from repositories import DoctrineRepository
 from services.price_service import PriceService, FitCostAnalysis
+import streamlit as st
 
 
 # =============================================================================
@@ -838,7 +839,6 @@ class DoctrineService:
     def get_all_fit_summaries(self) -> list[FitSummary]:
         """
         Get all fit summaries as domain models.
-
         Returns:
             List of FitSummary objects
         """
@@ -848,10 +848,8 @@ class DoctrineService:
     def get_fit_summary(self, fit_id: int) -> Optional[FitSummary]:
         """
         Get a specific fit summary by ID.
-
         Args:
             fit_id: The fit ID to retrieve
-
         Returns:
             FitSummary or None if not found
         """
@@ -864,10 +862,8 @@ class DoctrineService:
     def get_fits_by_status(self, status: StockStatus) -> list[FitSummary]:
         """
         Get fits filtered by stock status.
-
         Args:
             status: StockStatus to filter by
-
         Returns:
             List of FitSummary objects matching the status
         """
@@ -876,10 +872,8 @@ class DoctrineService:
     def get_fits_by_group(self, ship_group: str) -> list[FitSummary]:
         """
         Get fits filtered by ship group.
-
         Args:
             ship_group: Ship group name (e.g., "Battlecruiser")
-
         Returns:
             List of FitSummary objects in the group
         """
@@ -892,15 +886,22 @@ class DoctrineService:
     def get_fit_items(self, fit_id: int) -> list[FitItem]:
         """
         Get all items for a specific fit.
-
         Args:
             fit_id: The fit ID
-
         Returns:
             List of FitItem objects
         """
         return self._repo.get_fit_items(fit_id)
 
+    def get_fit_name(self, fit_id: int) -> str:
+        """
+        Get the name of a specific fit.
+        Args:
+            fit_id: The fit ID
+        Returns:
+            The name of the fit
+        """
+        return self._repo.get_fit_name(fit_id)
     # -------------------------------------------------------------------------
     # Cost Analysis
     # -------------------------------------------------------------------------
@@ -1000,7 +1001,6 @@ def get_doctrine_service() -> DoctrineService:
         service = get_doctrine_service()
         summaries = service.get_all_fit_summaries()
     """
-    import streamlit as st
 
     if 'doctrine_service' not in st.session_state:
         st.session_state.doctrine_service = DoctrineService.create_default()
