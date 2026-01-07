@@ -76,7 +76,6 @@ def get_types_for_group(db_engine, group_id: int) -> pd.DataFrame:
 ```
 
 ## Migration Steps
-1.  **Remove CSV Dependency**: You no longer need to load `industry_types.csv`.
-2.  **Verify Database**: Ensure `sdelite2.db` is up to date and contains the `industryActivityProducts` table.
-3.  **Update Function**: Replace the CSV-reading logic with the SQL query above.
+1.  **Verify Database**: Ensure `sdelite2.db` is up to date and contains the `industryActivityProducts` table.
+2.  **Update Function**: Replace the CSV-reading logic with the SQL query above.
 

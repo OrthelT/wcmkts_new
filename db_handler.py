@@ -311,10 +311,11 @@ def get_update_time()->str:
                 logger.error(f"Failed to format local_update_status.updated: {e}")
     return None
 
+@st.cache_data(ttl=3600)
 def get_groups_for_category(category_id: int)->pd.DataFrame:
     sde2_db = DatabaseConfig("sde")
     if category_id == 17:
-        df = pd.read_csv("build_commodity_groups.csv")
+        df = pd.read_csv("csvfiles/build_commodity_groups.csv")
         return df
     elif category_id == 4:
         query = """
@@ -328,6 +329,7 @@ def get_groups_for_category(category_id: int)->pd.DataFrame:
         df = pd.read_sql_query(text(query), conn, params={"category_id": category_id})
     return df
 
+@st.cache_data(ttl=3600)
 def get_types_for_group(group_id: int)->pd.DataFrame:
     sde2_db = DatabaseConfig("sde")
     query = """

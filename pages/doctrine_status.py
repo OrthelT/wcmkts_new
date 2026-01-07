@@ -9,7 +9,7 @@ import pandas as pd
 from sqlalchemy import text
 from millify import millify
 from logging_config import setup_logging
-from db_handler import get_update_time  # Keep only non-doctrine utilities
+from db_handler import get_update_time, read_df  # Keep only non-doctrine utilities
 from utils import get_multi_item_jita_price
 from config import DatabaseConfig
 from services import get_doctrine_service, get_price_service
@@ -27,7 +27,7 @@ summary_df = fit_build_result.summary_df
 
 def get_fit_summary() -> pd.DataFrame:
     """Get a summary of all doctrine fits using service."""
-    logger.info("Getting fit summary via service")
+    logger.debug("Getting fit summary via service")
 
     # Use service to get all fit summaries as domain models
     summaries = service.get_all_fit_summaries()
@@ -56,7 +56,6 @@ def get_fit_summary() -> pd.DataFrame:
             'ship_group': summary.ship_group,
             'total_cost': summary.total_cost
         })
-
     return pd.DataFrame(fit_summary)
 
 def format_module_list(modules_list):
@@ -204,7 +203,6 @@ def get_fitting_column_config() -> dict:
         'ship_name': st.column_config.TextColumn(
             "Ship Name",
             help="Ship Name",
-            width="medium"
         ),
         'type_id': st.column_config.NumberColumn(
             "Type ID",
@@ -213,7 +211,7 @@ def get_fitting_column_config() -> dict:
         'type_name': st.column_config.TextColumn(
             "Type Name",
             help="Type Name",
-            width="medium"
+            width="me`dium"
         ),
         'fit_qty': st.column_config.NumberColumn(
             "Qty/fit",
@@ -264,7 +262,7 @@ def fetch_jita_prices_for_types(type_ids: tuple[int, ...]) -> dict[int, float]:
     """
     if not type_ids:
         return {}
-    price_service = PriceService.create_default()
+    price_service = get_price_service()
     prices = price_service.get_jita_prices(list(type_ids))
     return prices.prices
 
@@ -290,6 +288,7 @@ def calculate_all_jita_deltas(force_refresh: bool = False):
         logger.error(f"Error calculating Jita deltas: {e}")
         st.session_state.jita_deltas = {}
         st.session_state.jita_deltas_last_updated = datetime.datetime.now()
+
 
 def main():
     # App title and logo
@@ -394,8 +393,9 @@ def main():
 
         # Display the fits in this group
         for i, row in group_data.iterrows():
+
             # Create a more compact horizontal section for each fit
-            col1, col2, col3 = st.columns([1, 3, 2])
+            col1, col2, col3 = st.columns([1,3,2])
 
             target_pct = row['target_percentage']
             target = int(row['target']) if pd.notna(row['target']) else 0
@@ -404,6 +404,8 @@ def main():
             fit_cost = millify(int(row['total_cost']), precision=2) if pd.notna(row['total_cost']) else 'N/A'
 
             with col1:
+                # add space
+                st.space("stretch")
                 # Ship image and ID info
                 try:
                     st.image(f"https://images.evetech.net/types/{row['ship_id']}/render?size=64", width=64)
@@ -419,119 +421,149 @@ def main():
                 else:
                     color = "red"
                     status = "Critical"
-
+                fit_id = row['fit_id']
+                fit_name = service.get_fit_name(fit_id)
                 st.badge(status, color=color)
-                st.text(f"ID: {row['fit_id']}")
-                st.text(f"Fit: {row['fit']}")
+                st.text(f"ID: {fit_id}")
+                st.text(f"Fit: {fit_name}")
 
             with col2:
-                # Ship name with checkbox and metrics in a more compact layout
-                ship_cols = st.columns([0.05, 0.95])
+                tab1,tab2 = st.tabs(["Market Stock","Fit Details"], default="Market Stock")
+                with tab1:
+                    # Ship name with checkbox and metrics in a more compact layout
+                    ship_cols = st.columns([0.05, 0.95])
 
-                with ship_cols[0]:
-                    # Add checkbox next to ship name with unique key using fit_id and ship_name
-                    unique_key = f"ship_{row['fit_id']}_{row['ship_name']}"
+                    with ship_cols[0]:
+                        # Add checkbox next to ship name with unique key using fit_id and ship_name
+                        unique_key = f"ship_{row['fit_id']}_{row['ship_name']}"
 
-                    # Initialize checkbox state from selected_ships if not already set
-                    if unique_key not in st.session_state:
-                        st.session_state[unique_key] = row['ship_name'] in st.session_state.selected_ships
+                        # Initialize checkbox state from selected_ships if not already set
+                        if unique_key not in st.session_state:
+                            st.session_state[unique_key] = row['ship_name'] in st.session_state.selected_ships
 
-                    ship_selected = st.checkbox("x", key=unique_key, label_visibility="hidden")
+                        ship_selected = st.checkbox("x", key=unique_key, label_visibility="hidden")
 
-                    # Sync checkbox state with selected_ships list
-                    if ship_selected and row['ship_name'] not in st.session_state.selected_ships:
-                        st.session_state.selected_ships.append(row['ship_name'])
-                    elif not ship_selected and row['ship_name'] in st.session_state.selected_ships:
-                        st.session_state.selected_ships.remove(row['ship_name'])
+                        # Sync checkbox state with selected_ships list
+                        if ship_selected and row['ship_name'] not in st.session_state.selected_ships:
+                            st.session_state.selected_ships.append(row['ship_name'])
+                        elif not ship_selected and row['ship_name'] in st.session_state.selected_ships:
+                            st.session_state.selected_ships.remove(row['ship_name'])
 
-                with ship_cols[1]:
-                    st.markdown(f"### {row['ship_name']}")
+                    with ship_cols[1]:
+                        st.markdown(f"### {row['ship_name']}")
 
-                # Display metrics in a single row
-                metric_cols = st.columns(4)
-                fits_delta = fits-target
-                hulls_delta = hulls-target
+                    # Display metrics in a single row
+                    metric_cols = st.columns(4)
+                    fits_delta = fits-target
+                    hulls_delta = hulls-target
 
-                with metric_cols[0]:
-                    # Format the delta values
-                    if fits:
-                        st.metric(label="Fits", value=f"{int(fits)}", delta=fits_delta)
-                    else:
-                        st.metric(label="Fits", value="0", delta=fits_delta)
-
-                with metric_cols[1]:
-                    if hulls:
-                        st.metric(label="Hulls", value=f"{int(hulls)}", delta=hulls_delta)
-                    else:
-                        st.metric(label="Hulls", value="0", delta=hulls_delta)
-
-                with metric_cols[2]:
-                    if target:
-                        st.metric(label="Target", value=f"{int(target)}")
-                    else:
-                        st.metric(label="Target", value="0")
-
-                with metric_cols[3]:
-                    if fit_cost and fit_cost != 'N/A':
-                        # Get the Jita cost delta from session state
-                        jita_delta = None
-                        if 'jita_deltas' in st.session_state and row['fit_id'] in st.session_state.jita_deltas:
-                            jita_delta = st.session_state.jita_deltas[row['fit_id']]
-                        
-                        if jita_delta is not None and pd.notna(jita_delta):
-                            # Format delta as percentage with 2 decimal places
-                            delta_str = f"{jita_delta:.2f}%"
-                            st.metric(label="Fit Cost", value=f"{fit_cost}", delta=delta_str)
+                    with metric_cols[0]:
+                        # Format the delta values
+                        if fits:
+                            st.metric(label="Fits", value=f"{int(fits)}", delta=fits_delta)
                         else:
-                            st.metric(label="Fit Cost", value=f"{fit_cost}")
-                    else:
-                        st.metric(label="Fit Cost", value="N/A")
-                        
-                # Progress bar for target percentage
-                target_pct = row['target_percentage']
-                color = "green" if target_pct >= 90 else "orange" if target_pct >= 50 else "red"
-                if target_pct == 0:
-                    color2 = "#5c1f06"
-                else:
-                    color2 = "#333"
+                            st.metric(label="Fits", value="0", delta=fits_delta)
 
-                st.markdown(
-                    f"""
-                    <div style="margin-top: 5px;">
-                        <div style="background-color: {color2}; width: 100%; height: 20px; border-radius: 3px;">
-                            <div style="background-color: {color}; width: {target_pct}%; height: 20px; border-radius: 3px; text-align: center; line-height: 20px; color: white; font-weight: bold;">
-                                {target_pct}%
+                    with metric_cols[1]:
+                        if hulls:
+                            st.metric(label="Hulls", value=f"{int(hulls)}", delta=hulls_delta)
+                        else:
+                            st.metric(label="Hulls", value="0", delta=hulls_delta)
+
+                    with metric_cols[2]:
+                        if target:
+                            st.metric(label="Target", value=f"{int(target)}")
+                        else:
+                            st.metric(label="Target", value="0")
+
+                    with metric_cols[3]:
+                        if fit_cost and fit_cost != 'N/A':
+                            # Get the Jita cost delta from session state
+                            jita_delta = None
+                            if 'jita_deltas' in st.session_state and row['fit_id'] in st.session_state.jita_deltas:
+                                jita_delta = st.session_state.jita_deltas[row['fit_id']]
+                            
+                            if jita_delta is not None and pd.notna(jita_delta):
+                                # Format delta as percentage with 2 decimal places
+                                delta_str = f"{jita_delta:.2f}%"
+                                st.metric(label="Fit Cost", value=f"{fit_cost}", delta=delta_str)
+                            else:
+                                st.metric(label="Fit Cost", value=f"{fit_cost}")
+                        else:
+                            st.metric(label="Fit Cost", value="N/A")
+                            
+                    # Progress bar for target percentage
+                    target_pct = row['target_percentage']
+                    color = "green" if target_pct >= 90 else "orange" if target_pct >= 50 else "red"
+                    if target_pct == 0:
+                        color2 = "#5c1f06"
+                    else:
+                        color2 = "#333"
+
+                    st.markdown(
+                        f"""
+                        <div style="margin-top: 5px;">
+                            <div style="background-color: {color2}; width: 100%; height: 20px; border-radius: 3px;">
+                                <div style="background-color: {color}; width: {target_pct}%; height: 20px; border-radius: 3px; text-align: center; line-height: 20px; color: white; font-weight: bold;">
+                                    {target_pct}%
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-                
-                with st.popover("📋 View Full Fitting Details"):
-                    with st.spinner("Loading fitting data..."):
-                        fit_detail_df = service.repository.get_fit_by_id(fit_id=row['fit_id'])
-                        
+                        """,
+                        unsafe_allow_html=True
+                    )
+                    
+                    with col3:
+                        # Low stock modules with selection checkboxes
+                        st.markdown(":blue[**Low Stock Modules:**]")
+                        for i, module in enumerate(row['lowest_modules']):
+                            module_qty = module.split("(")[1].split(")")[0]
+                            module_name = module.split(" (")[0]
+                            # Make each key unique by adding fit_id and index to avoid duplicates
+                            module_key = f"{row['fit_id']}_{i}_{module_name}_{module_qty}"
+                            display_key = f"{module_name}_{module_qty}"
+
+                            # Determine module status
+                            if int(module_qty) <= row['target'] * 0.2:
+                                module_status = "Critical"
+                            elif int(module_qty) <= row['target']:
+                                module_status = "Needs Attention"
+                            else:
+                                module_status = "Good"
+
+                            # Apply module status filter
+                            if selected_module_status == "All Low Stock":
+                                if int(module_qty) <= row['target'] * 0.9:
+                                    module_status = "All Low Stock"
+                            if selected_module_status != "All" and selected_module_status != module_status:
+                                continue
+
+                            col_a, col_b = st.columns([0.1, 0.9])
+                            with col_a:
+                                # Initialize checkbox state from selected_modules if not already set
+                                if module_key not in st.session_state:
+                                    st.session_state[module_key] = display_key in st.session_state.selected_modules
+
+                                is_selected = st.checkbox("1", key=module_key, label_visibility="hidden")
+
+                                # Sync checkbox state with selected_modules list
+                                if is_selected and display_key not in st.session_state.selected_modules:
+                                    st.session_state.selected_modules.append(display_key)
+                                elif not is_selected and display_key in st.session_state.selected_modules:
+                                    st.session_state.selected_modules.remove(display_key)
+
+                            with col_b:
+                                if int(module_qty) <= row['target'] * 0.2:
+                                    st.markdown(f":red-badge[:material/error: {module}]")
+                                elif int(module_qty) <= row['target']:
+                                    st.markdown(f":orange-badge[:material/error: {module}]")
+                                else:
+                                    st.text(module)
+                    with tab2:
+                        ship_name = row['ship_name']
+                        st.write(f"{ship_name} - Fit {fit_id}")
+                        fit_detail_df = service.repository.get_fit_by_id(fit_id=fit_id)                    
                         if not fit_detail_df.empty:
-                            st.dataframe(fit_detail_df, hide_index=True, width='stretch')
-                            
-                        if not fit_detail_df.empty:
-                            # Display summary info
-                            fit_info_col1, fit_info_col2, fit_info_col3 = st.columns(3)
-                            
-                            with fit_info_col1:
-                                st.metric("Total Items", len(fit_detail_df))
-                            
-                            with fit_info_col2:
-                                if 'total_stock' in fit_detail_df.columns:
-                                    total_value = (fit_detail_df['price'] * fit_detail_df['total_stock']).sum()
-                                    st.metric("Total Stock Value", f"{millify(total_value, precision=2)}")
-                            
-                            with fit_info_col3:
-                                if 'Fits on Market' in fit_detail_df.columns:
-                                    bottleneck = fit_detail_df['Fits on Market'].min()
-                                    st.metric("Bottleneck (Min Fits)", int(bottleneck))
-                            
                             # Display the fitting dataframe
                             col_config = get_fitting_column_config()
                             st.dataframe(
@@ -553,58 +585,10 @@ def main():
                         else:
                             st.info("No detailed fitting data available for this fit.")
 
-            with col3:
-                # Low stock modules with selection checkboxes
-                st.markdown(":blue[**Low Stock Modules:**]")
-                for i, module in enumerate(row['lowest_modules']):
-                    module_qty = module.split("(")[1].split(")")[0]
-                    module_name = module.split(" (")[0]
-                    # Make each key unique by adding fit_id and index to avoid duplicates
-                    module_key = f"{row['fit_id']}_{i}_{module_name}_{module_qty}"
-                    display_key = f"{module_name}_{module_qty}"
+                        # Add a thinner divider between fits
+                        st.markdown("<hr style='margin: 0.5em 0; border-width: 1px'>", unsafe_allow_html=True)
 
-                    # Determine module status
-                    if int(module_qty) <= row['target'] * 0.2:
-                        module_status = "Critical"
-                    elif int(module_qty) <= row['target']:
-                        module_status = "Needs Attention"
-                    else:
-                        module_status = "Good"
 
-                    # Apply module status filter
-                    if selected_module_status == "All Low Stock":
-                        if int(module_qty) <= row['target'] * 0.9:
-                            module_status = "All Low Stock"
-                    if selected_module_status != "All" and selected_module_status != module_status:
-                        continue
-
-                    col_a, col_b = st.columns([0.1, 0.9])
-                    with col_a:
-                        # Initialize checkbox state from selected_modules if not already set
-                        if module_key not in st.session_state:
-                            st.session_state[module_key] = display_key in st.session_state.selected_modules
-
-                        is_selected = st.checkbox("1", key=module_key, label_visibility="hidden")
-
-                        # Sync checkbox state with selected_modules list
-                        if is_selected and display_key not in st.session_state.selected_modules:
-                            st.session_state.selected_modules.append(display_key)
-                        elif not is_selected and display_key in st.session_state.selected_modules:
-                            st.session_state.selected_modules.remove(display_key)
-
-                    with col_b:
-                        if int(module_qty) <= row['target'] * 0.2:
-                            st.markdown(f":red-badge[:material/error: {module}]")
-                        elif int(module_qty) <= row['target']:
-                            st.markdown(f":orange-badge[:material/error: {module}]")
-                        else:
-                            st.text(module)
-
-            # Add a thinner divider between fits
-            st.markdown("<hr style='margin: 0.5em 0; border-width: 1px'>", unsafe_allow_html=True)
-
-        # Add divider between groups
-        # st.markdown("<hr style='margin: 1.5em 0; border-width: 2px'>", unsafe_allow_html=True)
 
     # Ship and Module Export Section
     st.sidebar.markdown("---")
