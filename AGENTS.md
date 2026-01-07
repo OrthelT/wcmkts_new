@@ -5,8 +5,10 @@ This file provides comprehensive guidance for LLM assistants (like Claude Code) 
 ## Project Overview
 
 Winter Coalition Market Stats Viewer is a Streamlit web application for EVE Online market analysis. It provides real-time market data visualization, doctrine analysis, and inventory management tools for the Winter Coalition.
+The web app can be found here: https://wcmkts.streamlit.app/
+It also has a sister application, Winter Coalition Northern Supply, which supports a different market hub managed in a separate repository. 
 
-**Important:** ESI calls to update market data in wcmkt2.db are handled in a separate repository: https://github.com/OrthelT/mkts_backend
+**Important:** ESI calls to update market data in wcmktprod.db are handled in a separate repository: https://github.com/OrthelT/mkts_backend
 
 ## Quick Start Commands
 
@@ -157,13 +159,12 @@ All pages follow consistent patterns with Streamlit best practices:
 - **`logs/`**: Application logs (git-ignored)
 - **`images/`**: UI assets and images
 - **`dev_files/`**: Development-specific files
-
 ## Database Architecture
 
 ### Turso Embedded Replica Pattern
 
 The application uses Turso's embedded-replica feature for optimal performance:
-- Local SQLite databases (`wcmkt2.db`, `sdelite2.db`) provide fast reads
+- Local SQLite databases (`wcmktprod.db`, `sdelite2.db`) provide fast reads
 - Automatic synchronization with remote Turso database via libsql
 - Background sync managed by DatabaseConfig with RWLock concurrency control
 - Integrity checks with `PRAGMA integrity_check` before and after sync
@@ -386,7 +387,7 @@ Include in PR description:
 │              DatabaseConfig (config.py)                     │
    │              RWLock Concurrency Control                     │
    │  ┌──────────┬──────────┬──────────┐                        │
-   │  │ wcmktprod│ sde_lite │buildcost │                        │
+   │  │ wcmktprod│ sdelite2 │buildcost │                        │
    │  │ .db      │ .db      │.db       │                        │
    │  └────┬─────┴──────────┴──────────┘                        │
    │       │ Sync (libsql)                                       │
@@ -424,9 +425,47 @@ Include in PR description:
 - **Main branch**: main
 - **Active development**: documentation branch (as of last update)
 
-## Additional Resources
+## Additional Resources & Documentation Index
 
-- **Project documentation**: `docs/` directory
-- **Development files**: `dev_files/` directory
-- **Legacy code**: `depreciated-code/` directory
-- **Backend repository**: https://github.com/OrthelT/mkts_backend (ESI API integration)
+### Living Documentation (LLM-Focused)
+The `docs/` directory contains living documentation that provides historical context about development work:
+
+**Refactoring & Analysis:**
+- `ANALYSIS_INDEX.md` - Index of codebase analysis work
+- `FUNCTION_USAGE_ANALYSIS.md` - Function usage patterns and dependencies
+- `REFACTOR_PLAN.md` - Refactoring strategy and plans
+
+**Migration & Implementation:**
+- `jita_optimization_migration.md` - Jita price optimization work
+- `ship_roles_migration.md` - Ship role assignment migration
+- `MIGRATION_EXAMPLES.md` - Examples of previous migrations
+
+**Development History:**
+- `START_PHASE_6.md` - Phase 6 initialization
+- `PHASE_6_PROMPT.md` - Phase 6 prompt and context
+- `PHASE_5_PROMPT.md` - Phase 5 prompt and context
+- `HANDOFF_SUMMARY.md` - Previous handoff documentation
+- `HANDOFF_PHASE6_DEBUGGING.md` - Debugging notes from Phase 6
+- `simplification_options.md` - Code simplification analysis
+
+**Technical Guides:**
+- `admin_guide.md` - Administrative guide
+- `database_config.md` - Database configuration details
+- `concurrency_refactor.md` - Concurrency implementation details
+- `testing.md` - Testing guidelines
+- `quick_reference.md` - Quick reference for common tasks
+- `walkthroughs.md` - Walkthroughs and tutorials
+- `worktree_setup.md` - Git worktree setup guide
+- `refactor_get_types_for_group.md` - Specific refactoring documentation
+
+### Project Directories
+- **`docs/`**: Complete documentation including guides, analysis, and living history
+- **`dev_files/`**: Development-specific files
+- **`depreciated-code/`**: Legacy code archive
+- **`tests/`**: Test suite
+- **`pages/`**: Streamlit application pages
+- **`logs/`**: Application logs (git-ignored)
+- **`images/`**: UI assets and images
+
+### External Resources
+- **Backend repository**: https://github.com/OrthelT/mkts_backend (ESI API integration, market data updates)
