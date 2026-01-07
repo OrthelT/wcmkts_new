@@ -240,8 +240,8 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
                     st.text(f"Fit ID: {fit_id}")
 
                 with ship_col2:
-                    # Get fit name from selected_data
-                    fit_name = service.repository.get_fit_name(fit_id)
+                    # Get fit name from service
+                    fit_name = service.get_fit_name(fit_id)
 
                     ship_target = fit_summary[fit_summary['fit_id'] == fit_id]['ship_target'].iloc[0]
                     if pd.notna(ship_target):
