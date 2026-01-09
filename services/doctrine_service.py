@@ -883,6 +883,123 @@ class DoctrineService:
         """Get all fits at critical stock levels."""
         return self.get_fits_by_status(StockStatus.CRITICAL)
 
+    def get_low_stock_fits(self) -> list[FitSummary]:
+        """
+        Get all fits that are below target (Critical + Needs Attention).
+
+        Returns fits where target_percentage <= 90%.
+        """
+        return [
+            s for s in self.get_all_fit_summaries()
+            if s.status in (StockStatus.CRITICAL, StockStatus.NEEDS_ATTENTION)
+        ]
+
+    def get_good_stock_fits(self) -> list[FitSummary]:
+        """Get all fits at good stock levels (> 90% of target)."""
+        return self.get_fits_by_status(StockStatus.GOOD)
+
+    def filter_fits_by_status_name(
+        self,
+        status_name: str,
+        summaries: Optional[list[FitSummary]] = None
+    ) -> list[FitSummary]:
+        """
+        Filter fits by status name string (for UI dropdown compatibility).
+
+        Args:
+            status_name: One of "All", "Critical", "Needs Attention", "All Low Stock", "Good"
+            summaries: Optional list to filter; uses all fits if not provided
+
+        Returns:
+            Filtered list of FitSummary objects
+        """
+        if summaries is None:
+            summaries = self.get_all_fit_summaries()
+
+        if status_name == "All":
+            return summaries
+        elif status_name == "Good":
+            return [s for s in summaries if s.status == StockStatus.GOOD]
+        elif status_name == "All Low Stock":
+            return [s for s in summaries if s.status != StockStatus.GOOD]
+        elif status_name == "Needs Attention":
+            return [s for s in summaries if s.status == StockStatus.NEEDS_ATTENTION]
+        elif status_name == "Critical":
+            return [s for s in summaries if s.status == StockStatus.CRITICAL]
+        else:
+            self._logger.warning(f"Unknown status filter: {status_name}")
+            return summaries
+
+    def filter_fits_by_group(
+        self,
+        ship_group: str,
+        summaries: Optional[list[FitSummary]] = None
+    ) -> list[FitSummary]:
+        """
+        Filter fits by ship group.
+
+        Args:
+            ship_group: Ship group name or "All"
+            summaries: Optional list to filter; uses all fits if not provided
+
+        Returns:
+            Filtered list of FitSummary objects
+        """
+        if summaries is None:
+            summaries = self.get_all_fit_summaries()
+
+        if ship_group == "All":
+            return summaries
+
+        return [s for s in summaries if s.ship_group == ship_group]
+
+    def apply_target_multiplier(
+        self,
+        multiplier: float,
+        summaries: Optional[list[FitSummary]] = None
+    ) -> list[FitSummary]:
+        """
+        Apply a target multiplier to all fits.
+
+        Args:
+            multiplier: Multiplier to apply (e.g., 1.5 = 150% of target)
+            summaries: Optional list to modify; uses all fits if not provided
+
+        Returns:
+            List of FitSummary objects with adjusted targets
+        """
+        if summaries is None:
+            summaries = self.get_all_fit_summaries()
+
+        if multiplier == 1.0:
+            return summaries
+
+        return [s.with_target_multiplier(multiplier) for s in summaries]
+
+    def get_unique_ship_groups(self) -> list[str]:
+        """Get sorted list of unique ship groups."""
+        summaries = self.get_all_fit_summaries()
+        groups = sorted(set(s.ship_group for s in summaries if s.ship_group))
+        return groups
+
+    # -------------------------------------------------------------------------
+    # Module Status Helpers
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def get_module_status(module_fits: int, target: int) -> StockStatus:
+        """
+        Determine module stock status.
+
+        Args:
+            module_fits: Number of fits this module can support
+            target: Target number of fits
+
+        Returns:
+            StockStatus enum value
+        """
+        return StockStatus.from_stock_and_target(module_fits, target)
+
     def get_fit_items(self, fit_id: int) -> list[FitItem]:
         """
         Get all items for a specific fit.

@@ -410,3 +410,71 @@ class Doctrine:
         if self.lead_ship_id:
             return f"https://images.evetech.net/types/{self.lead_ship_id}/render?size=256"
         return ""
+
+
+# =============================================================================
+# ShipStock - Ship hull with stock and target information
+# =============================================================================
+
+@dataclass(frozen=True)
+class ShipStock:
+    """
+    Represents a ship hull with its stock levels and target.
+
+    Used for sidebar display of selected ships in doctrine_status.py.
+    Consolidates the data retrieved by get_ship_stock_list().
+
+    Attributes:
+        type_id: EVE type ID of the ship
+        type_name: Display name of the ship
+        total_stock: Total quantity of hulls in market stock
+        fits_on_mkt: Number of complete fits this stock can support
+        fit_id: The fit_id used for this ship (for multi-fit ships)
+        ship_target: Target number of fits to maintain
+    """
+    type_id: TypeID
+    type_name: str
+    total_stock: int = 0
+    fits_on_mkt: int = 0
+    fit_id: FitID = 0
+    ship_target: int = 0
+
+    @classmethod
+    def from_query_result(
+        cls,
+        row: pd.Series,
+        ship_target: int = 0
+    ) -> "ShipStock":
+        """
+        Factory method to create ShipStock from query result.
+
+        Args:
+            row: Row from doctrines table with stock info
+            ship_target: Target stock level
+
+        Returns:
+            A new ShipStock instance
+        """
+        return cls(
+            type_id=safe_int(row.get('type_id')),
+            type_name=safe_str(row.get('type_name')),
+            total_stock=safe_int(row.get('total_stock')),
+            fits_on_mkt=safe_int(row.get('fits_on_mkt')),
+            fit_id=safe_int(row.get('fit_id')),
+            ship_target=ship_target,
+        )
+
+    @property
+    def display_string(self) -> str:
+        """Formatted string for sidebar display."""
+        return f"{self.type_name} (Qty: {self.total_stock} | Fits: {self.fits_on_mkt} | Target: {self.ship_target})"
+
+    @property
+    def csv_line(self) -> str:
+        """CSV-formatted line for export."""
+        return f"{self.type_name},{self.type_id},{self.total_stock},{self.fits_on_mkt},{self.ship_target},\n"
+
+    @property
+    def status(self) -> StockStatus:
+        """Get stock status relative to target."""
+        return StockStatus.from_stock_and_target(self.fits_on_mkt, self.ship_target)
