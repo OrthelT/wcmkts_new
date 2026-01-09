@@ -12,7 +12,7 @@ import json
 # ASYNC LIBRARIES
 import asyncio
 import httpx
-
+from ui.formatters import display_build_cost_tool_description
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import DatabaseConfig
@@ -382,20 +382,6 @@ async def get_costs_async(job: JobQuery) -> tuple[dict, dict]:
     logger.info("="*80)
 
     return results, status_log
-
-def display_log_status(status: dict):
-
-    logger.info("Status Report:")
-    logger.info(f"Requests: {status['req_count']}")
-    logger.info(f"Successes: {status['success_count']}")
-    logger.info(f"Errors: {status['error_count']}")
-    if status["error_count"] > 0:
-        logger.error(f"Error Log: {status['error_log']}")
-        st.toast(f"Errors returned for {status['error_count']}. This is likely due to problems with the external industry data API. Please try again later.", icon="⚠️")
-
-
-    with open("status.log", "w") as f:
-        f.write(json.dumps(status, indent=4))
 
 @st.cache_data(ttl=3600)
 def get_all_structures(
@@ -796,7 +782,7 @@ def main():
     with col2:
         st.title("Build Cost Tool")
 
-    df = pd.read_csv("build_catagories.csv")
+    df = pd.read_csv("csvfiles/build_catagories.csv")
     df = df.sort_values(by="category")
 
     categories = df["category"].unique().tolist()
@@ -1009,29 +995,14 @@ def main():
             material_prices=st.session_state.price_source,
         )
         logger.info("=" * 80)
-        logger.info("=" * 80)
-        logger.info("\n")
-        logger.info("get_costs()")
-        logger.info("=" * 80)
-        logger.info("=" * 80)
-        logger.info("\n")
-        t1 = time.perf_counter()
+
 
         results, status_log = get_costs(job, async_mode)
-        logger.info(f"Status log: {status_log['success_count']} success, {status_log['error_count']} errors")
-
-        display_log_status(status_log)
+        logger.debug(f"Status log: {status_log['success_count']} success, {status_log['error_count']} errors")
 
         if not results:
             st.error("No results returned. This is likely due to problems with the external industry data API. Please try again later.")
             return
-
-        t2 = time.perf_counter()
-        elapsed_time = round((t2 - t1) * 1000, 2)
-        logger.info("=" * 80)
-        logger.info(f"TIME get_costs() = {elapsed_time} ms")
-        logger.info("=" * 80)
-        logger.info("\n")
 
         # Cache the results and parameters
         st.session_state.cost_results = results
@@ -1168,18 +1139,7 @@ def main():
         )
 
         st.markdown(
-            """
-
-                    - <span style="font-weight: bold; color: orange;">Runs:</span> The number of runs to calculate the cost for.
-                    - <span style="font-weight: bold; color: orange;">ME:</span> The material efficiency of the blueprint. (default 0)
-                    - <span style="font-weight: bold; color: orange;">TE:</span> The time efficiency of the blueprint. (default 0)
-                    - <span style="font-weight: bold; color: orange;">Material price source:</span> The source of the material prices used in the calculations.
-                        - *ESI Average* - the CCP average price used in the in-game industry window.
-                        - *Jita Sell* - the minimum price of sale orders in Jita.
-                        - *Jita Buy* - the maximum price of buy orders in Jita.
-                    - <span style="font-weight: bold; color: orange;">Structure:</span> The structure to compare the cost to build versus. (optional)
-                    - <span style="font-weight: bold; color: orange;">Skills:</span> All skills are assumed to be at level 5.
-                    """,
+            display_build_cost_tool_description(),
             unsafe_allow_html=True,
         )
 
