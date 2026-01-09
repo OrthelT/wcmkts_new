@@ -265,7 +265,6 @@ def get_ship_role_categorizer(
     """
     return ConfigBasedCategorizer(config)
 
-
 # ============================================================================
 # Backwards Compatibility
 # ============================================================================

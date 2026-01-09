@@ -1,16 +1,21 @@
 
-import pandas as pd
-import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import streamlit as st
 import pathlib
-from logging_config import setup_logging
-from db_handler import get_update_time
-from services import get_doctrine_service
-from services.categorization import get_ship_role_categorizer
+import sys
 
-logger = setup_logging(__name__, log_file="experiments.log")
+import pandas as pd
+import streamlit as st
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from db_handler import get_update_time
+from domain import StockStatus
+from logging_config import setup_logging
+from services import get_doctrine_service
+from services.categorization import categorize_ship_by_role
+from ui.formatters import get_doctrine_report_column_config, get_image_url, get_ship_role_format
+
+logger = setup_logging(__name__, log_file=__name__)
 
 # Initialize service (cached in session state)
 service = get_doctrine_service()
@@ -44,12 +49,6 @@ def get_module_stock_list(module_names: list):
             st.session_state.module_list_state[module_name] = module_info
             st.session_state.csv_module_list_state[module_name] = csv_module_info
 
-def categorize_ship_by_role(ship_name: str, fit_id: int) -> str:
-    """Categorize ship by role using categorizer service (cached, no file I/O on every call)."""
-    categorizer = get_ship_role_categorizer()
-    role = categorizer.categorize(ship_name, fit_id)
-    return role.display_name
-
 def display_categorized_doctrine_data(selected_data):
     """Display doctrine data grouped by ship functional roles."""
 
@@ -67,14 +66,6 @@ def display_categorized_doctrine_data(selected_data):
     # Remove fit_id 474 using loc
     selected_data_with_roles = selected_data_with_roles.loc[selected_data_with_roles['fit_id'] != 474]
 
-    # Define role colors and emojis for visual appeal
-    role_styling = {
-        "DPS": {"color": "red", "emoji": "💥", "description": "Primary DPS Ships"},
-        "Logi": {"color": "green", "emoji": "🏥", "description": "Logistics Ships"},
-        "Links": {"color": "blue", "emoji": "📡", "description": "Command Ships"},
-        "Support": {"color": "orange", "emoji": "🛠️", "description": "EWAR, Tackle & Other Support Ships"}
-    }
-
     # Group by role and display each category
     roles_present = selected_data_with_roles['role'].unique()
 
@@ -83,13 +74,10 @@ def display_categorized_doctrine_data(selected_data):
             continue
 
         role_data = selected_data_with_roles[selected_data_with_roles['role'] == role]
-        style_info = role_styling[role]
+        styler = get_ship_role_format(role)
 
         # Create expandable section for each role
-        with st.expander(
-            f"{style_info['emoji']} **{role}** - {style_info['description']} ({len(role_data)} fits)",
-            expanded=True
-        ):
+        with st.expander(styler, expanded=True):
             # Create columns for metrics summary
             col1, col2, col3 = st.columns(3, gap="small", width=500)
 
@@ -109,10 +97,6 @@ def display_categorized_doctrine_data(selected_data):
                 st.metric("Avg Target %", f"{int(avg_target_pct)}%")
 
 
-            # Display the data table for this role (without the role column)
-            # display_columns = [col for col in role_data.columns if col != 'role']
-
-            # df = role_data[display_columns].copy()
             df = role_data.copy()
             df = df.drop(columns=['role']).reset_index(drop=True)
             df['ship_target'] = df['ship_target'] * st.session_state.target_multiplier
@@ -123,50 +107,7 @@ def display_categorized_doctrine_data(selected_data):
 
             st.dataframe(
                 df, 
-                column_config={
-                    'target_percentage': st.column_config.ProgressColumn(
-                        "Target %",
-                        format="percent",
-                        width="medium",
-
-                    ),
-                    'ship_target': st.column_config.Column(
-                        "Target",
-                        help="Number of fits required for stock",
-
-                    ),
-                    'daily_avg': st.column_config.NumberColumn(
-                        "Daily Sales",
-                        help="Average daily sales over the last 30 days"
-                    ),
-                    'ship_group': st.column_config.Column(
-                        "Group",
-                        help="Ship group"
-                    ),
-                    'ship_name': st.column_config.Column(
-                        "Ship",
-                        help="Ship name"
-                    ),
-                    'ship_id': st.column_config.Column(
-                        "Type ID",
-                        help="Ship ID"
-                    ),
-                    'fit_id': st.column_config.Column(
-                        "Fit ID",
-                        help="Fit ID"
-                    ),
-                    'price': st.column_config.NumberColumn(
-                        "Price",
-                        format="compact",
-                        help="Price of the ship"
-                    ),
-                    'total_cost': st.column_config.NumberColumn(
-                        "Total Cost",
-                        format="compact",
-                        help="Total cost of the fit"
-                    )
-
-                },
+                column_config=get_doctrine_report_column_config(),
                 width='content',
                 hide_index=True,
                 height=static_height
@@ -188,8 +129,6 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
         else:
             lead_fit_id = selected_data[selected_data['ship_id'] == lead_ship_id].fit_id.iloc[0]
  
-
-
         # Create two columns for display
         col1, col2 = st.columns(2)
 
@@ -226,15 +165,12 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
             target_col = col1 if i % 2 == 0 else col2
 
             with target_col:
-                # Ship header with image
-                ship_image_url = f"https://images.evetech.net/types/{ship_id}/render?size=64"
-
                 # Create ship header section
                 ship_col1, ship_col2 = st.columns([0.2, 0.8])
 
                 with ship_col1:
                     try:
-                        st.image(ship_image_url, width=64)
+                        st.image(get_image_url(ship_id, 64), width=64)
                     except Exception:
                         st.text("🚀")
                     st.text(f"Fit ID: {fit_id}")
@@ -268,16 +204,9 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
                     module_target = int(target) if pd.notna(target) else 0
                     module_key = f"ship_module_{fit_id}_{module_name}_{stock}_{module_target}"
 
-                    # Determine module status based on target comparison with new tier system
-                    if stock > target * 0.9:
-                        badge_status = "On Target"
-                        badge_color = "green"
-                    elif stock > target * 0.2:
-                        badge_status = "Needs Attention"
-                        badge_color = "orange"
-                    else:
-                        badge_status = "Critical"
-                        badge_color = "red"
+                    stock_status = StockStatus.from_stock_and_target(stock, module_target)
+                    badge_status = stock_status.display_name
+                    badge_color = stock_status.display_color
 
                     # Create checkbox and module info
                     checkbox_col, badge_col, text_col = st.columns([0.1, 0.2, 0.7])
@@ -326,16 +255,13 @@ def main():
     # Handle path properly for WSL environment
     image_path = pathlib.Path(__file__).parent.parent / "images" / "wclogo.png"
 
+
     col1, col2 = st.columns([0.2, 0.8], vertical_alignment="bottom")
     with col1:
-        if image_path.exists():
-            st.image(str(image_path), width=150)
-        else:
-            logger.warning("Logo image not found")
+        st.image(image_path, 150)
     with col2:
         st.title("Doctrine Report")
         st.text("4-HWWF Market Status By Fleet Doctrine")
-
 
     # Fetch the data using service
     result = service.build_fit_data()
@@ -377,7 +303,7 @@ def main():
     # Create enhanced header with lead ship image
     # Get lead ship image for this doctrine
     lead_ship_id = service.repository.get_doctrine_lead_ship(selected_doctrine_id)
-    lead_ship_image_url = f"https://images.evetech.net/types/{lead_ship_id}/render?size=256"
+    lead_ship_image_url = get_image_url(lead_ship_id, 256)
 
     # Create two-column layout for doctrine header
     header_col1, header_col2 = st.columns([0.2, 0.8], gap="small", vertical_alignment="center")
@@ -399,10 +325,8 @@ def main():
     # Display categorized doctrine data instead of simple dataframe
     display_categorized_doctrine_data(selected_data)
 
-
     # Display lowest stock modules by ship with checkboxes
     display_low_stock_modules(selected_data, doctrine_modules, selected_fit_ids, fit_summary, lead_ship_id, selected_doctrine_id)
-
 
     # Display selected modules if any
     st.sidebar.markdown("---")

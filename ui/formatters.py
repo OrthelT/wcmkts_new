@@ -11,8 +11,9 @@ Design Principles:
 - Return simple types (str, tuple) for flexibility
 """
 
-from domain import StockStatus
+import streamlit as st
 
+from domain.enums import ShipRole, StockStatus
 
 def format_module_list(modules_list: list[str]) -> str:
     """
@@ -186,3 +187,81 @@ def display_build_cost_tool_description() -> str:
     - <span style="font-weight: bold; color: orange;">Structure:</span> The structure to compare the cost to build versus. (optional)
     - <span style="font-weight: bold; color: orange;">Skills:</span> All skills are assumed to be at level 5.
     """
+
+
+def get_ship_role_format(role: str) -> str:
+    """
+    Get formatted display string for a ship role.
+
+    Args:
+        role: Role name string ("DPS", "Logi", "Links", "Support")
+
+    Returns:
+        Formatted string with emoji, bold name, and description
+        e.g., "💥 **DPS** - Primary DPS Ships"
+    """
+    ship_role = ShipRole.from_string(role)
+    return f"{ship_role.display_emoji} **{ship_role.display_name}** - {ship_role.description}"
+
+def get_doctrine_report_column_config() -> dict:
+    """
+    Get the column configuration for the doctrine_report.py display table.
+    Returns:
+        Column configuration for the doctrine_report.py display table
+    """
+    config = {'target_percentage': st.column_config.ProgressColumn(
+                        "Target %",
+                        format="percent",
+                        width="medium",
+                    ),
+            'ship_target': st.column_config.Column(
+                "Target",
+                help="Number of fits required for stock",
+
+            ),
+            'daily_avg': st.column_config.NumberColumn(
+                "Daily Sales",
+                help="Average daily sales over the last 30 days"
+            ),
+            'ship_group': st.column_config.Column(
+                "Group",
+                help="Ship group"
+            ),
+            'ship_name': st.column_config.Column(
+                "Ship",
+                help="Ship name"
+            ),
+            'ship_id': st.column_config.Column(
+                "Type ID",
+                help="Ship ID"
+            ),
+            'fit_id': st.column_config.Column(
+                "Fit ID",
+                help="Fit ID"
+            ),
+            'price': st.column_config.NumberColumn(
+                "Price",
+                format="compact",
+                help="Price of the ship"
+            ),
+            'total_cost': st.column_config.NumberColumn(
+                "Total Cost",
+                format="compact",
+                help="Total cost of the fit"
+            ) 
+            }
+    return config
+
+def get_image_url(type_id: int, size: int = 64) -> str:
+    """
+    Get the image URL for a type.
+
+    Args:
+        type_id: Type ID
+        size: Size of the image
+
+    Returns:
+        Image URL for the type
+    """
+    return f"https://images.evetech.net/types/{type_id}/render?size={size}"
+
