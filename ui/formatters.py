@@ -173,3 +173,16 @@ def parse_module_display_string(module_str: str) -> tuple[str, int]:
         pass
 
     return module_str, 0
+
+def display_build_cost_tool_description() -> str:
+    return """
+    - <span style="font-weight: bold; color: orange;">Runs:</span> The number of runs to calculate the cost for.
+    - <span style="font-weight: bold; color: orange;">ME:</span> The material efficiency of the blueprint. (default 0)
+    - <span style="font-weight: bold; color: orange;">TE:</span> The time efficiency of the blueprint. (default 0)
+    - <span style="font-weight: bold; color: orange;">Material price source:</span> The source of the material prices used in the calculations.
+        - *ESI Average* - the CCP average price used in the in-game industry window.
+        - *Jita Sell* - the minimum price of sale orders in Jita.
+        - *Jita Buy* - the maximum price of buy orders in Jita.
+    - <span style="font-weight: bold; color: orange;">Structure:</span> The structure to compare the cost to build versus. (optional)
+    - <span style="font-weight: bold; color: orange;">Skills:</span> All skills are assumed to be at level 5.
+    """
