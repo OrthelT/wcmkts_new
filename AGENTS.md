@@ -318,7 +318,7 @@ The test suite includes:
 - `test_rwlock.py`: RWLock implementation tests (12 tests)
 - `test_database_config_concurrency.py`: DatabaseConfig concurrency tests
 - Additional tests for database operations, logging, and data fetching
-- Current status: 36 tests passing
+- Current status: 37 tests passing
 
 ## Commit & Pull Request Guidelines
 
@@ -417,6 +417,93 @@ Include in PR description:
 - Automatic recovery from database corruption
 - Separation of concerns: backend handles ESI, frontend handles UI/analysis
 
+### Layered Architecture & Module Dependencies
+
+The codebase follows a strict layered architecture. Dependencies must flow **downward only** - upper layers may import from lower layers, but never the reverse.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  PRESENTATION LAYER                                         │
+│  pages/              → Streamlit pages (UI entry points)    │
+│  app.py              → Application entry point              │
+└─────────────────────────────────────────────────────────────┘
+                              │ imports from ↓
+┌─────────────────────────────────────────────────────────────┐
+│  UI LAYER                                                   │
+│  ui/                 → Formatting, column configs, display  │
+│    formatters.py     → Pure formatting functions            │
+│    column_definitions.py → st.column_config definitions     │
+└─────────────────────────────────────────────────────────────┘
+                              │ imports from ↓
+┌─────────────────────────────────────────────────────────────┐
+│  FACADE LAYER                                               │
+│  facades/            → Simplified API for pages             │
+│    doctrine_facade.py → Unified doctrine operations         │
+└─────────────────────────────────────────────────────────────┘
+                              │ imports from ↓
+┌─────────────────────────────────────────────────────────────┐
+│  SERVICE LAYER                                              │
+│  services/           → Business logic orchestration         │
+│    doctrine_service.py → FitDataBuilder, DoctrineService    │
+│    price_service.py    → Price fetching with fallbacks      │
+│    categorization.py   → Ship role categorization           │
+└─────────────────────────────────────────────────────────────┘
+                              │ imports from ↓
+┌─────────────────────────────────────────────────────────────┐
+│  REPOSITORY LAYER                                           │
+│  repositories/       → Database access abstraction          │
+│    doctrine_repo.py  → DoctrineRepository (17 methods)      │
+└─────────────────────────────────────────────────────────────┘
+                              │ imports from ↓
+┌─────────────────────────────────────────────────────────────┐
+│  DOMAIN LAYER                                               │
+│  domain/             → Core business models (no deps)       │
+│    models.py         → FitItem, FitSummary, ModuleStock     │
+│    enums.py          → StockStatus, ShipRole                │
+│    converters.py     → Type conversion utilities            │
+└─────────────────────────────────────────────────────────────┘
+                              │ imports from ↓
+┌─────────────────────────────────────────────────────────────┐
+│  INFRASTRUCTURE LAYER                                       │
+│  config.py           → DatabaseConfig, RWLock               │
+│  models.py           → SQLAlchemy ORM models                │
+│  db_handler.py       → Low-level DB queries                 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Dependency Rules (CRITICAL):**
+
+| Layer | May Import From | Must NOT Import From |
+|-------|-----------------|----------------------|
+| `pages/` | `ui/`, `facades/`, `services/`, `domain/`, `repositories/` | - |
+| `ui/` | `domain/` only | `services/`, `facades/`, `pages/`, `app.py` |
+| `facades/` | `services/`, `repositories/`, `domain/` | `ui/`, `pages/` |
+| `services/` | `repositories/`, `domain/` | `ui/`, `facades/`, `pages/` |
+| `repositories/` | `domain/`, `config`, `models` | `services/`, `facades/`, `ui/`, `pages/` |
+| `domain/` | Python stdlib only | Everything else |
+
+**Common Circular Import Causes:**
+1. **UI importing from services** - UI layer should only use domain enums/models
+2. **Importing from `app.py`** - Entry point should never be imported
+3. **Services importing from facades** - Facades wrap services, not vice versa
+
+**Example - Correct Pattern:**
+```python
+# ui/formatters.py - CORRECT
+from domain.enums import ShipRole, StockStatus  # ✓ domain only
+
+def get_ship_role_format(role: str) -> str:
+    ship_role = ShipRole.from_string(role)
+    return f"{ship_role.display_emoji} **{ship_role.display_name}**"
+```
+
+**Example - Anti-Pattern (causes circular imports):**
+```python
+# ui/formatters.py - WRONG
+from services.categorization import get_ship_role_object  # ✗ services!
+from app import logger  # ✗ entry point!
+```
+
 ## Version Information
 
 - **Current version**: 0.1.5
@@ -427,45 +514,36 @@ Include in PR description:
 
 ## Additional Resources & Documentation Index
 
-### Living Documentation (LLM-Focused)
-The `docs/` directory contains living documentation that provides historical context about development work:
+### Documentation (`docs/` directory)
 
-**Refactoring & Analysis:**
-- `ANALYSIS_INDEX.md` - Index of codebase analysis work
-- `FUNCTION_USAGE_ANALYSIS.md` - Function usage patterns and dependencies
-- `REFACTOR_PLAN.md` - Refactoring strategy and plans
+**User Documentation:**
+- `docs.md` - End-user guide for the application
+- `docs_cn.md` - Chinese translation of user guide
 
-**Migration & Implementation:**
-- `jita_optimization_migration.md` - Jita price optimization work
-- `ship_roles_migration.md` - Ship role assignment migration
-- `MIGRATION_EXAMPLES.md` - Examples of previous migrations
+**Technical Reference:**
+- `REFACTOR_PLAN.md` - Comprehensive architecture documentation and refactoring history
+- `database_config.md` - Database configuration and Turso sync details
+- `concurrency_refactor.md` - RWLock implementation and concurrency patterns
+- `testing.md` - Testing guidelines and pytest patterns
 
-**Development History:**
-- `START_PHASE_6.md` - Phase 6 initialization
-- `PHASE_6_PROMPT.md` - Phase 6 prompt and context
-- `PHASE_5_PROMPT.md` - Phase 5 prompt and context
-- `HANDOFF_SUMMARY.md` - Previous handoff documentation
-- `HANDOFF_PHASE6_DEBUGGING.md` - Debugging notes from Phase 6
-- `simplification_options.md` - Code simplification analysis
-
-**Technical Guides:**
-- `admin_guide.md` - Administrative guide
-- `database_config.md` - Database configuration details
-- `concurrency_refactor.md` - Concurrency implementation details
-- `testing.md` - Testing guidelines
+**Guides:**
+- `admin_guide.md` - Administrative guide for managing the application
 - `quick_reference.md` - Quick reference for common tasks
-- `walkthroughs.md` - Walkthroughs and tutorials
-- `worktree_setup.md` - Git worktree setup guide
-- `refactor_get_types_for_group.md` - Specific refactoring documentation
+- `walkthrough.md` - Step-by-step walkthroughs
+- `worktree_setup.md` - Git worktree setup for parallel development
 
 ### Project Directories
-- **`docs/`**: Complete documentation including guides, analysis, and living history
-- **`dev_files/`**: Development-specific files
-- **`depreciated-code/`**: Legacy code archive
-- **`tests/`**: Test suite
+- **`domain/`**: Core business models (FitItem, FitSummary, StockStatus, ShipRole)
+- **`repositories/`**: Database access layer (DoctrineRepository)
+- **`services/`**: Business logic (DoctrineService, PriceService, categorization)
+- **`facades/`**: Simplified API layer (DoctrineFacade)
+- **`ui/`**: UI formatting utilities and column configurations
 - **`pages/`**: Streamlit application pages
+- **`tests/`**: pytest unit tests
+- **`docs/`**: Documentation
 - **`logs/`**: Application logs (git-ignored)
-- **`images/`**: UI assets and images
+- **`images/`**: UI assets
+- **`depreciated-code/`**: Legacy code archive
 
 ### External Resources
 - **Backend repository**: https://github.com/OrthelT/mkts_backend (ESI API integration, market data updates)
