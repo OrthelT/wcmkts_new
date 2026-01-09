@@ -6,18 +6,15 @@ import pathlib
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 import pandas as pd
-from sqlalchemy import text
 from millify import millify
 from logging_config import setup_logging
-from db_handler import get_update_time, read_df  # Keep only non-doctrine utilities
-from utils import get_multi_item_jita_price
-from config import DatabaseConfig
+from db_handler import get_update_time
 from services import get_doctrine_service, get_price_service
-from services.categorization import get_ship_role_categorizer
+from domain import StockStatus
+from ui import get_fitting_column_config, render_progress_bar_html
 
 # Insert centralized logging configuration
 logger = setup_logging(__name__, log_file="doctrine_status.log")
-mkt_db = DatabaseConfig("wcmkt")
 
 # Initialize service (cached in session state)
 service = get_doctrine_service()
@@ -101,6 +98,16 @@ def get_module_stock_list(module_names: list):
             st.session_state.csv_module_list_state[module_name] = csv_module_info
 
 def get_ship_stock_list(ship_names: list):
+    """
+    Get ship stock information and cache in session state.
+
+    Uses DoctrineRepository.get_ship_stock() which handles:
+    - Preferred fit selection from settings.toml
+    - Target lookup by ship_id
+
+    Args:
+        ship_names: List of ship names to query
+    """
     if not st.session_state.get('ship_list_state'):
         st.session_state.ship_list_state = {}
     if not st.session_state.get('csv_ship_list_state'):
@@ -109,38 +116,17 @@ def get_ship_stock_list(ship_names: list):
     logger.info(f"Ship names: {ship_names}")
     for ship in ship_names:
         if ship not in st.session_state.ship_list_state:
-            logger.info(f"Querying database for {ship}")
-            params = {"ship": ship}
-            extra = ""
-            if ship == "Ferox Navy Issue":
-                extra = " AND fit_id = :fit_id"
-                params["fit_id"] = 473
-            elif ship == "Hurricane Fleet Issue":
-                extra = " AND fit_id = :fit_id"
-                params["fit_id"] = 494
+            logger.info(f"Querying database for {ship} via repository")
 
-            query = text(
-                f"""
-                SELECT type_name, type_id, total_stock, fits_on_mkt, fit_id
-                FROM doctrines
-                WHERE type_name = :ship{extra}
-                LIMIT 1
-                """
-            )
-            df = read_df(mkt_db, query, params)
-            if not df.empty and pd.notna(df.loc[0, 'total_stock']) and pd.notna(df.loc[0, 'type_id']) and pd.notna(df.loc[0, 'fits_on_mkt']):
-                ship_id = int(df.loc[0, 'type_id'])
-                ship_stock = int(df.loc[0, 'total_stock'])
-                ship_fits = int(df.loc[0, 'fits_on_mkt'])
-                ship_target = service.repository.get_target_by_ship_id(ship_id)
-                ship_info = f"{ship} (Qty: {ship_stock} | Fits: {ship_fits} | Target: {ship_target})"
-                csv_ship_info = f"{ship},{ship_id},{ship_stock},{ship_fits},{ship_target},\n"
+            # Use repository method (handles preferred fits from config)
+            ship_stock = service.repository.get_ship_stock(ship)
+
+            if ship_stock:
+                st.session_state.ship_list_state[ship] = ship_stock.display_string
+                st.session_state.csv_ship_list_state[ship] = ship_stock.csv_line
             else:
-                ship_info = ship
-                csv_ship_info = f"{ship},0,0,0,0,\n"
-
-            st.session_state.ship_list_state[ship] = ship_info
-            st.session_state.csv_ship_list_state[ship] = csv_ship_info
+                st.session_state.ship_list_state[ship] = ship
+                st.session_state.csv_ship_list_state[ship] = f"{ship},0,0,0,0,\n"
 
 def fitting_download_button():
     targets = service.repository.get_all_targets()
@@ -192,68 +178,6 @@ def get_fit_detail_data(fit_id: int) -> pd.DataFrame:
     except Exception as e:
         logger.error(f"Error getting fit detail data for fit_id {fit_id}: {e}")
         return pd.DataFrame()
-
-def get_fitting_column_config() -> dict:
-    """Get column configuration for fitting data display"""
-    return {
-        'fit_id': st.column_config.NumberColumn(
-            "Fit ID",
-            help="WC Doctrine Fit ID"
-        ),
-        'ship_name': st.column_config.TextColumn(
-            "Ship Name",
-            help="Ship Name",
-        ),
-        'type_id': st.column_config.NumberColumn(
-            "Type ID",
-            help="Type ID"
-        ),
-        'type_name': st.column_config.TextColumn(
-            "Type Name",
-            help="Type Name",
-            width="me`dium"
-        ),
-        'fit_qty': st.column_config.NumberColumn(
-            "Qty/fit",
-            help="Quantity of this item per fit",
-            width="small"
-        ),
-        'Fits on Market': st.column_config.NumberColumn(
-            "Fits",
-            help="Total fits available on market for this item",
-            width="small"
-        ),
-        'total_stock': st.column_config.NumberColumn(
-            "Stock",
-            help="Total stock of this item",
-            width="small"
-        ),
-        'price': st.column_config.NumberColumn(
-            "Price",
-            help="Price of this item",
-            format="localized"
-        ),
-        'avg_vol': st.column_config.NumberColumn(
-            "Avg Vol",
-            help="Average volume over the last 30 days",
-            width="small"
-        ),
-        'days': st.column_config.NumberColumn(
-            "Days",
-            help="Days remaining (based on historical average)",
-            width="small"
-        ),
-        'group_name': st.column_config.Column(
-            "Group",
-            help="Group of this item",
-            width="small"
-        ),
-        'category_id': st.column_config.NumberColumn(
-            "Category ID",
-            help="Category ID (ships are 6)",
-            width="small"
-        ),
-    }
 
 def fetch_jita_prices_for_types(type_ids: tuple[int, ...]) -> dict[int, float]:
     """
@@ -357,16 +281,29 @@ def main():
     filtered_df = fit_summary.copy()
     filtered_df['target'] = filtered_df['target'] * ds_target_multiplier
 
-    # Apply status filter
+    # Recalculate target_percentage with multiplier (capped at 100)
+    filtered_df['target_percentage'] = (
+        (filtered_df['fits'] / filtered_df['target'] * 100)
+        .clip(upper=100)
+        .fillna(0)
+        .astype(int)
+    )
+
+    # Apply status filter using StockStatus thresholds (Critical: <=20%, Good: >90%)
     if selected_status != "All":
         if selected_status == "Good":
             filtered_df = filtered_df[filtered_df['target_percentage'] > 90]
         elif selected_status == "All Low Stock":
             filtered_df = filtered_df[filtered_df['target_percentage'] <= 90]
         elif selected_status == "Needs Attention":
-            filtered_df = filtered_df[(filtered_df['target_percentage'] > 40) & (filtered_df['target_percentage'] <= 90)]
+            # StockStatus.NEEDS_ATTENTION: >20% and <=90%
+            filtered_df = filtered_df[
+                (filtered_df['target_percentage'] > 20) &
+                (filtered_df['target_percentage'] <= 90)
+            ]
         elif selected_status == "Critical":
-            filtered_df = filtered_df[filtered_df['target_percentage'] <= 40]
+            # StockStatus.CRITICAL: <=20%
+            filtered_df = filtered_df[filtered_df['target_percentage'] <= 20]
 
     # Apply ship group filter
     if selected_group != "All":
@@ -412,15 +349,10 @@ def main():
                 except Exception:
                     st.text("Image not available")
 
-                if target_pct > 90:
-                    color = "green"
-                    status = "Good"
-                elif target_pct > 40:
-                    color = "orange"
-                    status = "Needs Attention"
-                else:
-                    color = "red"
-                    status = "Critical"
+                # Use StockStatus for consistent categorization
+                stock_status = StockStatus.from_percentage(target_pct)
+                color = stock_status.display_color
+                status = stock_status.display_name
                 fit_id = row['fit_id']
                 fit_name = service.get_fit_name(fit_id)
                 st.badge(status, color=color)
@@ -492,30 +424,15 @@ def main():
                         else:
                             st.metric(label="Fit Cost", value="N/A")
                             
-                    # Progress bar for target percentage
+                    # Progress bar for target percentage (uses ui.formatters)
                     target_pct = row['target_percentage']
-                    color = "green" if target_pct >= 90 else "orange" if target_pct >= 50 else "red"
-                    if target_pct == 0:
-                        color2 = "#5c1f06"
-                    else:
-                        color2 = "#333"
-
-                    st.markdown(
-                        f"""
-                        <div style="margin-top: 5px;">
-                            <div style="background-color: {color2}; width: 100%; height: 20px; border-radius: 3px;">
-                                <div style="background-color: {color}; width: {target_pct}%; height: 20px; border-radius: 3px; text-align: center; line-height: 20px; color: white; font-weight: bold;">
-                                    {target_pct}%
-                                </div>
-                            </div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
+                    st.markdown(render_progress_bar_html(target_pct), unsafe_allow_html=True)
                     
                     with col3:
                         # Low stock modules with selection checkboxes
                         st.markdown(":blue[**Low Stock Modules:**]")
+                        target = int(row['target']) if pd.notna(row['target']) else 0
+
                         for i, module in enumerate(row['lowest_modules']):
                             module_qty = module.split("(")[1].split(")")[0]
                             module_name = module.split(" (")[0]
@@ -523,17 +440,14 @@ def main():
                             module_key = f"{row['fit_id']}_{i}_{module_name}_{module_qty}"
                             display_key = f"{module_name}_{module_qty}"
 
-                            # Determine module status
-                            if int(module_qty) <= row['target'] * 0.2:
-                                module_status = "Critical"
-                            elif int(module_qty) <= row['target']:
-                                module_status = "Needs Attention"
-                            else:
-                                module_status = "Good"
+                            # Use StockStatus for consistent module categorization
+                            mod_stock_status = StockStatus.from_stock_and_target(int(module_qty), target)
+                            module_status = mod_stock_status.display_name
 
                             # Apply module status filter
                             if selected_module_status == "All Low Stock":
-                                if int(module_qty) <= row['target'] * 0.9:
+                                # "All Low Stock" = not Good (i.e., <=90% of target)
+                                if mod_stock_status != StockStatus.GOOD:
                                     module_status = "All Low Stock"
                             if selected_module_status != "All" and selected_module_status != module_status:
                                 continue
@@ -553,9 +467,10 @@ def main():
                                     st.session_state.selected_modules.remove(display_key)
 
                             with col_b:
-                                if int(module_qty) <= row['target'] * 0.2:
+                                # Display with color based on status
+                                if mod_stock_status == StockStatus.CRITICAL:
                                     st.markdown(f":red-badge[:material/error: {module}]")
-                                elif int(module_qty) <= row['target']:
+                                elif mod_stock_status == StockStatus.NEEDS_ATTENTION:
                                     st.markdown(f":orange-badge[:material/error: {module}]")
                                 else:
                                     st.text(module)
@@ -637,21 +552,22 @@ def main():
                 if row['ship_name'] not in st.session_state.displayed_ships:
                     continue
 
+                target = int(row['target']) if pd.notna(row['target']) else 0
+
                 for module in row['lowest_modules']:
                     module_qty = module.split("(")[1].split(")")[0]
                     module_name = module.split(" (")[0]
                     display_key = f"{module_name}_{module_qty}"
 
-                    # Determine module status for filtering
+                    # Use StockStatus for consistent module categorization
+                    mod_stock_status = StockStatus.from_stock_and_target(int(module_qty), target)
+                    module_status = mod_stock_status.display_name
+
+                    # Handle "All Low Stock" filter
                     if selected_module_status == "All Low Stock":
-                        if int(module_qty) <= row['target'] * 0.9:
+                        if mod_stock_status != StockStatus.GOOD:
                             low_stock_modules.append(display_key)
-                    elif int(module_qty) <= row['target'] * 0.2:
-                        module_status = "Critical"
-                    elif int(module_qty) <= row['target']:
-                        module_status = "Needs Attention"
-                    else:
-                        module_status = "Good"
+                        continue
 
                     # Apply module status filter
                     if selected_module_status != "All" and selected_module_status != module_status:

@@ -55,3 +55,9 @@
         "39" = "Links"
         "114" = "Links"
         "288" = "Support"
+
+# Preferred fits for ships with multiple variants
+# Maps ship_name -> fit_id for stock display purposes
+[preferred_fits]
+    "Ferox Navy Issue" = 473
+    "Hurricane Fleet Issue" = 494

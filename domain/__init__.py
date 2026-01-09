@@ -17,6 +17,7 @@ from domain.models import (
     ModuleStock,
     ModuleUsage,
     Doctrine,
+    ShipStock,
 )
 
 __all__ = [
@@ -29,4 +30,5 @@ __all__ = [
     "ModuleStock",
     "ModuleUsage",
     "Doctrine",
+    "ShipStock",
 ]

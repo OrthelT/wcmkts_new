@@ -20,7 +20,7 @@ import pandas as pd
 from sqlalchemy import text
 
 from config import DatabaseConfig, DEFAULT_SHIP_TARGET
-from domain import FitItem, FitSummary, ModuleStock, ModuleUsage, Doctrine
+from domain import FitItem, FitSummary, ModuleStock, ModuleUsage, Doctrine, ShipStock
 import streamlit as st
 from logging_config import setup_logging
 logger = setup_logging(__name__, log_file="doctrine_repo.log")
@@ -55,6 +55,8 @@ class DoctrineRepository:
     - `get_module_usage(module_name)`: Get usage information for a module
     - `get_module_stock(module_name)`: Get complete module stock information as a domain model
     - `get_multiple_module_stocks(module_names)`: Get stock information for multiple modules
+    - `get_ship_stock(ship_name)`: Get stock information for a specific ship hull
+    - `get_multiple_ship_stocks(ship_names)`: Get stock information for multiple ships
     - `get_avg_prices(type_ids)`: Get average prices for multiple type IDs from marketstats
     - `get_fit_items(fit_id)`: Get all items for a fit as domain models
     - `get_doctrine(doctrine_name)`: Get a complete Doctrine domain model
@@ -279,6 +281,87 @@ class DoctrineRepository:
         return result
 
     # =========================================================================
+    # Ship Stock
+    # =========================================================================
+
+    def get_ship_stock(self, ship_name: str) -> Optional[ShipStock]:
+        """
+        Get stock information for a specific ship hull.
+
+        Handles ships with multiple fits by using preferred_fits configuration
+        from settings.toml. Falls back to first available fit if not configured.
+
+        Args:
+            ship_name: Name of the ship (e.g., "Hurricane Fleet Issue")
+
+        Returns:
+            ShipStock domain model, or None if not found
+        """
+        preferred_fits = _load_preferred_fits()
+        preferred_fit_id = preferred_fits.get(ship_name)
+
+        # Build query with optional fit_id filter
+        if preferred_fit_id:
+            query = text("""
+                SELECT type_name, type_id, total_stock, fits_on_mkt, fit_id
+                FROM doctrines
+                WHERE type_name = :ship_name AND fit_id = :fit_id
+                LIMIT 1
+            """)
+            params = {"ship_name": ship_name, "fit_id": preferred_fit_id}
+        else:
+            query = text("""
+                SELECT type_name, type_id, total_stock, fits_on_mkt, fit_id
+                FROM doctrines
+                WHERE type_name = :ship_name
+                LIMIT 1
+            """)
+            params = {"ship_name": ship_name}
+
+        try:
+            with self._db.local_access():
+                with self._db.engine.connect() as conn:
+                    df = pd.read_sql_query(query, conn, params=params)
+
+            if df.empty:
+                self._logger.warning(f"No stock data found for ship: {ship_name}")
+                return None
+
+            row = df.iloc[0]
+
+            # Validate required fields
+            if pd.isna(row.get('total_stock')) or pd.isna(row.get('type_id')):
+                self._logger.warning(f"Invalid stock data for ship: {ship_name}")
+                return None
+
+            # Get target from ship_id
+            ship_id = int(row['type_id'])
+            ship_target = self.get_target_by_ship_id(ship_id)
+
+            return ShipStock.from_query_result(row, ship_target=ship_target)
+
+        except Exception as e:
+            self._logger.error(f"Failed to get ship stock for {ship_name}: {e}")
+            return None
+
+    def get_multiple_ship_stocks(self, ship_names: list[str]) -> dict[str, ShipStock]:
+        """
+        Get stock information for multiple ships.
+
+        Args:
+            ship_names: List of ship names
+
+        Returns:
+            Dict mapping ship name to ShipStock
+        """
+        result = {}
+        for name in ship_names:
+            stock = self.get_ship_stock(name)
+            if stock:
+                result[name] = stock
+        return result
+
+    # =========================================================================
     # Market Stats (for price fallback)
     # =========================================================================
 
@@ -393,6 +476,40 @@ class DoctrineRepository:
             doc = method.__doc__ if method.__doc__ else 'No documentation'
             print(f"{method_name}: {doc}")
             print("----------------------------------------")
+
+# =============================================================================
+# Configuration Loaders
+# =============================================================================
+
+@st.cache_data(ttl=3600)
+def _load_preferred_fits() -> dict[str, int]:
+    """
+    Load preferred fit mappings from settings.toml.
+
+    Maps ship names to their preferred fit_id for ships with multiple fits.
+    Cached for 1 hour.
+
+    Returns:
+        Dict mapping ship_name -> fit_id
+    """
+    import tomllib
+    from pathlib import Path
+
+    try:
+        settings_path = Path("settings.toml")
+        if not settings_path.exists():
+            logger.warning("settings.toml not found, no preferred fits configured")
+            return {}
+
+        with open(settings_path, "rb") as f:
+            settings = tomllib.load(f)
+
+        return settings.get("preferred_fits", {})
+
+    except Exception as e:
+        logger.error(f"Failed to load preferred fits from settings.toml: {e}")
+        return {}
+
 
 # =============================================================================
 # Streamlit Integration
