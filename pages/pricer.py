@@ -28,81 +28,86 @@ def format_isk(value: float) -> str:
         return "0"
     return millify(value, precision=2)
 
+def round_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    """Round columns."""
+    df2 = df.copy()
+    round_columns = [col for col in df2.columns if df2[col].dtype == "float64"]
+    for column in round_columns:
+        df2[column] = df2[column].apply(lambda x: round(x, 1) if x < 1000 else round(x, 0))
+    return df2
 
 def get_pricer_column_config() -> dict:
     """Get column configuration for the pricer results table."""
     return {
-        "type_name": st.column_config.TextColumn(
+        "image_url": st.column_config.ImageColumn(
+            "Icon",
+            help="Item icon",
+            width="small",
+        ),
+        "type_id": st.column_config.NumberColumn(
+            "Type ID",
+            help="Type ID",
+            width="small",
+        ),
+        "Item": st.column_config.TextColumn(
             "Item",
             help="Item name",
             width="medium",
         ),
-        "quantity": st.column_config.NumberColumn(
+        "Qty": st.column_config.NumberColumn(
             "Qty",
             help="Quantity",
-            width="small",
+            format="localized"
         ),
-        "slot_type": st.column_config.TextColumn(
-            "Slot",
-            help="Slot type (for EFT fittings)",
-            width="small",
-        ),
-        "category_name": st.column_config.TextColumn(
-            "Category",
-            help="Item category",
-            width="small",
-        ),
-        "volume": st.column_config.NumberColumn(
-            "Vol (m³)",
-            help="Volume per unit in m³",
-            format="%.2f",
-            width="small",
-        ),
-        "jita_sell": st.column_config.NumberColumn(
+        "Jita Sell": st.column_config.NumberColumn(
             "Jita Sell",
             help="Jita sell price per unit",
-            format="%.2f",
-            width="small",
+            format="localized",
         ),
-        "jita_buy": st.column_config.NumberColumn(
+        "Jita Buy": st.column_config.NumberColumn(
             "Jita Buy",
             help="Jita buy price per unit",
-            format="%.2f",
-            width="small",
+            format="localized",
         ),
-        "jita_sell_total": st.column_config.NumberColumn(
+        "Jita Sell Total": st.column_config.NumberColumn(
             "Jita Sell Total",
             help="Total Jita sell value",
-            format="%.2f",
-            width="small",
+            format="localized",
         ),
-        "jita_buy_total": st.column_config.NumberColumn(
+        "Jita Buy Total": st.column_config.NumberColumn(
             "Jita Buy Total",
             help="Total Jita buy value",
-            format="%.2f",
-            width="small",
+            format="localized",
         ),
-        "local_sell": st.column_config.NumberColumn(
+        "4-HWWF Sell": st.column_config.NumberColumn(
             "4H Sell",
             help="4-HWWF minimum sell price per unit",
-            width="small",
+            format="localized",
         ),
-        "local_buy": st.column_config.NumberColumn(
+        "4-HWWF Buy": st.column_config.NumberColumn(
             "4H Buy",
             help="4-HWWF maximum buy price per unit",
-            width="small",
+            format="localized",
         ),
-        "local_sell_total": st.column_config.NumberColumn(
+        "4-HWWF Sell Total": st.column_config.NumberColumn(
             "4H Sell Total",
             help="Total 4-HWWF sell value",
-            format="%.2f",
-            width="small",
+            format="localized",
         ),
-        "local_buy_total": st.column_config.NumberColumn(
+        "4-HWWF Buy Total": st.column_config.NumberColumn(
             "4H Buy Total",
             help="Total 4-HWWF buy value",
-            format="%.2f",
-            width="small",
+            format="localized",
+        ),
+
+        "Volume": st.column_config.NumberColumn(
+            "Vol (m³)",
+            help="Volume per unit in m³",
+            format="localized",
+        ),
+        "Category": st.column_config.TextColumn(
+            "Category",
+            help="Item category",
         ),
     }
 
@@ -186,25 +191,25 @@ Tab-separated (qty first):
             with col1:
                 st.metric(
                     "Jita Sell",
-                    format_isk(result.grand_total_jita_sell),
+                    format_isk(result.jita_sell_grand_total),
                     help="Total value at Jita sell prices"
                 )
             with col2:
                 st.metric(
                     "Jita Buy",
-                    format_isk(result.grand_total_jita_buy),
+                    format_isk(result.jita_buy_grand_total),
                     help="Total value at Jita buy prices"
                 )
             with col3:
                 st.metric(
                     "4-HWWF Sell",
-                    format_isk(result.grand_total_local_sell),
+                    format_isk(result.local_sell_grand_total),
                     help="Total value at 4-HWWF sell prices"
                 )
             with col4:
                 st.metric(
                     "4-HWWF Buy",
-                    format_isk(result.grand_total_local_buy),
+                    format_isk(result.local_buy_grand_total),
                     help="Total value at 4-HWWF buy prices"
                 )
 
@@ -216,34 +221,58 @@ Tab-separated (qty first):
 
             df = result.to_dataframe()
 
+            # Add calculated columns
+            df["Total Volume"] = df["Qty"] * df["Volume"]
+
+            static_columns = ["image_url", "Item", "Qty"]
+            category_column = ["Category"]
+
+            total_price_columns = ["Jita Sell Total", "Jita Buy Total", "4-HWWF Sell Total", "4-HWWF Buy Total", "Total Volume"]
+            item_price_columns = [c for c in df.columns if c not in total_price_columns and df[c].dtype == "float64" and c != "type_id"]
+
+            display_selector = st.pills(
+                label="Display", 
+                options=["item prices", "total prices"], 
+                default="item prices", 
+                key="display_pill", 
+                help="Select item prices or totals"
+            )
+            if display_selector == "totals":
+                selected_columns = total_price_columns + ["type_id"]
+            else:
+                selected_columns = item_price_columns + ["type_id"]
+
             if not df.empty:
+                columns_to_round = [c for c in selected_columns if c in df.columns]
+                df = round_columns(df, columns_to_round)
+
                 # Reorder columns for better display
-                display_columns = [
-                    "type_name",
-                    "quantity",
-                    "slot_type",
-                    "category_name",
-                    "volume",
-                    "jita_sell",
-                    "jita_buy",
-                    "jita_sell_total",
-                    "jita_buy_total",
-                    "local_sell",
-                    "local_buy",
-                    "local_sell_total",
-                    "local_buy_total",
-                ]
-
-                # Filter to only columns that exist
-                available_columns = [c for c in display_columns if c in df.columns]
-                df_display = df[available_columns]
-
-                st.dataframe(
-                    df_display,
+                column_order = [
+                    "image_url",
+                    "type_id",
+                    "Item",
+                    "Qty",
+                    "Jita Sell",
+                    "Jita Buy",
+                    "Jita Sell Total",
+                    "Jita Buy Total",
+                    "4-HWWF Sell",
+                    "4-HWWF Buy",
+                    "4-HWWF Sell Total",
+                    "4-HWWF Buy Total",
+                    "Volume",
+                    "Total Volume",
+                    "Category",
+                ]     
+                column_order = [c for c in column_order if c in df.columns]
+                
+                st.data_editor(
+                    df,
                     hide_index=True,
                     column_config=get_pricer_column_config(),
-                    use_container_width=True,
-                )
+                    width="content",
+                    column_order=column_order,
+                )   
 
                 # Download button
                 csv_data = df.to_csv(index=False)

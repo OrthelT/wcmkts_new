@@ -263,5 +263,6 @@ def get_image_url(type_id: int, size: int = 64) -> str:
     Returns:
         Image URL for the type
     """
-    return f"https://images.evetech.net/types/{type_id}/render?size={size}"
+    image_url = f"https://images.evetech.net/types/{type_id}/render?size={size}"
+    return image_url
 

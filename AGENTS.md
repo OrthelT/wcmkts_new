@@ -436,12 +436,6 @@ The codebase follows a strict layered architecture. Dependencies must flow **dow
 └─────────────────────────────────────────────────────────────┘
                               │ imports from ↓
 ┌─────────────────────────────────────────────────────────────┐
-│  FACADE LAYER                                               │
-│  facades/            → Simplified API for pages             │
-│    doctrine_facade.py → Unified doctrine operations         │
-└─────────────────────────────────────────────────────────────┘
-                              │ imports from ↓
-┌─────────────────────────────────────────────────────────────┐
 │  SERVICE LAYER                                              │
 │  services/           → Business logic orchestration         │
 │    doctrine_service.py → FitDataBuilder, DoctrineService    │

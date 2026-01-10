@@ -35,6 +35,7 @@ from services.parser_utils import (
 from repositories.market_orders_repo import MarketOrdersRepository, get_market_orders_repository
 from logging_config import setup_logging
 import streamlit as st
+from ui.formatters import get_image_url
 
 logger = setup_logging(__name__, log_file="pricer_service.log")
 
@@ -422,11 +423,15 @@ class PricerService:
             if not item.type_id:
                 continue
 
-            jita_data = jita_prices.get(item.type_id, JitaPriceData(type_id=item.type_id))
-            local_data = local_prices.get(item.type_id, LocalPriceData(type_id=item.type_id))
+            # Type assertion: after the check above, item.type_id is guaranteed to be int
+            type_id: int = item.type_id
+
+            jita_data = jita_prices.get(type_id, JitaPriceData(type_id=type_id))
+            local_data = local_prices.get(type_id, LocalPriceData(type_id=type_id))
 
             priced_items.append(PricedItem(
                 item=item,
+                image_url=get_image_url(type_id, size=64),
                 jita_sell=jita_data.sell_price,
                 jita_buy=jita_data.buy_price,
                 local_sell=local_data.min_sell_price,
