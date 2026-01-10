@@ -185,6 +185,7 @@ class PricedItem:
         local_sell_volume: Total sell volume at 4-HWWF
         local_buy_volume: Total buy volume at 4-HWWF
     """
+    image_url: str
     item: ParsedItem
     jita_sell: Price = 0.0
     jita_buy: Price = 0.0
@@ -254,6 +255,8 @@ class PricedItem:
     def to_dict(self) -> dict:
         """Convert to dictionary for DataFrame creation."""
         return {
+            "image_url": self.image_url,
+            "type_id": self.type_id or 0,  # Use 0 as default if None
             "Item": self.type_name,
             "Qty": self.quantity,
             "Volume": self.item.volume,
