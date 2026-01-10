@@ -8,6 +8,7 @@ raw DataFrame passing throughout the codebase.
 Key Components:
 - Enums: StockStatus, ShipRole for categorical data
 - Models: FitItem, FitSummary, ModuleStock, Doctrine
+- Pricer: ParsedItem, PricedItem, PricerResult for pricing feature
 """
 
 from domain.enums import StockStatus, ShipRole
@@ -18,6 +19,14 @@ from domain.models import (
     ModuleUsage,
     Doctrine,
     ShipStock,
+)
+from domain.pricer import (
+    InputFormat,
+    SlotType,
+    ParsedItem,
+    PricedItem,
+    PricerResult,
+    LocalPriceData,
 )
 
 __all__ = [
@@ -31,4 +40,11 @@ __all__ = [
     "ModuleUsage",
     "Doctrine",
     "ShipStock",
+    # Pricer
+    "InputFormat",
+    "SlotType",
+    "ParsedItem",
+    "PricedItem",
+    "PricerResult",
+    "LocalPriceData",
 ]
