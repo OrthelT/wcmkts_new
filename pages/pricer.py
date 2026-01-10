@@ -105,6 +105,11 @@ def get_pricer_column_config() -> dict:
             help="Volume per unit in m³",
             format="localized",
         ),
+        "Total Volume": st.column_config.NumberColumn(
+            "Total Vol (m³)",
+            help="Total volume (Qty × Volume)",
+            format="localized",
+        ),
         "Category": st.column_config.TextColumn(
             "Category",
             help="Item category",
@@ -224,46 +229,32 @@ Tab-separated (qty first):
             # Add calculated columns
             df["Total Volume"] = df["Qty"] * df["Volume"]
 
-            static_columns = ["image_url", "Item", "Qty"]
-            category_column = ["Category"]
-
+            # Define column groups
+            static_columns = ["image_url", "type_id", "Item", "Qty"]
+            item_price_columns = ["Jita Sell", "Jita Buy", "4-HWWF Sell", "4-HWWF Buy", "Volume"]
             total_price_columns = ["Jita Sell Total", "Jita Buy Total", "4-HWWF Sell Total", "4-HWWF Buy Total", "Total Volume"]
-            item_price_columns = [c for c in df.columns if c not in total_price_columns and df[c].dtype == "float64" and c != "type_id"]
+            always_show_columns = ["Category"]
 
             display_selector = st.pills(
-                label="Display", 
-                options=["item prices", "total prices"], 
-                default="item prices", 
-                key="display_pill", 
-                help="Select item prices or totals"
+                label="Display",
+                options=["item prices", "total prices"],
+                default="item prices",
+                key="display_pill",
+                help="Toggle between per-unit prices and totals"
             )
-            if display_selector == "totals":
-                selected_columns = total_price_columns + ["type_id"]
+
+            # Select price columns based on toggle
+            if display_selector == "total prices":
+                price_columns = total_price_columns
             else:
-                selected_columns = item_price_columns + ["type_id"]
+                price_columns = item_price_columns
 
             if not df.empty:
-                columns_to_round = [c for c in selected_columns if c in df.columns]
-                df = round_columns(df, columns_to_round)
+                # Round numeric columns for display
+                df = round_columns(df, price_columns)
 
-                # Reorder columns for better display
-                column_order = [
-                    "image_url",
-                    "type_id",
-                    "Item",
-                    "Qty",
-                    "Jita Sell",
-                    "Jita Buy",
-                    "Jita Sell Total",
-                    "Jita Buy Total",
-                    "4-HWWF Sell",
-                    "4-HWWF Buy",
-                    "4-HWWF Sell Total",
-                    "4-HWWF Buy Total",
-                    "Volume",
-                    "Total Volume",
-                    "Category",
-                ]     
+                # Build column order: static + selected prices + always-show
+                column_order = static_columns + price_columns + always_show_columns
                 column_order = [c for c in column_order if c in df.columns]
                 
                 st.data_editor(
