@@ -60,6 +60,17 @@ from services.categorization import (
     categorize_ship_by_role,
 )
 
+from services.pricer_service import (
+    # Main service
+    PricerService,
+    get_pricer_service,
+
+    # Supporting classes
+    JitaPriceProvider,
+    JitaPriceData,
+    SDELookupService,
+)
+
 __all__ = [
     # Price Service
     'PriceService',
@@ -89,4 +100,11 @@ __all__ = [
     'get_ship_role_categorizer',
     'ShipRoleConfig',
     'categorize_ship_by_role',
+
+    # Pricer Service
+    'PricerService',
+    'get_pricer_service',
+    'JitaPriceProvider',
+    'JitaPriceData',
+    'SDELookupService',
 ]
