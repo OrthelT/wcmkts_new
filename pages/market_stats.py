@@ -12,7 +12,7 @@ from sqlalchemy import text,bindparam
 from db_handler import safe_format, get_market_history, read_df, extract_sde_info
 from logging_config import setup_logging
 import millify
-from config import DatabaseConfig
+from config import DatabaseConfig, get_settings
 from services import get_doctrine_service
 from db_handler import new_get_market_data, get_all_mkt_orders, get_all_mkt_stats, get_all_market_history
 from init_db import init_db
@@ -24,6 +24,11 @@ from utils import get_jita_price
 mkt_db = DatabaseConfig("wcmkt")
 sde_db = DatabaseConfig("sde")
 build_cost_db = DatabaseConfig("build_cost")
+settings = get_settings()
+env = settings['env']['env']
+market_name = settings['market']['name']
+market_short_name = settings['market']['short_name']
+header_env = f"[{env.upper()}]" if env != "prod" else ""
 
 # Insert centralized logging configuration
 logger = setup_logging(__name__)
@@ -414,7 +419,7 @@ def get_fitting_col_config()->dict:
                     format="localized",
                     width="small"
                 ),
-                'Fits on Market': st.column_config.NumberColumn(
+                'fits_on_mkt': st.column_config.NumberColumn(
                     "Fits",
                     help="Total fits available on market for this item",
                     format="localized",
@@ -551,14 +556,21 @@ def render_title_headers():
         wclogo = "images/wclogo.png"
         st.image(wclogo, width=125)
     with col2:
-        st.title("Winter Coalition Market Stats - 4-HWWF Market")
+        st.title(f"Winter Coalition Market Stats - {market_name} Market {header_env}")
 
-@st.fragment
+@st.cache_data(ttl=1800)
+def convert_to_csv(df):
+    return df.to_csv(index=False)
+
+orders_csv = convert_to_csv(get_all_mkt_orders())
+stats_csv = convert_to_csv(get_all_mkt_stats())
+history_csv = convert_to_csv(get_all_market_history())
+
 def display_downloads():
     """Display the download buttons for the market stats page"""
-    st.download_button("Download Market Orders", data=get_all_mkt_orders().to_csv(index=False), file_name="4H_market_orders.csv", mime="text/csv",type="tertiary", help="Download all 4H market orders as a CSV file",icon="📥")
-    st.download_button("Download Market Stats", data=get_all_mkt_stats().to_csv(index=False), file_name="4H_market_stats.csv", mime="text/csv",type="tertiary", help="Download aggregated 4H market statistics for commonly traded items as a CSV file",icon="📥")
-    st.download_button("Download Market History", data=get_all_market_history().to_csv(index=False), file_name="4H_market_history.csv", mime="text/csv",type="tertiary", help="Download 4H market history for commonly traded items as a CSV file",icon="📥")
+    st.download_button("Download Market Orders", data=orders_csv, file_name=f"{market_short_name}_market_orders.csv", mime="text/csv",type="tertiary", help="Download all 4H market orders as a CSV file",icon="📥")
+    st.download_button("Download Market Stats", data=stats_csv, file_name=f"{market_short_name}_market_stats.csv", mime="text/csv",type="tertiary", help="Download aggregated 4H market statistics for commonly traded items as a CSV file",icon="📥")
+    st.download_button("Download Market History", data=history_csv, file_name=f"{market_short_name}_market_history.csv", mime="text/csv",type="tertiary", help="Download 4H market history for commonly traded items as a CSV file",icon="📥")
 
 @st.fragment
 def display_sde_table_download():
@@ -713,9 +725,25 @@ def main():
                 # Get the fitting data for the selected item
                 try:
                     all_fits = service.repository.get_all_fits()
-                    fit_df = all_fits[all_fits['type_id'] == selected_item_id]
-                except Exception:
-                    logger.warning(f"Failed to get fitting data for {selected_item_id}")
+                    # First, find any fits containing this item
+                    item_fits = all_fits[all_fits['type_id'] == selected_item_id]
+
+                    if not item_fits.empty:
+                        # Check if selected item is a ship (category_id == 6)
+                        item_cat_id = item_fits['category_id'].iloc[0] if 'category_id' in item_fits.columns else None
+
+                        if item_cat_id == 6:
+                            # It's a ship hull - get the complete fit with all modules
+                            fit_id = item_fits['fit_id'].iloc[0]
+                            fit_df = service.repository.get_fit_by_id(fit_id)
+                            logger.info(f"Loaded complete fit {fit_id} with {len(fit_df)} items for ship {selected_item}")
+                        else:
+                            # It's a module/charge - just show which fits use it
+                            fit_df = item_fits
+                    else:
+                        fit_df = pd.DataFrame()
+                except Exception as e:
+                    logger.warning(f"Failed to get fitting data for {selected_item_id}: {e}")
                     fit_df = pd.DataFrame()
 
         elif show_all:
@@ -750,9 +778,10 @@ def main():
                 logger.error(f"Error: {e}")
                 cat_id = None
             try:
-                fits_on_mkt = fit_df['Fits on Market'].min()
+                # Column name in database is 'fits_on_mkt' (not 'Fits on Market')
+                fits_on_mkt = fit_df['fits_on_mkt'].min()
             except Exception as e:
-                logger.error(f"Error: {e}")
+                logger.error(f"Error getting fits_on_mkt: {e}")
                 fits_on_mkt = None
             if cat_id == 6:
                 isship = True

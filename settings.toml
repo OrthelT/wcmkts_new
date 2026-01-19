@@ -61,3 +61,20 @@
 [preferred_fits]
     "Ferox Navy Issue" = 473
     "Hurricane Fleet Issue" = 494
+
+[db_paths]
+    "wcmktprod" = "wcmktprod.db" #production database
+    "sde" = "sdelite2.db"
+    "build_cost" = "buildcost.db"
+    "wcmkttest" = "wcmkttest.db" #testing db
+
+[env_db_aliases]
+    "prod" = "wcmktprod"
+    "dev" = "wcmkttest"
+
+[env]
+    env = "prod"
+
+[market]
+    name = "4-HWWF"
+    short_name = "4H"
