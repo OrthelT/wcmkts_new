@@ -13,20 +13,7 @@ mkt_db = DatabaseConfig("wcmkt")
 sde_db = DatabaseConfig("sde")
 build_cost_db = DatabaseConfig("build_cost")
 
-local_mkt_url = mkt_db.url
-local_sde_url = sde_db.url
-build_cost_url = build_cost_db.url
-local_mkt_db = mkt_db.path
-
 logger = setup_logging(__name__)
-
-# Use environment variables for production
-mkt_url = mkt_db.turso_url
-mkt_auth_token = mkt_db.token
-
-sde_url = sde_db.turso_url
-sde_auth_token = sde_db.token
-
 
 def read_df(
     db: DatabaseConfig,
@@ -123,26 +110,17 @@ def get_all_mkt_stats()->pd.DataFrame:
     df = df.reset_index(drop=True)
     return df
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=1800)
 def get_all_mkt_orders()->pd.DataFrame:
     logger.info("-"*40)
     all_mkt_start = time.perf_counter()
     query = """
     SELECT * FROM marketorders
     """
-    # Proactive integrity check before reading
-    try:
-        if not mkt_db.integrity_check():
-
-            logger.warning("Local DB integrity check failed; attempting resync before read…")
-            mkt_db.sync()
-    except Exception as e:
-        logger.error(f"Pre-read sync attempt failed: {e}")
 
     def _read_all():
-        with mkt_db.local_access():
-            with mkt_db.engine.connect() as conn:
-                return pd.read_sql_query(query, conn)
+        with mkt_db.engine.connect() as conn:
+            return pd.read_sql_query(query, conn)
 
     try:
         df = _read_all()
@@ -176,6 +154,7 @@ def get_price_from_mkt_orders(type_id):
     df = df.reset_index(drop=True)
     return df['price'].iloc[0]
 
+@st.cache_data(ttl=3600)
 def request_type_names(type_ids):
     logger.info("requesting type names with cache")
     # Process in chunks of 1000
@@ -194,6 +173,7 @@ def request_type_names(type_ids):
 
     return all_results
 
+@st.cache_data(ttl=1800)
 def clean_mkt_data(df):
     # Create a copy first
     df = df.copy()
@@ -248,13 +228,6 @@ def get_stats(stats_query=None):
             raise
     return stats
 
-def query_local_mkt_db(query: str) -> pd.DataFrame:
-    engine = mkt_db.engine
-    with mkt_db.local_access():
-        with engine.connect() as conn:
-            df = pd.read_sql_query(query, conn)
-    return df
-
 # Helper function to safely format numbers
 def safe_format(value, format_string):
     try:
@@ -264,7 +237,7 @@ def safe_format(value, format_string):
     except (ValueError, TypeError):
         return ''
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=3600)
 def get_market_history(type_id: int)->pd.DataFrame:
     query = """
         SELECT date, average, volume
@@ -377,9 +350,9 @@ def get_4H_price(type_id):
     query = """
         SELECT * FROM marketstats WHERE type_id = :type_id
         """
-    with mkt_db.local_access():
-        with mkt_db.engine.connect() as conn:
-            df = pd.read_sql_query(text(query), conn, params={"type_id": type_id})
+
+    with mkt_db.engine.connect() as conn:
+        df = pd.read_sql_query(text(query), conn, params={"type_id": type_id})
     try:
         return df.price.iloc[0]
     except Exception:

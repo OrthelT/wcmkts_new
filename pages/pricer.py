@@ -117,8 +117,17 @@ def get_pricer_column_config() -> dict:
     }
 
 
+def render_header():
+    """Render the Winter Coalition header with panda logo."""
+    col1, col2 = st.columns([0.2, 0.8], vertical_alignment="bottom")
+    with col1:
+        st.image("images/wclogo.png", width=125)
+    with col2:
+        st.title("Winter Coalition Pricer")
+
+
 def main():
-    st.title("Pricer")
+    render_header()
     st.markdown("Price items and fittings using Jita and 4-HWWF market data.")
 
     # Input section
