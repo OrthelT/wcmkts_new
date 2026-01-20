@@ -128,12 +128,20 @@ def get_ship_stock_list(ship_names: list):
                 st.session_state.ship_list_state[ship] = ship
                 st.session_state.csv_ship_list_state[ship] = f"{ship},0,0,0,0,\n"
 
-def fitting_download_button():
-    targets = service.repository.get_all_targets()
-    data = all_fits_df.merge(targets, on='fit_id', how='left')
+@st.cache_data(ttl=300, show_spinner=False)
+def _prepare_download_csv(_all_fits_df: pd.DataFrame) -> str:
+    """Cache the download CSV preparation to avoid redundant merge/csv on every rerun."""
+    doctrine_service = get_doctrine_service()
+    targets = doctrine_service.repository.get_all_targets()
+    data = _all_fits_df.merge(targets, on='fit_id', how='left')
     data = data.reset_index(drop=True)
+    return data.to_csv(index=False)
 
-    if st.download_button("Download Data", data=data.to_csv(index=False), file_name="wc_doctrine_fits.csv", help="Download all doctrine fit information as a CSV file", mime="text/csv"):
+
+def fitting_download_button():
+    csv_data = _prepare_download_csv(all_fits_df)
+
+    if st.download_button("Download Data", data=csv_data, file_name="wc_doctrine_fits.csv", help="Download all doctrine fit information as a CSV file", mime="text/csv"):
         st.toast("Data downloaded successfully", icon="✅")
 
 def get_fit_detail_data(fit_id: int) -> pd.DataFrame:
@@ -354,7 +362,7 @@ def main():
                 color = stock_status.display_color
                 status = stock_status.display_name
                 fit_id = row['fit_id']
-                fit_name = service.get_fit_name(fit_id)
+                fit_name = row['fit']  # Already available from summary DataFrame
                 st.badge(status, color=color)
                 st.text(f"ID: {fit_id}")
                 st.text(f"Fit: {fit_name}")
@@ -477,28 +485,40 @@ def main():
                     with tab2:
                         ship_name = row['ship_name']
                         st.write(f"{ship_name} - Fit {fit_id}")
-                        fit_detail_df = service.repository.get_fit_by_id(fit_id=fit_id)                    
-                        if not fit_detail_df.empty:
-                            # Display the fitting dataframe
-                            col_config = get_fitting_column_config()
-                            st.dataframe(
-                                fit_detail_df,
-                                hide_index=True,
-                                column_config=col_config,
-                                width='stretch'
-                            )
-                            
-                            # Download button for this specific fit
-                            csv = fit_detail_df.to_csv(index=False)
-                            st.download_button(
-                                label=f"📥 Download Fit {row['fit_id']} Data",
-                                data=csv,
-                                file_name=f"fit_{row['fit_id']}_{row['ship_name'].replace(' ', '_')}.csv",
-                                mime="text/csv",
-                                key=f"download_fit_{row['fit_id']}"
-                            )
-                        else:
-                            st.info("No detailed fitting data available for this fit.")
+
+                        # Lazy-load: only fetch fit details when user explicitly requests
+                        tab2_key = f"tab2_data_{fit_id}"
+
+                        if tab2_key not in st.session_state:
+                            # Show load button if data hasn't been fetched
+                            if st.button("Load Fit Details", key=f"load_tab2_{fit_id}", type="secondary"):
+                                fit_detail_df = service.repository.get_fit_by_id(fit_id=fit_id)
+                                st.session_state[tab2_key] = fit_detail_df
+                                st.rerun()
+
+                        if tab2_key in st.session_state:
+                            fit_detail_df = st.session_state[tab2_key]
+                            if not fit_detail_df.empty:
+                                # Display the fitting dataframe
+                                col_config = get_fitting_column_config()
+                                st.dataframe(
+                                    fit_detail_df,
+                                    hide_index=True,
+                                    column_config=col_config,
+                                    width='stretch'
+                                )
+
+                                # Download button for this specific fit
+                                csv = fit_detail_df.to_csv(index=False)
+                                st.download_button(
+                                    label=f"📥 Download Fit {row['fit_id']} Data",
+                                    data=csv,
+                                    file_name=f"fit_{row['fit_id']}_{row['ship_name'].replace(' ', '_')}.csv",
+                                    mime="text/csv",
+                                    key=f"download_fit_{row['fit_id']}"
+                                )
+                            else:
+                                st.info("No detailed fitting data available for this fit.")
 
                         # Add a thinner divider between fits
                         st.markdown("<hr style='margin: 0.5em 0; border-width: 1px'>", unsafe_allow_html=True)
