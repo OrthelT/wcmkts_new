@@ -33,8 +33,11 @@ header_env = f"[{env.upper()}]" if env != "prod" else ""
 # Insert centralized logging configuration
 logger = setup_logging(__name__)
 
-# Initialize service (cached in session state)
-service = get_doctrine_service()
+# Service is initialized lazily to avoid database access at module import time
+# Use _get_service() instead of direct service variable
+def _get_service():
+    """Get doctrine service lazily to avoid database access before init_db()."""
+    return get_doctrine_service()
 
 # Log application start
 logger.info("Application started")
@@ -562,12 +565,16 @@ def render_title_headers():
 def convert_to_csv(df):
     return df.to_csv(index=False)
 
-orders_csv = convert_to_csv(get_all_mkt_orders())
-stats_csv = convert_to_csv(get_all_mkt_stats())
-history_csv = convert_to_csv(get_all_market_history())
+# CSV data is now generated lazily inside display_downloads() to avoid
+# database access at module import time (before init_db() runs)
 
 def display_downloads():
     """Display the download buttons for the market stats page"""
+    # Generate CSV data lazily - only when this function is called (after init_db)
+    orders_csv = convert_to_csv(get_all_mkt_orders())
+    stats_csv = convert_to_csv(get_all_mkt_stats())
+    history_csv = convert_to_csv(get_all_market_history())
+
     st.download_button("Download Market Orders", data=orders_csv, file_name=f"{market_short_name}_market_orders.csv", mime="text/csv",type="tertiary", help="Download all 4H market orders as a CSV file",icon="📥")
     st.download_button("Download Market Stats", data=stats_csv, file_name=f"{market_short_name}_market_stats.csv", mime="text/csv",type="tertiary", help="Download aggregated 4H market statistics for commonly traded items as a CSV file",icon="📥")
     st.download_button("Download Market History", data=history_csv, file_name=f"{market_short_name}_market_history.csv", mime="text/csv",type="tertiary", help="Download 4H market history for commonly traded items as a CSV file",icon="📥")
@@ -703,6 +710,9 @@ def main():
 
     # Initialize the fitting dataframe
     fit_df = pd.DataFrame()
+
+    # Get service lazily (after database is initialized)
+    service = _get_service()
 
     if not sell_data.empty:
         if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
