@@ -11,12 +11,36 @@ from sqlalchemy.orm import Session
 import threading
 from contextlib import suppress, contextmanager
 from time import perf_counter
-
+import tomllib
+from pathlib import Path
 logger = setup_logging(__name__)
+
+# =============================================================================
+# Doctrine Configuration Constants
+# =============================================================================
+
+# Default ship target stock level when not explicitly configured
+# This value is used as the fallback when a fit or ship doesn't have a
+# target defined in the ship_targets table
+DEFAULT_SHIP_TARGET = 20
+
+# =============================================================================
+# Database Configuration
+# =============================================================================
 
 # Global lock to serialize sync operations within the process
 _SYNC_LOCK = threading.Lock()
 
+@st.cache_data(ttl=3600)
+def get_settings()->dict:
+    """Get the settings from the settings.toml file."""
+    settings_path = Path("settings.toml")
+    try:
+        with open(settings_path, "rb") as f:
+            return tomllib.load(f)
+    except Exception as e:
+        logger.error(f"Failed to load settings from settings.toml: {e}")
+        raise e
 
 class RWLock:
     """Read-Write lock implementation.
@@ -85,15 +109,16 @@ class RWLock:
             self.release_write()
 
 class DatabaseConfig:
+    settings = get_settings()
+    wcdbmap = settings['env_db_aliases'][settings['env']['env']] #master config variable for the database to use
 
-    wcdbmap = "wcmktprod" #master config variable for the database to use
+    logger.info(wcdbmap)
 
     _db_paths = {
-        "wcmktprod": "wcmktprod.db", #production database
-        "sde": "sdelite2.db",
-        "build_cost": "buildcost.db",
-        "wcmkttest": "wcmkttest.db" #testing db
-
+        "wcmktprod": settings['db_paths']['wcmktprod'], #production database
+        "sde": settings['db_paths']['sde'],
+        "build_cost": settings['db_paths']['build_cost'],
+        "wcmkttest": settings['db_paths']['wcmkttest'] #testing db
     }
 
     _db_turso_urls = {

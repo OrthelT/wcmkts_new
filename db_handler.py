@@ -13,20 +13,7 @@ mkt_db = DatabaseConfig("wcmkt")
 sde_db = DatabaseConfig("sde")
 build_cost_db = DatabaseConfig("build_cost")
 
-local_mkt_url = mkt_db.url
-local_sde_url = sde_db.url
-build_cost_url = build_cost_db.url
-local_mkt_db = mkt_db.path
-
 logger = setup_logging(__name__)
-
-# Use environment variables for production
-mkt_url = mkt_db.turso_url
-mkt_auth_token = mkt_db.token
-
-sde_url = sde_db.turso_url
-sde_auth_token = sde_db.token
-
 
 def read_df(
     db: DatabaseConfig,
@@ -123,26 +110,17 @@ def get_all_mkt_stats()->pd.DataFrame:
     df = df.reset_index(drop=True)
     return df
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=1800)
 def get_all_mkt_orders()->pd.DataFrame:
     logger.info("-"*40)
     all_mkt_start = time.perf_counter()
     query = """
     SELECT * FROM marketorders
     """
-    # Proactive integrity check before reading
-    try:
-        if not mkt_db.integrity_check():
-
-            logger.warning("Local DB integrity check failed; attempting resync before read…")
-            mkt_db.sync()
-    except Exception as e:
-        logger.error(f"Pre-read sync attempt failed: {e}")
 
     def _read_all():
-        with mkt_db.local_access():
-            with mkt_db.engine.connect() as conn:
-                return pd.read_sql_query(query, conn)
+        with mkt_db.engine.connect() as conn:
+            return pd.read_sql_query(query, conn)
 
     try:
         df = _read_all()
@@ -176,6 +154,7 @@ def get_price_from_mkt_orders(type_id):
     df = df.reset_index(drop=True)
     return df['price'].iloc[0]
 
+@st.cache_data(ttl=3600)
 def request_type_names(type_ids):
     logger.info("requesting type names with cache")
     # Process in chunks of 1000
@@ -194,6 +173,7 @@ def request_type_names(type_ids):
 
     return all_results
 
+@st.cache_data(ttl=1800)
 def clean_mkt_data(df):
     # Create a copy first
     df = df.copy()
@@ -222,49 +202,6 @@ def clean_mkt_data(df):
 
     return df
 
-
-@st.cache_data(ttl=600)
-def get_all_fitting_data()->pd.DataFrame:
-    with mkt_db.local_access():
-        query = """
-                SELECT * FROM doctrines
-                """
-        try:
-            with mkt_db.engine.connect() as conn:
-                df = pd.read_sql_query(query, conn)
-            df = df.reset_index(drop=True)
-        except Exception as e:
-            logger.error(f"Failed to get doctrine data: {str(e)}")
-            raise
-    return df
-
-def get_fitting_data(type_id):
-    logger.debug("getting fitting data")
-    df = get_all_fitting_data()
-    if df.empty:
-        return None
-    else:
-        df2 = df.copy()
-        df2 = df2[df2['type_id'] == type_id]
-        df2.reset_index(drop=True, inplace=True)
-        try:
-            fit_id = df2.iloc[0]['fit_id']
-        except (IndexError, KeyError):
-            return None
-
-        df3 = df.copy()
-        df3 = df3[df3['fit_id'] == fit_id]
-        df3.reset_index(drop=True, inplace=True)
-
-        df3.drop(columns=['ship_id', 'hulls', 'group_id', 'category_name', 'id', 'timestamp'], inplace=True)
-
-        df3['type_id'] = round(df3['type_id'],0).astype(int)
-        df3['fit_id'] = round(df3['fit_id'],0).astype(int)
-        df3.rename(columns={'fits_on_mkt': 'Fits on Market'}, inplace=True)
-        df3 = df3.sort_values(by='Fits on Market', ascending=True)
-        df3.reset_index(drop=True, inplace=True)
-    return df3
-
 @st.cache_data(ttl=600)
 def get_stats(stats_query=None):
     if stats_query is None:
@@ -291,13 +228,6 @@ def get_stats(stats_query=None):
             raise
     return stats
 
-def query_local_mkt_db(query: str) -> pd.DataFrame:
-    engine = mkt_db.engine
-    with mkt_db.local_access():
-        with engine.connect() as conn:
-            df = pd.read_sql_query(query, conn)
-    return df
-
 # Helper function to safely format numbers
 def safe_format(value, format_string):
     try:
@@ -307,7 +237,7 @@ def safe_format(value, format_string):
     except (ValueError, TypeError):
         return ''
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=3600)
 def get_market_history(type_id: int)->pd.DataFrame:
     query = """
         SELECT date, average, volume
@@ -354,33 +284,11 @@ def get_update_time()->str:
                 logger.error(f"Failed to format local_update_status.updated: {e}")
     return None
 
-def get_module_fits(type_id):
-    with mkt_db.local_access():
-        query = """
-            SELECT * FROM doctrines WHERE type_id = :type_id
-            """
-        try:
-            with mkt_db.engine.connect() as conn:
-                df = pd.read_sql_query(text(query), conn, params={'type_id': type_id})
-        except Exception as e:
-            logger.error(f"Failed to get data for type_id={type_id}: {str(e)}")
-            raise
-
-        df2 = df.copy()
-        try:
-            ships = df2['ship_name'].tolist()
-            fit_qty = df2['fit_qty'].tolist()
-            ships = [f"{ship} ({qty})" for ship, qty in zip(ships, fit_qty)]
-            ships = ', '.join(ships)
-            return ships
-        except (IndexError, KeyError):
-            return None
-
-
+@st.cache_data(ttl=3600)
 def get_groups_for_category(category_id: int)->pd.DataFrame:
     sde2_db = DatabaseConfig("sde")
     if category_id == 17:
-        df = pd.read_csv("build_commodity_groups.csv")
+        df = pd.read_csv("csvfiles/build_commodity_groups.csv")
         return df
     elif category_id == 4:
         query = """
@@ -394,6 +302,7 @@ def get_groups_for_category(category_id: int)->pd.DataFrame:
         df = pd.read_sql_query(text(query), conn, params={"category_id": category_id})
     return df
 
+@st.cache_data(ttl=3600)
 def get_types_for_group(group_id: int)->pd.DataFrame:
     sde2_db = DatabaseConfig("sde")
     query = """
@@ -441,9 +350,9 @@ def get_4H_price(type_id):
     query = """
         SELECT * FROM marketstats WHERE type_id = :type_id
         """
-    with mkt_db.local_access():
-        with mkt_db.engine.connect() as conn:
-            df = pd.read_sql_query(text(query), conn, params={"type_id": type_id})
+
+    with mkt_db.engine.connect() as conn:
+        df = pd.read_sql_query(text(query), conn, params={"type_id": type_id})
     try:
         return df.price.iloc[0]
     except Exception:

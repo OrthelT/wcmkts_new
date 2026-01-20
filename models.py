@@ -189,12 +189,13 @@ class DoctrineFit(Base):
     fit_id: Mapped[int] = mapped_column(Integer)
     ship_name: Mapped[str] = mapped_column(String)
     target: Mapped[int] = mapped_column(Integer)
+    market_flag: Mapped[str] = mapped_column(String, default="primary", nullable=True)
 
     def __repr__(self) -> str:
         return (
             f"doctrine_fits(id={self.id!r}, doctrine_name={self.doctrine_name!r}, fit_name={self.fit_name!r}, "
             f"ship_type_id={self.ship_type_id!r}, doctrine_id={self.doctrine_id!r}, fit_id={self.fit_id!r}, "
-            f"ship_name={self.ship_name!r}, target={self.target!r})"
+            f"ship_name={self.ship_name!r}, target={self.target!r}, market_flag={self.market_flag!r})"
         )
 
 

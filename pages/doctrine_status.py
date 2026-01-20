@@ -6,120 +6,53 @@ import pathlib
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 import pandas as pd
-from sqlalchemy import text
 from millify import millify
 from logging_config import setup_logging
-from db_handler import get_update_time, read_df, get_all_fitting_data
-from doctrines import create_fit_df, get_all_fit_data, calculate_jita_fit_cost_and_delta
-from utils import get_multi_item_jita_price
-from config import DatabaseConfig
+from db_handler import get_update_time
+from services import get_doctrine_service, get_price_service
+from domain import StockStatus
+from ui import get_fitting_column_config, render_progress_bar_html
+
 # Insert centralized logging configuration
 logger = setup_logging(__name__, log_file="doctrine_status.log")
-mkt_db = DatabaseConfig("wcmkt")
 
-@st.cache_data(ttl=600, show_spinner="Loading cacheddoctrine fits...")
-def get_fit_summary()->pd.DataFrame:
-    """Get a summary of all doctrine fits"""
-    logger.info("Getting fit summary")
+# Initialize service (cached in session state)
+service = get_doctrine_service()
+fit_build_result = service.build_fit_data()
+all_fits_df = fit_build_result.raw_df
+summary_df = fit_build_result.summary_df
 
-    # Get the raw data with all fit details
-    all_fits_df, summary_df = create_fit_df()
+def get_fit_summary() -> pd.DataFrame:
+    """Get a summary of all doctrine fits using service."""
+    logger.debug("Getting fit summary via service")
 
-    if all_fits_df.empty:
+    # Use service to get all fit summaries as domain models
+    summaries = service.get_all_fit_summaries()
+
+    if not summaries:
         return pd.DataFrame()
 
-    # Get unique fit_ids
-    fit_ids = all_fits_df['fit_id'].unique()
-
-    # Create a summary dataframe
+    # Convert domain models to DataFrame for compatibility with existing UI code
     fit_summary = []
+    for summary in summaries:
+        # lowest_modules is already a tuple of formatted strings
+        lowest_modules_list = list(summary.lowest_modules)
 
-    for fit_id in fit_ids:
-        # Filter data for this fit
-        try:
-            fit_data = all_fits_df[all_fits_df['fit_id'] == fit_id]
-            fit_summary_data = summary_df[summary_df['fit_id'] == fit_id]
-        except Exception as e:
-            st.error("Error getting fit data for fit_id: " + fit_id + " " + str(e))
-            logger.error(f"Error: {e}")
-            continue
-        # Get the first row for fit metadata
-        first_row = fit_data.iloc[0]
-
-        # Get basic information
-        ship_id = first_row['ship_id']
-        ship_name = first_row['ship_name']
-        hulls = first_row['hulls'] if pd.notna(first_row['hulls']) else 0
-        total_cost = fit_summary_data['total_cost'].iloc[0] if pd.notna(fit_summary_data['total_cost'].iloc[0]) else 0
-        # Extract ship group from the data
-        ship_group = "Ungrouped"  # Default
-
-        # Find the row that matches the ship_id
-        ship_rows = fit_data[fit_data['type_id'] == ship_id]
-
-        # Check if ship_rows is not empty and has a 'group_name' column
-        if not ship_rows.empty and 'group_name' in ship_rows.columns:
-            try:
-                # Get the first row's group_name value
-                ship_group = ship_rows['group_name'].iloc[0]
-            except Exception as e:
-                logger.error(f"Error getting group_name for fit_id: {fit_id}: {e}")
-                continue
-
-        # Calculate minimum fits (how many complete fits can be made)
-        try:
-            min_fits = fit_data['fits_on_mkt'].min()
-            # Handle NaN values
-            if pd.isna(min_fits):
-                min_fits = 0
-        except Exception as e:
-            logger.error(f"Error getting min_fits for fit_id: {fit_id}: {e}")
-            continue
-
-        # Get target value from database if available, otherwise use default
-        target = get_ship_target(0, fit_id)
-
-        # Calculate target percentage
-        if target > 0:
-            target_percentage = min(100, int((min_fits / target) * 100))
-        else:
-            target_percentage = 0
-
-        # Get the lowest stocked modules (exclude the ship itself)
-        ship_type_id = first_row['ship_id']
-        module_data = fit_data[fit_data['type_id'] != ship_type_id]
-        lowest_modules = module_data.sort_values('fits_on_mkt').head(3)
-
-        lowest_modules_list = []
-        for _, row in lowest_modules.iterrows():
-            module_name = row['type_name']
-            module_stock = row['fits_on_mkt']
-            if not pd.isna(module_name) and not pd.isna(module_stock):
-                lowest_modules_list.append(f"{module_name} ({int(module_stock)})")
-
-        # Get daily average volume if available
-        daily_avg = fit_data['avg_vol'].mean() if 'avg_vol' in fit_data.columns else 0
-
-        # Get fit name from the ship_targets table if available
-        fit_name = get_fit_name(fit_id)
-
-        # Add to summary list (Jita delta will be calculated separately for performance)
         fit_summary.append({
-            'fit_id': fit_id,
-            'ship_id': ship_id,
-            'ship_name': ship_name,
-            'fit': fit_name,
-            'ship': ship_name,
-            'fits': min_fits,
-            'hulls': hulls,
-            'target': target,
-            'target_percentage': target_percentage,
+            'fit_id': summary.fit_id,
+            'ship_id': summary.ship_id,
+            'ship_name': summary.ship_name,
+            'fit': summary.fit_name,
+            'ship': summary.ship_name,
+            'fits': summary.fits,
+            'hulls': summary.hulls,
+            'target': summary.ship_target,
+            'target_percentage': summary.target_percentage,
             'lowest_modules': lowest_modules_list,
-            'daily_avg': daily_avg,
-            'ship_group': ship_group,
-            'total_cost': total_cost
+            'daily_avg': summary.daily_avg,
+            'ship_group': summary.ship_group,
+            'total_cost': summary.total_cost
         })
-
     return pd.DataFrame(fit_summary)
 
 def format_module_list(modules_list):
@@ -128,20 +61,10 @@ def format_module_list(modules_list):
         return ""
     return "<br>".join(modules_list)
 
-def get_fit_name(fit_id: int) -> str:
-    """Get the fit name for a given fit id"""
-    try:
-        df = read_df(mkt_db, text("SELECT fit_name FROM ship_targets WHERE fit_id = :fit_id"), {"fit_id": fit_id})
-        return str(df.loc[0, 'fit_name']) if not df.empty else "Unknown Fit"
-    except Exception as e:
-        logger.error(f"Error getting fit name for fit_id: {fit_id}")
-        logger.error(f"Error: {e}")
-        return "Unknown Fit"
-
 def get_module_stock_list(module_names: list):
-    """Get lists of modules with their stock quantities for display and CSV export."""
+    """Get lists of modules with their stock quantities for display and CSV export using service."""
 
-    #set the session state variables for the module list and csv module list
+    # Set the session state variables for the module list and csv module list
     if not st.session_state.get('module_list_state'):
         st.session_state.module_list_state = {}
     if not st.session_state.get('csv_module_list_state'):
@@ -149,82 +72,42 @@ def get_module_stock_list(module_names: list):
 
     for module_name in module_names:
         if module_name not in st.session_state.module_list_state:
-            logger.info(f"Querying database for {module_name}")
-            query = text(
-                """
-                SELECT type_name, type_id, total_stock, fits_on_mkt
-                FROM doctrines
-                WHERE type_name = :module_name
-                LIMIT 1
-                """
-            )
-            df = read_df(mkt_db, query, {"module_name": module_name})
+            logger.info(f"Querying database for {module_name} via service")
 
-            # Get module usage information
-            usage_display = ""
-            try:
-                usage_query = text(
-                    """
-                    SELECT st.ship_name, st.ship_target, d.fit_qty
-                    FROM doctrines d
-                    JOIN ship_targets st ON d.fit_id = st.fit_id
-                    WHERE d.type_name = :module_name
-                    """
-                )
-                usage_df = read_df(mkt_db, usage_query, {"module_name": module_name})
-                if not usage_df.empty:
-                    grouped_usage = (
-                        usage_df
-                        .fillna({"ship_target": 0, "fit_qty": 0})
-                        .groupby(["ship_name", "ship_target"], dropna=False)["fit_qty"]
-                        .sum()
-                        .reset_index()
-                    )
-                    usage_parts = []
-                    for _, usage_row in grouped_usage.iterrows():
-                        fit_name = (
-                            str(usage_row["ship_name"])
-                            if pd.notna(usage_row["ship_name"])
-                            else "Unknown Fit"
-                        )
-                        ship_target = (
-                            int(usage_row["ship_target"])
-                            if pd.notna(usage_row["ship_target"])
-                            else 0
-                        )
-                        fit_qty = (
-                            int(usage_row["fit_qty"])
-                            if pd.notna(usage_row["fit_qty"])
-                            else 0
-                        )
-                        modules_needed = ship_target * fit_qty
-                        usage_parts.append(f"{fit_name}({modules_needed})")
-                    usage_display = ", ".join(usage_parts)
-            except Exception as e:
-                logger.error(f"Error getting fit usage for {module_name}: {e}")
+            # Use service repository to get module stock info
+            module_stock = service.repository.get_module_stock(module_name)
 
-            if not df.empty and pd.notna(df.loc[0, 'total_stock']) and pd.notna(df.loc[0, 'fits_on_mkt']) and pd.notna(df.loc[0, 'type_id']):
-                stock = int(df.loc[0, 'total_stock'])
-                fits = int(df.loc[0, 'fits_on_mkt'])
-                type_id = int(df.loc[0, 'type_id'])
-                module_info = f"{module_name} (Total: {stock} | Fits: {fits})"
+            if module_stock:
+                # Format usage information
+                usage_parts = []
+                for usage_item in module_stock.usage:
+                    modules_needed = usage_item.ship_target * usage_item.fit_qty
+                    usage_parts.append(f"{usage_item.ship_name}({modules_needed})")
+                usage_display = ", ".join(usage_parts) if usage_parts else ""
+
+                # Format display info
+                module_info = f"{module_name} (Total: {module_stock.total_stock} | Fits: {module_stock.fits_on_mkt})"
                 if usage_display:
                     module_info = f"{module_info} | Used in: {usage_display}"
-                csv_module_info = f"{module_name},{type_id},{stock},{fits},,{usage_display}\n"
+                csv_module_info = f"{module_name},{module_stock.type_id},{module_stock.total_stock},{module_stock.fits_on_mkt},,{usage_display}\n"
             else:
                 module_info = f"{module_name}"
-                if usage_display:
-                    module_info = f"{module_info} | Used in: {usage_display}"
-                csv_module_info = f"{module_name},0,0,0,,{usage_display}\n"
+                csv_module_info = f"{module_name},0,0,0,,\n"
 
             st.session_state.module_list_state[module_name] = module_info
             st.session_state.csv_module_list_state[module_name] = csv_module_info
 
-        #with the session state variables, we can now return the lists by saving to the session state variables, we
-        #won't need to run the query again
-
-@st.cache_data(ttl=600, show_spinner="Loading cached ship stock list...")
 def get_ship_stock_list(ship_names: list):
+    """
+    Get ship stock information and cache in session state.
+
+    Uses DoctrineRepository.get_ship_stock() which handles:
+    - Preferred fit selection from settings.toml
+    - Target lookup by ship_id
+
+    Args:
+        ship_names: List of ship names to query
+    """
     if not st.session_state.get('ship_list_state'):
         st.session_state.ship_list_state = {}
     if not st.session_state.get('csv_ship_list_state'):
@@ -233,85 +116,33 @@ def get_ship_stock_list(ship_names: list):
     logger.info(f"Ship names: {ship_names}")
     for ship in ship_names:
         if ship not in st.session_state.ship_list_state:
-            logger.info(f"Querying database for {ship}")
-            params = {"ship": ship}
-            extra = ""
-            if ship == "Ferox Navy Issue":
-                extra = " AND fit_id = :fit_id"
-                params["fit_id"] = 473
-            elif ship == "Hurricane Fleet Issue":
-                extra = " AND fit_id = :fit_id"
-                params["fit_id"] = 494
+            logger.info(f"Querying database for {ship} via repository")
 
-            query = text(
-                f"""
-                SELECT type_name, type_id, total_stock, fits_on_mkt, fit_id
-                FROM doctrines
-                WHERE type_name = :ship{extra}
-                LIMIT 1
-                """
-            )
-            df = read_df(mkt_db, query, params)
-            if not df.empty and pd.notna(df.loc[0, 'total_stock']) and pd.notna(df.loc[0, 'type_id']) and pd.notna(df.loc[0, 'fits_on_mkt']):
-                ship_id = int(df.loc[0, 'type_id'])
-                ship_stock = int(df.loc[0, 'total_stock'])
-                ship_fits = int(df.loc[0, 'fits_on_mkt'])
-                ship_target = get_ship_target(ship_id, 0)
-                ship_info = f"{ship} (Qty: {ship_stock} | Fits: {ship_fits} | Target: {ship_target})"
-                csv_ship_info = f"{ship},{ship_id},{ship_stock},{ship_fits},{ship_target},\n"
+            # Use repository method (handles preferred fits from config)
+            ship_stock = service.repository.get_ship_stock(ship)
+
+            if ship_stock:
+                st.session_state.ship_list_state[ship] = ship_stock.display_string
+                st.session_state.csv_ship_list_state[ship] = ship_stock.csv_line
             else:
-                ship_info = ship
-                csv_ship_info = f"{ship},0,0,0,0,\n"
+                st.session_state.ship_list_state[ship] = ship
+                st.session_state.csv_ship_list_state[ship] = f"{ship},0,0,0,0,\n"
 
-            st.session_state.ship_list_state[ship] = ship_info
-            st.session_state.csv_ship_list_state[ship] = csv_ship_info
-@st.fragment
-def fitting_download_button():
-    data = get_all_fit_data()
-    _, summary_data = create_fit_df()
-    targets = summary_data[['fit_id', 'ship_target']]
-    data = data.merge(targets, on='fit_id', how='left')
+@st.cache_data(ttl=300, show_spinner=False)
+def _prepare_download_csv(_all_fits_df: pd.DataFrame) -> str:
+    """Cache the download CSV preparation to avoid redundant merge/csv on every rerun."""
+    doctrine_service = get_doctrine_service()
+    targets = doctrine_service.repository.get_all_targets()
+    data = _all_fits_df.merge(targets, on='fit_id', how='left')
     data = data.reset_index(drop=True)
+    return data.to_csv(index=False)
 
-    if st.download_button("Download Data", data=data.to_csv(index=False), file_name="wc_doctrine_fits.csv", help="Download all doctrine fit information as a CSV file", mime="text/csv"):
+
+def fitting_download_button():
+    csv_data = _prepare_download_csv(all_fits_df)
+
+    if st.download_button("Download Data", data=csv_data, file_name="wc_doctrine_fits.csv", help="Download all doctrine fit information as a CSV file", mime="text/csv"):
         st.toast("Data downloaded successfully", icon="✅")
-
-def get_ship_target(ship_id: int, fit_id: int) -> int:
-    """Get the target for a given ship id or fit id
-    if searching by ship_id, enter zero for fit_id
-    if searching by fit_id, enter zero for ship_id
-    """
-    if ship_id == 0 and fit_id == 0:
-        logger.error("Error: Both ship_id and fit_id are zero")
-        st.error("Error: Both ship_id and fit_id are zero")
-        return 20
-
-    elif ship_id == 0:
-        try:
-            df = read_df(mkt_db, text("SELECT ship_target FROM ship_targets WHERE fit_id = :fit_id"), {"fit_id": fit_id})
-            if not df.empty and pd.notna(df.loc[0, 'ship_target']):
-                return int(df.loc[0, 'ship_target'])
-            return 20
-        except Exception as e:
-            logger.error(f"Error getting target for fit_id: {fit_id}")
-            logger.error(f"Error: {e}")
-            st.sidebar.error(f"Did not find a target for fit_id: {fit_id}, we'll just use 20 as default")
-            return 20
-    else:
-        try:
-            df = read_df(mkt_db, text("SELECT ship_target FROM ship_targets WHERE ship_id = :ship_id"), {"ship_id": ship_id})
-            if not df.empty and pd.notna(df.loc[0, 'ship_target']):
-                return int(df.loc[0, 'ship_target'])
-            return 20
-        except Exception as e:
-            logger.error(f"Error getting target for ship_id: {ship_id}, using 20 as default")
-            logger.error(f"Error: {e}")
-            st.sidebar.error(f"Did not find a target for ship_id: {ship_id}, we'll just use 20 as default")
-            return 20
-
-def get_tgt_from_fit_summary(fit_summary: pd.DataFrame, fit_id: int) -> int:
-    """Get the target for a given fit id from the fit summary"""
-    return fit_summary[fit_summary['fit_id'] == fit_id]['target'].iloc[0]
 
 def get_fit_detail_data(fit_id: int) -> pd.DataFrame:
     """
@@ -319,7 +150,7 @@ def get_fit_detail_data(fit_id: int) -> pd.DataFrame:
     Returns a DataFrame with all modules/items for the fit.
     """
     try:
-        df = get_all_fitting_data()
+        df = service.repository.get_all_fits()
         if df.empty:
             return pd.DataFrame()
         
@@ -356,70 +187,6 @@ def get_fit_detail_data(fit_id: int) -> pd.DataFrame:
         logger.error(f"Error getting fit detail data for fit_id {fit_id}: {e}")
         return pd.DataFrame()
 
-def get_fitting_column_config() -> dict:
-    """Get column configuration for fitting data display"""
-    return {
-        'fit_id': st.column_config.NumberColumn(
-            "Fit ID",
-            help="WC Doctrine Fit ID"
-        ),
-        'ship_name': st.column_config.TextColumn(
-            "Ship Name",
-            help="Ship Name",
-            width="medium"
-        ),
-        'type_id': st.column_config.NumberColumn(
-            "Type ID",
-            help="Type ID"
-        ),
-        'type_name': st.column_config.TextColumn(
-            "Type Name",
-            help="Type Name",
-            width="medium"
-        ),
-        'fit_qty': st.column_config.NumberColumn(
-            "Qty/fit",
-            help="Quantity of this item per fit",
-            width="small"
-        ),
-        'Fits on Market': st.column_config.NumberColumn(
-            "Fits",
-            help="Total fits available on market for this item",
-            width="small"
-        ),
-        'total_stock': st.column_config.NumberColumn(
-            "Stock",
-            help="Total stock of this item",
-            width="small"
-        ),
-        'price': st.column_config.NumberColumn(
-            "Price",
-            help="Price of this item",
-            format="localized"
-        ),
-        'avg_vol': st.column_config.NumberColumn(
-            "Avg Vol",
-            help="Average volume over the last 30 days",
-            width="small"
-        ),
-        'days': st.column_config.NumberColumn(
-            "Days",
-            help="Days remaining (based on historical average)",
-            width="small"
-        ),
-        'group_name': st.column_config.Column(
-            "Group",
-            help="Group of this item",
-            width="small"
-        ),
-        'category_id': st.column_config.NumberColumn(
-            "Category ID",
-            help="Category ID (ships are 6)",
-            width="small"
-        ),
-    }
-
-@st.cache_data(ttl=3600, show_spinner="Fetching Jita prices...")
 def fetch_jita_prices_for_types(type_ids: tuple[int, ...]) -> dict[int, float]:
     """
     Fetch Jita prices for a set of type_ids using a single API call.
@@ -427,7 +194,9 @@ def fetch_jita_prices_for_types(type_ids: tuple[int, ...]) -> dict[int, float]:
     """
     if not type_ids:
         return {}
-    return get_multi_item_jita_price(list(type_ids))
+    price_service = get_price_service()
+    prices = price_service.get_jita_prices(list(type_ids))
+    return prices.prices
 
 def calculate_all_jita_deltas(force_refresh: bool = False):
     """
@@ -442,51 +211,16 @@ def calculate_all_jita_deltas(force_refresh: bool = False):
     if 'jita_deltas' not in st.session_state:
         st.session_state.jita_deltas = {}
 
-    # Get the raw fit data
-    all_fits_df, summary_df = create_fit_df()
-
-    if all_fits_df.empty:
+    # Use service to calculate all jita deltas
+    try:
+        st.session_state.jita_deltas = service.calculate_all_jita_deltas()
+        st.session_state.jita_deltas_last_updated = datetime.datetime.now()
+        logger.info(f"Calculated Jita deltas for {len(st.session_state.jita_deltas)} fits at {st.session_state.jita_deltas_last_updated}")
+    except Exception as e:
+        logger.error(f"Error calculating Jita deltas: {e}")
         st.session_state.jita_deltas = {}
         st.session_state.jita_deltas_last_updated = datetime.datetime.now()
-        return
 
-    fit_ids = all_fits_df['fit_id'].unique()
-
-    # Fetch ALL unique type_ids in one batch
-    unique_type_ids = tuple(
-        sorted({int(tid) for tid in all_fits_df['type_id'].dropna().unique().tolist()})
-    )
-
-    if force_refresh:
-        fetch_jita_prices_for_types.clear()
-
-    with st.spinner("Calculating Jita price deltas..."):
-        jita_price_map = fetch_jita_prices_for_types(unique_type_ids)
-
-        if not jita_price_map:
-            logger.warning("No Jita prices fetched; skipping delta calculation.")
-            st.session_state.jita_deltas = {fit_id: None for fit_id in fit_ids}
-        else:
-            for fit_id in fit_ids:
-                try:
-                    fit_data = all_fits_df[all_fits_df['fit_id'] == fit_id]
-                    fit_summary_data = summary_df[summary_df['fit_id'] == fit_id]
-
-                    if not fit_summary_data.empty:
-                        total_cost = fit_summary_data['total_cost'].iloc[0] if pd.notna(fit_summary_data['total_cost'].iloc[0]) else 0
-
-                        # Pass shared price map to avoid redundant API calls
-                        jita_fit_cost, jita_cost_delta = calculate_jita_fit_cost_and_delta(
-                            fit_data, total_cost, jita_price_map
-                        )
-
-                        st.session_state.jita_deltas[fit_id] = jita_cost_delta
-                except Exception as e:
-                    logger.error(f"Error calculating Jita delta for fit_id {fit_id}: {e}")
-                    st.session_state.jita_deltas[fit_id] = None
-
-    st.session_state.jita_deltas_last_updated = datetime.datetime.now()
-    logger.info(f"Calculated Jita deltas for {len(st.session_state.jita_deltas)} fits at {st.session_state.jita_deltas_last_updated}")
 
 def main():
     # App title and logo
@@ -555,16 +289,29 @@ def main():
     filtered_df = fit_summary.copy()
     filtered_df['target'] = filtered_df['target'] * ds_target_multiplier
 
-    # Apply status filter
+    # Recalculate target_percentage with multiplier (capped at 100)
+    filtered_df['target_percentage'] = (
+        (filtered_df['fits'] / filtered_df['target'] * 100)
+        .clip(upper=100)
+        .fillna(0)
+        .astype(int)
+    )
+
+    # Apply status filter using StockStatus thresholds (Critical: <=20%, Good: >90%)
     if selected_status != "All":
         if selected_status == "Good":
             filtered_df = filtered_df[filtered_df['target_percentage'] > 90]
         elif selected_status == "All Low Stock":
             filtered_df = filtered_df[filtered_df['target_percentage'] <= 90]
         elif selected_status == "Needs Attention":
-            filtered_df = filtered_df[(filtered_df['target_percentage'] > 40) & (filtered_df['target_percentage'] <= 90)]
+            # StockStatus.NEEDS_ATTENTION: >20% and <=90%
+            filtered_df = filtered_df[
+                (filtered_df['target_percentage'] > 20) &
+                (filtered_df['target_percentage'] <= 90)
+            ]
         elif selected_status == "Critical":
-            filtered_df = filtered_df[filtered_df['target_percentage'] <= 40]
+            # StockStatus.CRITICAL: <=20%
+            filtered_df = filtered_df[filtered_df['target_percentage'] <= 20]
 
     # Apply ship group filter
     if selected_group != "All":
@@ -591,8 +338,9 @@ def main():
 
         # Display the fits in this group
         for i, row in group_data.iterrows():
+
             # Create a more compact horizontal section for each fit
-            col1, col2, col3 = st.columns([1, 3, 2])
+            col1, col2, col3 = st.columns([1,3,2])
 
             target_pct = row['target_percentage']
             target = int(row['target']) if pd.notna(row['target']) else 0
@@ -601,196 +349,181 @@ def main():
             fit_cost = millify(int(row['total_cost']), precision=2) if pd.notna(row['total_cost']) else 'N/A'
 
             with col1:
+                # add space
+                st.space("stretch")
                 # Ship image and ID info
                 try:
                     st.image(f"https://images.evetech.net/types/{row['ship_id']}/render?size=64", width=64)
                 except Exception:
                     st.text("Image not available")
 
-                if target_pct > 90:
-                    color = "green"
-                    status = "Good"
-                elif target_pct > 40:
-                    color = "orange"
-                    status = "Needs Attention"
-                else:
-                    color = "red"
-                    status = "Critical"
-
+                # Use StockStatus for consistent categorization
+                stock_status = StockStatus.from_percentage(target_pct)
+                color = stock_status.display_color
+                status = stock_status.display_name
+                fit_id = row['fit_id']
+                fit_name = row['fit']  # Already available from summary DataFrame
                 st.badge(status, color=color)
-                st.text(f"ID: {row['fit_id']}")
-                st.text(f"Fit: {row['fit']}")
+                st.text(f"ID: {fit_id}")
+                st.text(f"Fit: {fit_name}")
 
             with col2:
-                # Ship name with checkbox and metrics in a more compact layout
-                ship_cols = st.columns([0.05, 0.95])
+                tab1,tab2 = st.tabs(["Market Stock","Fit Details"], default="Market Stock")
+                with tab1:
+                    # Ship name with checkbox and metrics in a more compact layout
+                    ship_cols = st.columns([0.05, 0.95])
 
-                with ship_cols[0]:
-                    # Add checkbox next to ship name with unique key using fit_id and ship_name
-                    unique_key = f"ship_{row['fit_id']}_{row['ship_name']}"
-                    ship_selected = st.checkbox("x", key=unique_key,
-                                             value=row['ship_name'] in st.session_state.selected_ships, label_visibility="hidden")
-                    if ship_selected and row['ship_name'] not in st.session_state.selected_ships:
-                        st.session_state.selected_ships.append(row['ship_name'])
-                    elif not ship_selected and row['ship_name'] in st.session_state.selected_ships:
-                        st.session_state.selected_ships.remove(row['ship_name'])
+                    with ship_cols[0]:
+                        # Add checkbox next to ship name with unique key using fit_id and ship_name
+                        unique_key = f"ship_{row['fit_id']}_{row['ship_name']}"
 
-                with ship_cols[1]:
-                    st.markdown(f"### {row['ship_name']}")
+                        # Initialize checkbox state from selected_ships if not already set
+                        if unique_key not in st.session_state:
+                            st.session_state[unique_key] = row['ship_name'] in st.session_state.selected_ships
 
-                # Display metrics in a single row
-                metric_cols = st.columns(4)
-                fits_delta = fits-target
-                hulls_delta = hulls-target
+                        ship_selected = st.checkbox("x", key=unique_key, label_visibility="hidden")
 
-                with metric_cols[0]:
-                    # Format the delta values
-                    if fits:
-                        st.metric(label="Fits", value=f"{int(fits)}", delta=fits_delta)
-                    else:
-                        st.metric(label="Fits", value="0", delta=fits_delta)
+                        # Sync checkbox state with selected_ships list
+                        if ship_selected and row['ship_name'] not in st.session_state.selected_ships:
+                            st.session_state.selected_ships.append(row['ship_name'])
+                        elif not ship_selected and row['ship_name'] in st.session_state.selected_ships:
+                            st.session_state.selected_ships.remove(row['ship_name'])
 
-                with metric_cols[1]:
-                    if hulls:
-                        st.metric(label="Hulls", value=f"{int(hulls)}", delta=hulls_delta)
-                    else:
-                        st.metric(label="Hulls", value="0", delta=hulls_delta)
+                    with ship_cols[1]:
+                        st.markdown(f"### {row['ship_name']}")
 
-                with metric_cols[2]:
-                    if target:
-                        st.metric(label="Target", value=f"{int(target)}")
-                    else:
-                        st.metric(label="Target", value="0")
+                    # Display metrics in a single row
+                    metric_cols = st.columns(4)
+                    fits_delta = fits-target
+                    hulls_delta = hulls-target
 
-                with metric_cols[3]:
-                    if fit_cost and fit_cost != 'N/A':
-                        # Get the Jita cost delta from session state
-                        jita_delta = None
-                        if 'jita_deltas' in st.session_state and row['fit_id'] in st.session_state.jita_deltas:
-                            jita_delta = st.session_state.jita_deltas[row['fit_id']]
-                        
-                        if jita_delta is not None and pd.notna(jita_delta):
-                            # Format delta as percentage with 2 decimal places
-                            delta_str = f"{jita_delta:.2f}%"
-                            st.metric(label="Fit Cost", value=f"{fit_cost}", delta=delta_str)
+                    with metric_cols[0]:
+                        # Format the delta values
+                        if fits:
+                            st.metric(label="Fits", value=f"{int(fits)}", delta=fits_delta)
                         else:
-                            st.metric(label="Fit Cost", value=f"{fit_cost}")
-                    else:
-                        st.metric(label="Fit Cost", value="N/A")
-                        
-                # Progress bar for target percentage
-                target_pct = row['target_percentage']
-                color = "green" if target_pct >= 90 else "orange" if target_pct >= 50 else "red"
-                if target_pct == 0:
-                    color2 = "#5c1f06"
-                else:
-                    color2 = "#333"
+                            st.metric(label="Fits", value="0", delta=fits_delta)
 
-                st.markdown(
-                    f"""
-                    <div style="margin-top: 5px;">
-                        <div style="background-color: {color2}; width: 100%; height: 20px; border-radius: 3px;">
-                            <div style="background-color: {color}; width: {target_pct}%; height: 20px; border-radius: 3px; text-align: center; line-height: 20px; color: white; font-weight: bold;">
-                                {target_pct}%
-                            </div>
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-                
-                # Add expandable fitting details section
-                with st.expander("📋 View Full Fitting Details", expanded=False):
-                    with st.spinner("Loading fitting data..."):
-                        fit_detail_df = get_fit_detail_data(row['fit_id'])
-                        
-                        if not fit_detail_df.empty:
-                            # Display summary info
-                            fit_info_col1, fit_info_col2, fit_info_col3 = st.columns(3)
-                            
-                            with fit_info_col1:
-                                st.metric("Total Items", len(fit_detail_df))
-                            
-                            with fit_info_col2:
-                                if 'total_stock' in fit_detail_df.columns:
-                                    total_value = (fit_detail_df['price'] * fit_detail_df['total_stock']).sum()
-                                    st.metric("Total Stock Value", f"{millify(total_value, precision=2)}")
-                            
-                            with fit_info_col3:
-                                if 'Fits on Market' in fit_detail_df.columns:
-                                    bottleneck = fit_detail_df['Fits on Market'].min()
-                                    st.metric("Bottleneck (Min Fits)", int(bottleneck))
-                            
-                            st.markdown("---")
-                            
-                            # Display the fitting dataframe
-                            col_config = get_fitting_column_config()
-                            st.dataframe(
-                                fit_detail_df,
-                                hide_index=True,
-                                column_config=col_config,
-                                width='stretch'
-                            )
-                            
-                            # Download button for this specific fit
-                            csv = fit_detail_df.to_csv(index=False)
-                            st.download_button(
-                                label=f"📥 Download Fit {row['fit_id']} Data",
-                                data=csv,
-                                file_name=f"fit_{row['fit_id']}_{row['ship_name'].replace(' ', '_')}.csv",
-                                mime="text/csv",
-                                key=f"download_fit_{row['fit_id']}"
-                            )
+                    with metric_cols[1]:
+                        if hulls:
+                            st.metric(label="Hulls", value=f"{int(hulls)}", delta=hulls_delta)
                         else:
-                            st.info("No detailed fitting data available for this fit.")
+                            st.metric(label="Hulls", value="0", delta=hulls_delta)
 
-            with col3:
-                # Low stock modules with selection checkboxes
-                st.markdown(":blue[**Low Stock Modules:**]")
-                for i, module in enumerate(row['lowest_modules']):
-                    module_qty = module.split("(")[1].split(")")[0]
-                    module_name = module.split(" (")[0]
-                    # Make each key unique by adding fit_id and index to avoid duplicates
-                    module_key = f"{row['fit_id']}_{i}_{module_name}_{module_qty}"
-                    display_key = f"{module_name}"
-
-                    # Determine module status
-                    if int(module_qty) <= row['target'] * 0.2:
-                        module_status = "Critical"
-                    elif int(module_qty) <= row['target']:
-                        module_status = "Needs Attention"
-                    else:
-                        module_status = "Good"
-
-                    # Apply module status filter
-                    if selected_module_status == "All Low Stock":
-                        if int(module_qty) <= row['target'] * 0.9:
-                            module_status = "All Low Stock"
-                    if selected_module_status != "All" and selected_module_status != module_status:
-                        continue
-
-                    col_a, col_b = st.columns([0.1, 0.9])
-                    with col_a:
-                        is_selected = st.checkbox("1", key=module_key, label_visibility="hidden",
-                                               value=display_key in st.session_state.selected_modules)
-                        if is_selected and display_key not in st.session_state.selected_modules:
-                            st.session_state.selected_modules.append(display_key)
-                        elif not is_selected and display_key in st.session_state.selected_modules:
-                            st.session_state.selected_modules.remove(display_key)
-
-                    with col_b:
-                        if int(module_qty) <= row['target'] * 0.2:
-                            st.markdown(f":red-badge[:material/error: {module}]")
-                        elif int(module_qty) <= row['target']:
-                            st.markdown(f":orange-badge[:material/error: {module}]")
+                    with metric_cols[2]:
+                        if target:
+                            st.metric(label="Target", value=f"{int(target)}")
                         else:
-                            st.text(module)
+                            st.metric(label="Target", value="0")
 
-            # Add a thinner divider between fits
-            st.markdown("<hr style='margin: 0.5em 0; border-width: 1px'>", unsafe_allow_html=True)
+                    with metric_cols[3]:
+                        if fit_cost and fit_cost != 'N/A':
+                            # Get the Jita cost delta from session state
+                            jita_delta = None
+                            if 'jita_deltas' in st.session_state and row['fit_id'] in st.session_state.jita_deltas:
+                                jita_delta = st.session_state.jita_deltas[row['fit_id']]
+                            
+                            if jita_delta is not None and pd.notna(jita_delta):
+                                # Format delta as percentage with 2 decimal places
+                                delta_str = f"{jita_delta:.2f}%"
+                                st.metric(label="Fit Cost", value=f"{fit_cost}", delta=delta_str)
+                            else:
+                                st.metric(label="Fit Cost", value=f"{fit_cost}")
+                        else:
+                            st.metric(label="Fit Cost", value="N/A")
+                            
+                    # Progress bar for target percentage (uses ui.formatters)
+                    target_pct = row['target_percentage']
+                    st.markdown(render_progress_bar_html(target_pct), unsafe_allow_html=True)
+                    
+                    with col3:
+                        # Low stock modules with selection checkboxes
+                        st.markdown(":blue[**Low Stock Modules:**]")
+                        target = int(row['target']) if pd.notna(row['target']) else 0
 
-        # Add divider between groups
-        # st.markdown("<hr style='margin: 1.5em 0; border-width: 2px'>", unsafe_allow_html=True)
+                        for i, module in enumerate(row['lowest_modules']):
+                            module_qty = module.split("(")[1].split(")")[0]
+                            module_name = module.split(" (")[0]
+                            # Make each key unique by adding fit_id and index to avoid duplicates
+                            module_key = f"{row['fit_id']}_{i}_{module_name}_{module_qty}"
+                            display_key = f"{module_name}_{module_qty}"
+
+                            # Use StockStatus for consistent module categorization
+                            mod_stock_status = StockStatus.from_stock_and_target(int(module_qty), target)
+                            module_status = mod_stock_status.display_name
+
+                            # Apply module status filter
+                            if selected_module_status == "All Low Stock":
+                                # "All Low Stock" = not Good (i.e., <=90% of target)
+                                if mod_stock_status != StockStatus.GOOD:
+                                    module_status = "All Low Stock"
+                            if selected_module_status != "All" and selected_module_status != module_status:
+                                continue
+
+                            col_a, col_b = st.columns([0.1, 0.9])
+                            with col_a:
+                                # Initialize checkbox state from selected_modules if not already set
+                                if module_key not in st.session_state:
+                                    st.session_state[module_key] = display_key in st.session_state.selected_modules
+
+                                is_selected = st.checkbox("1", key=module_key, label_visibility="hidden")
+
+                                # Sync checkbox state with selected_modules list
+                                if is_selected and display_key not in st.session_state.selected_modules:
+                                    st.session_state.selected_modules.append(display_key)
+                                elif not is_selected and display_key in st.session_state.selected_modules:
+                                    st.session_state.selected_modules.remove(display_key)
+
+                            with col_b:
+                                # Display with color based on status
+                                if mod_stock_status == StockStatus.CRITICAL:
+                                    st.markdown(f":red-badge[:material/error: {module}]")
+                                elif mod_stock_status == StockStatus.NEEDS_ATTENTION:
+                                    st.markdown(f":orange-badge[:material/error: {module}]")
+                                else:
+                                    st.text(module)
+                    with tab2:
+                        ship_name = row['ship_name']
+                        st.write(f"{ship_name} - Fit {fit_id}")
+
+                        # Lazy-load: only fetch fit details when user explicitly requests
+                        tab2_key = f"tab2_data_{fit_id}"
+
+                        if tab2_key not in st.session_state:
+                            # Show load button if data hasn't been fetched
+                            if st.button("Load Fit Details", key=f"load_tab2_{fit_id}", type="secondary"):
+                                fit_detail_df = service.repository.get_fit_by_id(fit_id=fit_id)
+                                st.session_state[tab2_key] = fit_detail_df
+                                st.rerun()
+
+                        if tab2_key in st.session_state:
+                            fit_detail_df = st.session_state[tab2_key]
+                            if not fit_detail_df.empty:
+                                # Display the fitting dataframe
+                                col_config = get_fitting_column_config()
+                                st.dataframe(
+                                    fit_detail_df,
+                                    hide_index=True,
+                                    column_config=col_config,
+                                    width='stretch'
+                                )
+
+                                # Download button for this specific fit
+                                csv = fit_detail_df.to_csv(index=False)
+                                st.download_button(
+                                    label=f"📥 Download Fit {row['fit_id']} Data",
+                                    data=csv,
+                                    file_name=f"fit_{row['fit_id']}_{row['ship_name'].replace(' ', '_')}.csv",
+                                    mime="text/csv",
+                                    key=f"download_fit_{row['fit_id']}"
+                                )
+                            else:
+                                st.info("No detailed fitting data available for this fit.")
+
+                        # Add a thinner divider between fits
+                        st.markdown("<hr style='margin: 0.5em 0; border-width: 1px'>", unsafe_allow_html=True)
+
+
 
     # Ship and Module Export Section
     st.sidebar.markdown("---")
@@ -803,6 +536,10 @@ def main():
     # Add "Select All Ships" button
     if ship_col1.button("📋 Select All Ships", width='content'):
         st.session_state.selected_ships = st.session_state.displayed_ships.copy()
+        # Clear all ship checkbox states so they reinitialize on next render
+        keys_to_clear = [key for key in st.session_state.keys() if key.startswith("ship_")]
+        for key in keys_to_clear:
+            del st.session_state[key]
         st.rerun()
 
     # Add "Clear Ship Selection" button
@@ -810,6 +547,10 @@ def main():
         st.session_state.selected_ships = []
         st.session_state.ship_list_state = {}
         st.session_state.csv_ship_list_state = {}
+        # Clear all ship checkbox states
+        keys_to_clear = [key for key in st.session_state.keys() if key.startswith("ship_")]
+        for key in keys_to_clear:
+            del st.session_state[key]
         logger.info("Cleared ship selection and session state")
         logger.info(f"Session state ship list: {st.session_state.ship_list_state}")
         logger.info(f"Session state csv ship list: {st.session_state.csv_ship_list_state}")
@@ -831,21 +572,22 @@ def main():
                 if row['ship_name'] not in st.session_state.displayed_ships:
                     continue
 
+                target = int(row['target']) if pd.notna(row['target']) else 0
+
                 for module in row['lowest_modules']:
                     module_qty = module.split("(")[1].split(")")[0]
                     module_name = module.split(" (")[0]
                     display_key = f"{module_name}_{module_qty}"
 
-                    # Determine module status for filtering
+                    # Use StockStatus for consistent module categorization
+                    mod_stock_status = StockStatus.from_stock_and_target(int(module_qty), target)
+                    module_status = mod_stock_status.display_name
+
+                    # Handle "All Low Stock" filter
                     if selected_module_status == "All Low Stock":
-                        if int(module_qty) <= row['target'] * 0.9:
+                        if mod_stock_status != StockStatus.GOOD:
                             low_stock_modules.append(display_key)
-                    elif int(module_qty) <= row['target'] * 0.2:
-                        module_status = "Critical"
-                    elif int(module_qty) <= row['target']:
-                        module_status = "Needs Attention"
-                    else:
-                        module_status = "Good"
+                        continue
 
                     # Apply module status filter
                     if selected_module_status != "All" and selected_module_status != module_status:
@@ -861,6 +603,12 @@ def main():
             st.session_state.selected_modules = list(set(low_stock_modules))
         else:
             st.session_state.selected_modules = list(set(visible_modules))
+        # Clear all module checkbox states so they reinitialize on next render
+        keys_to_clear = [key for key in st.session_state.keys() if "_" in key and key.split("_")[0].isdigit()]
+        for key in keys_to_clear:
+            # Only clear keys that look like module checkboxes (fit_id_index_module_qty pattern)
+            if len(key.split("_")) >= 3:
+                del st.session_state[key]
         st.rerun()
 
     # Clear module selection button
@@ -868,6 +616,12 @@ def main():
         st.session_state.selected_modules = []
         st.session_state.module_list_state = {}
         st.session_state.csv_module_list_state = {}
+        # Clear all module checkbox states
+        keys_to_clear = [key for key in st.session_state.keys() if "_" in key and key.split("_")[0].isdigit()]
+        for key in keys_to_clear:
+            # Only clear keys that look like module checkboxes (fit_id_index_module_qty pattern)
+            if len(key.split("_")) >= 3:
+                del st.session_state[key]
         logger.info("Cleared module selection and session state")
         logger.info(f"Session state module list: {st.session_state.module_list_state}")
         logger.info(f"Session state csv module list: {st.session_state.csv_module_list_state}")

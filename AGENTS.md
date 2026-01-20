@@ -5,8 +5,10 @@ This file provides comprehensive guidance for LLM assistants (like Claude Code) 
 ## Project Overview
 
 Winter Coalition Market Stats Viewer is a Streamlit web application for EVE Online market analysis. It provides real-time market data visualization, doctrine analysis, and inventory management tools for the Winter Coalition.
+The web app can be found here: https://wcmkts.streamlit.app/
+It also has a sister application, Winter Coalition Northern Supply, which supports a different market hub managed in a separate repository. 
 
-**Important:** ESI calls to update market data in wcmkt2.db are handled in a separate repository: https://github.com/OrthelT/mkts_backend
+**Important:** ESI calls to update market data in wcmktprod.db are handled in a separate repository: https://github.com/OrthelT/mkts_backend
 
 ## Quick Start Commands
 
@@ -157,13 +159,12 @@ All pages follow consistent patterns with Streamlit best practices:
 - **`logs/`**: Application logs (git-ignored)
 - **`images/`**: UI assets and images
 - **`dev_files/`**: Development-specific files
-
 ## Database Architecture
 
 ### Turso Embedded Replica Pattern
 
 The application uses Turso's embedded-replica feature for optimal performance:
-- Local SQLite databases (`wcmkt2.db`, `sdelite2.db`) provide fast reads
+- Local SQLite databases (`wcmktprod.db`, `sdelite2.db`) provide fast reads
 - Automatic synchronization with remote Turso database via libsql
 - Background sync managed by DatabaseConfig with RWLock concurrency control
 - Integrity checks with `PRAGMA integrity_check` before and after sync
@@ -317,7 +318,7 @@ The test suite includes:
 - `test_rwlock.py`: RWLock implementation tests (12 tests)
 - `test_database_config_concurrency.py`: DatabaseConfig concurrency tests
 - Additional tests for database operations, logging, and data fetching
-- Current status: 36 tests passing
+- Current status: 37 tests passing
 
 ## Commit & Pull Request Guidelines
 
@@ -386,7 +387,7 @@ Include in PR description:
 │              DatabaseConfig (config.py)                     │
    │              RWLock Concurrency Control                     │
    │  ┌──────────┬──────────┬──────────┐                        │
-   │  │ wcmktprod│ sde_lite │buildcost │                        │
+   │  │ wcmktprod│ sdelite2 │buildcost │                        │
    │  │ .db      │ .db      │.db       │                        │
    │  └────┬─────┴──────────┴──────────┘                        │
    │       │ Sync (libsql)                                       │
@@ -416,6 +417,87 @@ Include in PR description:
 - Automatic recovery from database corruption
 - Separation of concerns: backend handles ESI, frontend handles UI/analysis
 
+### Layered Architecture & Module Dependencies
+
+The codebase follows a strict layered architecture. Dependencies must flow **downward only** - upper layers may import from lower layers, but never the reverse.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  PRESENTATION LAYER                                         │
+│  pages/              → Streamlit pages (UI entry points)    │
+│  app.py              → Application entry point              │
+└─────────────────────────────────────────────────────────────┘
+                              │ imports from ↓
+┌─────────────────────────────────────────────────────────────┐
+│  UI LAYER                                                   │
+│  ui/                 → Formatting, column configs, display  │
+│    formatters.py     → Pure formatting functions            │
+│    column_definitions.py → st.column_config definitions     │
+└─────────────────────────────────────────────────────────────┘
+                              │ imports from ↓
+┌─────────────────────────────────────────────────────────────┐
+│  SERVICE LAYER                                              │
+│  services/           → Business logic orchestration         │
+│    doctrine_service.py → FitDataBuilder, DoctrineService    │
+│    price_service.py    → Price fetching with fallbacks      │
+│    categorization.py   → Ship role categorization           │
+└─────────────────────────────────────────────────────────────┘
+                              │ imports from ↓
+┌─────────────────────────────────────────────────────────────┐
+│  REPOSITORY LAYER                                           │
+│  repositories/       → Database access abstraction          │
+│    doctrine_repo.py  → DoctrineRepository (17 methods)      │
+└─────────────────────────────────────────────────────────────┘
+                              │ imports from ↓
+┌─────────────────────────────────────────────────────────────┐
+│  DOMAIN LAYER                                               │
+│  domain/             → Core business models (no deps)       │
+│    models.py         → FitItem, FitSummary, ModuleStock     │
+│    enums.py          → StockStatus, ShipRole                │
+│    converters.py     → Type conversion utilities            │
+└─────────────────────────────────────────────────────────────┘
+                              │ imports from ↓
+┌─────────────────────────────────────────────────────────────┐
+│  INFRASTRUCTURE LAYER                                       │
+│  config.py           → DatabaseConfig, RWLock               │
+│  models.py           → SQLAlchemy ORM models                │
+│  db_handler.py       → Low-level DB queries                 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Dependency Rules (CRITICAL):**
+
+| Layer | May Import From | Must NOT Import From |
+|-------|-----------------|----------------------|
+| `pages/` | `ui/`, `facades/`, `services/`, `domain/`, `repositories/` | - |
+| `ui/` | `domain/` only | `services/`, `facades/`, `pages/`, `app.py` |
+| `facades/` | `services/`, `repositories/`, `domain/` | `ui/`, `pages/` |
+| `services/` | `repositories/`, `domain/` | `ui/`, `facades/`, `pages/` |
+| `repositories/` | `domain/`, `config`, `models` | `services/`, `facades/`, `ui/`, `pages/` |
+| `domain/` | Python stdlib only | Everything else |
+
+**Common Circular Import Causes:**
+1. **UI importing from services** - UI layer should only use domain enums/models
+2. **Importing from `app.py`** - Entry point should never be imported
+3. **Services importing from facades** - Facades wrap services, not vice versa
+
+**Example - Correct Pattern:**
+```python
+# ui/formatters.py - CORRECT
+from domain.enums import ShipRole, StockStatus  # ✓ domain only
+
+def get_ship_role_format(role: str) -> str:
+    ship_role = ShipRole.from_string(role)
+    return f"{ship_role.display_emoji} **{ship_role.display_name}**"
+```
+
+**Example - Anti-Pattern (causes circular imports):**
+```python
+# ui/formatters.py - WRONG
+from services.categorization import get_ship_role_object  # ✗ services!
+from app import logger  # ✗ entry point!
+```
+
 ## Version Information
 
 - **Current version**: 0.1.5
@@ -424,9 +506,38 @@ Include in PR description:
 - **Main branch**: main
 - **Active development**: documentation branch (as of last update)
 
-## Additional Resources
+## Additional Resources & Documentation Index
 
-- **Project documentation**: `docs/` directory
-- **Development files**: `dev_files/` directory
-- **Legacy code**: `depreciated-code/` directory
-- **Backend repository**: https://github.com/OrthelT/mkts_backend (ESI API integration)
+### Documentation (`docs/` directory)
+
+**User Documentation:**
+- `docs.md` - End-user guide for the application
+- `docs_cn.md` - Chinese translation of user guide
+
+**Technical Reference:**
+- `REFACTOR_PLAN.md` - Comprehensive architecture documentation and refactoring history
+- `database_config.md` - Database configuration and Turso sync details
+- `concurrency_refactor.md` - RWLock implementation and concurrency patterns
+- `testing.md` - Testing guidelines and pytest patterns
+
+**Guides:**
+- `admin_guide.md` - Administrative guide for managing the application
+- `quick_reference.md` - Quick reference for common tasks
+- `walkthrough.md` - Step-by-step walkthroughs
+- `worktree_setup.md` - Git worktree setup for parallel development
+
+### Project Directories
+- **`domain/`**: Core business models (FitItem, FitSummary, StockStatus, ShipRole)
+- **`repositories/`**: Database access layer (DoctrineRepository)
+- **`services/`**: Business logic (DoctrineService, PriceService, categorization)
+- **`facades/`**: Simplified API layer (DoctrineFacade)
+- **`ui/`**: UI formatting utilities and column configurations
+- **`pages/`**: Streamlit application pages
+- **`tests/`**: pytest unit tests
+- **`docs/`**: Documentation
+- **`logs/`**: Application logs (git-ignored)
+- **`images/`**: UI assets
+- **`depreciated-code/`**: Legacy code archive
+
+### External Resources
+- **Backend repository**: https://github.com/OrthelT/mkts_backend (ESI API integration, market data updates)

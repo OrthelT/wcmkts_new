@@ -1,0 +1,307 @@
+================================================================================
+                FUNCTION USAGE & REFACTORING ANALYSIS
+                          EXECUTIVE SUMMARY
+================================================================================
+
+PROJECT: refactordoctrines
+ANALYSIS DATE: 2026-01-04
+SCOPE: pages/doctrine_status.py | pages/doctrine_report.py
+TARGET: Complete migration to DoctrineFacade pattern
+
+================================================================================
+ANALYSIS OVERVIEW
+================================================================================
+
+7 Functions Analyzed:
+  1. create_fit_df()                    - Backwards-compatible wrapper exists
+  2. get_fit_name() / get_fit_name_from_db()   - DUPLICATES (identical logic)
+  3. get_module_stock_list()            - DUPLICATES (slightly different)
+  4. categorize_ship_by_role()          - Wrapper exists (performance issue)
+  5. calculate_jita_fit_cost_and_delta() - Wrapper exists
+  6. get_ship_target()                  - Confusing dual-purpose API
+  7. get_doctrine_lead_ship()           - DUPLICATE (identical logic)
+
+Total Code Duplication: ~275 lines
+Removable Lines: ~175 lines
+Lines Saved on Consolidation: ~226 lines
+
+================================================================================
+KEY FINDINGS
+================================================================================
+
+CRITICAL ISSUES (Must fix):
+  - get_fit_name(): 2 identical implementations in different files
+    * doctrine_status.py:131-139
+    * doctrine_report.py:62-73
+    * Already centralized: repository.py:246, facade.py:269
+
+  - get_module_stock_list(): 2 implementations with inconsistent features
+    * doctrine_status.py:141-221 (81 lines with usage calculation)
+    * doctrine_report.py:21-51 (31 lines, simpler version)
+    * NOT YET CENTRALIZED - needs facade implementation
+
+PERFORMANCE ISSUES:
+  - categorize_ship_by_role(): Loads settings.toml on EVERY call
+    * Original in doctrine_report.py:75 is inefficient
+    * Wrapper in services/categorization.py:274 fixes this
+    * Facade already has typed method: facade.categorize_ship()
+
+CODE QUALITY ISSUES:
+  - get_ship_target(): Confusing API with "magic zero" parameters
+    * doctrine_status.py:279 requires: get_ship_target(0, fit_id) or get_ship_target(ship_id, 0)
+    * Repository properly splits: get_target_by_fit_id() vs get_target_by_ship_id()
+    * Should not be called directly from page anymore
+
+N+1 QUERY PATTERN:
+  - get_fit_name(): Called in loops without caching
+    * doctrine_status.py:104 called for each fit in loop
+    * doctrine_report.py:299 called for each fit in loop
+    * Recommendation: Add session state caching in facade
+
+================================================================================
+REFACTORING PRIORITIES
+================================================================================
+
+PHASE 1: HIGH PRIORITY (Quick wins, low risk)
+────────────────────────────────────────────
+Effort: Low | Risk: Low | Impact: High | Lines Saved: ~84
+
+Tasks:
+  ✓ Replace get_fit_name() calls with facade.get_fit_name()
+    - doctrine_status.py:104
+    - doctrine_report.py:299
+  ✓ Delete duplicate functions:
+    - doctrine_status.py:131-139
+    - doctrine_report.py:62-73
+  ✓ Replace get_doctrine_lead_ship() call with facade method
+    - doctrine_report.py:432
+  ✓ Delete duplicate function:
+    - doctrine_report.py:53-60
+  ✓ Replace get_ship_target() calls (2 locations)
+    - doctrine_status.py:80 -> facade.repository.get_target_by_fit_id()
+    - doctrine_status.py:259 -> facade.repository.get_target_by_ship_id()
+  ✓ Delete confusing function:
+    - doctrine_status.py:279-309
+
+Result: ~84 lines removed, 5 call sites migrated, 4 duplicate functions deleted
+
+PHASE 2: MEDIUM PRIORITY (Requires facade enhancement)
+──────────────────────────────────────────────────────
+Effort: Medium | Risk: Low | Impact: Medium | Lines Saved: ~142
+
+Tasks:
+  ✓ Implement facade.get_module_stock(module_name) method
+  ✓ Replace get_module_stock_list() calls
+    - doctrine_status.py:897
+    - doctrine_report.py:352
+  ✓ Delete duplicate functions:
+    - doctrine_status.py:141-221
+    - doctrine_report.py:21-51
+  ✓ Update categorize_ship_by_role() usage
+    - doctrine_report.py:118 (in apply lambda)
+  ✓ Delete original function:
+    - doctrine_report.py:75-106
+
+Result: ~142 lines removed, 3 call sites migrated, 3 functions deleted
+
+PHASE 3: LOW PRIORITY (Already refactored)
+───────────────────────────────────────────
+Effort: Low | Risk: Very Low | Impact: Low | Lines Saved: 0
+
+Tasks:
+  ✓ Update create_fit_df() calls (4 locations) to use facade.build_fit_data()
+  ✓ Update calculate_jita_fit_cost_and_delta() call (1 location)
+  
+Result: Better type safety, access to metadata, no code deletion
+
+================================================================================
+FACADE READINESS
+================================================================================
+
+READY TO USE:
+  ✓ get_fit_name(fit_id) -> str
+    Location: facades/doctrine_facade.py:269
+    Delegates to: repositories/doctrine_repo.py:246
+    Status: PRODUCTION READY
+
+  ✓ get_doctrine_lead_ship(doctrine_id) -> Optional[int]
+    Location: facades/doctrine_facade.py:400
+    Delegates to: repositories/doctrine_repo.py:316
+    Status: PRODUCTION READY
+
+  ✓ categorize_ship(ship_name, fit_id) -> ShipRole
+    Location: facades/doctrine_facade.py:423
+    Delegates to: services/categorization.py (ConfigBasedCategorizer)
+    Status: PRODUCTION READY
+
+  ✓ build_fit_data() -> FitBuildResult
+    Location: facades/doctrine_facade.py:287
+    Delegates to: services/doctrine_service.py
+    Status: PRODUCTION READY
+
+  ✓ get_target_by_fit_id(fit_id) -> int
+    Location: repositories/doctrine_repo.py:185
+    Status: READY TO USE (via facade.repository)
+
+  ✓ get_target_by_ship_id(ship_id) -> int
+    Location: repositories/doctrine_repo.py:214
+    Status: READY TO USE (via facade.repository)
+
+NEEDS IMPLEMENTATION:
+  ✗ get_module_stock(module_name) -> Optional[ModuleStock]
+    Location: MISSING in facade (exists in repository)
+    Action: Add facade.py method delegating to repository.get_module_stock()
+
+OPTIONAL IMPROVEMENTS:
+  ? get_fit_target(fit_id) -> int
+    Convenience wrapper for get_target_by_fit_id()
+    
+  ? get_ship_target(ship_id) -> int
+    Convenience wrapper for get_target_by_ship_id()
+    
+  ? calculate_fit_jita_analysis(fit_data, cost) -> FitCostAnalysis
+    Convenience wrapper for price_service.analyze_fit_cost()
+
+================================================================================
+IMPLEMENTATION CHECKLIST
+================================================================================
+
+PHASE 1 - GET_FIT_NAME MIGRATION
+  [ ] Update doctrine_status.py:104 call site
+  [ ] Update doctrine_report.py:299 call site
+  [ ] Delete doctrine_status.py:131-139
+  [ ] Delete doctrine_report.py:62-73
+  [ ] Test: Verify fit names display correctly
+  [ ] Commit: "refactor: migrate get_fit_name to facade"
+
+PHASE 1 - GET_DOCTRINE_LEAD_SHIP MIGRATION
+  [ ] Update doctrine_report.py:432 call site
+  [ ] Add null check for lead_ship_id
+  [ ] Delete doctrine_report.py:53-60
+  [ ] Test: Verify doctrine header image displays
+  [ ] Commit: "refactor: migrate get_doctrine_lead_ship to facade"
+
+PHASE 1 - GET_SHIP_TARGET MIGRATION
+  [ ] Update doctrine_status.py:80 call site
+  [ ] Update doctrine_status.py:259 call site
+  [ ] Delete doctrine_status.py:279-309
+  [ ] Test: Verify target percentages display correctly
+  [ ] Optional: Add convenience methods to facade
+  [ ] Commit: "refactor: migrate get_ship_target to split facade methods"
+
+PHASE 2 - GET_MODULE_STOCK_LIST CENTRALIZATION
+  [ ] Analyze repository implementation of get_module_stock()
+  [ ] Add facade.get_module_stock(module_name) method
+  [ ] Update doctrine_status.py:897 call site
+  [ ] Update doctrine_report.py:352 call site
+  [ ] Verify session state handling still works
+  [ ] Delete doctrine_status.py:141-221
+  [ ] Delete doctrine_report.py:21-51
+  [ ] Test: Verify module stock display works
+  [ ] Commit: "refactor: migrate get_module_stock_list to facade"
+
+PHASE 2 - CATEGORIZE_SHIP_BY_ROLE MIGRATION
+  [ ] Update doctrine_report.py:118 apply lambda
+  [ ] Handle ShipRole enum -> display_name conversion
+  [ ] Verify performance improvement (TOML caching)
+  [ ] Delete doctrine_report.py:75-106
+  [ ] Test: Verify ship categorization displays correctly
+  [ ] Commit: "refactor: migrate categorize_ship_by_role to facade"
+
+PHASE 3 - CREATE_FIT_DF MIGRATION
+  [ ] Update doctrine_status.py:26 call site
+  [ ] Update doctrine_status.py:271 call site
+  [ ] Update doctrine_status.py:446 call site
+  [ ] Update doctrine_report.py:396 call site
+  [ ] Use result.raw_df and result.summary_df
+  [ ] Test: Verify fit data builds correctly
+  [ ] Commit: "refactor: migrate create_fit_df to facade.build_fit_data()"
+
+PHASE 3 - CALCULATE_JITA_COST MIGRATION
+  [ ] Optional: Add facade convenience method
+  [ ] Update doctrine_status.py:479 call site
+  [ ] Test: Verify Jita deltas calculate correctly
+  [ ] Commit: "refactor: migrate calculate_jita_fit_cost_and_delta to facade"
+
+================================================================================
+EXPECTED OUTCOMES
+================================================================================
+
+After Complete Refactoring:
+
+Code Metrics:
+  - Lines removed: ~226
+  - Code duplication: Eliminated
+  - Number of local functions in pages: 7 -> 0
+  - Centralized implementations: 7
+
+Quality Improvements:
+  - Type safety: Improved (enums, domain models, Optional handling)
+  - Error handling: Consistent (all via centralized implementations)
+  - Logging: Consistent (all via centralized implementations)
+  - Caching: Improved (TOML loaded once, not per call)
+  - N+1 Queries: Could be fixed with session state caching
+
+Performance:
+  - categorize_ship_by_role: ~1000x faster (TOML caching)
+  - get_fit_name: No change (unless session caching added)
+  - get_module_stock_list: No change
+  - Overall: Marginal improvement from consolidation
+
+Maintainability:
+  - Single source of truth: All queries in repository/facade
+  - Easier to debug: No duplicate logic to compare
+  - Easier to test: All logic testable via facade/repository/service
+  - Easier to modify: Changes propagate automatically
+
+================================================================================
+RISK ASSESSMENT
+================================================================================
+
+Risk Level: LOW
+
+Mitigations:
+  - Backwards-compatible wrappers already exist in services
+  - Repository implementations fully tested
+  - Facade provides stable API surface
+  - Changes are call-site replacements, not logic changes
+  - Session state handling preserved
+  - No database schema changes required
+
+Testing Strategy:
+  - Unit tests for each facade method (already exist)
+  - Integration tests for page functionality (run after migration)
+  - Manual testing of all affected UI pages
+  - Performance testing for loops with repeated calls
+
+Rollback Plan:
+  - Keep original functions in pages (don't delete) for 1 release
+  - Maintain wrapper functions for 1 release
+  - Branch policy: feature branches for each phase
+
+================================================================================
+FILES MODIFIED
+================================================================================
+
+PRIMARY TARGETS:
+  - pages/doctrine_status.py (5 call sites, 3 function deletions)
+  - pages/doctrine_report.py (4 call sites, 4 function deletions)
+
+SUPPORTING CHANGES:
+  - facades/doctrine_facade.py (add 1 method: get_module_stock)
+  - repositories/doctrine_repo.py (no changes, ready to use)
+  - services/doctrine_service.py (no changes)
+  - services/categorization.py (no changes)
+  - services/price_service.py (no changes)
+
+================================================================================
+DOCUMENTATION UPDATES NEEDED
+================================================================================
+
+  - [ ] Update architecture docs: Remove references to page-level functions
+  - [ ] Add facade usage patterns to developer guide
+  - [ ] Document removed functions in DEPRECATIONS.md
+  - [ ] Update README with facade examples
+  - [ ] Add type hints documentation
+
+================================================================================
