@@ -770,9 +770,145 @@ Update Streamlit pages to use facade:
 - [x] Eliminated ~233 lines of duplicate/complex code
 - [x] Fixed major performance issue (TOML loading on every call)
 
+
+
+# Phase 7: Performance Debugging
+
+**Context:** `pages/doctrine_status.py` is still slow. The most likely cause is expensive full-script reruns triggered by widget interactions (especially checkboxes). Your job is to **diagnose the actual bottlenecks** and propose a **minimal-complexity plan** that produces meaningful performance gains.
+
+**Role:** You are a senior engineer acting as the orchestrator of a small team of specialized agents. Use them to parallelize investigation, then synthesize a single recommended plan. Prefer **simple, explicit, maintainable** solutions.
+
 ---
 
-## Migration Strategy
+## Goals
+1. Identify *what* is slow (data retrieval, transformations, rendering, rerun scope, downloads, etc.).
+2. Identify *why* it reruns so expensively (widget placement/state, layout patterns, session state usage, fragments/forms, etc.).
+3. Propose a solution that:
+   - reduces redundant work across reruns,
+   - isolates expensive work from widget churn,
+   - avoids unnecessary complexity or large refactors.
+
+---
+
+## Step 1: Measure before guessing
+Add lightweight instrumentation to `pages/doctrine_status.py` and any called modules as needed.
+
+**Deliverables:**
+- A list of the top time-consuming sections (with timings).
+- A call graph / narrative of what runs on initial load vs on checkbox interaction.
+- Confirmation of whether expensive work repeats due to reruns or due to per-row/per-fit loops.
+
+**Suggested instrumentation approach:**
+- Use `time.perf_counter()` around major blocks (data fetch, building fit list, computing status, filtering/sorting, rendering, download data prep).
+- Add counters (e.g., “db calls made”, “fits processed”, “status computed N times”).
+- If appropriate, use `st.write` in debug mode or log to console.
+
+---
+
+## Step 2: Assign agents
+
+### Agent A: Code usage / hot path analysis
+Analyze `DoctrineRepository`, `DoctrineService`, and their interaction with `doctrine_status.py`.
+
+**Focus:**
+- DB call frequency and volume.
+- N+1 patterns (per-fit/per-row queries).
+- Redundant recalculation inside loops.
+- Any “derived data” recomputed repeatedly (status, aggregations, joins).
+
+**Output:**
+- List of expensive calls and where they originate.
+- Which functions are pure/deterministic and safe to cache.
+- Which calls could be batched (single query returning all needed rows).
+
+---
+
+### Agent B: Streamlit caching strategy specialist
+Review Streamlit caching docs and propose a caching approach that works with this codebase.
+
+**Important constraints/notes:**
+- `st.cache_data` caches based on function args; methods are fine *if* arguments are hashable or handled with `hash_funcs`.
+- If the object (`self`) is unhashable, options include:
+  - cache pure helper functions outside the class (preferred),
+  - use `hash_funcs` to define how to hash `self` (only if safe and stable),
+  - pass only stable primitives into cached functions (IDs, sfy, region, etc.),
+  - store heavy-but-stable data in `st.session_state` and compute views from it.
+
+**Deliverables:**
+- A short summary of relevant caching rules and pitfalls (mutability, invalidation, TTL, memory).
+- A concrete recommended pattern for *this* app (with examples).
+
+Docs:
+- `st.cache_data`: https://docs.streamlit.io/develop/api-reference/caching-and-state/st.cache_data  
+- Caching overview: https://docs.streamlit.io/develop/concepts/architecture/caching  
+
+---
+
+### Agent C: Execution-flow / rerun containment specialist
+Investigate whether the main issue is full reruns and UI structure, not just DB speed.
+
+**Focus:**
+- Which widgets trigger reruns and how much code reruns as a result.
+- Whether `st.fragment` can isolate expensive sections (noting sidebar constraints).
+- Whether `st.form` can batch checkbox interactions to a single “Apply filters” submit.
+- Whether expensive rendering (tabs, expanders, per-fit panels) is happening eagerly.
+
+**Deliverables:**
+- Recommendations for rerun containment with minimal UI disruption.
+- If UI changes are required, propose the smallest viable change.
+
+---
+
+## Candidate solutions to evaluate (do not assume; validate via measurements)
+
+**Caching / data layer**
+- Batch-load data once (per doctrine/version) and cache the raw dataset.
+- Cache expensive derived computations (status calculations, merges, aggregations).
+- Prefer caching pure functions that accept primitives + dataframes, not service objects.
+- Use `st.session_state` only for data that is genuinely “page state,” not as a dumping ground.
+
+**Rerun containment / UI**
+- Use `st.form` to prevent each checkbox toggle from triggering full recomputation; compute only on submit.
+- Use `st.fragment` for expensive sections placed in the main body (not sidebar).
+- Delay heavy fit-detail rendering until user intent is clear (button press, selectbox, expander opened, etc.).
+- Avoid eager computation for download buttons; compute download payload only when clicked.
+
+**Downloads**
+- Confirm whether download buttons precompute bytes/data on page load.
+- Consider moving all download functionality to a dedicated “Downloads” page or a single controlled section to avoid per-fit download overhead.
+
+---
+
+## Step 3: Synthesize findings and propose an initial plan
+After agents report back, produce:
+1. **Root cause summary** (what is slow and why).
+2. **Recommended fix plan** in phases:
+   - Phase 1: low-risk changes (quick wins).
+   - Phase 2: medium changes if needed.
+   - Phase 3: optional enhancements.
+3. For each change:
+   - expected impact (what work it removes),
+   - complexity risk,
+   - how to validate improvement (timing before/after).
+
+Prefer solutions that reduce total work and rerun scope, not just micro-optimizations.
+
+---
+
+## Step 4: Enforce simplicity
+Spawn a “code simplification” agent to critique your proposed plan. Incorporate feedback to keep the solution minimal and maintainable.
+
+**Final output must include:**
+- The specific functions/blocks to change.
+- The caching boundaries and invalidation strategy.
+- Any UI changes (forms/fragments) and why they’re worth it.
+- A short checklist to confirm the issue is fixed.
+
+
+
+---
+
+# Migration Strategy
 
 1. **Additive changes first** - Create new modules alongside existing code
 2. **Backwards compatibility wrappers** - Old function signatures delegate to new services
