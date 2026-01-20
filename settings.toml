@@ -73,7 +73,7 @@
     "dev" = "wcmkttest"
 
 [env]
-    env = "prod"
+    env = "dev"
 
 [market]
     name = "4-HWWF"
