@@ -9,7 +9,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from sqlalchemy import text,bindparam
-from db_handler import safe_format, get_market_history, read_df
+from db_handler import get_market_history, read_df
 from logging_config import setup_logging
 import millify
 from config import DatabaseConfig, get_settings
