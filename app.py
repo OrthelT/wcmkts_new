@@ -13,6 +13,9 @@ pages = {
         st.Page("pages/doctrine_report.py", title="📝Doctrine Report"),
         st.Page("pages/build_costs.py", title="🏗️Build Costs"),
         st.Page("pages/pricer.py", title="🏷️Pricer")
+    ],
+    "Data": [
+        st.Page("pages/downloads.py", title="📥Downloads")
     ]
 }
 pg = st.navigation(pages)

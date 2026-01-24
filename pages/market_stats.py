@@ -9,12 +9,12 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from sqlalchemy import text,bindparam
-from db_handler import safe_format, get_market_history, read_df, extract_sde_info
+from db_handler import safe_format, get_market_history, read_df
 from logging_config import setup_logging
 import millify
 from config import DatabaseConfig, get_settings
 from services import get_doctrine_service
-from db_handler import new_get_market_data, get_all_mkt_orders, get_all_mkt_stats, get_all_market_history
+from db_handler import new_get_market_data
 from init_db import init_db
 from sync_state import update_wcmkt_state
 from type_info import get_type_id_with_fallback
@@ -561,34 +561,7 @@ def render_title_headers():
     with col2:
         st.title(f"Winter Coalition Market Stats - {market_name} Market {header_env}")
 
-@st.cache_data(ttl=1800)
-def convert_to_csv(df):
-    return df.to_csv(index=False)
 
-# CSV data is now generated lazily inside display_downloads() to avoid
-# database access at module import time (before init_db() runs)
-
-def display_downloads():
-    """Display the download buttons for the market stats page"""
-    # Generate CSV data lazily - only when this function is called (after init_db)
-    orders_csv = convert_to_csv(get_all_mkt_orders())
-    stats_csv = convert_to_csv(get_all_mkt_stats())
-    history_csv = convert_to_csv(get_all_market_history())
-
-    st.download_button("Download Market Orders", data=orders_csv, file_name=f"{market_short_name}_market_orders.csv", mime="text/csv",type="tertiary", help="Download all 4H market orders as a CSV file",icon="📥")
-    st.download_button("Download Market Stats", data=stats_csv, file_name=f"{market_short_name}_market_stats.csv", mime="text/csv",type="tertiary", help="Download aggregated 4H market statistics for commonly traded items as a CSV file",icon="📥")
-    st.download_button("Download Market History", data=history_csv, file_name=f"{market_short_name}_market_history.csv", mime="text/csv",type="tertiary", help="Download 4H market history for commonly traded items as a CSV file",icon="📥")
-
-@st.fragment
-def display_sde_table_download():
-    """Display the SDE table download buttons for the market stats page"""
-    db = DatabaseConfig("sde")
-    tables = db.get_table_list()
-    default_table = "sdetypes"
-    selected_table = st.selectbox("Select an SDE table to download", options=tables, index=tables.index(default_table), help="Select an SDE table to download as a CSV file. Note: sdetypes provides the most commonly used fields and is probably what you want. ")
-    st.download_button("Download Table", data=extract_sde_info("sde", params={"table_name": selected_table}).to_csv(index=False), file_name=f"{selected_table}.csv", mime="text/csv",type="tertiary", help="Download the selected table as a CSV file",icon="🗃")
-    logger.info(f"downloaded {selected_table} to {f"{selected_table}.csv"}")
-    
 def display_history_data(history_df):
 
     history_df.date = pd.to_datetime(history_df.date).dt.strftime("%Y-%m-%d")
@@ -1026,10 +999,8 @@ def main():
             check_db(manual_override=True)
         st.sidebar.divider()
 
-        display_downloads()
-        st.sidebar.divider()
-        st.markdown("### Download SDE Tables")
-        st.markdown("Use this to download a Static Data Export (SDE) table as a CSV file. We have created the **sdetypes** table which combines the most commonly used fields and is probably the one you want.")
-        display_sde_table_download()
+        st.markdown("### Data Downloads")
+        st.markdown("*Visit the **Downloads** page for market data, doctrine fits, and SDE table exports.*")
+
 if __name__ == "__main__":
     main()

@@ -128,22 +128,6 @@ def get_ship_stock_list(ship_names: list):
                 st.session_state.ship_list_state[ship] = ship
                 st.session_state.csv_ship_list_state[ship] = f"{ship},0,0,0,0,\n"
 
-@st.cache_data(ttl=300, show_spinner=False)
-def _prepare_download_csv(_all_fits_df: pd.DataFrame) -> str:
-    """Cache the download CSV preparation to avoid redundant merge/csv on every rerun."""
-    doctrine_service = get_doctrine_service()
-    targets = doctrine_service.repository.get_all_targets()
-    data = _all_fits_df.merge(targets, on='fit_id', how='left')
-    data = data.reset_index(drop=True)
-    return data.to_csv(index=False)
-
-
-def fitting_download_button():
-    csv_data = _prepare_download_csv(all_fits_df)
-
-    if st.download_button("Download Data", data=csv_data, file_name="wc_doctrine_fits.csv", help="Download all doctrine fit information as a CSV file", mime="text/csv"):
-        st.toast("Data downloaded successfully", icon="✅")
-
 def get_fit_detail_data(fit_id: int) -> pd.DataFrame:
     """
     Get detailed fitting data for a specific fit_id.
@@ -241,8 +225,7 @@ def main():
             fit_summary = get_fit_summary()
             st.markdown("&nbsp;")
             st.markdown("&nbsp;")
-            fitting_download_button()
-            st.markdown("<span style='font-size: 12px; color: #666;'>*Download all doctrine fit data*</span>", unsafe_allow_html=True)
+            st.markdown("<span style='font-size: 12px; color: #666;'>*Use Downloads page for full data export*</span>", unsafe_allow_html=True)
 
         except Exception as e:
             logger.error(f"Error getting fit summary: {e}")
@@ -507,16 +490,6 @@ def main():
                                     column_config=col_config,
                                     width='stretch'
                                 )
-
-                                # Download button for this specific fit
-                                csv = fit_detail_df.to_csv(index=False)
-                                st.download_button(
-                                    label=f"📥 Download Fit {row['fit_id']} Data",
-                                    data=csv,
-                                    file_name=f"fit_{row['fit_id']}_{row['ship_name'].replace(' ', '_')}.csv",
-                                    mime="text/csv",
-                                    key=f"download_fit_{row['fit_id']}"
-                                )
                             else:
                                 st.info("No detailed fitting data available for this fit.")
 
@@ -554,7 +527,7 @@ def main():
         logger.info("Cleared ship selection and session state")
         logger.info(f"Session state ship list: {st.session_state.ship_list_state}")
         logger.info(f"Session state csv ship list: {st.session_state.csv_ship_list_state}")
-        logger.info(f"\n{"-"*60}\n")
+        logger.info("\n" + "-"*60 + "\n")
         st.rerun()
 
     # Module selection
@@ -625,7 +598,7 @@ def main():
         logger.info("Cleared module selection and session state")
         logger.info(f"Session state module list: {st.session_state.module_list_state}")
         logger.info(f"Session state csv module list: {st.session_state.csv_module_list_state}")
-        logger.info(f"\n{"-"*60}\n")
+        logger.info("\n" + "-"*60 + "\n")
         st.rerun()
 
     # Display selected ships if any
