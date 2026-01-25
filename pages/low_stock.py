@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from io import StringIO
 from db_handler import get_update_time, read_df
 from logging_config import setup_logging
 from config import DatabaseConfig
@@ -286,24 +285,10 @@ def main():
             key='low_stock_editor'
         )
 
-        # Download CSV button
+        # Selected items info
         selected_rows = edited_df[edited_df['select'] == True]
         if len(selected_rows) > 0:
-            # Prepare CSV data - remove the select column
-            csv_df = selected_rows.drop(columns=['select'])
-
-            # Convert to CSV
-            csv_buffer = StringIO()
-            csv_df.to_csv(csv_buffer, index=False)
-            csv_data = csv_buffer.getvalue()
-
-            st.download_button(
-                label=f"Download {len(selected_rows)} selected items as CSV",
-                data=csv_data,
-                file_name="low_stock_items.csv",
-                mime="text/csv",
-                use_container_width=True
-            )
+            st.info(f"{len(selected_rows)} items selected. Visit the **Downloads** page for bulk CSV exports.")
 
         # Display charts
         st.subheader("Days Remaining by Item")
