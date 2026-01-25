@@ -410,6 +410,11 @@ def sde_downloads_section():
     st.markdown("Download Static Data Export (SDE) tables. The **sdetypes** table combines the most commonly used fields.")
 
     tables = _get_sde_tables()
+
+    if not tables:
+        st.warning("No SDE tables available.")
+        return
+
     default_index = tables.index("sdetypes") if "sdetypes" in tables else 0
 
     selected_table = st.selectbox(
