@@ -443,6 +443,13 @@ The codebase follows a strict layered architecture. Dependencies must flow **dow
 └─────────────────────────────────────────────────────────────┘
                               │ imports from ↓
 ┌─────────────────────────────────────────────────────────────┐
+│  STATE LAYER (Presentation)                                 │
+│  state/              → Session state management             │
+│    session_state.py  → ss_get, ss_has, ss_init utilities    │
+│    service_registry.py → get_service singleton management   │
+└─────────────────────────────────────────────────────────────┘
+                              │ imports from ↓
+┌─────────────────────────────────────────────────────────────┐
 │  UI LAYER                                                   │
 │  ui/                 → Formatting, column configs, display  │
 │    formatters.py     → Pure formatting functions            │
@@ -483,12 +490,15 @@ The codebase follows a strict layered architecture. Dependencies must flow **dow
 
 | Layer | May Import From | Must NOT Import From |
 |-------|-----------------|----------------------|
-| `pages/` | `ui/`, `facades/`, `services/`, `domain/`, `repositories/` | - |
-| `ui/` | `domain/` only | `services/`, `facades/`, `pages/`, `app.py` |
-| `facades/` | `services/`, `repositories/`, `domain/` | `ui/`, `pages/` |
-| `services/` | `repositories/`, `domain/` | `ui/`, `facades/`, `pages/` |
-| `repositories/` | `domain/`, `config`, `models` | `services/`, `facades/`, `ui/`, `pages/` |
+| `pages/` | `state/`, `ui/`, `facades/`, `services/`, `domain/`, `repositories/` | - |
+| `state/` | `services/`, `repositories/`, `domain/`, `config` | `ui/`, `pages/` |
+| `ui/` | `domain/` only | `services/`, `facades/`, `pages/`, `app.py`, `state/` |
+| `facades/` | `services/`, `repositories/`, `domain/` | `ui/`, `pages/`, `state/` |
+| `services/` | `repositories/`, `domain/`, `config` (NO streamlit†) | `ui/`, `facades/`, `pages/` |
+| `repositories/` | `domain/`, `config`, `models` (NO streamlit†) | `services/`, `facades/`, `ui/`, `pages/` |
 | `domain/` | Python stdlib only | Everything else |
+
+†Services and repositories use try/except imports from `state/` only in factory functions to maintain testability outside Streamlit.
 
 **Common Circular Import Causes:**
 1. **UI importing from services** - UI layer should only use domain enums/models
@@ -545,6 +555,7 @@ from app import logger  # ✗ entry point!
 - **`domain/`**: Core business models (FitItem, FitSummary, StockStatus, ShipRole, PricedItem)
 - **`repositories/`**: Database access layer (DoctrineRepository)
 - **`services/`**: Business logic (DoctrineService, PriceService, PricerService, categorization)
+- **`state/`**: Session state management (ss_get, ss_has, ss_init, get_service)
 - **`facades/`**: Simplified API layer (DoctrineFacade)
 - **`ui/`**: UI formatting utilities and column configurations
 - **`pages/`**: Streamlit application pages

@@ -22,7 +22,6 @@ from sqlalchemy import text
 from config import DatabaseConfig
 from domain.pricer import LocalPriceData
 from logging_config import setup_logging
-import streamlit as st
 
 logger = setup_logging(__name__, log_file="market_orders_repo.log")
 
@@ -234,13 +233,19 @@ def get_market_orders_repository() -> MarketOrdersRepository:
     """
     Get or create a MarketOrdersRepository instance.
 
-    Uses Streamlit session state for persistence across reruns.
+    Uses state.get_service for session state persistence across reruns.
+    Falls back to direct instantiation if state module unavailable.
 
     Returns:
         MarketOrdersRepository instance
     """
-    if 'market_orders_repository' not in st.session_state:
+    def _create_market_orders_repository() -> MarketOrdersRepository:
         db = DatabaseConfig("wcmkt")
-        st.session_state.market_orders_repository = MarketOrdersRepository(db)
+        return MarketOrdersRepository(db)
 
-    return st.session_state.market_orders_repository
+    try:
+        from state import get_service
+        return get_service('market_orders_repository', _create_market_orders_repository)
+    except ImportError:
+        # Fallback for non-Streamlit contexts or missing state module
+        return _create_market_orders_repository()

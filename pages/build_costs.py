@@ -25,7 +25,8 @@ from db_handler import (
     get_4H_price,
     request_type_names,
 )
-from utils import update_industry_index, get_jita_price, ss_init, ss_has
+from utils import update_industry_index, get_jita_price
+from state import ss_init, ss_has
 import datetime
 import time
 API_TIMEOUT = 20.0

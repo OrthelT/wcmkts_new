@@ -19,7 +19,8 @@ from init_db import init_db
 from sync_state import update_wcmkt_state
 from type_info import get_type_id_with_fallback
 from market_metrics import render_ISK_volume_chart_ui, render_ISK_volume_table_ui, render_30day_metrics_ui, render_current_market_status_ui
-from utils import get_jita_price, ss_has, ss_get
+from utils import get_jita_price
+from state import ss_has, ss_get
 
 mkt_db = DatabaseConfig("wcmkt")
 sde_db = DatabaseConfig("sde")

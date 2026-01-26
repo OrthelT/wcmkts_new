@@ -12,7 +12,7 @@ from db_handler import get_update_time
 from services import get_doctrine_service, get_price_service
 from domain import StockStatus
 from ui import get_fitting_column_config, render_progress_bar_html
-from utils import ss_init, ss_get
+from state import ss_init, ss_get
 
 # Insert centralized logging configuration
 logger = setup_logging(__name__, log_file="doctrine_status.log")

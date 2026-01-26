@@ -26,7 +26,6 @@ import pandas as pd
 from domain import FitItem, FitSummary, StockStatus
 from repositories import DoctrineRepository
 from services.price_service import PriceService, FitCostAnalysis
-import streamlit as st
 
 
 # =============================================================================
@@ -1110,7 +1109,8 @@ def get_doctrine_service() -> DoctrineService:
     """
     Get or create a DoctrineService instance.
 
-    Uses Streamlit session state for persistence across reruns.
+    Uses state.get_service for session state persistence across reruns.
+    Falls back to direct instantiation if state module unavailable.
 
     Example:
         from services.doctrine_service import get_doctrine_service
@@ -1118,11 +1118,12 @@ def get_doctrine_service() -> DoctrineService:
         service = get_doctrine_service()
         summaries = service.get_all_fit_summaries()
     """
-
-    if 'doctrine_service' not in st.session_state:
-        st.session_state.doctrine_service = DoctrineService.create_default()
-
-    return st.session_state.doctrine_service
+    try:
+        from state import get_service
+        return get_service('doctrine_service', DoctrineService.create_default)
+    except ImportError:
+        # Fallback for non-Streamlit contexts or missing state module
+        return DoctrineService.create_default()
 
 
 # =============================================================================

@@ -4,11 +4,10 @@ from sqlalchemy import text, bindparam
 import streamlit as st
 
 import requests
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional
 from logging_config import setup_logging
 import time
 from config import DatabaseConfig
-from utils import ss_has, ss_get
 
 mkt_db = DatabaseConfig("wcmkt")
 sde_db = DatabaseConfig("sde")
@@ -274,12 +273,28 @@ def get_all_market_history()->pd.DataFrame:
     df = df.reset_index(drop=True)
     return df
 
-def get_update_time()->str:
-    """Return last local update time as formatted string, handling stale/bool state."""
-    if status := ss_get("local_update_status"):
-        if isinstance(status, dict) and status.get("updated"):
+def get_update_time(local_update_status: Optional[dict] = None) -> Optional[str]:
+    """Return last local update time as formatted string, handling stale/bool state.
+
+    Args:
+        local_update_status: Optional dict containing update status.
+                            If None, attempts to read from session state.
+
+    Returns:
+        Formatted timestamp string or None if unavailable.
+    """
+    # If no parameter passed, try to get from session state
+    if local_update_status is None:
+        try:
+            from state import ss_get
+            local_update_status = ss_get("local_update_status")
+        except ImportError:
+            return None
+
+    if local_update_status:
+        if isinstance(local_update_status, dict) and local_update_status.get("updated"):
             try:
-                return status["updated"].strftime("%Y-%m-%d | %H:%M UTC")
+                return local_update_status["updated"].strftime("%Y-%m-%d | %H:%M UTC")
             except Exception as e:
                 logger.error(f"Failed to format local_update_status.updated: {e}")
     return None
@@ -358,12 +373,32 @@ def get_4H_price(type_id):
     except Exception:
         return None
 
-def new_get_market_data(show_all):
+def new_get_market_data(show_all, category_info: Optional[dict] = None, selected_item_id: Optional[int] = None):
+    """Get market data with optional filtering.
+
+    Args:
+        show_all: Whether to show all data (unused currently)
+        category_info: Optional category filter info dict with 'type_ids' key.
+                      If None, attempts to read from session state.
+        selected_item_id: Optional specific item ID to filter by.
+                         If None, attempts to read from session state.
+    """
     df = get_all_mkt_orders()
 
-    if category_info := ss_get('selected_category_info'):
+    # Try to get filter values from session state if not provided
+    if category_info is None or selected_item_id is None:
+        try:
+            from state import ss_get
+            if category_info is None:
+                category_info = ss_get('selected_category_info')
+            if selected_item_id is None:
+                selected_item_id = ss_get('selected_item_id')
+        except ImportError:
+            pass
+
+    if category_info:
         orders_df = df[df['type_id'].isin(category_info['type_ids'])]
-    if selected_item_id := ss_get('selected_item_id'):
+    if selected_item_id:
         logger.debug(f"selected_item_id: {selected_item_id}")
         orders_df = df[df['type_id'] == selected_item_id]
     else:

@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import millify
 from services import get_doctrine_service
 import numpy as np
-from utils import ss_has, ss_get, ss_init
+from state import ss_has, ss_get, ss_init
 
 logger = setup_logging(__name__)
 
