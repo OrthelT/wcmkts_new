@@ -26,7 +26,7 @@ from db_handler import (
     request_type_names,
 )
 from utils import update_industry_index, get_jita_price
-from state import ss_init, ss_has
+from state import ss_init
 import datetime
 import time
 API_TIMEOUT = 20.0
