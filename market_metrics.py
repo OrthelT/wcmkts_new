@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 import millify
 from services import get_doctrine_service
 import numpy as np
+from utils import ss_has, ss_get, ss_init
 
 logger = setup_logging(__name__)
 
@@ -90,7 +91,7 @@ def wrap_top_n_items(df_7days: pd.DataFrame, df_30days: pd.DataFrame) -> pd.Data
 
     @st.fragment
     def top_n_items_fragment():
-        if "week_month_pill" in st.session_state and "daily_total_pill" in st.session_state and "isk_volume_pill" in st.session_state and "top_items_count" in st.session_state:
+        if ss_has("week_month_pill", "daily_total_pill", "isk_volume_pill", "top_items_count"):
             if df_7days.empty or df_30days.empty:
                 return None
             else:
@@ -673,7 +674,7 @@ def render_top_n_items_ui(df_7days,df_30days)->None:
         isk_volume = "ISK" if st.session_state.isk_volume_pill == 0 else "Volume"
         num_items = st.session_state.top_items_count
 
-        if 'selected_category' in st.session_state and st.session_state.selected_category is not None:
+        if ss_has('selected_category'):
             metric_name = st.session_state.selected_category + "s"
         else:
             metric_name = "Items"
@@ -716,14 +717,14 @@ def render_30day_metrics_ui():
     metrics_category = None
     metrics_item_id = None
 
-    if 'selected_item_id' in st.session_state and st.session_state.selected_item_id is not None:
+    if ss_has('selected_item_id'):
         metrics_item_id = st.session_state.selected_item_id
-    elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
+    elif ss_has('selected_category'):
         metrics_category = st.session_state.selected_category
 
-    if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
+    if ss_has('selected_item'):
         metrics_label = st.session_state.selected_item
-    elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
+    elif ss_has('selected_category'):
         metrics_label = st.session_state.selected_category
     else:
         metrics_label = "All Items"
@@ -853,7 +854,7 @@ def render_current_market_status_ui(sell_data, stats, selected_item, sell_order_
     with col2:
         if not sell_data.empty:
             volume = sell_data['volume_remain'].sum()
-            if pd.notna(volume) and 'selected_item' in st.session_state and st.session_state.selected_item is not None:
+            if pd.notna(volume) and ss_has('selected_item'):
                 display_volume = millify.millify(volume, precision=2)
                 st.metric("Market Stock (sell orders)", f"{display_volume}")
             else:

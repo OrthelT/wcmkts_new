@@ -25,6 +25,7 @@ from logging_config import setup_logging
 from config import DatabaseConfig, get_settings
 from services import get_doctrine_service
 from db_handler import get_all_mkt_orders, get_all_mkt_stats, get_all_market_history, extract_sde_info, read_df
+from utils import ss_get
 
 logger = setup_logging(__name__, log_file="downloads.log")
 
@@ -203,7 +204,7 @@ def market_downloads_section():
         if st.button("Prepare Market Orders", key="prep_orders", use_container_width=True):
             st.session_state.orders_csv_ready = True
 
-        if st.session_state.get('orders_csv_ready'):
+        if ss_get('orders_csv_ready'):
             with st.spinner("Loading market orders..."):
                 csv_data = _get_market_orders_csv()
             st.download_button(
@@ -219,7 +220,7 @@ def market_downloads_section():
         if st.button("Prepare Market Stats", key="prep_stats", use_container_width=True):
             st.session_state.stats_csv_ready = True
 
-        if st.session_state.get('stats_csv_ready'):
+        if ss_get('stats_csv_ready'):
             with st.spinner("Loading market stats..."):
                 csv_data = _get_market_stats_csv()
             st.download_button(
@@ -235,7 +236,7 @@ def market_downloads_section():
         if st.button("Prepare Market History", key="prep_history", use_container_width=True):
             st.session_state.history_csv_ready = True
 
-        if st.session_state.get('history_csv_ready'):
+        if ss_get('history_csv_ready'):
             with st.spinner("Loading market history..."):
                 csv_data = _get_market_history_csv()
             st.download_button(
@@ -282,7 +283,7 @@ def doctrine_downloads_section():
         if st.button("Prepare All Doctrine Fits", key="prep_all_fits", use_container_width=True):
             st.session_state.all_fits_ready = True
 
-        if st.session_state.get('all_fits_ready'):
+        if ss_get('all_fits_ready'):
             with st.spinner("Loading all doctrine fits..."):
                 csv_data = _get_all_doctrine_fits_csv()
             st.download_button(
@@ -306,7 +307,7 @@ def doctrine_downloads_section():
                     st.session_state.filtered_fit_ids = fit_ids
                     st.session_state.filtered_doctrine_name = selected_doctrine
 
-                if st.session_state.get('filtered_fits_ready') and st.session_state.get('filtered_fit_ids') == fit_ids:
+                if ss_get('filtered_fits_ready') and ss_get('filtered_fit_ids') == fit_ids:
                     with st.spinner(f"Loading {selected_doctrine} fits..."):
                         csv_data = _get_filtered_doctrine_csv(fit_ids)
 
@@ -343,7 +344,7 @@ def individual_fit_downloads_section():
             st.session_state.individual_fit_ready = True
             st.session_state.individual_fit_id = fit_id
 
-        if st.session_state.get('individual_fit_ready') and st.session_state.get('individual_fit_id') == fit_id:
+        if ss_get('individual_fit_ready') and ss_get('individual_fit_id') == fit_id:
             with st.spinner("Loading fit data..."):
                 csv_data, ship_name = _get_single_fit_csv(fit_id)
 
@@ -389,7 +390,7 @@ def low_stock_downloads_section():
         st.session_state.low_stock_params = (max_days, doctrine_only, tech2_only)
 
     current_params = (max_days, doctrine_only, tech2_only)
-    if st.session_state.get('low_stock_ready') and st.session_state.get('low_stock_params') == current_params:
+    if ss_get('low_stock_ready') and ss_get('low_stock_params') == current_params:
         with st.spinner("Loading low stock data..."):
             csv_data = _get_low_stock_csv(max_days, doctrine_only, tech2_only)
 
@@ -428,7 +429,7 @@ def sde_downloads_section():
         st.session_state.sde_ready = True
         st.session_state.sde_table = selected_table
 
-    if st.session_state.get('sde_ready') and st.session_state.get('sde_table') == selected_table:
+    if ss_get('sde_ready') and ss_get('sde_table') == selected_table:
         with st.spinner(f"Loading {selected_table}..."):
             csv_data = _get_sde_table_csv(selected_table)
 

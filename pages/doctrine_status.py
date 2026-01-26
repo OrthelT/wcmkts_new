@@ -12,6 +12,7 @@ from db_handler import get_update_time
 from services import get_doctrine_service, get_price_service
 from domain import StockStatus
 from ui import get_fitting_column_config, render_progress_bar_html
+from utils import ss_init, ss_get
 
 # Insert centralized logging configuration
 logger = setup_logging(__name__, log_file="doctrine_status.log")
@@ -65,10 +66,10 @@ def get_module_stock_list(module_names: list):
     """Get lists of modules with their stock quantities for display and CSV export using service."""
 
     # Set the session state variables for the module list and csv module list
-    if not st.session_state.get('module_list_state'):
-        st.session_state.module_list_state = {}
-    if not st.session_state.get('csv_module_list_state'):
-        st.session_state.csv_module_list_state = {}
+    ss_init({
+        'module_list_state': {},
+        'csv_module_list_state': {},
+    })
 
     for module_name in module_names:
         if module_name not in st.session_state.module_list_state:
@@ -108,10 +109,10 @@ def get_ship_stock_list(ship_names: list):
     Args:
         ship_names: List of ship names to query
     """
-    if not st.session_state.get('ship_list_state'):
-        st.session_state.ship_list_state = {}
-    if not st.session_state.get('csv_ship_list_state'):
-        st.session_state.csv_ship_list_state = {}
+    ss_init({
+        'ship_list_state': {},
+        'csv_ship_list_state': {},
+    })
 
     logger.info(f"Ship names: {ship_names}")
     for ship in ship_names:
@@ -192,8 +193,7 @@ def calculate_all_jita_deltas(force_refresh: bool = False):
     """
     import datetime
 
-    if 'jita_deltas' not in st.session_state:
-        st.session_state.jita_deltas = {}
+    ss_init({'jita_deltas': {}})
 
     # Use service to calculate all jita deltas
     try:
@@ -237,8 +237,7 @@ def main():
 
     # Target multiplier
     ds_target_multiplier = 1.0
-    if 'ds_target_multiplier' not in st.session_state:
-        st.session_state.ds_target_multiplier = ds_target_multiplier
+    ss_init({'ds_target_multiplier': ds_target_multiplier})
     with st.sidebar.expander("Target Multiplier"):
         ds_target_multiplier = st.slider("Target Multiplier", min_value=0.5, max_value=2.0, value=1.0, step=0.1)
         st.session_state.ds_target_multiplier = ds_target_multiplier
@@ -256,12 +255,10 @@ def main():
     unique_ships = sorted(fit_summary["ship_name"].unique().tolist())
 
     # Initialize session state for ship selection if not exists
-    if 'selected_ships' not in st.session_state:
-        st.session_state.selected_ships = []
-
-    # Initialize session state for ship display (showing all ships)
-    if 'displayed_ships' not in st.session_state:
-        st.session_state.displayed_ships = unique_ships.copy()
+    ss_init({
+        'selected_ships': [],
+        'displayed_ships': unique_ships.copy(),
+    })
 
     # Module status filter
     st.sidebar.subheader("Module Filters")
@@ -308,8 +305,7 @@ def main():
         return
 
     # Initialize module selection for export
-    if 'selected_modules' not in st.session_state:
-        st.session_state.selected_modules = []
+    ss_init({'selected_modules': []})
 
     # Group the data by ship_group
     grouped_fits = filtered_df.groupby('ship_group')
@@ -688,7 +684,7 @@ def main():
     st.sidebar.markdown("---")
     st.sidebar.subheader("Jita Price Comparison")
 
-    jita_deltas = st.session_state.get('jita_deltas', {})
+    jita_deltas = ss_get('jita_deltas', {})
 
     if not jita_deltas:
         if st.sidebar.button(
