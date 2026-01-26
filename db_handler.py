@@ -8,6 +8,7 @@ from typing import Any, Mapping
 from logging_config import setup_logging
 import time
 from config import DatabaseConfig
+from utils import ss_has, ss_get
 
 mkt_db = DatabaseConfig("wcmkt")
 sde_db = DatabaseConfig("sde")
@@ -275,8 +276,7 @@ def get_all_market_history()->pd.DataFrame:
 
 def get_update_time()->str:
     """Return last local update time as formatted string, handling stale/bool state."""
-    if "local_update_status" in st.session_state:
-        status = st.session_state.local_update_status
+    if status := ss_get("local_update_status"):
         if isinstance(status, dict) and status.get("updated"):
             try:
                 return status["updated"].strftime("%Y-%m-%d | %H:%M UTC")
@@ -361,11 +361,11 @@ def get_4H_price(type_id):
 def new_get_market_data(show_all):
     df = get_all_mkt_orders()
 
-    if 'selected_category_info' in st.session_state and st.session_state.selected_category_info is not None:
-        orders_df = df[df['type_id'].isin(st.session_state.selected_category_info['type_ids'])]
-    if 'selected_item_id' in st.session_state and st.session_state.selected_item_id is not None:
-        logger.debug(f"selected_item_id: {st.session_state.selected_item_id}")
-        orders_df = df[df['type_id'] == st.session_state.selected_item_id]
+    if category_info := ss_get('selected_category_info'):
+        orders_df = df[df['type_id'].isin(category_info['type_ids'])]
+    if selected_item_id := ss_get('selected_item_id'):
+        logger.debug(f"selected_item_id: {selected_item_id}")
+        orders_df = df[df['type_id'] == selected_item_id]
     else:
         orders_df = df
 

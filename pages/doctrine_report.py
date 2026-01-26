@@ -14,6 +14,7 @@ from logging_config import setup_logging
 from services import get_doctrine_service
 from services.categorization import categorize_ship_by_role
 from ui.formatters import get_doctrine_report_column_config, get_image_url, get_ship_role_format
+from utils import ss_init, ss_get
 
 logger = setup_logging(__name__, log_file=__name__)
 
@@ -27,10 +28,10 @@ def get_module_stock_list(module_names: list):
     """Get lists of modules with their stock quantities for display and CSV export using service."""
 
     # Set the session state variables for the module list and csv module list
-    if not st.session_state.get('module_list_state'):
-        st.session_state.module_list_state = {}
-    if not st.session_state.get('csv_module_list_state'):
-        st.session_state.csv_module_list_state = {}
+    ss_init({
+        'module_list_state': {},
+        'csv_module_list_state': {},
+    })
 
     for module_name in module_names:
         if module_name not in st.session_state.module_list_state:
@@ -242,14 +243,11 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
                 st.markdown("<br>", unsafe_allow_html=True)
 
 def main():
-    # Initialize session state for target multiplier
-    if 'target_multiplier' not in st.session_state:
-        st.session_state.target_multiplier = 1.0
-        target_multiplier = st.session_state.target_multiplier
-
-    # Initialize session state for selected modules
-    if 'selected_modules' not in st.session_state:
-        st.session_state.selected_modules = []
+    # Initialize session state for target multiplier and selected modules
+    ss_init({
+        'target_multiplier': 1.0,
+        'selected_modules': [],
+    })
 
     # App title and logo
     # Handle path properly for WSL environment

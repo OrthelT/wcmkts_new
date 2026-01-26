@@ -25,7 +25,7 @@ from db_handler import (
     get_4H_price,
     request_type_names,
 )
-from utils import update_industry_index, get_jita_price
+from utils import update_industry_index, get_jita_price, ss_init, ss_has
 import datetime
 import time
 API_TIMEOUT = 20.0
@@ -574,34 +574,21 @@ def check_industry_index_expiry():
 
 def initialise_session_state():
     logger.info("initialising build cost tool")
-    if "sci_expires" not in st.session_state:
-        st.session_state.sci_expires = None
-    if "sci_last_modified" not in st.session_state:
-        st.session_state.sci_last_modified = None
-    if "etag" not in st.session_state:
-        st.session_state.etag = None
-    if "cost_results" not in st.session_state:
-        st.session_state.cost_results = None
-    if "current_job_params" not in st.session_state:
-        st.session_state.current_job_params = None
-    if "selected_item_for_display" not in st.session_state:
-        st.session_state.selected_item_for_display = None
-    if "price_source" not in st.session_state:
-        st.session_state.price_source = None
-    if "price_source_name" not in st.session_state:
-        st.session_state.price_source_name = None
-    if "calculate_clicked" not in st.session_state:
-        st.session_state.calculate_clicked = False
-    if "button_label" not in st.session_state:
-        st.session_state.button_label = "Calculate"
-    if "current_job_params" not in st.session_state:
-        st.session_state.current_job_params = None
-    if "selected_structure" not in st.session_state:
-        st.session_state.selected_structure = None
-    if "super" not in st.session_state:
-        st.session_state.super = False
-    if "async_mode" not in st.session_state:
-        st.session_state.async_mode = False
+    ss_init({
+        "sci_expires": None,
+        "sci_last_modified": None,
+        "etag": None,
+        "cost_results": None,
+        "current_job_params": None,
+        "selected_item_for_display": None,
+        "price_source": None,
+        "price_source_name": None,
+        "calculate_clicked": False,
+        "button_label": "Calculate",
+        "selected_structure": None,
+        "super": False,
+        "async_mode": False,
+    })
     st.session_state.initialised = True
 
     try:

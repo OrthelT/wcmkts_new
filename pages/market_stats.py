@@ -19,7 +19,7 @@ from init_db import init_db
 from sync_state import update_wcmkt_state
 from type_info import get_type_id_with_fallback
 from market_metrics import render_ISK_volume_chart_ui, render_ISK_volume_table_ui, render_30day_metrics_ui, render_current_market_status_ui
-from utils import get_jita_price
+from utils import get_jita_price, ss_has, ss_get
 
 mkt_db = DatabaseConfig("wcmkt")
 sde_db = DatabaseConfig("sde")
@@ -688,7 +688,7 @@ def main():
     service = _get_service()
 
     if not sell_data.empty:
-        if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
+        if ss_has('selected_item'):
             selected_item = st.session_state.selected_item
             sell_data = sell_data[sell_data['type_name'] == selected_item]
 
@@ -696,8 +696,7 @@ def main():
                 buy_data = buy_data[buy_data['type_name'] == selected_item]
             stats = stats[stats['type_name'] == selected_item]
 
-            if 'selected_item_id' in st.session_state:
-                selected_item_id = st.session_state.selected_item_id
+            if selected_item_id := ss_get('selected_item_id'):
                 logger.debug(f"selected_item_id in st.session_state: {selected_item_id}")
             else:
                 logger.debug(f"selected_item_id not in st.session_state, getting backup type id")
@@ -735,7 +734,7 @@ def main():
             selected_item_id = None
             fit_df = pd.DataFrame()
 
-        elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
+        elif ss_has('selected_category'):
             selected_category = st.session_state.selected_category
 
             stats = stats[stats['category_name'] == selected_category]
@@ -772,12 +771,10 @@ def main():
         # Create headers for different filter states
         if show_all:
             st.header("All Sell Orders", divider="green")
-        elif 'selected_item' in st.session_state and st.session_state.selected_item is not None:
+        elif ss_has('selected_item'):
             selected_item = st.session_state.selected_item
-            if 'selected_item_id' in st.session_state:
-                selected_item_id = st.session_state.selected_item_id
-            else:
-                selected_item_id = get_type_id_with_fallback(selected_item)
+            selected_item_id = ss_get('selected_item_id') or get_type_id_with_fallback(selected_item)
+            if 'selected_item_id' not in st.session_state:
                 st.session_state.selected_item_id = selected_item_id
             try:
                 image_id = selected_item_id
@@ -812,7 +809,7 @@ def main():
                 except Exception as e:
                     logger.error(f"Error: {e}")
                     pass
-        elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
+        elif ss_has('selected_category'):
             selected_category = st.session_state.selected_category
             st.header(selected_category + "s", divider="green")
 
@@ -839,10 +836,10 @@ def main():
         display_df = sell_data.copy()
 
         # Add subheader for sell orders section
-        if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
+        if ss_has('selected_item'):
             selected_item = st.session_state.selected_item
             st.subheader("Sell Orders for " + selected_item, divider="blue")
-        elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
+        elif ss_has('selected_category'):
             selected_category = st.session_state.selected_category
             cat_label = selected_category
             if not cat_label.endswith("s"):
@@ -862,11 +859,11 @@ def main():
             st.subheader("All Buy Orders", divider="orange")
         else:
                 # Display buy orders header
-            if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
+            if ss_has('selected_item'):
                 selected_item = st.session_state.selected_item
                 type_name = selected_item
                 st.subheader(f"Buy Orders for {type_name}", divider="orange")
-            elif 'selected_category' in st.session_state and st.session_state.selected_category is not None:
+            elif ss_has('selected_category'):
                 selected_category = st.session_state.selected_category
                 cat_label = selected_category
                 if cat_label.endswith("s"):
@@ -927,10 +924,10 @@ def main():
             render_ISK_volume_table_ui()
 
     # Get selected_item from session state if available
-    if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
+    if ss_has('selected_item'):
         selected_item = st.session_state.selected_item
-        if 'selected_item_id' in st.session_state and st.session_state.selected_item_id is not None:
-            selected_item_id = st.session_state.selected_item_id
+        if selected_item_id := ss_get('selected_item_id'):
+            pass
         else:
             try:
                 selected_item_id = get_type_id_with_fallback(selected_item)
@@ -970,14 +967,8 @@ def main():
     if fit_df.empty is False and fit_df is not None:
         st.subheader("Fitting Data",divider="blue")
 
-        if 'selected_item' in st.session_state and st.session_state.selected_item is not None:
-            selected_item = st.session_state.selected_item
-        else:
-            selected_item = " "
-        if 'selected_item_id' in st.session_state and st.session_state.selected_item_id is not None:
-            selected_item_id = st.session_state.selected_item_id
-        else:
-            selected_item_id = get_type_id_with_fallback(selected_item)
+        selected_item = ss_get('selected_item', " ")
+        selected_item_id = ss_get('selected_item_id') or get_type_id_with_fallback(selected_item)
         try:
             fit_id = fit_df['fit_id'].iloc[0]
         except Exception as e:
