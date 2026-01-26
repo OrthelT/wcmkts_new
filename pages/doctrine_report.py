@@ -14,7 +14,7 @@ from logging_config import setup_logging
 from services import get_doctrine_service
 from services.categorization import categorize_ship_by_role
 from ui.formatters import get_doctrine_report_column_config, get_image_url, get_ship_role_format
-from utils import ss_init, ss_get
+from state import ss_init, ss_get
 
 logger = setup_logging(__name__, log_file=__name__)
 

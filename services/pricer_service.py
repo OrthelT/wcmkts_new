@@ -491,12 +491,15 @@ def get_pricer_service() -> PricerService:
     """
     Get or create a PricerService instance.
 
-    Uses Streamlit session state for persistence.
+    Uses state.get_service for session state persistence across reruns.
+    Falls back to direct instantiation if state module unavailable.
 
     Returns:
         PricerService instance
     """
-    if 'pricer_service' not in st.session_state:
-        st.session_state.pricer_service = PricerService.create_default()
-
-    return st.session_state.pricer_service
+    try:
+        from state import get_service
+        return get_service('pricer_service', PricerService.create_default)
+    except ImportError:
+        # Fallback for non-Streamlit contexts or missing state module
+        return PricerService.create_default()

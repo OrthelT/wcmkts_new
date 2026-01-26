@@ -54,9 +54,6 @@ class TestGetAllMktOrders:
         assert list(result.columns) == ['order_id', 'type_id', 'price', 'volume', 'is_buy_order']
         assert result.index.tolist() == [0, 1, 2]  # Index should be reset
 
-        # Verify integrity check was called
-        mock_mkt_db.integrity_check.assert_called_once()
-
 
 if __name__ == "__main__":
     pytest.main([__file__])

@@ -752,8 +752,8 @@ def get_price_service() -> PriceService:
     """
     Get or create a PriceService instance.
 
-    Uses Streamlit session state for persistence across reruns.
-    This is the recommended way to get the service in Streamlit pages.
+    Uses state.get_service for session state persistence across reruns.
+    Falls back to direct instantiation if state module unavailable.
 
     Example:
         from services.price_service import get_price_service
@@ -761,8 +761,7 @@ def get_price_service() -> PriceService:
         service = get_price_service()
         prices = service.get_jita_prices([34, 35, 36])
     """
-
-    if 'price_service' not in st.session_state:
+    def _create_price_service() -> PriceService:
         # Get API key from secrets if available
         janice_key = None
         try:
@@ -771,12 +770,17 @@ def get_price_service() -> PriceService:
             pass
 
         db_config = DatabaseConfig("wcmkt")
-        st.session_state.price_service = PriceService.create_default(
+        return PriceService.create_default(
             db_config=db_config,
             janice_api_key=janice_key
         )
 
-    return st.session_state.price_service
+    try:
+        from state import get_service
+        return get_service('price_service', _create_price_service)
+    except ImportError:
+        # Fallback for non-Streamlit contexts or missing state module
+        return _create_price_service()
 
 
 # =============================================================================

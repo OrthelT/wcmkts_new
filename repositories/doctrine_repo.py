@@ -516,12 +516,11 @@ def _load_preferred_fits() -> dict[str, int]:
 # =============================================================================
 
 def get_doctrine_repository() -> DoctrineRepository:
-    logger.debug("Getting DoctrineRepository")
     """
     Get or create a DoctrineRepository instance.
 
-    Uses Streamlit session state for persistence across reruns.
-    This is the recommended way to get the repository in Streamlit pages.
+    Uses state.get_service for session state persistence across reruns.
+    Falls back to direct instantiation if state module unavailable.
 
     Example:
         from repositories import get_doctrine_repository
@@ -529,12 +528,19 @@ def get_doctrine_repository() -> DoctrineRepository:
         repo = get_doctrine_repository()
         fits = repo.get_all_fits()
     """
-    if 'doctrine_repository' not in st.session_state:
-        logger.debug("Creating DoctrineRepository instance in session state")
-        db = DatabaseConfig("wcmkt")
-        st.session_state.doctrine_repository = DoctrineRepository(db)
+    logger.debug("Getting DoctrineRepository")
 
-    return st.session_state.doctrine_repository
+    def _create_doctrine_repository() -> DoctrineRepository:
+        logger.debug("Creating DoctrineRepository instance")
+        db = DatabaseConfig("wcmkt")
+        return DoctrineRepository(db)
+
+    try:
+        from state import get_service
+        return get_service('doctrine_repository', _create_doctrine_repository)
+    except ImportError:
+        # Fallback for non-Streamlit contexts or missing state module
+        return _create_doctrine_repository()
 
 
 # =============================================================================
