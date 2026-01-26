@@ -26,6 +26,9 @@ import pandas as pd
 from domain import FitItem, FitSummary, StockStatus
 from repositories import DoctrineRepository
 from services.price_service import PriceService, FitCostAnalysis
+from logging_config import setup_logging
+
+logger = setup_logging(__name__, log_file="doctrine_service.log")
 
 
 # =============================================================================
@@ -1122,7 +1125,7 @@ def get_doctrine_service() -> DoctrineService:
         from state import get_service
         return get_service('doctrine_service', DoctrineService.create_default)
     except ImportError:
-        # Fallback for non-Streamlit contexts or missing state module
+        logger.debug("state module unavailable, creating new DoctrineService instance")
         return DoctrineService.create_default()
 
 

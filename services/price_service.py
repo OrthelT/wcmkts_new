@@ -24,6 +24,9 @@ import requests
 import pandas as pd
 import streamlit as st
 from config import DatabaseConfig
+from logging_config import setup_logging
+
+logger = setup_logging(__name__, log_file="price_service.log")
 
 # Type alias for clarity
 TypeID = int
@@ -779,7 +782,7 @@ def get_price_service() -> PriceService:
         from state import get_service
         return get_service('price_service', _create_price_service)
     except ImportError:
-        # Fallback for non-Streamlit contexts or missing state module
+        logger.debug("state module unavailable, creating new PriceService instance")
         return _create_price_service()
 
 

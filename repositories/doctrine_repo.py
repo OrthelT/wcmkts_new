@@ -539,7 +539,7 @@ def get_doctrine_repository() -> DoctrineRepository:
         from state import get_service
         return get_service('doctrine_repository', _create_doctrine_repository)
     except ImportError:
-        # Fallback for non-Streamlit contexts or missing state module
+        logger.debug("state module unavailable, creating new DoctrineRepository instance")
         return _create_doctrine_repository()
 
 

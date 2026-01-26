@@ -247,5 +247,5 @@ def get_market_orders_repository() -> MarketOrdersRepository:
         from state import get_service
         return get_service('market_orders_repository', _create_market_orders_repository)
     except ImportError:
-        # Fallback for non-Streamlit contexts or missing state module
+        logger.debug("state module unavailable, creating new MarketOrdersRepository instance")
         return _create_market_orders_repository()

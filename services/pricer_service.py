@@ -501,5 +501,5 @@ def get_pricer_service() -> PricerService:
         from state import get_service
         return get_service('pricer_service', PricerService.create_default)
     except ImportError:
-        # Fallback for non-Streamlit contexts or missing state module
+        logger.debug("state module unavailable, creating new PricerService instance")
         return PricerService.create_default()

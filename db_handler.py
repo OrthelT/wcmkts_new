@@ -289,6 +289,7 @@ def get_update_time(local_update_status: Optional[dict] = None) -> Optional[str]
             from state import ss_get
             local_update_status = ss_get("local_update_status")
         except ImportError:
+            logger.debug("state module unavailable, cannot retrieve local_update_status")
             return None
 
     if local_update_status:
@@ -394,7 +395,7 @@ def new_get_market_data(show_all, category_info: Optional[dict] = None, selected
             if selected_item_id is None:
                 selected_item_id = ss_get('selected_item_id')
         except ImportError:
-            pass
+            logger.debug("state module unavailable, using provided filter values only")
 
     if category_info:
         orders_df = df[df['type_id'].isin(category_info['type_ids'])]
