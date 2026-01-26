@@ -491,7 +491,7 @@ The codebase follows a strict layered architecture. Dependencies must flow **dow
 | Layer | May Import From | Must NOT Import From |
 |-------|-----------------|----------------------|
 | `pages/` | `state/`, `ui/`, `facades/`, `services/`, `domain/`, `repositories/` | - |
-| `state/` | `services/`, `repositories/`, `domain/`, `config` | `ui/`, `pages/` |
+| `state/` | `streamlit`, `typing`, `domain/` (type hints only) | `services/`, `repositories/`, `ui/`, `pages/`, `config` |
 | `ui/` | `domain/` only | `services/`, `facades/`, `pages/`, `app.py`, `state/` |
 | `facades/` | `services/`, `repositories/`, `domain/` | `ui/`, `pages/`, `state/` |
 | `services/` | `repositories/`, `domain/`, `config` (NO streamlit†) | `ui/`, `facades/`, `pages/` |
@@ -504,6 +504,7 @@ The codebase follows a strict layered architecture. Dependencies must flow **dow
 1. **UI importing from services** - UI layer should only use domain enums/models
 2. **Importing from `app.py`** - Entry point should never be imported
 3. **Services importing from facades** - Facades wrap services, not vice versa
+4. **State importing from services/repositories** - Since services and repositories import from `state/` in their factory functions, the `state/` module must NOT import from them (would cause circular dependency)
 
 **Example - Correct Pattern:**
 ```python
