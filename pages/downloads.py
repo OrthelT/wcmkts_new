@@ -2,7 +2,8 @@
 Downloads Page
 
 Centralized download page for all CSV exports.
-Data is loaded lazily to improve performance.
+Uses Streamlit's callable pattern for lazy data loading - data is only
+generated when the user clicks the download button.
 
 Downloads available:
 - Market Data: Orders, Stats, History
@@ -25,7 +26,6 @@ from logging_config import setup_logging
 from config import DatabaseConfig, get_settings
 from services import get_doctrine_service
 from db_handler import get_all_mkt_orders, get_all_mkt_stats, get_all_market_history, extract_sde_info, read_df
-from utils import ss_get
 
 logger = setup_logging(__name__, log_file="downloads.log")
 
@@ -38,35 +38,35 @@ market_short_name = settings['market']['short_name']
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
-def _get_market_orders_csv() -> str:
-    """Lazily load and convert market orders to CSV."""
+def _get_market_orders_csv() -> bytes:
+    """Lazily load and convert market orders to CSV bytes."""
     df = get_all_mkt_orders()
-    return df.to_csv(index=False)
+    return df.to_csv(index=False).encode('utf-8')
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
-def _get_market_stats_csv() -> str:
-    """Lazily load and convert market stats to CSV."""
+def _get_market_stats_csv() -> bytes:
+    """Lazily load and convert market stats to CSV bytes."""
     df = get_all_mkt_stats()
-    return df.to_csv(index=False)
+    return df.to_csv(index=False).encode('utf-8')
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
-def _get_market_history_csv() -> str:
-    """Lazily load and convert market history to CSV."""
+def _get_market_history_csv() -> bytes:
+    """Lazily load and convert market history to CSV bytes."""
     df = get_all_market_history()
-    return df.to_csv(index=False)
+    return df.to_csv(index=False).encode('utf-8')
 
 
 @st.cache_data(ttl=600, show_spinner=False)
-def _get_all_doctrine_fits_csv() -> str:
-    """Lazily load all doctrine fits data as CSV."""
+def _get_all_doctrine_fits_csv() -> bytes:
+    """Lazily load all doctrine fits data as CSV bytes."""
     service = get_doctrine_service()
     all_fits_df = service.build_fit_data().raw_df
     targets = service.repository.get_all_targets()
     data = all_fits_df.merge(targets, on='fit_id', how='left')
     data = data.reset_index(drop=True)
-    return data.to_csv(index=False)
+    return data.to_csv(index=False).encode('utf-8')
 
 
 @st.cache_data(ttl=600, show_spinner=False)
@@ -97,8 +97,8 @@ def _get_doctrine_options() -> list[dict]:
 
 
 @st.cache_data(ttl=600, show_spinner=False)
-def _get_filtered_doctrine_csv(fit_ids: tuple) -> str:
-    """Get doctrine data filtered by fit_ids."""
+def _get_filtered_doctrine_csv(fit_ids: tuple) -> bytes:
+    """Get doctrine data filtered by fit_ids as CSV bytes."""
     service = get_doctrine_service()
     all_fits_df = service.build_fit_data().raw_df
     targets = service.repository.get_all_targets()
@@ -107,27 +107,22 @@ def _get_filtered_doctrine_csv(fit_ids: tuple) -> str:
     filtered_df = all_fits_df[all_fits_df['fit_id'].isin(fit_ids)]
     data = filtered_df.merge(targets, on='fit_id', how='left')
     data = data.reset_index(drop=True)
-    return data.to_csv(index=False)
+    return data.to_csv(index=False).encode('utf-8')
 
 
 @st.cache_data(ttl=600, show_spinner=False)
-def _get_single_fit_csv(fit_id: int) -> tuple[str, str]:
-    """Get CSV data for a single fit."""
+def _get_single_fit_csv(fit_id: int) -> bytes:
+    """Get CSV bytes for a single fit."""
     service = get_doctrine_service()
     fit_df = service.repository.get_fit_by_id(fit_id)
     if fit_df.empty:
-        return "", ""
-
-    # Get ship name for filename
-    ship_name = fit_df['ship_name'].iloc[0] if 'ship_name' in fit_df.columns else "unknown"
-    ship_name_clean = ship_name.replace(' ', '_')
-
-    return fit_df.to_csv(index=False), ship_name_clean
+        return b""
+    return fit_df.to_csv(index=False).encode('utf-8')
 
 
 @st.cache_data(ttl=600, show_spinner=False)
-def _get_low_stock_csv(max_days: float, doctrine_only: bool, tech2_only: bool) -> str:
-    """Get low stock items as CSV."""
+def _get_low_stock_csv(max_days: float, doctrine_only: bool, tech2_only: bool) -> bytes:
+    """Get low stock items as CSV bytes."""
     mktdb = DatabaseConfig("wcmkt")
     sde_db = DatabaseConfig("sde")
 
@@ -171,14 +166,14 @@ def _get_low_stock_csv(max_days: float, doctrine_only: bool, tech2_only: bool) -
     columns_to_drop = ['min_price', 'avg_price', 'category_id', 'group_id', 'is_doctrine']
     df = df.drop(columns=[c for c in columns_to_drop if c in df.columns], errors='ignore')
 
-    return df.to_csv(index=False)
+    return df.to_csv(index=False).encode('utf-8')
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def _get_sde_table_csv(table_name: str) -> str:
-    """Get SDE table as CSV."""
+def _get_sde_table_csv(table_name: str) -> bytes:
+    """Get SDE table as CSV bytes."""
     df = extract_sde_info("sde", params={"table_name": table_name})
-    return df.to_csv(index=False)
+    return df.to_csv(index=False).encode('utf-8')
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -189,64 +184,45 @@ def _get_sde_tables() -> list[str]:
 
 
 # =============================================================================
-# UI Fragments for Lazy Loading
+# UI Sections
 # =============================================================================
 
-@st.fragment
 def market_downloads_section():
-    """Fragment for market data downloads."""
+    """Section for market data downloads."""
     st.subheader("Market Data Downloads", divider="blue")
     st.markdown("Download market orders, statistics, and history data.")
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        if st.button("Prepare Market Orders", key="prep_orders", use_container_width=True):
-            st.session_state.orders_csv_ready = True
-
-        if ss_get('orders_csv_ready'):
-            with st.spinner("Loading market orders..."):
-                csv_data = _get_market_orders_csv()
-            st.download_button(
-                "Download Market Orders",
-                data=csv_data,
-                file_name=f"{market_short_name}_market_orders.csv",
-                mime="text/csv",
-                use_container_width=True,
-                icon=":material/download:"
-            )
+        st.download_button(
+            "Download Market Orders",
+            data=_get_market_orders_csv,
+            file_name=f"{market_short_name}_market_orders.csv",
+            mime="text/csv",
+            use_container_width=True,
+            icon=":material/download:"
+        )
 
     with col2:
-        if st.button("Prepare Market Stats", key="prep_stats", use_container_width=True):
-            st.session_state.stats_csv_ready = True
-
-        if ss_get('stats_csv_ready'):
-            with st.spinner("Loading market stats..."):
-                csv_data = _get_market_stats_csv()
-            st.download_button(
-                "Download Market Stats",
-                data=csv_data,
-                file_name=f"{market_short_name}_market_stats.csv",
-                mime="text/csv",
-                use_container_width=True,
-                icon=":material/download:"
-            )
+        st.download_button(
+            "Download Market Stats",
+            data=_get_market_stats_csv,
+            file_name=f"{market_short_name}_market_stats.csv",
+            mime="text/csv",
+            use_container_width=True,
+            icon=":material/download:"
+        )
 
     with col3:
-        if st.button("Prepare Market History", key="prep_history", use_container_width=True):
-            st.session_state.history_csv_ready = True
-
-        if ss_get('history_csv_ready'):
-            with st.spinner("Loading market history..."):
-                csv_data = _get_market_history_csv()
-            st.download_button(
-                "Download Market History",
-                data=csv_data,
-                file_name=f"{market_short_name}_market_history.csv",
-                mime="text/csv",
-                use_container_width=True,
-                icon=":material/download:"
-            )
+        st.download_button(
+            "Download Market History",
+            data=_get_market_history_csv,
+            file_name=f"{market_short_name}_market_history.csv",
+            mime="text/csv",
+            use_container_width=True,
+            icon=":material/download:"
+        )
 
 
 @st.fragment
@@ -280,20 +256,14 @@ def doctrine_downloads_section():
 
     # Download button
     if filter_type == "All Fits":
-        if st.button("Prepare All Doctrine Fits", key="prep_all_fits", use_container_width=True):
-            st.session_state.all_fits_ready = True
-
-        if ss_get('all_fits_ready'):
-            with st.spinner("Loading all doctrine fits..."):
-                csv_data = _get_all_doctrine_fits_csv()
-            st.download_button(
-                "Download All Doctrine Fits",
-                data=csv_data,
-                file_name="wc_doctrine_fits.csv",
-                mime="text/csv",
-                use_container_width=True,
-                icon=":material/download:"
-            )
+        st.download_button(
+            "Download All Doctrine Fits",
+            data=_get_all_doctrine_fits_csv,
+            file_name="wc_doctrine_fits.csv",
+            mime="text/csv",
+            use_container_width=True,
+            icon=":material/download:"
+        )
     else:
         if selected_doctrine and selected_doctrine != "Select a doctrine...":
             doctrines = _get_doctrine_options()
@@ -301,25 +271,16 @@ def doctrine_downloads_section():
 
             if doctrine_data:
                 fit_ids = tuple(doctrine_data['fit_ids'])
+                safe_name = selected_doctrine.replace(' ', '_').lower()
 
-                if st.button(f"Prepare {selected_doctrine} Data", key="prep_filtered_fits", use_container_width=True):
-                    st.session_state.filtered_fits_ready = True
-                    st.session_state.filtered_fit_ids = fit_ids
-                    st.session_state.filtered_doctrine_name = selected_doctrine
-
-                if ss_get('filtered_fits_ready') and ss_get('filtered_fit_ids') == fit_ids:
-                    with st.spinner(f"Loading {selected_doctrine} fits..."):
-                        csv_data = _get_filtered_doctrine_csv(fit_ids)
-
-                    safe_name = selected_doctrine.replace(' ', '_').lower()
-                    st.download_button(
-                        f"Download {selected_doctrine}",
-                        data=csv_data,
-                        file_name=f"doctrine_{safe_name}.csv",
-                        mime="text/csv",
-                        use_container_width=True,
-                        icon=":material/download:"
-                    )
+                st.download_button(
+                    f"Download {selected_doctrine}",
+                    data=lambda fids=fit_ids: _get_filtered_doctrine_csv(fids),
+                    file_name=f"doctrine_{safe_name}.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                    icon=":material/download:"
+                )
 
 
 @st.fragment
@@ -329,7 +290,7 @@ def individual_fit_downloads_section():
     st.markdown("Download detailed data for a specific fit.")
 
     fits = _get_fit_options()
-    fit_options = {f"{f['ship_name']} (ID: {f['fit_id']})": f['fit_id'] for f in fits}
+    fit_options = {f"{f['ship_name']} (ID: {f['fit_id']})": f for f in fits}
 
     selected_fit_label = st.selectbox(
         "Select Fit",
@@ -338,27 +299,18 @@ def individual_fit_downloads_section():
     )
 
     if selected_fit_label and selected_fit_label != "Select a fit...":
-        fit_id = fit_options[selected_fit_label]
+        fit_data = fit_options[selected_fit_label]
+        fit_id = fit_data['fit_id']
+        ship_name = fit_data['ship_name'].replace(' ', '_')
 
-        if st.button(f"Prepare Fit Data", key="prep_individual_fit", use_container_width=True):
-            st.session_state.individual_fit_ready = True
-            st.session_state.individual_fit_id = fit_id
-
-        if ss_get('individual_fit_ready') and ss_get('individual_fit_id') == fit_id:
-            with st.spinner("Loading fit data..."):
-                csv_data, ship_name = _get_single_fit_csv(fit_id)
-
-            if csv_data:
-                st.download_button(
-                    f"Download Fit {fit_id}",
-                    data=csv_data,
-                    file_name=f"fit_{fit_id}_{ship_name}.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                    icon=":material/download:"
-                )
-            else:
-                st.warning("No data found for this fit.")
+        st.download_button(
+            f"Download Fit {fit_id}",
+            data=lambda fid=fit_id: _get_single_fit_csv(fid),
+            file_name=f"fit_{fit_id}_{ship_name}.csv",
+            mime="text/csv",
+            use_container_width=True,
+            icon=":material/download:"
+        )
 
 
 @st.fragment
@@ -385,23 +337,14 @@ def low_stock_downloads_section():
     with col3:
         tech2_only = st.checkbox("Tech 2 Items Only", key="low_stock_tech2_only")
 
-    if st.button("Prepare Low Stock Data", key="prep_low_stock", use_container_width=True):
-        st.session_state.low_stock_ready = True
-        st.session_state.low_stock_params = (max_days, doctrine_only, tech2_only)
-
-    current_params = (max_days, doctrine_only, tech2_only)
-    if ss_get('low_stock_ready') and ss_get('low_stock_params') == current_params:
-        with st.spinner("Loading low stock data..."):
-            csv_data = _get_low_stock_csv(max_days, doctrine_only, tech2_only)
-
-        st.download_button(
-            "Download Low Stock Items",
-            data=csv_data,
-            file_name="low_stock_items.csv",
-            mime="text/csv",
-            use_container_width=True,
-            icon=":material/download:"
-        )
+    st.download_button(
+        "Download Low Stock Items",
+        data=lambda md=max_days, do=doctrine_only, t2=tech2_only: _get_low_stock_csv(md, do, t2),
+        file_name="low_stock_items.csv",
+        mime="text/csv",
+        use_container_width=True,
+        icon=":material/download:"
+    )
 
 
 @st.fragment
@@ -425,22 +368,14 @@ def sde_downloads_section():
         key="sde_table_select"
     )
 
-    if st.button("Prepare SDE Table", key="prep_sde", use_container_width=True):
-        st.session_state.sde_ready = True
-        st.session_state.sde_table = selected_table
-
-    if ss_get('sde_ready') and ss_get('sde_table') == selected_table:
-        with st.spinner(f"Loading {selected_table}..."):
-            csv_data = _get_sde_table_csv(selected_table)
-
-        st.download_button(
-            f"Download {selected_table}",
-            data=csv_data,
-            file_name=f"{selected_table}.csv",
-            mime="text/csv",
-            use_container_width=True,
-            icon=":material/download:"
-        )
+    st.download_button(
+        f"Download {selected_table}",
+        data=lambda tbl=selected_table: _get_sde_table_csv(tbl),
+        file_name=f"{selected_table}.csv",
+        mime="text/csv",
+        use_container_width=True,
+        icon=":material/download:"
+    )
 
 
 # =============================================================================
@@ -461,12 +396,6 @@ def main():
         st.markdown("*Centralized data export for all market and doctrine data*")
 
     st.divider()
-
-    # Info box
-    st.info(
-        "Click **Prepare** to load the data, then click **Download** to save the CSV file. "
-        "Data is cached to improve performance on subsequent downloads."
-    )
 
     # Download sections
     market_downloads_section()
