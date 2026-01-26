@@ -68,7 +68,7 @@ uv run pytest --cov
 ## Project Structure & Module Organization
 
 ### Application Entry Point
-- **`app.py`**: Streamlit entry point with page routing to 5 main pages across 2 sections ("Market Stats" and "Analysis Tools")
+- **`app.py`**: Streamlit entry point with page routing to 7 main pages across 2 sections ("Market Stats" and "Analysis Tools")
 
 ### UI Pages (`pages/` directory)
 All pages follow consistent patterns with Streamlit best practices:
@@ -78,6 +78,8 @@ All pages follow consistent patterns with Streamlit best practices:
 3. **`doctrine_report.py`** (📝 Doctrine Report) - Detailed doctrine analysis and reporting
 4. **`low_stock.py`** (⚠️ Low Stock) - Low inventory alerting system with category filtering
 5. **`build_costs.py`** (🏗️ Build Costs) - Manufacturing cost analysis with structure/rig configuration and industry indices
+6. **`downloads.py`** (📥 Downloads) - Centralized CSV export for market data, doctrine fits, low stock items, and SDE tables. Uses Streamlit's callable pattern for lazy data loading.
+7. **`pricer.py`** (💰 Pricer) - Item and fitting price calculator similar to [Janice](https://janice.e-351.com/). Accepts EFT fittings or tab-separated item lists and displays both Jita and 4-HWWF market prices.
 
 ### Core Modules
 
@@ -102,6 +104,16 @@ All pages follow consistent patterns with Streamlit best practices:
   - Jita price lookups with Fuzzworks API fallback
 - **`market_metrics.py`**: Market analysis metrics and UI rendering for ISK volume charts, historical metrics
 - **`type_info.py`**: Type name/ID resolution with SDE database queries and Fuzzworks API fallback
+
+**Pricer Module (`parser/` directory):**
+- **`parser.py`**: Input parsing for EFT fittings and tab-separated item lists (contributed open source code)
+- **`model.py`**: Data models for the parser
+- **`sample_eft-fit.txt`**: Example EFT fitting for testing
+- **`items.txt`**: Sample tab-separated item list for testing
+
+**Pricer Service Layer:**
+- **`services/pricer_service.py`**: PricerService orchestrates parsing and price lookups from Jita (via Janice API or Fuzzworks) and 4-HWWF (local market database)
+- **`domain/pricer.py`**: Domain models including `PricedItem`, `PricingResult`, and `InputFormat` enum for EFT vs multibuy detection
 
 **Initialization & State:**
 - **`init_db.py`**: Database initialization with path verification and auto-sync for missing files
@@ -210,6 +222,7 @@ TURSO_DATABASE_URL = "libsql://your-database.turso.io"
 TURSO_AUTH_TOKEN = "your_turso_auth_token"
 SDE_URL = "libsql://your-sde.turso.io"
 SDE_AUTH_TOKEN = "your_sde_auth_token"
+JANICE_API_KEY = "your_janice_api_key"  # For Pricer page Jita price lookups
 ```
 
 ### Local Development Notes
@@ -288,6 +301,7 @@ df = get_all_mkt_stats()  # Returns cached pandas DataFrame
 - **Connection pooling**: DatabaseConfig manages connection pooling automatically
 - **Concurrent reads**: Multiple read operations can occur simultaneously thanks to RWLock
 - **Malformed DB recovery**: Built into `db_handler.py` read functions
+- **Lazy download generation**: Use `st.download_button(data=callable)` pattern for on-demand data generation. Pass a function reference (not the result) to defer data loading until user clicks download. See `pages/downloads.py` for examples.
 
 ### Data Synchronization
 
@@ -373,14 +387,14 @@ Include in PR description:
 ## Architecture Summary
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     Streamlit Frontend                      │
-│                        (app.py)                             │
-│  ┌──────────┬──────────┬──────────┬──────────┬──────────┐  │
-│  │ Market   │ Doctrine │ Doctrine │ Low      │ Build    │  │
-│  │ Stats    │ Status   │ Report   │ Stock    │ Costs    │  │
-│  └──────────┴──────────┴──────────┴──────────┴──────────┘  │
-└────────────────────────┬────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────────────────┐
+│                              Streamlit Frontend                                       │
+│                                 (app.py)                                              │
+│  ┌──────────┬──────────┬──────────┬──────────┬──────────┬───────────┬───────────────┐ │
+│  │ Market   │ Doctrine │ Doctrine │ Low      │ Build    │ Downloads │ Pricer        │ │
+│  │ Stats    │ Status   │ Report   │ Stock    │ Costs    │           │               │ │
+│  └──────────┴──────────┴──────────┴──────────┴──────────┴───────────┴───────────────┘ │
+└───────────────────────────────────────┬───────────────────────────────────────────────┘
                          │
                          ▼
 ┌─────────────────────────────────────────────────────────────┐
@@ -519,6 +533,7 @@ from app import logger  # ✗ entry point!
 - `database_config.md` - Database configuration and Turso sync details
 - `concurrency_refactor.md` - RWLock implementation and concurrency patterns
 - `testing.md` - Testing guidelines and pytest patterns
+- `parser_feature.md` - Pricer/parser feature requirements and acceptance criteria
 
 **Guides:**
 - `admin_guide.md` - Administrative guide for managing the application
@@ -527,12 +542,13 @@ from app import logger  # ✗ entry point!
 - `worktree_setup.md` - Git worktree setup for parallel development
 
 ### Project Directories
-- **`domain/`**: Core business models (FitItem, FitSummary, StockStatus, ShipRole)
+- **`domain/`**: Core business models (FitItem, FitSummary, StockStatus, ShipRole, PricedItem)
 - **`repositories/`**: Database access layer (DoctrineRepository)
-- **`services/`**: Business logic (DoctrineService, PriceService, categorization)
+- **`services/`**: Business logic (DoctrineService, PriceService, PricerService, categorization)
 - **`facades/`**: Simplified API layer (DoctrineFacade)
 - **`ui/`**: UI formatting utilities and column configurations
 - **`pages/`**: Streamlit application pages
+- **`parser/`**: EFT fitting and item list parser (open source contribution)
 - **`tests/`**: pytest unit tests
 - **`docs/`**: Documentation
 - **`logs/`**: Application logs (git-ignored)
