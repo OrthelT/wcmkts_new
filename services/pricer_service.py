@@ -330,17 +330,22 @@ class PricerService:
     2. Resolving items in SDE
     3. Fetching Jita prices (buy + sell)
     4. Fetching local 4-HWWF prices
-    5. Combining into final result
+    5. Fetching market stats (avg volume, days remaining)
+    6. Fetching doctrine information
+    7. Combining into final result
     """
 
     def __init__(
         self,
         sde_db: DatabaseConfig,
+        mkt_db: DatabaseConfig,
         market_repo: MarketOrdersRepository,
         jita_provider: JitaPriceProvider,
         logger_instance: Optional[logging.Logger] = None
     ):
         self._sde_lookup = SDELookupService(sde_db, logger_instance)
+        self._sde_db = sde_db
+        self._mkt_db = mkt_db
         self._market_repo = market_repo
         self._jita_provider = jita_provider
         self._logger = logger_instance or logger
@@ -351,6 +356,7 @@ class PricerService:
         Factory method to create service with default configuration.
         """
         sde_db = DatabaseConfig("sde")
+        mkt_db = DatabaseConfig("wcmkt")
         market_repo = get_market_orders_repository()
 
         # Get Janice API key from secrets
@@ -362,7 +368,97 @@ class PricerService:
 
         jita_provider = JitaPriceProvider(janice_key)
 
-        return cls(sde_db, market_repo, jita_provider)
+        return cls(sde_db, mkt_db, market_repo, jita_provider)
+
+    def get_market_stats(self, type_ids: list[int]) -> dict[int, dict]:
+        """
+        Get market stats (avg_volume, days_remaining) for type IDs.
+
+        Args:
+            type_ids: List of EVE type IDs
+
+        Returns:
+            Dict mapping type_id to dict with avg_volume and days_remaining
+        """
+        if not type_ids:
+            return {}
+
+        placeholders = ','.join([':id' + str(i) for i in range(len(type_ids))])
+        query = f"""
+            SELECT type_id, avg_volume, days_remaining, total_volume_remain
+            FROM marketstats
+            WHERE type_id IN ({placeholders})
+        """
+        params = {f'id{i}': tid for i, tid in enumerate(type_ids)}
+
+        try:
+            with self._mkt_db.engine.connect() as conn:
+                df = pd.read_sql_query(text(query), conn, params=params)
+
+            result = {}
+            for _, row in df.iterrows():
+                type_id = int(row['type_id'])
+                avg_vol = float(row['avg_volume']) if pd.notna(row['avg_volume']) else 0.0
+                days = float(row['days_remaining']) if pd.notna(row['days_remaining']) else 0.0
+                result[type_id] = {
+                    'avg_volume': avg_vol,
+                    'days_remaining': days,
+                    'total_volume_remain': int(row['total_volume_remain']) if pd.notna(row['total_volume_remain']) else 0
+                }
+
+            return result
+
+        except Exception as e:
+            self._logger.error(f"Error fetching market stats: {e}")
+            return {}
+
+    def get_doctrine_info(self, type_ids: list[int]) -> dict[int, dict]:
+        """
+        Get doctrine information for type IDs.
+
+        Args:
+            type_ids: List of EVE type IDs
+
+        Returns:
+            Dict mapping type_id to dict with is_doctrine and ships list
+        """
+        if not type_ids:
+            return {}
+
+        placeholders = ','.join([':id' + str(i) for i in range(len(type_ids))])
+        query = f"""
+            SELECT DISTINCT type_id, ship_name, fits_on_mkt
+            FROM doctrines
+            WHERE type_id IN ({placeholders})
+        """
+        params = {f'id{i}': tid for i, tid in enumerate(type_ids)}
+
+        try:
+            with self._mkt_db.engine.connect() as conn:
+                df = pd.read_sql_query(text(query), conn, params=params)
+
+            # Group ships by type_id
+            result = {}
+            for type_id in type_ids:
+                result[type_id] = {'is_doctrine': False, 'ships': []}
+
+            for _, row in df.iterrows():
+                type_id = int(row['type_id'])
+                ship_name = row['ship_name']
+                fits = int(row['fits_on_mkt']) if pd.notna(row['fits_on_mkt']) else 0
+
+                if type_id not in result:
+                    result[type_id] = {'is_doctrine': False, 'ships': []}
+
+                result[type_id]['is_doctrine'] = True
+                if ship_name and pd.notna(ship_name):
+                    result[type_id]['ships'].append(f"{ship_name} ({fits})")
+
+            return result
+
+        except Exception as e:
+            self._logger.error(f"Error fetching doctrine info: {e}")
+            return {tid: {'is_doctrine': False, 'ships': []} for tid in type_ids}
 
     def price_input(self, text: str) -> PricerResult:
         """
@@ -417,7 +513,13 @@ class PricerService:
         jita_prices = self._jita_provider.get_prices(type_ids)
         local_prices = self._market_repo.get_local_prices(type_ids)
 
-        # Step 5: Combine into PricedItems
+        # Step 5: Fetch market stats (avg volume, days remaining)
+        market_stats = self.get_market_stats(type_ids)
+
+        # Step 6: Fetch doctrine information
+        doctrine_info = self.get_doctrine_info(type_ids)
+
+        # Step 7: Combine into PricedItems
         priced_items = []
         for item in resolved:
             if not item.type_id:
@@ -428,9 +530,10 @@ class PricerService:
 
             jita_data = jita_prices.get(type_id, JitaPriceData(type_id=type_id))
             local_data = local_prices.get(type_id, LocalPriceData(type_id=type_id))
+            stats = market_stats.get(type_id, {'avg_volume': 0.0, 'days_remaining': 0.0})
+            doctrine = doctrine_info.get(type_id, {'is_doctrine': False, 'ships': []})
 
             category_name = item.category_name
-            print(category_name)
             isship = True if category_name == "Ship" else False
 
             priced_items.append(PricedItem(
@@ -442,8 +545,11 @@ class PricerService:
                 local_buy=local_data.max_buy_price,
                 local_sell_volume=local_data.total_sell_volume,
                 local_buy_volume=local_data.total_buy_volume,
+                avg_daily_volume=stats['avg_volume'],
+                days_of_stock=stats['days_remaining'],
+                is_doctrine=doctrine['is_doctrine'],
+                doctrine_ships=tuple(doctrine['ships']),
             ))
-            print(f"Image URL: {priced_items[-1].image_url}")
 
         self._logger.info(
             f"Priced {len(priced_items)} items "

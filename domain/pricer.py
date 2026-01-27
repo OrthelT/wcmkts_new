@@ -184,6 +184,10 @@ class PricedItem:
         local_buy: 4-HWWF max buy price per unit
         local_sell_volume: Total sell volume at 4-HWWF
         local_buy_volume: Total buy volume at 4-HWWF
+        avg_daily_volume: Average daily sales volume (30-day)
+        days_of_stock: Days of stock remaining based on avg sales
+        is_doctrine: Whether item is used in doctrines
+        doctrine_ships: List of ships/fits using this item
     """
     image_url: str
     item: ParsedItem
@@ -193,6 +197,10 @@ class PricedItem:
     local_buy: Price = 0.0
     local_sell_volume: int = 0
     local_buy_volume: int = 0
+    avg_daily_volume: float = 0.0
+    days_of_stock: float = 0.0
+    is_doctrine: bool = False
+    doctrine_ships: tuple[str, ...] = field(default_factory=tuple)
 
     @property
     def quantity(self) -> int:
@@ -272,6 +280,10 @@ class PricedItem:
             "4-HWWF Buy Total": self.local_buy_total,
             "4-HWWF Sell Vol": self.local_sell_volume,
             "4-HWWF Buy Vol": self.local_buy_volume,
+            "Avg Daily Vol": self.avg_daily_volume,
+            "Days of Stock": self.days_of_stock,
+            "Is Doctrine": self.is_doctrine,
+            "Doctrine Ships": list(self.doctrine_ships),
         }
 
 

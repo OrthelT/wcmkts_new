@@ -19,6 +19,11 @@ from ui.formatters import (
     get_progress_bar_color,
     render_progress_bar_html,
 )
+from ui.popovers import (
+    render_market_popover,
+    render_item_with_popover,
+    render_ship_with_popover,
+)
 
 __all__ = [
     # Column configs
@@ -30,4 +35,8 @@ __all__ = [
     "get_status_badge_color",
     "get_progress_bar_color",
     "render_progress_bar_html",
+    # Popovers
+    "render_market_popover",
+    "render_item_with_popover",
+    "render_ship_with_popover",
 ]

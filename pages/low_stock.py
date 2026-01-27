@@ -1,110 +1,33 @@
+"""
+Low Stock Page
+
+Displays items that are running low on the 4-HWWF market with filtering
+options for categories, doctrines, fits, and item meta types.
+
+Uses LowStockService for all data operations.
+"""
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from db_handler import get_update_time, read_df
+
+from db_handler import get_update_time
 from logging_config import setup_logging
-from config import DatabaseConfig
-# Insert centralized logging configuration
-logger = setup_logging(__name__)
+from services import get_low_stock_service, LowStockFilters
+from ui.formatters import get_image_url
+from state import ss_init, ss_get
 
-# Import from the root directory
+logger = setup_logging(__name__, log_file="low_stock.log")
 
-mktdb = DatabaseConfig("wcmkt")
-sde_db = DatabaseConfig("sde")
-
-@st.cache_data(ttl=600)
-def get_filter_options(selected_categories=None):
-    try:
-        # Get data from marketstats table
-        query = """
-        SELECT DISTINCT type_id, type_name, category_id, category_name, group_id, group_name
-        FROM marketstats
-        """
-
-        df = read_df(mktdb, query)
-        df = df.rename(columns={
-            # Ensure expected column names if the database returns different casing
-            'typeID': 'type_id', 'typeName': 'type_name',
-            'categoryID': 'category_id', 'categoryName': 'category_name',
-            'groupID': 'group_id', 'groupName': 'group_name'
-        })
-
-        if df.empty:
-            return [], []
-
-        categories = sorted(df['category_name'].unique())
-
-        if selected_categories:
-            df = df[df['category_name'].isin(selected_categories)]
-
-        items = sorted(df['type_name'].unique())
-        logger.info(f"items: {len(items)} categories: {len(categories)}")
-
-        return categories, items
+# Initialize service (cached in session state)
+service = get_low_stock_service()
 
 
-    except Exception as e:
-        st.error(f"Database error: {str(e)}")
-        return [], []
+def create_days_remaining_chart(df: pd.DataFrame):
+    """Create a bar chart showing days of stock remaining."""
+    if df.empty:
+        return None
 
-@st.cache_data(ttl=600)
-def get_market_stats(selected_categories=None, selected_items=None, max_days_remaining=None, doctrine_only=False, tech2_only=False):
-
-    if tech2_only:
-        tech2_query = """
-        SELECT typeID FROM sdetypes WHERE metaGroupID = 2
-        """
-        tech2_type_ids = read_df(sde_db, tech2_query)['typeID'].tolist()
-
-    # Start with base query for marketstats
-    query = """
-    SELECT ms.*,
-           CASE WHEN d.type_id IS NOT NULL THEN 1 ELSE 0 END as is_doctrine,
-           d.ship_name,
-           d.fits_on_mkt
-    FROM marketstats ms
-    LEFT JOIN doctrines d ON ms.type_id = d.type_id
-    """
-
-    # Get market stats data
-    df = read_df(mktdb, query)
-
-    # Apply filters
-    if selected_categories:
-        df = df[df['category_name'].isin(selected_categories)]
-
-    if selected_items:
-        df = df[df['type_name'].isin(selected_items)]
-
-    if doctrine_only:
-        df = df[df['is_doctrine'] == 1]
-
-    # Apply days_remaining filter
-    if max_days_remaining is not None:
-        df = df[df['days_remaining'] <= max_days_remaining]
-
-    # Group by item and aggregate ship information
-    if not df.empty:
-        # Create a list of ships for each item
-        ship_groups = df.groupby('type_id', group_keys=False).apply(
-            lambda x: [f"{row['ship_name']} ({int(row['fits_on_mkt'])})"
-                      for _, row in x.iterrows()
-                      if pd.notna(row['ship_name']) and pd.notna(row['fits_on_mkt'])], include_groups = False
-        ).to_dict()
-
-        # Keep only one row per item
-        df = df.drop_duplicates(subset=['type_id'])
-
-        # Add the ships column
-        df['ships'] = df['type_id'].map(ship_groups)
-
-    if tech2_only:
-        df = df[df['type_id'].isin(tech2_type_ids)]
-
-    return df
-
-def create_days_remaining_chart(df):
-    # Create bar chart for days remaining
     fig = px.bar(
         df,
         x='type_name',
@@ -118,7 +41,6 @@ def create_days_remaining_chart(df):
         color_discrete_sequence=px.colors.qualitative.Set3
     )
 
-    # Update layout for better readability
     fig.update_layout(
         xaxis_title="Item",
         yaxis_title="Days Remaining",
@@ -126,50 +48,172 @@ def create_days_remaining_chart(df):
         height=500
     )
 
-    # Add a horizontal line at days_remaining = 3
-    fig.add_hline(y=3, line_dash="dash", line_color="red", annotation_text="Critical Level (3 days)")
+    # Add a horizontal line at critical level
+    fig.add_hline(
+        y=3,
+        line_dash="dash",
+        line_color="red",
+        annotation_text="Critical Level (3 days)"
+    )
 
     return fig
 
 
+def highlight_critical(val):
+    """Style function for critical days remaining values."""
+    try:
+        val = float(val)
+        if val <= 3:
+            return 'background-color: #fc4103'  # Red for critical
+        elif val <= 7:
+            return 'background-color: #c76d14'  # Orange for low
+        return ''
+    except Exception:
+        return ''
+
+
+def highlight_doctrine(row):
+    """Style function to highlight doctrine items."""
+    try:
+        if isinstance(row.get('ships'), list) and len(row['ships']) > 0:
+            styles = [''] * len(row)
+            # Highlight the type_name column
+            if 'type_name' in row.index:
+                idx = row.index.get_loc('type_name')
+                styles[idx] = 'background-color: #328fed'
+            return styles
+    except Exception:
+        pass
+    return [''] * len(row)
+
+
 def main():
-    # Title
+    # Initialize session state
+    ss_init({
+        'ls_selected_categories': [],
+        'ls_selected_doctrine': None,
+        'ls_selected_fit': None,
+        'ls_doctrine_only': False,
+        'ls_tech2_only': False,
+        'ls_faction_only': False,
+        'ls_max_days': 7.0,
+    })
+
+    # Title and logo
     col1, col2 = st.columns([0.2, 0.8], vertical_alignment="bottom")
     with col1:
-        wclogo = "images/wclogo.png"
-        st.image(wclogo, width=125)
+        st.image("images/wclogo.png", width=125)
     with col2:
         st.title("4-HWWF Low Stock Tool")
 
     st.markdown("""
     This page shows items that are running low on the market. The **Days Remaining** column shows how many days of sales
-    can be sustained by the current stock based on historical average sales. Items with fewer days remaining need attention. The **Used In Fits** column shows the doctrine ships that use the item (if any) and the number of fits that the current market stock of the item can support.
+    can be sustained by the current stock based on historical average sales. Items with fewer days remaining need attention.
+    The **Used In Fits** column shows the doctrine ships that use the item (if any) and the number of fits that the current
+    market stock of the item can support.
     """)
 
     # Sidebar filters
     st.sidebar.header("Filters")
     st.sidebar.markdown("Use the filters below to customize your view of low stock items.")
 
-    # Doctrine items filter
-    doctrine_only = st.sidebar.checkbox("Show Doctrine Items Only", value=False, help="Show only items that are used in a doctrine fit, the fits used are shown in the 'Used In Fits' column")
-    tech2_only = st.sidebar.checkbox("Show Tech 2 Items Only", value=False, help="Show only items that are in the Tech 2 group")
+    # Item type filters
+    st.sidebar.subheader("Item Type Filters")
 
-    # Get initial categories
-    categories, _ = get_filter_options()
+    doctrine_only = st.sidebar.checkbox(
+        "Doctrine Items Only",
+        value=ss_get('ls_doctrine_only', False),
+        help="Show only items that are used in a doctrine fit"
+    )
+    st.session_state.ls_doctrine_only = doctrine_only
 
+    tech2_only = st.sidebar.checkbox(
+        "Tech II Items Only",
+        value=ss_get('ls_tech2_only', False),
+        help="Show only Tech II items (metaGroupID=2)"
+    )
+    st.session_state.ls_tech2_only = tech2_only
 
+    faction_only = st.sidebar.checkbox(
+        "Faction Items Only",
+        value=ss_get('ls_faction_only', False),
+        help="Show only Faction items (metaGroupID=4)"
+    )
+    st.session_state.ls_faction_only = faction_only
+
+    # Category filter
     st.sidebar.subheader("Category Filter")
-    st.sidebar.multiselect(
+    categories = service.get_category_options()
+
+    selected_categories = st.sidebar.multiselect(
         "Select Categories",
         options=categories,
-        key="multiselect_categories",
+        default=ss_get('ls_selected_categories', []),
         help="Select one or more categories to filter the data"
     )
+    st.session_state.ls_selected_categories = selected_categories
 
-    if st.session_state.get('multiselect_categories'):
-        selected_categories = st.session_state.multiselect_categories
-    else:
-        selected_categories = []
+    # Doctrine/Fit filter section
+    st.sidebar.subheader("Doctrine/Fit Filter")
+
+    # Get doctrine options
+    doctrine_options = service.get_doctrine_options()
+    doctrine_names = ["All"] + [d.doctrine_name for d in doctrine_options]
+
+    selected_doctrine_name = st.sidebar.selectbox(
+        "Select Doctrine",
+        options=doctrine_names,
+        index=0,
+        help="Filter to show only items from a specific doctrine"
+    )
+
+    selected_doctrine = None
+    selected_fit = None
+    fit_ids = []
+
+    if selected_doctrine_name != "All":
+        # Find the doctrine info
+        selected_doctrine = next(
+            (d for d in doctrine_options if d.doctrine_name == selected_doctrine_name),
+            None
+        )
+
+        if selected_doctrine:
+            # Display doctrine image
+            if selected_doctrine.lead_ship_id:
+                st.sidebar.image(
+                    selected_doctrine.lead_ship_image_url,
+                    width=128,
+                    caption=selected_doctrine_name
+                )
+
+            # Get fit options for this doctrine
+            fit_options = service.get_fit_options(selected_doctrine.doctrine_id)
+            fit_names = ["All Fits"] + [f.ship_name for f in fit_options]
+
+            selected_fit_name = st.sidebar.selectbox(
+                "Select Fit",
+                options=fit_names,
+                index=0,
+                help="Filter to show only items from a specific fit"
+            )
+
+            if selected_fit_name != "All Fits":
+                selected_fit = next(
+                    (f for f in fit_options if f.ship_name == selected_fit_name),
+                    None
+                )
+                if selected_fit:
+                    fit_ids = [selected_fit.fit_id]
+                    # Display fit ship image
+                    st.sidebar.image(
+                        selected_fit.ship_image_url,
+                        width=128,
+                        caption=f"{selected_fit.ship_name}\n{selected_fit.fit_name}"
+                    )
+            else:
+                # All fits in this doctrine
+                fit_ids = selected_doctrine.fit_ids
 
     # Days remaining filter
     st.sidebar.subheader("Days Remaining Filter")
@@ -177,98 +221,152 @@ def main():
         "Maximum Days Remaining",
         min_value=0.0,
         max_value=30.0,
-        value=7.0,
+        value=ss_get('ls_max_days', 7.0),
         step=0.5,
         help="Show only items with days remaining less than or equal to this value"
     )
+    st.session_state.ls_max_days = max_days_remaining
 
-    # Get filtered data
-    df = get_market_stats(selected_categories, None, max_days_remaining, doctrine_only, tech2_only)
+    # Build filters
+    filters = LowStockFilters(
+        categories=selected_categories,
+        max_days_remaining=max_days_remaining,
+        doctrine_only=doctrine_only,
+        tech2_only=tech2_only,
+        faction_only=faction_only,
+        fit_ids=fit_ids,
+    )
+
+    # Get filtered data using service
+    df = service.get_low_stock_items(filters)
 
     if not df.empty:
         # Sort by days_remaining (ascending) to show most critical items first
         df = df.sort_values('days_remaining')
 
+        # Get statistics
+        stats = service.get_stock_statistics(df)
+
         # Display metrics
         col1, col2, col3 = st.columns(3)
         with col1:
-            critical_items = len(df[df['days_remaining'] <= 3])
-            st.metric("Critical Items (≤3 days)", critical_items)
+            st.metric("Critical Items (\u22643 days)", stats["critical"])
         with col2:
-            low_items = len(df[(df['days_remaining'] > 3) & (df['days_remaining'] <= 7)])
-            st.metric("Low Stock Items (3-7 days)", low_items)
+            st.metric("Low Stock Items (3-7 days)", stats["low"])
         with col3:
-            total_items = len(df)
-            st.metric("Total Filtered Items", total_items)
+            st.metric("Total Filtered Items", stats["total"])
 
         st.divider()
 
+        # Display header with selected filter info
+        if selected_doctrine:
+            header_col1, header_col2 = st.columns([0.15, 0.85])
+            with header_col1:
+                if selected_fit and selected_fit.ship_id:
+                    st.image(get_image_url(selected_fit.ship_id, 64, isship=True), width=64)
+                elif selected_doctrine.lead_ship_id:
+                    st.image(get_image_url(selected_doctrine.lead_ship_id, 64, isship=True), width=64)
+            with header_col2:
+                if selected_fit:
+                    st.subheader(f"Low Stock: {selected_fit.ship_name}")
+                    st.caption(selected_fit.fit_name)
+                else:
+                    st.subheader(f"Low Stock: {selected_doctrine_name}")
+        else:
+            st.subheader("Low Stock Items")
+
         # Format the DataFrame for display
         display_df = df.copy()
-        display_df = display_df.drop(columns=['min_price', 'avg_price', 'category_id', 'group_id'])
 
-        # Select and rename columns - add checkbox column
-        columns_to_show = ['select', 'type_id', 'type_name', 'price', 'days_remaining', 'total_volume_remain', 'avg_volume', 'category_name', 'group_name', 'ships']
+        # Drop columns not needed for display
+        columns_to_drop = ['min_price', 'avg_price', 'category_id', 'group_id', 'is_doctrine',
+                          'ship_name', 'fits_on_mkt', 'last_update']
+        display_df = display_df.drop(
+            columns=[c for c in columns_to_drop if c in display_df.columns],
+            errors='ignore'
+        )
 
-        # Initialize checkbox column with False
+        # Prepare columns for display
+        columns_to_show = [
+            'select', 'type_id', 'type_name', 'price', 'days_remaining',
+            'total_volume_remain', 'avg_volume', 'category_name', 'group_name', 'ships'
+        ]
+
+        # Initialize checkbox column
         display_df['select'] = False
+
+        # Ensure all columns exist
+        for col in columns_to_show:
+            if col not in display_df.columns:
+                display_df[col] = None
+
         display_df = display_df[columns_to_show]
 
-
-        numeric_formats = {
-            'select': st.column_config.CheckboxColumn('Select', help='Check items you want to include in the CSV download', default=False, width='small'),
-            'type_id': st.column_config.NumberColumn('Type ID', help='type ID of the item', width='small'),
-            'type_name': st.column_config.TextColumn('Item', help='name of the item', width='medium'),
-            'total_volume_remain': st.column_config.NumberColumn('Volume Remaining',  format='localized', help='total items currently available on the market', width='small'),
-            'price': st.column_config.NumberColumn('Price', format='localized', help='lowest 5-percentile price of current sell orders, or if no sell orders, the historical average price'),
-            'days_remaining': st.column_config.NumberColumn('Days', format='localized', help='days of stock remaining based on historical average sales for the last 30 days', width='small'),
-            'avg_volume': st.column_config.NumberColumn('Avg Vol', format='localized', help='average volume over the last 30 days', width='small'),
-            'ships': st.column_config.ListColumn('Used In Fits', help='number of fits available on the market', width='large'),
-            'category_name': st.column_config.TextColumn('Category', help='category of the item'),
-            'group_name': st.column_config.TextColumn('Group', help='group of the item'),
+        # Column configuration
+        column_config = {
+            'select': st.column_config.CheckboxColumn(
+                'Select',
+                help='Check items you want to include in the CSV download',
+                default=False,
+                width='small'
+            ),
+            'type_id': st.column_config.NumberColumn(
+                'Type ID',
+                help='Type ID of the item',
+                width='small'
+            ),
+            'type_name': st.column_config.TextColumn(
+                'Item',
+                help='Name of the item',
+                width='medium'
+            ),
+            'total_volume_remain': st.column_config.NumberColumn(
+                'Volume Remaining',
+                format='localized',
+                help='Total items currently available on the market',
+                width='small'
+            ),
+            'price': st.column_config.NumberColumn(
+                'Price',
+                format='localized',
+                help='Lowest 5-percentile price of current sell orders'
+            ),
+            'days_remaining': st.column_config.NumberColumn(
+                'Days',
+                format='localized',
+                help='Days of stock remaining based on historical average sales',
+                width='small'
+            ),
+            'avg_volume': st.column_config.NumberColumn(
+                'Avg Vol',
+                format='localized',
+                help='Average volume over the last 30 days',
+                width='small'
+            ),
+            'ships': st.column_config.ListColumn(
+                'Used In Fits',
+                help='Doctrine ships that use this item',
+                width='large'
+            ),
+            'category_name': st.column_config.TextColumn(
+                'Category',
+                help='Category of the item'
+            ),
+            'group_name': st.column_config.TextColumn(
+                'Group',
+                help='Group of the item'
+            ),
         }
 
-
-        # Add a color indicator for critical items
-        def highlight_critical(val):
-            try:
-                val = float(val)
-                if val <= 3:
-                    return 'background-color: #fc4103'  # Light red for critical
-                elif val <= 7:
-                    return 'background-color: #c76d14'  # Light yellow for low
-                else:
-                    return ''
-            except Exception:
-                return ''
-
-        # Add a color indicator for doctrine items
-        def highlight_doctrine(row):
-            # Check if the "Used In Fits" column has data
-            try:
-                # Check if the value is not empty and not NaN
-                if isinstance(row['ships'], list) and len(row['ships']) > 0:
-                    # Create a list of empty strings for all columns
-                    styles = [''] * len(row)
-                    # Apply highlighting only to the "Item" column (index 0)
-                    styles[2] = 'background-color: #328fed'
-                    return styles
-            except Exception:
-                pass
-            return [''] * len(row)
-
-        # Apply the styling - updated from applymap to map
+        # Apply styling
         styled_df = display_df.style.map(highlight_critical, subset=['days_remaining'])
-
-        # Add doctrine highlighting
         styled_df = styled_df.apply(highlight_doctrine, axis=1)
 
         # Display the dataframe with editable checkbox column
-        st.subheader("Low Stock Items")
         edited_df = st.data_editor(
             styled_df,
             hide_index=True,
-            column_config=numeric_formats,
+            column_config=column_config,
             disabled=[col for col in display_df.columns if col != 'select'],
             key='low_stock_editor'
         )
@@ -278,10 +376,11 @@ def main():
         if len(selected_rows) > 0:
             st.info(f"{len(selected_rows)} items selected. Visit the **Downloads** page for bulk CSV exports.")
 
-        # Display charts
+        # Display chart
         st.subheader("Days Remaining by Item")
         days_chart = create_days_remaining_chart(df)
-        st.plotly_chart(days_chart)
+        if days_chart:
+            st.plotly_chart(days_chart)
 
     else:
         st.warning("No items found with the selected filters.")
@@ -289,6 +388,7 @@ def main():
     # Display last update timestamp
     st.sidebar.markdown("---")
     st.sidebar.write(f"Last ESI update: {get_update_time()}")
+
 
 if __name__ == "__main__":
     main()

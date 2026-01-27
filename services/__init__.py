@@ -71,6 +71,33 @@ from services.pricer_service import (
     SDELookupService,
 )
 
+from services.low_stock_service import (
+    # Main service
+    LowStockService,
+    get_low_stock_service,
+
+    # Domain models
+    LowStockFilters,
+    LowStockItem,
+    DoctrineFilterInfo,
+    FitFilterInfo,
+)
+
+from services.selection_service import (
+    # Main service
+    SelectionService,
+    get_selection_service,
+
+    # Domain models
+    SelectedItem,
+    SelectionState,
+
+    # Helpers
+    get_status_filter_options,
+    apply_status_filter,
+    render_sidebar_selections,
+)
+
 __all__ = [
     # Price Service
     'PriceService',
@@ -107,4 +134,21 @@ __all__ = [
     'JitaPriceProvider',
     'JitaPriceData',
     'SDELookupService',
+
+    # Low Stock Service
+    'LowStockService',
+    'get_low_stock_service',
+    'LowStockFilters',
+    'LowStockItem',
+    'DoctrineFilterInfo',
+    'FitFilterInfo',
+
+    # Selection Service
+    'SelectionService',
+    'get_selection_service',
+    'SelectedItem',
+    'SelectionState',
+    'get_status_filter_options',
+    'apply_status_filter',
+    'render_sidebar_selections',
 ]

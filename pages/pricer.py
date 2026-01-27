@@ -4,6 +4,11 @@ Pricer Page
 Streamlit page for pricing Eve Online items and fittings.
 Accepts EFT fittings or tab-separated item lists and displays
 both Jita and 4-HWWF market prices.
+
+Includes:
+- Average daily volume and days of stock remaining
+- Doctrine/fit highlighting
+- Ship image display for EFT fittings
 """
 
 import sys
@@ -18,7 +23,9 @@ from millify import millify
 from logging_config import setup_logging
 from services import get_pricer_service
 from domain import InputFormat
-from state import ss_get, ss_has
+from state import ss_get, ss_has, ss_init
+from ui.formatters import get_image_url
+
 logger = setup_logging(__name__, log_file="pricer.log")
 
 
@@ -28,6 +35,7 @@ def format_isk(value: float) -> str:
         return "0"
     return millify(value, precision=2)
 
+
 def round_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     """Round columns."""
     df2 = df.copy()
@@ -35,6 +43,7 @@ def round_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     for column in round_columns:
         df2[column] = df2[column].apply(lambda x: round(x, 1) if x < 1000 else round(x, 0))
     return df2
+
 
 def get_pricer_column_config() -> dict:
     """Get column configuration for the pricer results table."""
@@ -74,7 +83,6 @@ def get_pricer_column_config() -> dict:
             help="4-HWWF sell volume",
             format="localized",
         ),
-
         "Jita Sell": st.column_config.NumberColumn(
             "Jita Sell",
             help="Jita sell price per unit",
@@ -95,7 +103,6 @@ def get_pricer_column_config() -> dict:
             help="Total Jita buy value",
             format="localized",
         ),
-
         "4-HWWF Buy": st.column_config.NumberColumn(
             "4H Buy",
             help="4-HWWF maximum buy price per unit",
@@ -111,22 +118,61 @@ def get_pricer_column_config() -> dict:
             help="Total 4-HWWF buy value",
             format="localized",
         ),
-
         "Volume": st.column_config.NumberColumn(
-            "Vol (m³)",
-            help="Volume per unit in m³",
+            "Vol (m\u00b3)",
+            help="Volume per unit in m\u00b3",
             format="localized",
         ),
         "Total Volume": st.column_config.NumberColumn(
-            "Total Vol (m³)",
-            help="Total volume (Qty × Volume)",
+            "Total Vol (m\u00b3)",
+            help="Total volume (Qty \u00d7 Volume)",
             format="localized",
         ),
         "Category": st.column_config.TextColumn(
             "Category",
             help="Item category",
         ),
+        "Avg Daily Vol": st.column_config.NumberColumn(
+            "Avg/Day",
+            help="Average daily sales volume (30-day)",
+            format="localized",
+        ),
+        "Days of Stock": st.column_config.NumberColumn(
+            "Days Stock",
+            help="Days of stock remaining based on avg sales",
+            format="%.1f",
+        ),
+        "Is Doctrine": st.column_config.CheckboxColumn(
+            "Doctrine",
+            help="Item is used in doctrine fits",
+            width="small",
+        ),
+        "Doctrine Ships": st.column_config.ListColumn(
+            "Used In Fits",
+            help="Doctrine ships that use this item",
+            width="medium",
+        ),
     }
+
+
+def highlight_doctrine_rows(row):
+    """Style function to highlight doctrine items."""
+    if row.get('Is Doctrine', False):
+        return ['background-color: rgba(50, 143, 237, 0.3)'] * len(row)
+    return [''] * len(row)
+
+
+def highlight_low_stock(val):
+    """Style function for low stock days."""
+    try:
+        val = float(val)
+        if val <= 3:
+            return 'background-color: #fc4103'  # Red for critical
+        elif val <= 7:
+            return 'background-color: #c76d14'  # Orange for low
+        return ''
+    except Exception:
+        return ''
 
 
 def render_header():
@@ -138,7 +184,40 @@ def render_header():
         st.title("Winter Coalition Pricer")
 
 
+def render_fit_header(result):
+    """Render the header for an EFT fit result with ship image."""
+    if result.input_type != InputFormat.EFT:
+        return
+
+    # Get ship type_id from the first item (hull)
+    ship_type_id = None
+    for item in result.items:
+        if item.item.category_name == "Ship":
+            ship_type_id = item.type_id
+            break
+
+    col1, col2 = st.columns([0.15, 0.85])
+
+    with col1:
+        if ship_type_id:
+            st.image(get_image_url(ship_type_id, 128, isship=True), width=128)
+
+    with col2:
+        if result.ship_name:
+            st.subheader(result.ship_name)
+        if result.fit_name:
+            st.caption(result.fit_name)
+
+
 def main():
+    # Initialize session state
+    ss_init({
+        'pricer_show_jita': True,
+        'pricer_show_doctrine': True,
+        'pricer_highlight_doctrine': True,
+        'pricer_show_stock_metrics': True,
+    })
+
     render_header()
     st.markdown("Price items and fittings using Jita and 4-HWWF market data.")
 
@@ -195,18 +274,11 @@ Tab-separated (qty first):
 
         st.divider()
 
-        # Format info
-        format_info = []
+        # Render fit header with ship image for EFT fittings
         if result.input_type == InputFormat.EFT:
-            format_info.append("**Format:** EFT Fitting")
-            if result.ship_name:
-                format_info.append(f"**Ship:** {result.ship_name}")
-            if result.fit_name:
-                format_info.append(f"**Fit:** {result.fit_name}")
+            render_fit_header(result)
         else:
-            format_info.append("**Format:** Multibuy/Item List")
-
-        st.markdown(" | ".join(format_info))
+            st.markdown("**Format:** Multibuy/Item List")
 
         # Grand totals metrics
         if result.items:
@@ -241,7 +313,7 @@ Tab-separated (qty first):
                 )
 
             # Volume metric
-            st.caption(f"**Total Volume:** {result.total_volume:,.2f} m³")
+            st.caption(f"**Total Volume:** {result.total_volume:,.2f} m\u00b3")
 
             # Results table
             st.subheader("Items")
@@ -253,14 +325,14 @@ Tab-separated (qty first):
 
             # Define column groups
             static_columns = ["image_url", "type_id", "Item", "Qty"]
-            all_price_columns = [ "4-HWWF Sell", "4-HWWF Buy", "4-HWWF Sell Vol", "Jita Sell", "Jita Buy", "Volume"]
-            price_columns_4hwwf = [ "4-HWWF Sell", "4-HWWF Buy", "4-HWWF Sell Vol", "Volume"]
+            price_columns_all = ["4-HWWF Sell", "4-HWWF Buy", "4-HWWF Sell Vol", "Jita Sell", "Jita Buy"]
+            price_columns_4hwwf = ["4-HWWF Sell", "4-HWWF Buy", "4-HWWF Sell Vol"]
+            stock_columns = ["Avg Daily Vol", "Days of Stock"]
+            doctrine_columns = ["Is Doctrine", "Doctrine Ships"]
+            always_show_columns = ["Volume", "Category"]
 
-
-
-            always_show_columns = ["Category"]
-
-            col1, col2 = st.columns(2)
+            # Display options
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
                 display_selector = st.pills(
                     label="Display",
@@ -270,24 +342,61 @@ Tab-separated (qty first):
                     help="Toggle between per-unit prices and totals"
                 )
             with col2:
-                st.checkbox("Show Jita Prices", value=True, key="show_jita_prices")
+                show_jita = st.checkbox(
+                    "Show Jita Prices",
+                    value=ss_get('pricer_show_jita', True),
+                    key="show_jita_prices"
+                )
+                st.session_state.pricer_show_jita = show_jita
+            with col3:
+                show_stock = st.checkbox(
+                    "Show Stock Metrics",
+                    value=ss_get('pricer_show_stock_metrics', True),
+                    key="show_stock_metrics",
+                    help="Show average daily volume and days of stock"
+                )
+                st.session_state.pricer_show_stock_metrics = show_stock
+            with col4:
+                highlight_doctrine = st.checkbox(
+                    "Highlight Doctrine Items",
+                    value=ss_get('pricer_highlight_doctrine', True),
+                    key="highlight_doctrine",
+                    help="Highlight items used in doctrine fits"
+                )
+                st.session_state.pricer_highlight_doctrine = highlight_doctrine
 
-            price_columns = all_price_columns if ss_has("show_jita_prices") and ss_get("show_jita_prices") else price_columns_4hwwf
-
-            # # Select price columns based on toggle
-            # if display_selector == "total prices":
-            #     price_columns = all_price_columns
-            # else:
-            #     price_columns = price_columns
+            # Build column list based on selections
+            price_columns = price_columns_all if show_jita else price_columns_4hwwf
 
             if not df.empty:
+                # Build column order
+                column_order = static_columns.copy()
+                column_order.extend(price_columns)
 
-                # Build column order: static + selected prices + always-show
-                column_order = static_columns + price_columns + always_show_columns
+                if show_stock:
+                    column_order.extend(stock_columns)
+
+                if highlight_doctrine:
+                    column_order.extend(doctrine_columns)
+
+                column_order.extend(always_show_columns)
+
+                # Filter to only columns that exist
                 column_order = [c for c in column_order if c in df.columns]
 
+                # Apply styling
+                styled_df = df.copy()
+
+                if highlight_doctrine and 'Is Doctrine' in styled_df.columns:
+                    styled_df = styled_df.style.apply(highlight_doctrine_rows, axis=1)
+
+                    if show_stock and 'Days of Stock' in df.columns:
+                        styled_df = styled_df.map(highlight_low_stock, subset=['Days of Stock'])
+                elif show_stock and 'Days of Stock' in df.columns:
+                    styled_df = styled_df.style.map(highlight_low_stock, subset=['Days of Stock'])
+
                 st.data_editor(
-                    df,
+                    styled_df,
                     hide_index=True,
                     column_config=get_pricer_column_config(),
                     width="content",
@@ -310,7 +419,7 @@ Tab-separated (qty first):
         # Parse errors
         if result.parse_errors:
             st.subheader("Issues")
-            with st.expander(f"⚠️ {len(result.parse_errors)} items could not be priced", expanded=False):
+            with st.expander(f"\u26a0\ufe0f {len(result.parse_errors)} items could not be priced", expanded=False):
                 for error in result.parse_errors:
                     st.warning(error)
 

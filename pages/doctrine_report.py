@@ -14,6 +14,7 @@ from logging_config import setup_logging
 from services import get_doctrine_service
 from services.categorization import categorize_ship_by_role
 from ui.formatters import get_doctrine_report_column_config, get_image_url, get_ship_role_format
+from ui.popovers import render_ship_with_popover, render_market_popover
 from state import ss_init, ss_get
 
 logger = setup_logging(__name__, log_file=__name__)
@@ -186,7 +187,15 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
                     else:
                         ship_target = 0
 
-                    st.subheader(ship_name,divider="orange")
+                    # Ship name with market data popover
+                    render_ship_with_popover(
+                        ship_id=ship_id,
+                        ship_name=ship_name,
+                        fits=int(fit_summary[fit_summary['fit_id'] == fit_id]['fits'].iloc[0]) if not fit_summary[fit_summary['fit_id'] == fit_id].empty else 0,
+                        hulls=int(fit_summary[fit_summary['fit_id'] == fit_id]['hulls'].iloc[0]) if not fit_summary[fit_summary['fit_id'] == fit_id].empty else 0,
+                        target=ship_target,
+                        key_suffix=f"dr_{fit_id}"
+                    )
                     st.markdown(f"{fit_name}  (**Target: {ship_target}**)")
 
                 # Display the 3 lowest stock modules
@@ -233,11 +242,27 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
                         st.badge(badge_status, color=badge_color)
 
                     with text_col:
-                        if module_row['type_id'] == ship_id:
-                            st.markdown(f'<span style="color:{badge_color}"> **{ship_name}** </span>  ({stock})', unsafe_allow_html=True)
-                            # st.markdown(f"**{ship_name}** ({stock})")
+                        # Display with market data popover
+                        type_id = int(module_row['type_id']) if pd.notna(module_row['type_id']) else 0
+                        if type_id == ship_id:
+                            # It's the ship hull
+                            render_ship_with_popover(
+                                ship_id=ship_id,
+                                ship_name=ship_name,
+                                fits=stock,
+                                hulls=stock,
+                                target=module_target,
+                                key_suffix=f"dr_hull_{fit_id}"
+                            )
                         else:
-                            st.text(f"{module_name} ({stock})")
+                            # It's a module
+                            render_market_popover(
+                                type_id=type_id,
+                                type_name=module_name,
+                                quantity=stock,
+                                display_text=f"{module_name} ({stock})",
+                                key_suffix=f"dr_mod_{fit_id}_{type_id}"
+                            )
 
                 # Add spacing between ships
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -330,16 +355,26 @@ def main():
     st.sidebar.markdown("---")
 
 
-    st.sidebar.header("🔄 Selected Items:", divider="blue")
+    st.sidebar.header("Selected Items", divider="blue")
 
-            # Display modules with their stock information
-    for item_name in st.session_state.selected_modules:
-        if item_name in st.session_state.get('module_list_state', {}):
-            item_info = st.session_state.module_list_state[item_name]
-            st.sidebar.text(f"🔹{item_name} ({item_info.split('(')[1].split(')')[0]})")
+    # Format selected items using code block for cleaner display
+    if st.session_state.selected_modules:
+        selection_lines = ["Modules:"]
+        for item_name in st.session_state.selected_modules:
+            if item_name in st.session_state.get('module_list_state', {}):
+                item_info = st.session_state.module_list_state[item_name]
+                # Extract stock from the info string
+                try:
+                    stock = item_info.split('(')[1].split(')')[0]
+                    selection_lines.append(f"  {item_name} ({stock})")
+                except (IndexError, ValueError):
+                    selection_lines.append(f"  {item_name}")
+            else:
+                selection_lines.append(f"  {item_name} (N/A)")
 
-        else:
-            st.sidebar.text(f"🚩{item_name} (Stock info not available)")
+        st.sidebar.code("\n".join(selection_lines), language=None)
+    else:
+        st.sidebar.info("No items selected")
 
     st.sidebar.markdown("### Export Options")
 

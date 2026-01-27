@@ -12,6 +12,8 @@ from db_handler import get_update_time
 from services import get_doctrine_service, get_price_service
 from domain import StockStatus
 from ui import get_fitting_column_config, render_progress_bar_html
+from ui.popovers import render_ship_with_popover, render_market_popover
+from services import get_status_filter_options
 from state import ss_init, ss_get
 
 # Insert centralized logging configuration
@@ -243,8 +245,8 @@ def main():
         st.session_state.ds_target_multiplier = ds_target_multiplier
         st.sidebar.write(f"Target Multiplier: {ds_target_multiplier}")
 
-    # Status filter
-    status_options = ["All", "Critical", "Needs Attention", "All Low Stock", "Good"]
+    # Status filter - use service layer options
+    status_options = get_status_filter_options()
     selected_status = st.sidebar.selectbox("Doctrine Status:", status_options)
 
     # Ship group filter
@@ -260,9 +262,9 @@ def main():
         'displayed_ships': unique_ships.copy(),
     })
 
-    # Module status filter
+    # Module status filter - use service layer options
     st.sidebar.subheader("Module Filters")
-    module_status_options = ["All", "Critical", "Needs Attention", "All Low Stock", "Good"]
+    module_status_options = get_status_filter_options()
     selected_module_status = st.sidebar.selectbox("Module Status:", module_status_options)
 
     # Apply filters
@@ -369,7 +371,15 @@ def main():
                             st.session_state.selected_ships.remove(row['ship_name'])
 
                     with ship_cols[1]:
-                        st.markdown(f"### {row['ship_name']}")
+                        # Ship name with market data popover
+                        render_ship_with_popover(
+                            ship_id=int(row['ship_id']),
+                            ship_name=row['ship_name'],
+                            fits=fits,
+                            hulls=hulls,
+                            target=target,
+                            key_suffix=f"ds_{row['fit_id']}"
+                        )
 
                     # Display metrics in a single row
                     metric_cols = st.columns(4)
@@ -454,13 +464,37 @@ def main():
                                     st.session_state.selected_modules.remove(display_key)
 
                             with col_b:
-                                # Display with color based on status
+                                # Display with color based on status and market popover
+                                # Get type_id for the module (need to look it up)
+                                module_stock = service.repository.get_module_stock(module_name)
+                                module_type_id = module_stock.type_id if module_stock else 0
+
                                 if mod_stock_status == StockStatus.CRITICAL:
-                                    st.markdown(f":red-badge[:material/error: {module}]")
+                                    st.markdown(f":red-badge[:material/error:]", help="Critical stock level")
+                                    render_market_popover(
+                                        type_id=module_type_id,
+                                        type_name=module_name,
+                                        quantity=int(module_qty),
+                                        display_text=module,
+                                        key_suffix=f"mod_{row['fit_id']}_{i}"
+                                    )
                                 elif mod_stock_status == StockStatus.NEEDS_ATTENTION:
-                                    st.markdown(f":orange-badge[:material/error: {module}]")
+                                    st.markdown(f":orange-badge[:material/error:]", help="Low stock")
+                                    render_market_popover(
+                                        type_id=module_type_id,
+                                        type_name=module_name,
+                                        quantity=int(module_qty),
+                                        display_text=module,
+                                        key_suffix=f"mod_{row['fit_id']}_{i}"
+                                    )
                                 else:
-                                    st.text(module)
+                                    render_market_popover(
+                                        type_id=module_type_id,
+                                        type_name=module_name,
+                                        quantity=int(module_qty),
+                                        display_text=module,
+                                        key_suffix=f"mod_{row['fit_id']}_{i}"
+                                    )
                     with tab2:
                         ship_name = row['ship_name']
                         st.write(f"{ship_name} - Fit {fit_id}")
@@ -597,41 +631,42 @@ def main():
         logger.info("\n" + "-"*60 + "\n")
         st.rerun()
 
-    # Display selected ships if any
-    if st.session_state.selected_ships:
+    # Display selected ships and modules using code block for cleaner formatting
+    if st.session_state.selected_ships or st.session_state.selected_modules:
         st.sidebar.markdown("---")
-        st.sidebar.markdown("### Selected Ships:")
-        num_selected_ships = len(st.session_state.selected_ships)
-        ship_container_height = 100 if num_selected_ships <= 2 else num_selected_ships * 50
+        st.sidebar.header("Selected Items", divider="blue")
 
-        # Create a scrollable container for selected ships
-        with st.sidebar.container(height=ship_container_height):
+        selection_lines = []
+
+        # Ships section
+        if st.session_state.selected_ships:
             get_ship_stock_list(st.session_state.selected_ships)
             ship_list = [st.session_state.ship_list_state[ship] for ship in st.session_state.selected_ships]
             csv_ship_list = [st.session_state.csv_ship_list_state[ship] for ship in st.session_state.selected_ships]
+
+            selection_lines.append("Ships:")
             for ship in ship_list:
-                st.text(ship)
-    # Display selected modules if any
-    if st.session_state.selected_modules:
-        # Get module names
-        module_names = [display_key.rsplit("_", 1)[0] for display_key in st.session_state.selected_modules]
-        module_names = list(set(module_names))
-        # Query market stock (total_stock) for these modules
-        get_module_stock_list(module_names)
+                selection_lines.append(f"  {ship}")
 
-        st.sidebar.markdown("---")
-        st.sidebar.markdown("### Selected Modules:")
-        num_selected_modules = len(st.session_state.selected_modules)
-        module_container_height =  100 if num_selected_modules <= 2 else num_selected_modules * 50
+        # Modules section
+        if st.session_state.selected_modules:
+            # Get module names
+            module_names = [display_key.rsplit("_", 1)[0] for display_key in st.session_state.selected_modules]
+            module_names = list(set(module_names))
+            # Query market stock for these modules
+            get_module_stock_list(module_names)
 
+            module_list = [st.session_state.module_list_state[module] for module in module_names]
+            csv_module_list = [st.session_state.csv_module_list_state[module] for module in module_names]
 
-        module_list = [st.session_state.module_list_state[module] for module in module_names]
-        csv_module_list = [st.session_state.csv_module_list_state[module] for module in module_names]
-
-        # Create a scrollable container for selected modules
-        with st.sidebar.container(height=module_container_height):
+            if selection_lines:
+                selection_lines.append("")  # Blank line separator
+            selection_lines.append("Modules:")
             for module in module_list:
-                st.text(module)
+                selection_lines.append(f"  {module}")
+
+        # Display using code block for clean formatting
+        st.sidebar.code("\n".join(selection_lines), language=None)
 
     # Show export options if anything is selected
     if st.session_state.selected_ships or st.session_state.selected_modules:
