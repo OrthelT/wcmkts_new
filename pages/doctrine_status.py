@@ -12,7 +12,7 @@ from db_handler import get_update_time
 from services import get_doctrine_service, get_price_service
 from domain import StockStatus
 from ui import get_fitting_column_config, render_progress_bar_html
-from ui.popovers import render_ship_with_popover, render_market_popover
+from ui.popovers import render_ship_with_popover, render_market_popover, has_equivalent_modules
 from services import get_status_filter_options
 from state import ss_init, ss_get
 
@@ -430,6 +430,9 @@ def main():
                         st.markdown(":blue[**Low Stock Modules:**]")
                         target = int(row['target']) if pd.notna(row['target']) else 0
 
+                        # Track if any module has equivalents for caption
+                        fit_has_equivalents = False
+
                         for i, module in enumerate(row['lowest_modules']):
                             module_qty = module.split("(")[1].split(")")[0]
                             module_name = module.split(" (")[0]
@@ -469,13 +472,21 @@ def main():
                                 module_stock = service.repository.get_module_stock(module_name)
                                 module_type_id = module_stock.type_id if module_stock else 0
 
+                                # Check if module has equivalents and add indicator
+                                module_has_equiv = has_equivalent_modules(module_type_id) if module_type_id else False
+                                if module_has_equiv:
+                                    fit_has_equivalents = True
+                                    display_module = f"🔄 {module}"
+                                else:
+                                    display_module = module
+
                                 if mod_stock_status == StockStatus.CRITICAL:
                                     st.markdown(f":red-badge[:material/error:]", help="Critical stock level")
                                     render_market_popover(
                                         type_id=module_type_id,
                                         type_name=module_name,
                                         quantity=int(module_qty),
-                                        display_text=module,
+                                        display_text=display_module,
                                         key_suffix=f"mod_{row['fit_id']}_{i}"
                                     )
                                 elif mod_stock_status == StockStatus.NEEDS_ATTENTION:
@@ -484,7 +495,7 @@ def main():
                                         type_id=module_type_id,
                                         type_name=module_name,
                                         quantity=int(module_qty),
-                                        display_text=module,
+                                        display_text=display_module,
                                         key_suffix=f"mod_{row['fit_id']}_{i}"
                                     )
                                 else:
@@ -492,9 +503,13 @@ def main():
                                         type_id=module_type_id,
                                         type_name=module_name,
                                         quantity=int(module_qty),
-                                        display_text=module,
+                                        display_text=display_module,
                                         key_suffix=f"mod_{row['fit_id']}_{i}"
                                     )
+
+                        # Show caption if any module has equivalents
+                        if fit_has_equivalents:
+                            st.caption("🔄 Stock includes equivalent modules")
                     with tab2:
                         ship_name = row['ship_name']
                         st.write(f"{ship_name} - Fit {fit_id}")

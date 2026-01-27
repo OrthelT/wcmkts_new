@@ -93,7 +93,7 @@ All pages follow consistent patterns with Streamlit best practices:
   - Cached data fetchers: `get_all_mkt_stats()`, `get_all_mkt_orders()`, `get_all_market_history()`
   - Built-in malformed DB recovery with automatic sync + remote fallback
 - **`models.py`**: SQLAlchemy ORM models using modern `mapped_column()` syntax
-  - MarketStats, MarketOrders, MarketHistory, Doctrines, ShipTargets, DoctrineFits, etc.
+  - MarketStats, MarketOrders, MarketHistory, Doctrines, ShipTargets, DoctrineFits, ModuleEquivalents, etc.
 - **`sdemodels.py`**: SDE (Static Data Export) ORM models for InvTypes, InvGroups, InvCategories
 - **`build_cost_models.py`**: Manufacturing models for Structures, IndustryIndex, Rigs
 
@@ -117,6 +117,7 @@ All pages follow consistent patterns with Streamlit best practices:
 - **`services/low_stock_service.py`**: LowStockService for low stock analysis with filtering (categories, doctrines, fits, tech2/faction items)
 - **`services/selection_service.py`**: SelectionService for managing item selections on doctrine pages with sidebar rendering
 - **`services/doctrine_service.py`**: DoctrineService and FitDataBuilder for doctrine fit aggregation
+- **`services/module_equivalents_service.py`**: ModuleEquivalentsService for looking up equivalent/interchangeable faction modules and calculating aggregated stock levels
 
 **Domain Models (`domain/` directory):**
 - **`domain/pricer.py`**: Domain models including `PricedItem`, `PricingResult`, and `InputFormat` enum for EFT vs multibuy detection
@@ -130,6 +131,7 @@ All pages follow consistent patterns with Streamlit best practices:
 
 **Initialization & State:**
 - **`init_db.py`**: Database initialization with path verification and auto-sync for missing files
+- **`init_equivalents.py`**: Module equivalents table initialization, loads interchangeable faction module mappings from CSV files
 - **`sync_state.py`**: Updates session state with local/remote database update times for sync tracking
 - **`set_targets.py`**: Ship target management from database with default fallback
 - **`logging_config.py`**: Centralized logging setup with rotating file handlers
@@ -157,6 +159,7 @@ All pages follow consistent patterns with Streamlit best practices:
 - `watchlist`: Market watchlist items
 - `nakah_watchlist`: Nakah-specific watchlist
 - `updatelog`: Database update tracking
+- `module_equivalents`: Interchangeable faction module mappings for aggregated stock calculations
 
 *sdelite2.db tables:*
 - `invTypes`: EVE Online item definitions
@@ -567,7 +570,7 @@ from state.session_state import ss_get  # ✗ state!
 ### Project Directories
 - **`domain/`**: Core business models (FitItem, FitSummary, StockStatus, ShipRole, PricedItem)
 - **`repositories/`**: Database access layer (DoctrineRepository)
-- **`services/`**: Business logic (DoctrineService, PriceService, PricerService, LowStockService, SelectionService, categorization)
+- **`services/`**: Business logic (DoctrineService, PriceService, PricerService, LowStockService, SelectionService, ModuleEquivalentsService, categorization)
 - **`state/`**: Session state management (ss_get, ss_has, ss_init, get_service)
 - **`ui/`**: UI formatting utilities, column configurations, and reusable popover components
 - **`pages/`**: Streamlit application pages

@@ -98,6 +98,16 @@ from services.selection_service import (
     render_sidebar_selections,
 )
 
+from services.module_equivalents_service import (
+    # Main service
+    ModuleEquivalentsService,
+    get_module_equivalents_service,
+
+    # Domain models
+    EquivalentModule,
+    EquivalenceGroup,
+)
+
 __all__ = [
     # Price Service
     'PriceService',
@@ -151,4 +161,10 @@ __all__ = [
     'get_status_filter_options',
     'apply_status_filter',
     'render_sidebar_selections',
+
+    # Module Equivalents Service
+    'ModuleEquivalentsService',
+    'get_module_equivalents_service',
+    'EquivalentModule',
+    'EquivalenceGroup',
 ]

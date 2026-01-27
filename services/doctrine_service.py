@@ -232,13 +232,14 @@ class FitDataBuilder:
 
     ## Pipeline Steps:
     ```python
-        1. load_raw_data() - Fetch all doctrine items from database 
-        2. fill_null_prices() - Apply price fallback chain
-        3. aggregate_summaries() - Group by fit_id, calculate fits
-        4. calculate_costs() - Sum item costs per fit
-        5. merge_targets() - Join target stock levels
-        6. finalize_columns() - Select and order output columns
-        7. build() - Generate FitBuildResult with domain models
+        1. load_raw_data() - Fetch all doctrine items from database
+        2. apply_module_equivalents() - Adjust stock for interchangeable modules
+        3. fill_null_prices() - Apply price fallback chain
+        4. aggregate_summaries() - Group by fit_id, calculate fits
+        5. calculate_costs() - Sum item costs per fit
+        6. merge_targets() - Join target stock levels
+        7. finalize_columns() - Select and order output columns
+        8. build() - Generate FitBuildResult with domain models
     ```
         """
 
@@ -331,6 +332,83 @@ class FitDataBuilder:
             self._metadata.unique_type_count = self._raw_df['type_id'].nunique()
 
         self._end_step('load_raw_data')
+        return self
+
+    def apply_module_equivalents(self) -> "FitDataBuilder":
+        """
+        Apply module equivalents to adjust fits_on_mkt for interchangeable modules.
+
+        This is Step 1.5 of the build pipeline. For modules that have
+        equivalent counterparts (e.g., faction hardeners), recalculates
+        fits_on_mkt based on the combined stock across all equivalents.
+
+        Returns:
+            self for method chaining
+
+        Side Effects:
+            - Updates self._raw_df['fits_on_mkt'] for modules with equivalents
+            - Updates self._raw_df['total_stock'] for modules with equivalents
+        """
+        self._start_step('apply_module_equivalents')
+
+        if self._raw_df is None or self._raw_df.empty:
+            self._end_step('apply_module_equivalents')
+            return self
+
+        try:
+            from services.module_equivalents_service import get_module_equivalents_service
+
+            equiv_service = get_module_equivalents_service()
+            type_ids_with_equivalents = equiv_service.get_type_ids_with_equivalents()
+
+            if not type_ids_with_equivalents:
+                self._logger.debug("No module equivalents configured")
+                self._end_step('apply_module_equivalents')
+                return self
+
+            # Find modules in raw data that have equivalents
+            modules_to_update = self._raw_df[
+                self._raw_df['type_id'].isin(type_ids_with_equivalents)
+            ]['type_id'].unique()
+
+            if len(modules_to_update) == 0:
+                self._logger.debug("No modules in fits have equivalents")
+                self._end_step('apply_module_equivalents')
+                return self
+
+            self._logger.info(f"Applying equivalents for {len(modules_to_update)} modules")
+
+            # Get aggregated stock for each module with equivalents
+            aggregated_stocks = equiv_service.get_aggregated_stock(list(modules_to_update))
+
+            # Update fits_on_mkt for each module with equivalents
+            for type_id, total_stock in aggregated_stocks.items():
+                mask = self._raw_df['type_id'] == type_id
+
+                # Get fit_qty for this module
+                fit_qty = self._raw_df.loc[mask, 'fit_qty'].iloc[0] if mask.any() else 1
+
+                # Calculate new fits_on_mkt based on combined stock
+                if fit_qty > 0:
+                    new_fits_on_mkt = total_stock // fit_qty
+                else:
+                    new_fits_on_mkt = total_stock
+
+                # Update the DataFrame
+                self._raw_df.loc[mask, 'total_stock'] = total_stock
+                self._raw_df.loc[mask, 'fits_on_mkt'] = new_fits_on_mkt
+
+                self._logger.debug(
+                    f"Updated type_id {type_id}: total_stock={total_stock}, "
+                    f"fits_on_mkt={new_fits_on_mkt}"
+                )
+
+        except ImportError:
+            self._logger.warning("Module equivalents service not available")
+        except Exception as e:
+            self._logger.error(f"Error applying module equivalents: {e}")
+
+        self._end_step('apply_module_equivalents')
         return self
 
     def fill_null_prices(self) -> "FitDataBuilder":
@@ -827,6 +905,7 @@ class DoctrineService:
         result = (
             FitDataBuilder(self._repo, self._price_service, self._logger)
             .load_raw_data()
+            .apply_module_equivalents()
             .fill_null_prices()
             .aggregate_summaries()
             .calculate_costs()

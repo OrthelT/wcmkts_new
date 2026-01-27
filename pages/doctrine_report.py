@@ -14,7 +14,7 @@ from logging_config import setup_logging
 from services import get_doctrine_service
 from services.categorization import categorize_ship_by_role
 from ui.formatters import get_doctrine_report_column_config, get_image_url, get_ship_role_format
-from ui.popovers import render_ship_with_popover, render_market_popover
+from ui.popovers import render_ship_with_popover, render_market_popover, has_equivalent_modules
 from state import ss_init, ss_get
 
 logger = setup_logging(__name__, log_file=__name__)
@@ -198,6 +198,9 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
                     )
                     st.markdown(f"{fit_name}  (**Target: {ship_target}**)")
 
+                # Track if any module has equivalents for caption
+                fit_has_equivalents = False
+
                 # Display the 3 lowest stock modules
                 for _, module_row in lowest_modules.iterrows():
                     # Get target for this fit from selected_data
@@ -255,14 +258,25 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
                                 key_suffix=f"dr_hull_{fit_id}"
                             )
                         else:
-                            # It's a module
+                            # It's a module - check for equivalents
+                            module_has_equiv = has_equivalent_modules(type_id) if type_id else False
+                            if module_has_equiv:
+                                fit_has_equivalents = True
+                                display_text = f"🔄 {module_name} ({stock})"
+                            else:
+                                display_text = f"{module_name} ({stock})"
+
                             render_market_popover(
                                 type_id=type_id,
                                 type_name=module_name,
                                 quantity=stock,
-                                display_text=f"{module_name} ({stock})",
+                                display_text=display_text,
                                 key_suffix=f"dr_mod_{fit_id}_{type_id}"
                             )
+
+                # Show caption if any module has equivalents
+                if fit_has_equivalents:
+                    st.caption("🔄 Stock includes equivalent modules")
 
                 # Add spacing between ships
                 st.markdown("<br>", unsafe_allow_html=True)

@@ -93,6 +93,75 @@ def get_doctrine_usage(type_id: int) -> list[dict]:
         return []
 
 
+def get_equivalent_modules(type_id: int) -> list[dict]:
+    """
+    Get equivalent modules for an item.
+
+    Args:
+        type_id: EVE type ID
+
+    Returns:
+        List of dicts with type_id, type_name, stock, price for each
+        equivalent module, or empty list if no equivalents
+    """
+    try:
+        from services import get_module_equivalents_service
+
+        equiv_service = get_module_equivalents_service()
+        group = equiv_service.get_equivalence_group(type_id)
+
+        if not group or len(group.modules) <= 1:
+            return []
+
+        return [
+            {
+                'type_id': m.type_id,
+                'type_name': m.type_name,
+                'stock': m.stock,
+                'price': m.price,
+            }
+            for m in group.modules
+        ]
+
+    except Exception:
+        return []
+
+
+def has_equivalent_modules(type_id: int) -> bool:
+    """
+    Check if a module has equivalent interchangeable modules.
+
+    Args:
+        type_id: EVE type ID
+
+    Returns:
+        True if module has equivalents, False otherwise
+    """
+    try:
+        from services import get_module_equivalents_service
+
+        equiv_service = get_module_equivalents_service()
+        return equiv_service.has_equivalents(type_id)
+
+    except Exception:
+        return False
+
+
+def get_equivalents_indicator(type_id: int) -> str:
+    """
+    Get the equivalents indicator icon if module has equivalents.
+
+    Args:
+        type_id: EVE type ID
+
+    Returns:
+        "🔄 " if module has equivalents, empty string otherwise
+    """
+    if has_equivalent_modules(type_id):
+        return "🔄 "
+    return ""
+
+
 def get_jita_price(type_id: int) -> float:
     """
     Get Jita sell price for an item.
@@ -121,6 +190,7 @@ def render_market_popover(
     display_text: Optional[str] = None,
     show_doctrine_usage: bool = True,
     show_jita: bool = True,
+    show_equivalents: bool = True,
     key_suffix: str = ""
 ) -> None:
     """
@@ -133,6 +203,7 @@ def render_market_popover(
         display_text: Text to display (defaults to type_name)
         show_doctrine_usage: Whether to show doctrine usage info
         show_jita: Whether to fetch and show Jita prices
+        show_equivalents: Whether to show equivalent modules section
         key_suffix: Unique suffix for the popover key
     """
     display = display_text or type_name
@@ -157,15 +228,29 @@ def render_market_popover(
 
         st.divider()
 
+        # Check for equivalent modules
+        equiv_modules = []
+        if show_equivalents:
+            equiv_modules = get_equivalent_modules(type_id)
+
         # Market data
         if market_data:
             st.markdown("**4-HWWF Market**")
 
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Price", format_price(market_data.get('price', 0)))
-            with col2:
-                st.metric("Stock", f"{market_data.get('total_volume_remain', 0):,}")
+            # If has equivalents, show combined stock
+            if equiv_modules:
+                combined_stock = sum(m['stock'] for m in equiv_modules)
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Price", format_price(market_data.get('price', 0)))
+                with col2:
+                    st.metric("Stock (Combined)", f"{combined_stock:,}")
+            else:
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Price", format_price(market_data.get('price', 0)))
+                with col2:
+                    st.metric("Stock", f"{market_data.get('total_volume_remain', 0):,}")
 
             col1, col2 = st.columns(2)
             with col1:
@@ -195,6 +280,23 @@ def render_market_popover(
 
         else:
             st.info("No market data available")
+
+        # Equivalent modules section
+        if equiv_modules:
+            st.divider()
+            st.markdown("**Equivalent Modules**")
+            combined_stock = sum(m['stock'] for m in equiv_modules)
+
+            for mod in equiv_modules:
+                mod_name = mod['type_name']
+                mod_stock = mod['stock']
+                # Highlight current module
+                if mod['type_id'] == type_id:
+                    st.text(f"  {mod_name}: {mod_stock:,}")
+                else:
+                    st.text(f"  {mod_name}: {mod_stock:,}")
+
+            st.caption(f"  **Total: {combined_stock:,}**")
 
         # Doctrine usage
         if show_doctrine_usage:

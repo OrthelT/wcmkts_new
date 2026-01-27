@@ -3,6 +3,7 @@ import os
 from logging_config import setup_logging
 from sync_state import update_wcmkt_state
 from time import perf_counter
+from init_equivalents import init_module_equivalents, get_equivalents_count
 
 logger = setup_logging(__name__)
 def verify_db_path(path):
@@ -53,7 +54,20 @@ def init_db():
     logger.info("-"*100)
 
     logger.info("wcmkt state updated✅")
+
+    # Initialize module equivalents table
     logger.info("-"*100)
+    logger.info("initializing module equivalents")
+    logger.info("-"*100)
+
+    equiv_count = get_equivalents_count(mkt_db)
+    if equiv_count == 0:
+        init_module_equivalents(mkt_db)
+        equiv_count = get_equivalents_count(mkt_db)
+
+    logger.info(f"module equivalents count: {equiv_count}")
+    logger.info("-"*100)
+
     end_time = perf_counter()
     elapsed_time = round((end_time-start_time)*1000, 2)
     logger.info(f"TIME init_db() = {elapsed_time} ms")

@@ -25,11 +25,11 @@ At the end of each task:
 
 ---
 
-## Status: PHASE 5 COMPLETE (Debugging)
+## Status: PHASE 6 COMPLETE (Faction Module Map)
 
-**Completed:** 2026-01-26
+**Completed:** 2026-01-27
 
-All bugs identified in Phase 5 have been fixed. Tests pass (37 tests).
+Phase 6 implemented interchangeable faction module mapping for aggregated stock calculations. Tests pass (37 tests).
 
 ---
 
@@ -177,21 +177,27 @@ All bugs identified in Phase 5 have been fixed. Tests pass (37 tests).
 |------|---------|
 | `services/low_stock_service.py` | Low stock data operations service |
 | `services/selection_service.py` | Selection state management service |
+| `services/module_equivalents_service.py` | **Phase 6:** Equivalence lookup service for interchangeable faction modules |
 | `ui/popovers.py` | Reusable market data popover components |
+| `init_equivalents.py` | **Phase 6:** Module equivalents table initialization and CSV loading |
 
 ### Files Modified
 | File | Changes |
 |------|---------|
 | `services/__init__.py` | Added exports for new services |
 | `services/pricer_service.py` | Added market stats and doctrine info methods |
-| `services/low_stock_service.py` | **Phase 5:** Fixed connection scope bug in `get_doctrine_options()` |
+| `services/low_stock_service.py` | **Phase 5:** Fixed connection scope bug; **Phase 6:** Added `_apply_equivalents_to_stock()` for aggregated stock |
+| `services/doctrine_service.py` | **Phase 6:** Added `apply_module_equivalents()` pipeline step to FitDataBuilder |
 | `domain/pricer.py` | Added new fields to PricedItem |
-| `ui/__init__.py` | Added popover exports |
-| `ui/popovers.py` | **Phase 5:** Fixed `get_jita_price()` to return float instead of PriceResult |
+| `models.py` | **Phase 6:** Added `ModuleEquivalents` SQLAlchemy model |
+| `init_db.py` | **Phase 6:** Added call to `init_module_equivalents()` |
+| `ui/__init__.py` | Added popover exports; **Phase 6:** Added equivalents helper function exports |
+| `ui/popovers.py` | **Phase 5:** Fixed `get_jita_price()`; **Phase 6:** Added equivalents section and helper functions |
+| `repositories/doctrine_repo.py` | **Phase 6:** Added `get_module_stock_with_equivalents()`, `get_equivalent_modules_stock()` |
 | `pages/low_stock.py` | Complete refactor to use LowStockService |
 | `pages/pricer.py` | Added new columns and doctrine highlighting |
-| `pages/doctrine_status.py` | Added popovers, improved sidebar |
-| `pages/doctrine_report.py` | Added popovers, improved sidebar |
+| `pages/doctrine_status.py` | Added popovers, improved sidebar; **Phase 6:** Added 🔄 indicator for modules with equivalents |
+| `pages/doctrine_report.py` | Added popovers, improved sidebar; **Phase 6:** Added 🔄 indicator for modules with equivalents |
 
 ---
 
@@ -243,14 +249,85 @@ with self._mkt_db.engine.connect() as conn:
 - Syntax validation: ✅ Both files pass `py_compile`
 - Test suite: ✅ All 37 tests pass 
 
-## TASK 6: Faction Map
+## TASK 6: Faction Map ✅ COMPLETE
 
-### Map faction modules to sum of the stock of identical modules
-- Throughout the app, when a faction module (meta group 7) is used in a fit, in some cases there are identical module with the exact same attributes. 
-- Our stock levels show as low, even though there are sufficient quantities available. 
-- csvfiles/factionmap.csv contains a list of modules that can be used interchangeably with 'Dark Blood Thermal Armor Hardner.' (type_id= 13984)
-- design a schema and add a database table with a Base model to contain doctrine modules that have interchangeable counterparts. Use this module as a guide. Load it in the table and refactor the code to use it. 
-- for modules with counterparts that can be used interchangeably, use the sum or all modules that may be used interchangeably calculate stock levels everywhere in the app. Doctrine popovers should be extended with a list of the configured module stock levels and all interchangeable modules. For  'Dark Blood Thermal Armor Hardner.' (type_id= 13984), there are 5 other modules listed in the csv which have identical attributes. Stock levels should be based on the sum of all their stock levels in any fit that uses this module. 
+**Status:** Implemented
+
+**Changes Made:**
+
+1. **Created `models.py` - ModuleEquivalents model**:
+   - New SQLAlchemy ORM model for `module_equivalents` table
+   - Columns: `id`, `group_id`, `type_id`, `type_name`
+   - `group_id` identifies equivalence groups (all modules with same group_id are interchangeable)
+
+2. **Created `init_equivalents.py`** - Table initialization:
+   - `create_module_equivalents_table()` - Creates table using SQLAlchemy metadata
+   - `load_equivalents_from_csv()` - Loads from CSV with group_id
+   - `init_module_equivalents()` - Main initialization function
+   - `get_equivalents_count()` - Returns count of entries
+   - Called from `init_db.py` during database initialization
+
+3. **Created `services/module_equivalents_service.py`** - Equivalence lookup service:
+   - `ModuleEquivalentsService` class with methods:
+     - `get_equivalent_type_ids(type_id)` - Returns all equivalent type_ids
+     - `get_equivalence_group(type_id)` - Returns full group with stock info
+     - `has_equivalents(type_id)` - Checks if module has equivalents
+     - `get_aggregated_stock(type_ids)` - Returns combined stock
+     - `get_type_ids_with_equivalents()` - Returns all type_ids with equivalents
+   - Domain models: `EquivalentModule`, `EquivalenceGroup`
+   - Cached query functions using `@st.cache_data` for performance
+
+4. **Updated `repositories/doctrine_repo.py`**:
+   - Added `get_module_stock_with_equivalents()` - Returns stock including equivalents
+   - Added `get_equivalent_modules_stock()` - Returns list of equivalent modules with individual stocks
+
+5. **Updated `services/doctrine_service.py`**:
+   - Added `apply_module_equivalents()` pipeline step in FitDataBuilder
+   - Updates `fits_on_mkt` based on combined stock across all equivalents
+   - Added to `build_fit_data()` pipeline between `load_raw_data()` and `fill_null_prices()`
+
+6. **Updated `ui/popovers.py`**:
+   - Added `get_equivalent_modules()` - Returns list of equivalent modules
+   - Added `has_equivalent_modules()` - Checks if module has equivalents
+   - Added `get_equivalents_indicator()` - Returns "🔄 " indicator for modules with equivalents
+   - Updated `render_market_popover()` with "Equivalent Modules" section showing:
+     - Each equivalent module with its individual stock
+     - Combined total stock across all equivalents
+
+7. **Updated `services/low_stock_service.py`**:
+   - Added `_apply_equivalents_to_stock()` method
+   - Updates `total_volume_remain` and `days_remaining` based on combined stock
+
+8. **Updated `pages/doctrine_status.py`**:
+   - Added 🔄 indicator next to module names that have equivalents
+   - Added caption "🔄 Stock includes equivalent modules" when fit contains modules with equivalents
+
+9. **Updated `pages/doctrine_report.py`**:
+   - Added 🔄 indicator next to module names that have equivalents
+   - Added caption "🔄 Stock includes equivalent modules" when fit contains modules with equivalents
+
+**Data Structure:**
+```csv
+# csvfiles/factionmap.csv
+type_id,type_name
+13984,Dark Blood Thermal Armor Hardener
+17838,Federation Navy Thermal Armor Hardener
+15705,Imperial Navy Thermal Armor Hardener
+28528,Khanid Navy Thermal Armor Hardener
+14065,Shadow Serpentis Thermal Armor Hardener
+13982,True Sansha Thermal Armor Hardener
+```
+
+**UI Indicators:**
+- 🔄 icon badge next to module names in doctrine pages
+- Caption "🔄 Stock includes equivalent modules" on fit cards
+- Popover shows "Equivalent Modules" section with breakdown
+
+**Architectural Decisions:**
+- **group_id pattern:** All modules in a CSV get the same group_id (currently group_id=1 for thermal hardeners)
+- **Extensibility:** Add more equivalence groups by adding rows with new group_id values to CSV or creating additional CSV files
+- **Caching:** Equivalence lookups cached with `@st.cache_data(ttl=3600)` for performance
+- **Backward Compatibility:** Modules without equivalents continue to work as before 
 
 
 

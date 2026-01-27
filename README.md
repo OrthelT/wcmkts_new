@@ -7,6 +7,15 @@ CONTRIBUTING: Contributors welcome. This project is fully open source under MIT 
 
 
 # UPDATES:
+## version 0.1.6
+### Interchangeable Faction Module Support (Phase 6)
+- Added support for equivalent faction modules (e.g., Dark Blood Thermal Armor Hardener and its 5 equivalents)
+- Stock levels now aggregate across all interchangeable modules for accurate fit calculations
+- 🔄 indicator shown next to modules with equivalents in Doctrine Status/Report pages
+- Popovers display "Equivalent Modules" section with individual and combined stock
+- New `module_equivalents` database table for configuring interchangeable module groups
+- New `ModuleEquivalentsService` for equivalence lookups and aggregated stock calculations
+
 ## version 0.1.5
 ### Low Stock Page Enhancements
 - Added Doctrine/Fit filtering with ship images in sidebar
@@ -26,6 +35,7 @@ CONTRIBUTING: Contributors welcome. This project is fully open source under MIT 
 ### New Services
 - `LowStockService` - Low stock data operations with filtering
 - `SelectionService` - Selection state management for doctrine pages
+- `ModuleEquivalentsService` - Equivalence lookups for interchangeable faction modules
 - `ui/popovers.py` - Reusable market data popover components
 
 ### Bug Fixes (Phase 5)

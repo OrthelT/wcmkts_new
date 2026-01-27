@@ -350,6 +350,9 @@ class LowStockService:
         This is the main data fetching method that combines market stats
         with doctrine information and applies all filters.
 
+        For items with equivalents, the stock and days_remaining are
+        calculated based on combined stock across all equivalent modules.
+
         Args:
             filters: Optional LowStockFilters configuration
 
@@ -374,6 +377,9 @@ class LowStockService:
 
             if df.empty:
                 return df
+
+            # Apply module equivalents to adjust stock and days_remaining
+            df = self._apply_equivalents_to_stock(df)
 
             # Apply category filter
             if filters.categories:
@@ -432,6 +438,80 @@ class LowStockService:
         except Exception as e:
             self._logger.error(f"Failed to get low stock items: {e}")
             return pd.DataFrame()
+
+    def _apply_equivalents_to_stock(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Apply module equivalents to adjust stock and days_remaining.
+
+        For items that have equivalent modules, updates:
+        - total_volume_remain: Combined stock across all equivalents
+        - days_remaining: Recalculated based on combined stock
+
+        Args:
+            df: DataFrame with market stats
+
+        Returns:
+            DataFrame with adjusted stock for items with equivalents
+        """
+        if df.empty:
+            return df
+
+        try:
+            from services.module_equivalents_service import get_module_equivalents_service
+
+            equiv_service = get_module_equivalents_service()
+            type_ids_with_equivalents = equiv_service.get_type_ids_with_equivalents()
+
+            if not type_ids_with_equivalents:
+                return df
+
+            # Find type_ids in df that have equivalents
+            df_type_ids = set(df['type_id'].unique())
+            matching_type_ids = df_type_ids.intersection(type_ids_with_equivalents)
+
+            if not matching_type_ids:
+                return df
+
+            self._logger.debug(f"Applying equivalents for {len(matching_type_ids)} items")
+
+            # Get aggregated stock for each
+            aggregated_stocks = equiv_service.get_aggregated_stock(list(matching_type_ids))
+
+            # Update stock and recalculate days_remaining
+            df = df.copy()
+            df['has_equivalents'] = False
+
+            for type_id, total_stock in aggregated_stocks.items():
+                mask = df['type_id'] == type_id
+
+                if not mask.any():
+                    continue
+
+                # Get avg_volume for days calculation
+                avg_volume = df.loc[mask, 'avg_volume'].iloc[0]
+                original_stock = df.loc[mask, 'total_volume_remain'].iloc[0]
+
+                # Update stock
+                df.loc[mask, 'total_volume_remain'] = total_stock
+                df.loc[mask, 'has_equivalents'] = True
+
+                # Recalculate days_remaining
+                if avg_volume and avg_volume > 0:
+                    new_days = total_stock / avg_volume
+                    df.loc[mask, 'days_remaining'] = new_days
+                    self._logger.debug(
+                        f"type_id {type_id}: stock {original_stock} -> {total_stock}, "
+                        f"days_remaining recalculated to {new_days:.1f}"
+                    )
+
+            return df
+
+        except ImportError:
+            self._logger.warning("Module equivalents service not available")
+            return df
+        except Exception as e:
+            self._logger.error(f"Error applying equivalents to stock: {e}")
+            return df
 
     def _get_type_ids_for_fits(self, fit_ids: list[int]) -> list[int]:
         """

@@ -23,6 +23,9 @@ from ui.popovers import (
     render_market_popover,
     render_item_with_popover,
     render_ship_with_popover,
+    has_equivalent_modules,
+    get_equivalents_indicator,
+    get_equivalent_modules,
 )
 
 __all__ = [
@@ -39,4 +42,7 @@ __all__ = [
     "render_market_popover",
     "render_item_with_popover",
     "render_ship_with_popover",
+    "has_equivalent_modules",
+    "get_equivalents_indicator",
+    "get_equivalent_modules",
 ]
