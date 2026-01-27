@@ -490,12 +490,11 @@ The codebase follows a strict layered architecture. Dependencies must flow **dow
 
 | Layer | May Import From | Must NOT Import From |
 |-------|-----------------|----------------------|
-| `pages/` | `state/`, `ui/`, `facades/`, `services/`, `domain/`, `repositories/` | - |
+| `pages/` | `state/`, `ui/`, `services/`, `domain/`, `repositories/` | - |
 | `state/` | `streamlit`, `typing`, `domain/` (type hints only) | `services/`, `repositories/`, `ui/`, `pages/`, `config` |
-| `ui/` | `domain/` only | `services/`, `facades/`, `pages/`, `app.py`, `state/` |
-| `facades/` | `services/`, `repositories/`, `domain/` | `ui/`, `pages/`, `state/` |
-| `services/` | `repositories/`, `domain/`, `config` (NO streamlit†) | `ui/`, `facades/`, `pages/` |
-| `repositories/` | `domain/`, `config`, `models` (NO streamlit†) | `services/`, `facades/`, `ui/`, `pages/` |
+| `ui/` | `domain/` only | `services/`, `pages/`, `app.py`, `state/` |
+| `services/` | `repositories/`, `domain/`, `config` (NO streamlit†) | `ui/`, `pages/` |
+| `repositories/` | `domain/`, `config`, `models` (NO streamlit†) | `services/`, `ui/`, `pages/` |
 | `domain/` | Python stdlib only | Everything else |
 
 †Services and repositories use try/except imports from `state/` only in factory functions to maintain testability outside Streamlit.
@@ -503,8 +502,7 @@ The codebase follows a strict layered architecture. Dependencies must flow **dow
 **Common Circular Import Causes:**
 1. **UI importing from services** - UI layer should only use domain enums/models
 2. **Importing from `app.py`** - Entry point should never be imported
-3. **Services importing from facades** - Facades wrap services, not vice versa
-4. **State importing from services/repositories** - Since services and repositories import from `state/` in their factory functions, the `state/` module must NOT import from them (would cause circular dependency)
+3. **State importing from services/repositories** - Since services and repositories import from `state/` in their factory functions, the `state/` module must NOT import from them (would cause circular dependency)
 
 **Example - Correct Pattern:**
 ```python
@@ -521,6 +519,7 @@ def get_ship_role_format(role: str) -> str:
 # ui/formatters.py - WRONG
 from services.categorization import get_ship_role_object  # ✗ services!
 from app import logger  # ✗ entry point!
+from state.session_state import ss_get  # ✗ state!
 ```
 
 ## Version Information
@@ -557,7 +556,6 @@ from app import logger  # ✗ entry point!
 - **`repositories/`**: Database access layer (DoctrineRepository)
 - **`services/`**: Business logic (DoctrineService, PriceService, PricerService, categorization)
 - **`state/`**: Session state management (ss_get, ss_has, ss_init, get_service)
-- **`facades/`**: Simplified API layer (DoctrineFacade)
 - **`ui/`**: UI formatting utilities and column configurations
 - **`pages/`**: Streamlit application pages
 - **`parser/`**: EFT fitting and item list parser (open source contribution)

@@ -20,8 +20,9 @@ services/         # Business logic layer
   ├── doctrine_service.py     # DoctrineService + FitDataBuilder + BuildMetadata
   └── categorization.py       # ShipRoleCategorizer + ConfigBasedCategorizer
 
-facades/          # Simplified API layer
-  └── doctrine_facade.py      # DoctrineFacade + get_doctrine_facade()
+state/            # Session state management
+  ├── session_state.py        # ss_get, ss_has, ss_init utilities
+  └── service_registry.py     # get_service singleton management
 ```
 
 **Refactoring Complete! To deploy:**
@@ -30,11 +31,12 @@ facades/          # Simplified API layer
 3. **Deploy** - Pages are ready for production use
 
 **What was accomplished:**
-- ✅ 7 phases complete: Domain → Repository → Services → Categorization → Facade → Pages
+- ✅ 7 phases complete: Domain → Repository → Services → Categorization → Service Registry → Pages → Performance
 - ✅ ~233 lines of code eliminated from pages
-- ✅ 100% of data operations flow through facade API
+- ✅ 100% of data operations flow through service layer
 - ✅ Major performance improvements (eliminated repeated file I/O)
-- ✅ Clean architecture: Pages → Facade → Services → Repository → Database
+- ✅ Clean architecture: Pages → Services → Repository → Database
+- ✅ Facades layer deprecated (unnecessary abstraction removed)
 
 **Next steps:** Manual testing, then deprecate `doctrines.py` in future cleanup phase
 
@@ -102,16 +104,15 @@ wcmkts_new/
 │   ├── price_service.py   # ✅ COMPLETED - Price fetching with fallback chain
 │   ├── doctrine_service.py    # Business logic orchestration
 │   └── categorization.py      # Ship role categorization strategies
-├── facades/
-│   ├── __init__.py
-│   └── doctrine_facade.py     # Simplified interface for Streamlit pages
 ├── pages/
-│   ├── doctrine_status.py     # Uses facade (simplified)
-│   └── doctrine_report.py     # Uses facade (simplified)
+│   ├── doctrine_status.py     # Uses services directly
+│   └── doctrine_report.py     # Uses services directly
 ├── config.py                  # DatabaseConfig (unchanged)
 ├── db_handler.py              # Keep for non-doctrine queries
 └── doctrines.py               # Eventually deprecated, replaced by services
 ```
+
+**Note:** The `facades/` layer was originally planned but has been **deprecated and removed** (see Architectural Changes section below). Pages now interact directly with services via factory functions and the service registry pattern.
 
 ---
 
@@ -174,12 +175,15 @@ class FitDataBuilder:
     def build(self) -> tuple[pd.DataFrame, pd.DataFrame]: ...
 ```
 
-### 6. Facade Pattern (simplified interface)
+### 6. Service Registry Pattern (session state management)
 ```python
-class DoctrineFacade:
-    def get_all_fit_summaries(self) -> list[FitSummary]: ...
-    def get_fits_by_status(self, status: str) -> list[FitSummary]: ...
-    def get_module_stock_info(self, names: list[str]) -> dict: ...
+from state.service_registry import get_service
+
+# Access services via centralized registry
+doctrine_service = get_service(DoctrineService)
+price_service = get_service(PriceService)
+
+# Services are cached in session state for lifecycle management
 ```
 
 ---
@@ -463,9 +467,11 @@ print(role_str)  # "DPS"
 - **Dependency Injection**: Factory function enables easy testing with mock configurations
 - **Configuration as Code**: Frozen dataclass makes config immutable and cacheable
 
-### `facades/doctrine_facade.py` (✅ Complete)
+### ~~`facades/doctrine_facade.py`~~ (✅ Complete, Later Deprecated)
 
-**Phase 5 Goal:** Create a unified, simplified API that Streamlit pages can use without needing to understand the underlying service architecture.
+**Phase 5 Goal (Original):** Create a unified, simplified API that Streamlit pages can use without needing to understand the underlying service architecture.
+
+**Note:** This component was completed but later deprecated and removed. See "Architectural Changes & Deprecations" section for details on why the facade pattern was removed in favor of direct service access via the service registry.
 
 **Key Components:**
 
@@ -520,34 +526,28 @@ The facade orchestrates 4 services transparently:
 - **PriceService** - Price lookups with fallback chain
 - **ConfigBasedCategorizer** - Ship role categorization
 
-**Example Usage:**
+**Example Usage (Historical - No Longer Valid):**
 
 ```python
-from facades import get_doctrine_facade
+# This code is no longer valid - facades have been removed
+# Pages now use services directly via factory functions
 
-# Get facade (cached in session state)
-facade = get_doctrine_facade()
+# Modern approach (current):
+from services import get_doctrine_service, get_price_service
+from services.categorization import get_ship_role_categorizer
 
-# Get all fit summaries with computed properties
-summaries = facade.get_all_fit_summaries()
-for fit in summaries:
-    print(f"{fit.ship_name}: {fit.target_percentage}% ({fit.status.display_name})")
+doctrine_service = get_doctrine_service()
+price_service = get_price_service()
+categorizer = get_ship_role_categorizer()
+
+# Get all fit summaries
+summaries = doctrine_service.get_all_fit_summaries()
 
 # Get critical fits
-critical = facade.get_critical_fits()
-print(f"Found {len(critical)} critical fits")
-
-# Get module stock
-module = facade.get_module_stock("Damage Control II")
-print(f"{module.type_name}: {module.total_stock} in stock")
+critical = doctrine_service.get_critical_fits()
 
 # Categorize ship
-role = facade.categorize_ship("Hurricane", 473)
-print(f"{role.display_emoji} {role.display_name}")
-
-# Get Jita price
-price = facade.get_jita_price(2048)
-print(f"Price: {price:,.2f} ISK")
+role = categorizer.categorize("Hurricane", 473)
 ```
 
 **Verification Results:**
@@ -610,49 +610,45 @@ All 7 test suites passed:
 - ~50 lines added, ~43 duplicate lines removed
 - Net impact: Cleaner, more maintainable codebase
 
-### `facades/doctrine_facade.py` - Phase 6 Extensions (✅ Complete)
+### Service Layer Enhancements - Phase 6 Preparation (✅ Complete)
 
-**Phase 6 Goal:** Extend facade with methods needed for page refactoring
+**Phase 6 Goal:** Ensure services provide all methods needed for page refactoring
 
-**Methods Added (2 new methods):**
+**Repository Methods Used Directly:**
+- `get_target_by_fit_id(fit_id)` - Get ship target for a specific fit ID
+- `get_target_by_ship_id(ship_id)` - Get ship target for a specific ship type ID
 
-| Method | Returns | Purpose |
-|--------|---------|---------|
-| `get_target_by_fit_id(fit_id)` | int | Get ship target for a specific fit ID |
-| `get_target_by_ship_id(ship_id)` | int | Get ship target for a specific ship type ID |
-
-**Design Rationale:**
-- Both methods delegate to existing repository methods (`get_target_by_fit_id`, `get_target_by_ship_id`)
-- Replaces the anti-pattern `get_ship_target(ship_id, fit_id)` which used "magic zeros"
+**Design Improvements:**
+- Replaced the anti-pattern `get_ship_target(ship_id, fit_id)` which used "magic zeros"
 - Default to `DEFAULT_SHIP_TARGET` (20) if not found
-- Consistent with facade's design principle: expose repository methods as needed
+- Pages now access repository methods directly when needed
 
 **Impact:**
 - Eliminated confusing "magic zero" parameter pattern
-- Clearer API: `get_target_by_fit_id(473)` vs `get_ship_target(0, 473)`
-- Total facade methods: **27 → 29** (2 added)
+- Clearer API: `repo.get_target_by_fit_id(473)` vs old `get_ship_target(0, 473)`
+- No unnecessary facade wrapper methods
 
 ### `pages/` - Phase 6 Refactoring (✅ Complete)
 
-**Phase 6 Goal:** Refactor Streamlit pages to use DoctrineFacade exclusively, eliminating direct database access and duplicate code
+**Phase 6 Goal:** Refactor Streamlit pages to use service layer directly, eliminating direct database access and duplicate code
 
 **Files Refactored:**
 - `pages/doctrine_status.py` (~990 lines)
 - `pages/doctrine_report.py` (~505 lines)
 
-**Functions Migrated to Facade (10 total):**
+**Functions Migrated to Service Layer (10 total):**
 
-| Function | Location | Lines Before | Lines After | Facade Method Used |
+| Function | Location | Lines Before | Lines After | Service Method Used |
 |----------|----------|--------------|-------------|-------------------|
-| `get_fit_name()` | doctrine_status.py | 9 | 0 (removed) | `facade.get_fit_name()` |
-| `get_fit_name_from_db()` | doctrine_report.py | 12 | 0 (removed) | `facade.get_fit_name()` |
-| `get_doctrine_lead_ship()` | doctrine_report.py | 8 | 0 (removed) | `facade.get_doctrine_lead_ship()` |
-| `get_ship_target()` | doctrine_status.py | 32 | 0 (removed) | `facade.get_target_by_fit_id/ship_id()` |
-| `get_module_stock_list()` | doctrine_status.py | 80 | 35 | `facade.get_module_stock()` |
-| `get_module_stock_list()` | doctrine_report.py | 30 | 25 | `facade.get_module_stock()` |
-| `categorize_ship_by_role()` | doctrine_report.py | 32 | 4 | `facade.categorize_ship()` |
-| `get_fit_summary()` | doctrine_status.py | 103 | 37 | `facade.get_all_fit_summaries()` |
-| Direct DB query | doctrine_report.py | 1 | 0 | `facade.get_all_doctrines()` |
+| `get_fit_name()` | doctrine_status.py | 9 | 0 (removed) | `repo.get_fit_name()` |
+| `get_fit_name_from_db()` | doctrine_report.py | 12 | 0 (removed) | `repo.get_fit_name()` |
+| `get_doctrine_lead_ship()` | doctrine_report.py | 8 | 0 (removed) | `repo.get_doctrine_lead_ship()` |
+| `get_ship_target()` | doctrine_status.py | 32 | 0 (removed) | `repo.get_target_by_fit_id/ship_id()` |
+| `get_module_stock_list()` | doctrine_status.py | 80 | 35 | `repo.get_module_stock()` |
+| `get_module_stock_list()` | doctrine_report.py | 30 | 25 | `repo.get_module_stock()` |
+| `categorize_ship_by_role()` | doctrine_report.py | 32 | 4 | `categorizer.categorize()` |
+| `get_fit_summary()` | doctrine_status.py | 103 | 37 | `service.get_all_fit_summaries()` |
+| Direct DB query | doctrine_report.py | 1 | 0 | `repo.get_all_doctrines()` |
 
 **Code Reduction:**
 - **doctrine_status.py**: ~140 lines removed
@@ -662,13 +658,13 @@ All 7 test suites passed:
 **Architecture Improvements:**
 
 1. **Eliminated Direct Database Access**
-   - All `read_df()` and `text()` SQL queries replaced with facade calls
+   - All `read_df()` and `text()` SQL queries replaced with service/repository calls
    - Removed 4 unused imports from doctrine_report.py (`sqlalchemy.text`, `read_df`, `DatabaseConfig`)
-   - Pages now operate as thin UI layers over facade API
+   - Pages now operate as thin UI layers over service API
 
 2. **Fixed Major Performance Issue**
    - **Before**: `categorize_ship_by_role()` loaded `settings.toml` on EVERY call (100+ times per page load!)
-   - **After**: Uses cached `facade.categorize_ship()` which loads config once
+   - **After**: Uses cached categorizer service which loads config once
    - **Impact**: Eliminates repeated file I/O, massive performance improvement
 
 3. **Eliminated Magic Zero Anti-Pattern**
@@ -678,12 +674,12 @@ All 7 test suites passed:
 
 4. **Simplified Complex Functions**
    - `get_fit_summary()`: 103 lines → 37 lines (64% reduction)
-   - Replaced manual DataFrame building with `facade.get_all_fit_summaries()`
+   - Replaced manual DataFrame building with `service.get_all_fit_summaries()`
    - Domain models converted to DataFrames only for display compatibility
 
 5. **Removed Duplicate Implementations**
-   - `get_fit_name()` / `get_fit_name_from_db()` - 2 identical copies → 1 facade call
-   - `get_module_stock_list()` - 2 inconsistent versions → 2 simplified facade wrappers
+   - `get_fit_name()` / `get_fit_name_from_db()` - 2 identical copies → 1 repository call
+   - `get_module_stock_list()` - 2 inconsistent versions → 2 simplified repository wrappers
    - `get_doctrine_lead_ship()` - duplicate removed
 
 **Type Safety Improvements:**
@@ -692,9 +688,9 @@ All 7 test suites passed:
 - Better IDE IntelliSense support from typed domain models
 
 **Session State Integration:**
-- Both pages now use `facade = get_doctrine_facade()` which caches in st.session_state
+- Both pages now use factory functions (e.g., `get_doctrine_service()`) which cache in st.session_state
 - Eliminates need for manual service instantiation in pages
-- Facade handles all caching transparently
+- Service registry handles all caching transparently
 
 **Verification:**
 - ⚠️ Manual testing required (Streamlit pages can't be unit tested easily)
@@ -715,10 +711,10 @@ All 7 test suites passed:
 **Impact Summary:**
 - ✅ 10 functions refactored across 2 pages
 - ✅ ~233 lines of code eliminated
-- ✅ 100% of data operations now flow through facade
+- ✅ 100% of data operations now flow through service layer
 - ✅ Major performance improvement (eliminated repeated TOML loading)
 - ✅ Eliminated 3 anti-patterns (magic zeros, direct DB access, duplicate code)
-- ✅ Extended facade API with 2 new methods
+- ✅ Cleaner service access via factory functions and service registry
 - ✅ Pages are now thin UI layers (architectural goal achieved)
 
 ---
@@ -754,26 +750,68 @@ Create `services/categorization.py` with:
 - [x] Backwards-compatible wrapper `categorize_ship_by_role()`
 - [x] Verification: 18/18 test scenarios passed
 
-### Phase 5: Facade ✅ COMPLETE
-Create `facades/doctrine_facade.py` with:
-- [x] `DoctrineFacade` class
-- [x] Simplified API for Streamlit pages (27 methods)
-- [x] Session state management via `get_doctrine_facade()`
-- [x] Orchestration of 4 underlying services
-- [x] Lazy initialization via @property decorators
-- [x] Comprehensive test suite (7/7 tests passed)
+### Phase 5: ~~Facade~~ Service Registry ✅ COMPLETE (Later Refactored)
+~~Create `facades/doctrine_facade.py`~~ Create service registry pattern:
+- [x] ~~`DoctrineFacade` class~~ (later deprecated)
+- [x] ~~Simplified API for Streamlit pages~~ (replaced with direct service access)
+- [x] Session state management via service registry
+- [x] Factory functions for service instantiation
+- [x] Centralized service lifecycle management
+- [x] **Note:** Facade pattern was implemented but later removed as unnecessary abstraction
 
 ### Phase 6: Page Refactoring ✅ COMPLETE
-Update Streamlit pages to use facade:
-- [x] `doctrine_status.py` - replace direct DB calls with facade
-- [x] `doctrine_report.py` - replace direct DB calls with facade
+Update Streamlit pages to use services directly:
+- [x] `doctrine_status.py` - replace direct DB calls with service layer
+- [x] `doctrine_report.py` - replace direct DB calls with service layer
 - [x] Remove duplicated functions
-- [x] Extended facade with 2 new methods (get_target_by_fit_id, get_target_by_ship_id)
+- [x] Use factory functions for service access (get_doctrine_service, etc.)
 - [x] Eliminated ~233 lines of duplicate/complex code
 - [x] Fixed major performance issue (TOML loading on every call)
 
 ### Phase 7: Performance Debugging ✅ COMPLETE
 - [x] identify sources of sluggish performance and correct them
+
+---
+
+## Architectural Changes & Deprecations
+
+### Facades Layer Removal (2026-01)
+
+**Status:** ✅ DEPRECATED AND REMOVED
+
+**Rationale:**
+The `facades/` layer was originally designed as a simplified API layer to provide a unified interface for Streamlit pages. However, after implementation and usage, it was determined that the facade pattern added unnecessary complexity without sufficient benefit:
+
+1. **Unnecessary Abstraction**: The facade primarily acted as a pass-through to service methods, adding an extra layer without meaningful value
+2. **Maintenance Overhead**: Required maintaining wrapper methods that simply delegated to underlying services
+3. **Service Registry Pattern**: The introduction of the `state/service_registry.py` module (with `get_service()` function) provides cleaner service access via session state
+4. **Direct Service Access**: Pages can interact directly with services using factory functions, which is simpler and more maintainable
+
+**Migration Path:**
+Pages that previously used `DoctrineFacade` were refactored to:
+- Use factory functions from services directly (e.g., `get_doctrine_service()`, `get_price_service()`)
+- Access services via the service registry pattern for session state management
+- Import only the specific services needed rather than a monolithic facade
+
+**Files Removed:**
+- `facades/__init__.py`
+- `facades/doctrine_facade.py`
+
+**Impact:**
+- Simplified architecture with one fewer layer
+- Reduced code duplication (no wrapper methods)
+- Clearer dependency paths
+- Easier testing (services can be mocked directly)
+- Better alignment with clean architecture principles
+
+**Current Architecture:**
+```
+pages/ → state/service_registry → services/ → repositories/ → domain/ → infrastructure
+```
+
+The service registry provides centralized service instance management while maintaining loose coupling and testability.
+
+---
 
 # Phase 7: Performance Debugging
 
@@ -925,15 +963,16 @@ Spawn a “code simplification” agent to critique your proposed plan. Incorpor
 When continuing this work, read these files for context:
 
 ```
-facades/doctrine_facade.py    # Simplified unified API (Phase 5 ✅)
+state/service_registry.py     # Service registry pattern (Phase 5 ✅)
+state/session_state.py        # Session state utilities
 services/categorization.py    # Ship role categorization (Phase 4 ✅)
 services/doctrine_service.py  # Business logic with Builder pattern (Phase 3 ✅)
 repositories/doctrine_repo.py # Repository for doctrine DB access (Phase 2 ✅)
 services/price_service.py     # Price fetching with fallback chain (Phase 0 ✅)
 domain/models.py              # Domain models (FitItem, FitSummary, etc.) (Phase 1 ✅)
 domain/enums.py               # Status and role enums (Phase 1 ✅)
-pages/doctrine_status.py      # Page to refactor (Phase 6 next)
-pages/doctrine_report.py      # Page to refactor (Phase 6 next)
+pages/doctrine_status.py      # Refactored page (Phase 6 ✅)
+pages/doctrine_report.py      # Refactored page (Phase 6 ✅)
 doctrines.py                  # Original code (being replaced)
 config.py                     # DatabaseConfig class (dependency)
 ```
