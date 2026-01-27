@@ -243,6 +243,15 @@ with self._mkt_db.engine.connect() as conn:
 - Syntax validation: ✅ Both files pass `py_compile`
 - Test suite: ✅ All 37 tests pass 
 
+## TASK 6: Faction Map
+
+### Map faction modules to sum of the stock of identical modules
+- Throughout the app, when a faction module (meta group 7) is used in a fit, in some cases there are identical module with the exact same attributes. 
+- Our stock levels show as low, even though there are sufficient quantities available. 
+- csvfiles/factionmap.csv contains a list of modules that can be used interchangeably with 'Dark Blood Thermal Armor Hardner.' (type_id= 13984)
+- design a schema and add a database table with a Base model to contain doctrine modules that have interchangeable counterparts. Use this module as a guide. Load it in the table and refactor the code to use it. 
+- for modules with counterparts that can be used interchangeably, use the sum or all modules that may be used interchangeably calculate stock levels everywhere in the app. Doctrine popovers should be extended with a list of the configured module stock levels and all interchangeable modules. For  'Dark Blood Thermal Armor Hardner.' (type_id= 13984), there are 5 other modules listed in the csv which have identical attributes. Stock levels should be based on the sum of all their stock levels in any fit that uses this module. 
+
 
 
 ## Testing & Debugging Notes
