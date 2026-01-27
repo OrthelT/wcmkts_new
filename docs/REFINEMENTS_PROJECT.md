@@ -25,11 +25,11 @@ At the end of each task:
 
 ---
 
-## Status: PHASE 1 COMPLETE
+## Status: PHASE 5 COMPLETE (Debugging)
 
 **Completed:** 2026-01-26
 
-All initial tasks have been implemented. See detailed completion notes below.
+All bugs identified in Phase 5 have been fixed. Tests pass (37 tests).
 
 ---
 
@@ -184,8 +184,10 @@ All initial tasks have been implemented. See detailed completion notes below.
 |------|---------|
 | `services/__init__.py` | Added exports for new services |
 | `services/pricer_service.py` | Added market stats and doctrine info methods |
+| `services/low_stock_service.py` | **Phase 5:** Fixed connection scope bug in `get_doctrine_options()` |
 | `domain/pricer.py` | Added new fields to PricedItem |
 | `ui/__init__.py` | Added popover exports |
+| `ui/popovers.py` | **Phase 5:** Fixed `get_jita_price()` to return float instead of PriceResult |
 | `pages/low_stock.py` | Complete refactor to use LowStockService |
 | `pages/pricer.py` | Added new columns and doctrine highlighting |
 | `pages/doctrine_status.py` | Added popovers, improved sidebar |
@@ -193,36 +195,53 @@ All initial tasks have been implemented. See detailed completion notes below.
 
 ---
 
-## TASK 5: Debugging
-This implementation has generated some bugs that need to be addressed. 
-### doctrine_status and doctrine_report fails on render_market_popover:
-- Doctrine status fails with the following error:
+## TASK 5: Debugging ✅ COMPLETE
 
-```bash
-Traceback (most recent call last):
-  File "/home/orthel/workspace/github/refactordoctrines/.venv/lib/python3.12/site-packages/streamlit/runtime/scriptrunner/exec_code.py", line 129, in exec_func_with_error_handling
-    result = func()
-             ^^^^^^
-  File "/home/orthel/workspace/github/refactordoctrines/.venv/lib/python3.12/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 671, in code_to_exec
-    exec(code, module.__dict__)  # noqa: S102
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/orthel/workspace/github/refactordoctrines/app.py", line 29, in <module>
-    pg.run()
-  File "/home/orthel/workspace/github/refactordoctrines/.venv/lib/python3.12/site-packages/streamlit/navigation/page.py", line 310, in run
-    exec(code, module.__dict__)  # noqa: S102
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/orthel/workspace/github/refactordoctrines/pages/doctrine_status.py", line 747, in <module>
-    main()
-  File "/home/orthel/workspace/github/refactordoctrines/pages/doctrine_status.py", line 491, in main
-    render_market_popover(
-  File "/home/orthel/workspace/github/refactordoctrines/ui/popovers.py", line 182, in render_market_popover
-    if jita_price > 0:
-       ^^^^^^^^^^^^^^
-TypeError: '>' not supported between instances of 'PriceResult' and 'int'
+**Status:** Fixed
+
+**Bugs Identified and Resolved:**
+
+### Bug 1: doctrine_status and doctrine_report fails on render_market_popover ✅
+
+**Root Cause:** In `ui/popovers.py`, the `get_jita_price()` function was returning `result.prices.get(type_id, 0)` which returns a `PriceResult` object (not a float). When the calling code compared `jita_price > 0`, it failed with `TypeError: '>' not supported between instances of 'PriceResult' and 'int'`.
+
+**Fix:** Changed `get_jita_price()` to use `BatchPriceResult.get_price()` method which properly extracts the float price value:
+```python
+# Before (wrong)
+return result.prices.get(type_id, 0)
+
+# After (correct)
+return result.get_price(type_id, default=0.0)
 ```
 
-### low_stock 
-- sidebar Doctrine/Fit filter is empty. 
+**File Changed:** `ui/popovers.py` (line 111)
+
+### Bug 2: low_stock sidebar Doctrine/Fit filter is empty ✅
+
+**Root Cause:** In `services/low_stock_service.py`, the `get_doctrine_options()` method executed a second database query **outside** the `with self._mkt_db.engine.connect() as conn:` block. The connection was already closed when the second query executed, causing a silent exception that returned an empty list.
+
+**Fix:** Moved the second query inside the `with` block so both queries use the same connection:
+```python
+# Before (wrong - second query outside with block)
+with self._mkt_db.engine.connect() as conn:
+    df = pd.read_sql_query(query, conn)
+
+fit_query = "SELECT doctrine_name, fit_id FROM doctrine_fits"
+fit_df = pd.read_sql_query(fit_query, conn)  # conn closed!
+
+# After (correct - both queries inside with block)
+with self._mkt_db.engine.connect() as conn:
+    df = pd.read_sql_query(query, conn)
+
+    fit_query = "SELECT doctrine_name, fit_id FROM doctrine_fits"
+    fit_df = pd.read_sql_query(fit_query, conn)
+```
+
+**File Changed:** `services/low_stock_service.py` (lines 228-232)
+
+### Verification
+- Syntax validation: ✅ Both files pass `py_compile`
+- Test suite: ✅ All 37 tests pass 
 
 
 

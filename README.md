@@ -1,4 +1,4 @@
-# Winter Coalition Market App (v.0.1.4)
+# Winter Coalition Market App (v.0.1.5)
 A Streamlit application for viewing EVE Online market statistics for Winter Coalition. This tool provides real-time market data analysis, historical price tracking, and fitting information for various items in EVE Online markets.
 
 SUPPORT: Join the Discord for support https://discord.gg/BxatJE572Y
@@ -8,6 +8,30 @@ CONTRIBUTING: Contributors welcome. This project is fully open source under MIT 
 
 # UPDATES:
 ## version 0.1.5
+### Low Stock Page Enhancements
+- Added Doctrine/Fit filtering with ship images in sidebar
+- Added Faction Items checkbox filter (metaGroupID=4)
+- Refactored to use new `LowStockService` for cleaner data operations
+
+### Pricer Page Enhancements
+- Added Stock Metrics columns: Avg Daily Volume, Days of Stock
+- Added Doctrine Items highlighting with toggle
+- Ship image header for EFT fitting inputs
+
+### Doctrine Status/Report Enhancements
+- Interactive market data popovers for all items and ships
+- Popovers show: item image, 4-HWWF price/stock, Jita price comparison, doctrine usage
+- Improved sidebar selections with code block formatting
+
+### New Services
+- `LowStockService` - Low stock data operations with filtering
+- `SelectionService` - Selection state management for doctrine pages
+- `ui/popovers.py` - Reusable market data popover components
+
+### Bug Fixes (Phase 5)
+- Fixed `render_market_popover` TypeError when comparing PriceResult to int
+- Fixed doctrine dropdown empty due to database connection scope error
+
 ### Ship Role Configuration
 - Moved ship role definitions to `settings.toml` for easier management without code changes
 - Added support for fit-specific role assignment (e.g. Vulture can be DPS or Links depending on fit)

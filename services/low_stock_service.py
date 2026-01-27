@@ -228,11 +228,11 @@ class LowStockService:
             with self._mkt_db.engine.connect() as conn:
                 df = pd.read_sql_query(query, conn)
 
-            # Get fit_ids for each doctrine
-            fit_query = "SELECT doctrine_name, fit_id FROM doctrine_fits"
-            fit_df = pd.read_sql_query(fit_query, conn)
+                # Get fit_ids for each doctrine - must be inside the with block
+                fit_query = "SELECT doctrine_name, fit_id FROM doctrine_fits"
+                fit_df = pd.read_sql_query(fit_query, conn)
 
-            # Group fit_ids by doctrine
+            # Group fit_ids by doctrine (can be outside with block, uses DataFrame)
             fit_ids_map = fit_df.groupby('doctrine_name')['fit_id'].apply(list).to_dict()
 
             result = []

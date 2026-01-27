@@ -101,16 +101,17 @@ def get_jita_price(type_id: int) -> float:
         type_id: EVE type ID
 
     Returns:
-        Jita sell price or 0 if not found
+        Jita sell price or 0.0 if not found
     """
     from services import get_price_service
 
     try:
         price_service = get_price_service()
         result = price_service.get_jita_prices([type_id])
-        return result.prices.get(type_id, 0)
+        # Use BatchPriceResult.get_price() which returns float, not PriceResult
+        return result.get_price(type_id, default=0.0)
     except Exception:
-        return 0
+        return 0.0
 
 
 def render_market_popover(

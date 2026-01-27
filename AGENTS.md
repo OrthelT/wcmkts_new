@@ -111,9 +111,22 @@ All pages follow consistent patterns with Streamlit best practices:
 - **`sample_eft-fit.txt`**: Example EFT fitting for testing
 - **`items.txt`**: Sample tab-separated item list for testing
 
-**Pricer Service Layer:**
+**Service Layer (`services/` directory):**
 - **`services/pricer_service.py`**: PricerService orchestrates parsing and price lookups from Jita (via Janice API or Fuzzworks) and 4-HWWF (local market database)
+- **`services/price_service.py`**: PriceService with provider chain (Fuzzwork → Janice) for Jita price lookups with caching
+- **`services/low_stock_service.py`**: LowStockService for low stock analysis with filtering (categories, doctrines, fits, tech2/faction items)
+- **`services/selection_service.py`**: SelectionService for managing item selections on doctrine pages with sidebar rendering
+- **`services/doctrine_service.py`**: DoctrineService and FitDataBuilder for doctrine fit aggregation
+
+**Domain Models (`domain/` directory):**
 - **`domain/pricer.py`**: Domain models including `PricedItem`, `PricingResult`, and `InputFormat` enum for EFT vs multibuy detection
+- **`domain/models.py`**: Core models: `FitItem`, `FitSummary`, `ModuleStock`
+- **`domain/enums.py`**: `StockStatus`, `ShipRole` enums with display formatting
+
+**UI Components (`ui/` directory):**
+- **`ui/popovers.py`**: Reusable market data popover components with item images, market stats, Jita prices, and doctrine usage
+- **`ui/formatters.py`**: Pure formatting functions for prices, percentages, image URLs
+- **`ui/column_definitions.py`**: Streamlit column_config definitions for data tables
 
 **Initialization & State:**
 - **`init_db.py`**: Database initialization with path verification and auto-sync for missing files
@@ -554,9 +567,9 @@ from state.session_state import ss_get  # ✗ state!
 ### Project Directories
 - **`domain/`**: Core business models (FitItem, FitSummary, StockStatus, ShipRole, PricedItem)
 - **`repositories/`**: Database access layer (DoctrineRepository)
-- **`services/`**: Business logic (DoctrineService, PriceService, PricerService, categorization)
+- **`services/`**: Business logic (DoctrineService, PriceService, PricerService, LowStockService, SelectionService, categorization)
 - **`state/`**: Session state management (ss_get, ss_has, ss_init, get_service)
-- **`ui/`**: UI formatting utilities and column configurations
+- **`ui/`**: UI formatting utilities, column configurations, and reusable popover components
 - **`pages/`**: Streamlit application pages
 - **`parser/`**: EFT fitting and item list parser (open source contribution)
 - **`tests/`**: pytest unit tests
