@@ -193,6 +193,39 @@ All initial tasks have been implemented. See detailed completion notes below.
 
 ---
 
+## TASK 5: Debugging
+This implementation has generated some bugs that need to be addressed. 
+### doctrine_status and doctrine_report fails on render_market_popover:
+- Doctrine status fails with the following error:
+
+```bash
+Traceback (most recent call last):
+  File "/home/orthel/workspace/github/refactordoctrines/.venv/lib/python3.12/site-packages/streamlit/runtime/scriptrunner/exec_code.py", line 129, in exec_func_with_error_handling
+    result = func()
+             ^^^^^^
+  File "/home/orthel/workspace/github/refactordoctrines/.venv/lib/python3.12/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 671, in code_to_exec
+    exec(code, module.__dict__)  # noqa: S102
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/orthel/workspace/github/refactordoctrines/app.py", line 29, in <module>
+    pg.run()
+  File "/home/orthel/workspace/github/refactordoctrines/.venv/lib/python3.12/site-packages/streamlit/navigation/page.py", line 310, in run
+    exec(code, module.__dict__)  # noqa: S102
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/orthel/workspace/github/refactordoctrines/pages/doctrine_status.py", line 747, in <module>
+    main()
+  File "/home/orthel/workspace/github/refactordoctrines/pages/doctrine_status.py", line 491, in main
+    render_market_popover(
+  File "/home/orthel/workspace/github/refactordoctrines/ui/popovers.py", line 182, in render_market_popover
+    if jita_price > 0:
+       ^^^^^^^^^^^^^^
+TypeError: '>' not supported between instances of 'PriceResult' and 'int'
+```
+
+### low_stock 
+- sidebar Doctrine/Fit filter is empty. 
+
+
+
 ## Testing & Debugging Notes
 
 ### Running the Application
