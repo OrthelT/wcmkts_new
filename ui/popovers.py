@@ -189,9 +189,10 @@ def render_market_popover(
     quantity: int = 1,
     display_text: Optional[str] = None,
     show_doctrine_usage: bool = True,
-    show_jita: bool = True,
+    show_jita: bool = False,
     show_equivalents: bool = True,
-    key_suffix: str = ""
+    key_suffix: str = "",
+    jita_prices: Optional[dict[int, float]] = None
 ) -> None:
     """
     Render a clickable item name with a market data popover.
@@ -202,9 +203,10 @@ def render_market_popover(
         quantity: Quantity to show (default 1)
         display_text: Text to display (defaults to type_name)
         show_doctrine_usage: Whether to show doctrine usage info
-        show_jita: Whether to fetch and show Jita prices
+        show_jita: Whether to show Jita prices (default False to avoid API calls)
         show_equivalents: Whether to show equivalent modules section
         key_suffix: Unique suffix for the popover key
+        jita_prices: Pre-fetched Jita prices dict {type_id: price} to avoid API calls
     """
     display = display_text or type_name
     unique_key = f"popover_{type_id}_{key_suffix}"
@@ -263,8 +265,15 @@ def render_market_popover(
                     st.metric("Days Stock", "N/A")
 
             # Jita price comparison
-            if show_jita:
-                jita_price = get_jita_price(type_id)
+            if show_jita or jita_prices:
+                # Use pre-fetched price if available, otherwise fetch
+                if jita_prices and type_id in jita_prices:
+                    jita_price = jita_prices[type_id]
+                elif show_jita:
+                    jita_price = get_jita_price(type_id)
+                else:
+                    jita_price = 0.0
+
                 if jita_price > 0:
                     st.divider()
                     st.markdown("**Jita**")

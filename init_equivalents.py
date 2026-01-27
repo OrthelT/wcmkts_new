@@ -4,9 +4,14 @@ Module Equivalents Initialization
 Creates and populates the module_equivalents table from CSV files.
 This table maps equivalent faction modules that can be used interchangeably
 when calculating stock levels.
+
+NOTE: This uses sqlite3 directly for table creation because the libsql
+embedded replica dialect doesn't persist table creations to the local file.
+The module_equivalents table is frontend-only and not synced from Turso.
 """
 
 import csv
+import sqlite3 as sql
 from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -22,6 +27,9 @@ def create_module_equivalents_table(db: DatabaseConfig) -> bool:
     """
     Create the module_equivalents table if it doesn't exist.
 
+    Uses raw sqlite3 to ensure the table is created in the local file,
+    since libsql embedded replica dialect doesn't persist DDL changes.
+
     Args:
         db: DatabaseConfig instance for the market database
 
@@ -29,8 +37,19 @@ def create_module_equivalents_table(db: DatabaseConfig) -> bool:
         True if table was created or already exists, False on error
     """
     try:
-        # Create table using SQLAlchemy metadata
-        Base.metadata.create_all(db.engine, tables=[ModuleEquivalents.__table__])
+        # Use raw sqlite3 to create table directly in local file
+        conn = sql.connect(db.path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS module_equivalents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id INTEGER NOT NULL,
+                type_id INTEGER NOT NULL,
+                type_name VARCHAR(255) NOT NULL
+            )
+        ''')
+        conn.commit()
+        conn.close()
         logger.info("module_equivalents table created or verified")
         return True
     except Exception as e:
@@ -45,6 +64,8 @@ def load_equivalents_from_csv(
 ) -> int:
     """
     Load module equivalents from a CSV file.
+
+    Uses raw sqlite3 to insert directly into the local file.
 
     Args:
         db: DatabaseConfig instance for the market database
@@ -61,36 +82,35 @@ def load_equivalents_from_csv(
     rows_inserted = 0
 
     try:
+        conn = sql.connect(db.path)
+        cursor = conn.cursor()
+
         with open(csv_path, 'r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
 
-            with Session(db.engine) as session:
-                for row in reader:
-                    type_id = int(row['type_id'])
-                    type_name = row['type_name'].strip()
+            for row in reader:
+                type_id = int(row['type_id'])
+                type_name = row['type_name'].strip()
 
-                    # Check if this type_id already exists in the group
-                    existing = session.execute(
-                        text("""
-                            SELECT id FROM module_equivalents
-                            WHERE group_id = :group_id AND type_id = :type_id
-                        """),
-                        {"group_id": group_id, "type_id": type_id}
-                    ).fetchone()
+                # Check if this type_id already exists in the group
+                cursor.execute(
+                    "SELECT id FROM module_equivalents WHERE group_id = ? AND type_id = ?",
+                    (group_id, type_id)
+                )
+                existing = cursor.fetchone()
 
-                    if existing:
-                        logger.debug(f"Skipping existing entry: {type_name} (type_id={type_id})")
-                        continue
+                if existing:
+                    logger.debug(f"Skipping existing entry: {type_name} (type_id={type_id})")
+                    continue
 
-                    equiv = ModuleEquivalents(
-                        group_id=group_id,
-                        type_id=type_id,
-                        type_name=type_name
-                    )
-                    session.add(equiv)
-                    rows_inserted += 1
+                cursor.execute(
+                    "INSERT INTO module_equivalents (group_id, type_id, type_name) VALUES (?, ?, ?)",
+                    (group_id, type_id, type_name)
+                )
+                rows_inserted += 1
 
-                session.commit()
+        conn.commit()
+        conn.close()
 
         logger.info(f"Loaded {rows_inserted} module equivalents from {csv_path.name}")
         return rows_inserted
@@ -104,6 +124,8 @@ def clear_equivalents_table(db: DatabaseConfig) -> bool:
     """
     Clear all data from the module_equivalents table.
 
+    Uses raw sqlite3 to delete directly from the local file.
+
     Args:
         db: DatabaseConfig instance for the market database
 
@@ -111,9 +133,11 @@ def clear_equivalents_table(db: DatabaseConfig) -> bool:
         True if successful, False on error
     """
     try:
-        with db.engine.connect() as conn:
-            conn.execute(text("DELETE FROM module_equivalents"))
-            conn.commit()
+        conn = sql.connect(db.path)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM module_equivalents")
+        conn.commit()
+        conn.close()
         logger.info("Cleared module_equivalents table")
         return True
     except Exception as e:
@@ -184,6 +208,8 @@ def get_equivalents_count(db: DatabaseConfig = None) -> int:
     """
     Get the count of entries in the module_equivalents table.
 
+    Uses raw sqlite3 to query directly from the local file.
+
     Args:
         db: DatabaseConfig instance (defaults to wcmkt)
 
@@ -194,10 +220,12 @@ def get_equivalents_count(db: DatabaseConfig = None) -> int:
         db = DatabaseConfig("wcmkt")
 
     try:
-        with db.engine.connect() as conn:
-            result = conn.execute(text("SELECT COUNT(*) FROM module_equivalents"))
-            count = result.fetchone()[0]
-            return count
+        conn = sql.connect(db.path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM module_equivalents")
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count
     except Exception as e:
         logger.error(f"Failed to get equivalents count: {e}")
         return 0

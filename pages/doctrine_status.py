@@ -208,6 +208,61 @@ def calculate_all_jita_deltas(force_refresh: bool = False):
         st.session_state.jita_deltas_last_updated = datetime.datetime.now()
 
 
+def prefetch_popover_data(filtered_df: pd.DataFrame) -> tuple[dict[str, int], dict[int, float]]:
+    """
+    Pre-fetch all data needed for popovers to avoid per-item API calls.
+
+    Collects all unique module names from lowest_modules, fetches their type_ids
+    via batch lookup, then fetches Jita prices for all type_ids in one API call.
+
+    Args:
+        filtered_df: The filtered DataFrame with fit summaries
+
+    Returns:
+        Tuple of (module_name_to_type_id, jita_prices)
+        - module_name_to_type_id: dict mapping module name -> type_id
+        - jita_prices: dict mapping type_id -> Jita price
+    """
+    # Collect all unique module names from lowest_modules
+    all_module_names = set()
+    all_ship_ids = set()
+
+    for _, row in filtered_df.iterrows():
+        # Collect ship_id
+        if pd.notna(row.get('ship_id')):
+            all_ship_ids.add(int(row['ship_id']))
+
+        # Extract module names from lowest_modules
+        lowest_modules = row.get('lowest_modules', [])
+        if lowest_modules:
+            for module in lowest_modules:
+                if isinstance(module, str) and ' (' in module:
+                    module_name = module.split(' (')[0]
+                    all_module_names.add(module_name)
+
+    logger.debug(f"Prefetching data for {len(all_module_names)} modules and {len(all_ship_ids)} ships")
+
+    # Batch fetch module stocks to get type_ids
+    module_name_to_type_id = {}
+    if all_module_names:
+        module_stocks = service.repository.get_multiple_module_stocks(list(all_module_names))
+        for name, stock in module_stocks.items():
+            module_name_to_type_id[name] = stock.type_id
+
+    # Collect all type_ids for Jita price fetch
+    all_type_ids = list(all_ship_ids) + list(module_name_to_type_id.values())
+
+    # Batch fetch Jita prices
+    jita_prices = {}
+    if all_type_ids:
+        price_service = get_price_service()
+        batch_result = price_service.get_jita_prices(all_type_ids)
+        jita_prices = batch_result.to_dict()
+        logger.debug(f"Prefetched {len(jita_prices)} Jita prices")
+
+    return module_name_to_type_id, jita_prices
+
+
 def main():
     # App title and logo
     col1, col2, col3 = st.columns([0.2, 0.5, 0.3])
@@ -308,6 +363,15 @@ def main():
 
     # Initialize module selection for export
     ss_init({'selected_modules': []})
+
+    # Pre-fetch all Jita prices and module type_ids for popovers
+    # This makes ONE batch API call instead of per-popover calls
+    module_type_ids, jita_prices = prefetch_popover_data(filtered_df)
+    logger.debug(f"Prefetched {len(module_type_ids)} module type_ids and {len(jita_prices)} Jita prices")
+
+    # Auto-calculate Jita deltas for fit costs on first load
+    if 'jita_deltas' not in st.session_state or not st.session_state.jita_deltas:
+        calculate_all_jita_deltas()
 
     # Group the data by ship_group
     grouped_fits = filtered_df.groupby('ship_group')
@@ -468,9 +532,8 @@ def main():
 
                             with col_b:
                                 # Display with color based on status and market popover
-                                # Get type_id for the module (need to look it up)
-                                module_stock = service.repository.get_module_stock(module_name)
-                                module_type_id = module_stock.type_id if module_stock else 0
+                                # Use pre-fetched type_id from batch lookup
+                                module_type_id = module_type_ids.get(module_name, 0)
 
                                 # Check if module has equivalents and add indicator
                                 module_has_equiv = has_equivalent_modules(module_type_id) if module_type_id else False
@@ -487,7 +550,8 @@ def main():
                                         type_name=module_name,
                                         quantity=int(module_qty),
                                         display_text=display_module,
-                                        key_suffix=f"mod_{row['fit_id']}_{i}"
+                                        key_suffix=f"mod_{row['fit_id']}_{i}",
+                                        jita_prices=jita_prices
                                     )
                                 elif mod_stock_status == StockStatus.NEEDS_ATTENTION:
                                     st.markdown(f":orange-badge[:material/error:]", help="Low stock")
@@ -496,7 +560,8 @@ def main():
                                         type_name=module_name,
                                         quantity=int(module_qty),
                                         display_text=display_module,
-                                        key_suffix=f"mod_{row['fit_id']}_{i}"
+                                        key_suffix=f"mod_{row['fit_id']}_{i}",
+                                        jita_prices=jita_prices
                                     )
                                 else:
                                     render_market_popover(
@@ -504,7 +569,8 @@ def main():
                                         type_name=module_name,
                                         quantity=int(module_qty),
                                         display_text=display_module,
-                                        key_suffix=f"mod_{row['fit_id']}_{i}"
+                                        key_suffix=f"mod_{row['fit_id']}_{i}",
+                                        jita_prices=jita_prices
                                     )
 
                         # Show caption if any module has equivalents
@@ -736,25 +802,20 @@ def main():
 
     jita_deltas = ss_get('jita_deltas', {})
 
-    if not jita_deltas:
-        if st.sidebar.button(
-            "📊 Calculate Jita Price Deltas",
-            help="Compare fit costs to Jita prices. Cached for 1 hour via the API response.",
-        ):
-            calculate_all_jita_deltas()
-            st.rerun()
-    else:
-        st.sidebar.success(f"✓ Jita deltas calculated for {len(jita_deltas)} fits")
+    if jita_deltas:
+        st.sidebar.success(f"✓ Jita prices loaded for {len(jita_deltas)} fits")
 
         if 'jita_deltas_last_updated' in st.session_state:
             timestamp = st.session_state.jita_deltas_last_updated
             time_str = timestamp.strftime("%H:%M:%S")
             st.sidebar.caption(f"Last updated: {time_str}")
 
-        if st.sidebar.button("🔄 Refresh Jita Prices", help="Fetch latest Jita prices (bypasses cache)"):
+        if st.sidebar.button("🔄 Refresh Jita Prices", help="Fetch latest Jita prices"):
             st.session_state.jita_deltas = {}
             calculate_all_jita_deltas(force_refresh=True)
             st.rerun()
+    else:
+        st.sidebar.info("Jita prices loading...")
     # Display last update timestamp
     st.sidebar.markdown("---")
     st.sidebar.write(f"Last ESI update: {get_update_time()}")

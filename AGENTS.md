@@ -125,13 +125,13 @@ All pages follow consistent patterns with Streamlit best practices:
 - **`domain/enums.py`**: `StockStatus`, `ShipRole` enums with display formatting
 
 **UI Components (`ui/` directory):**
-- **`ui/popovers.py`**: Reusable market data popover components with item images, market stats, Jita prices, and doctrine usage
+- **`ui/popovers.py`**: Reusable market data popover components with item images, market stats, Jita prices, and doctrine usage. Pass pre-fetched `jita_prices` dict to avoid per-popover API calls (Jita fetching is disabled by default)
 - **`ui/formatters.py`**: Pure formatting functions for prices, percentages, image URLs
 - **`ui/column_definitions.py`**: Streamlit column_config definitions for data tables
 
 **Initialization & State:**
 - **`init_db.py`**: Database initialization with path verification and auto-sync for missing files
-- **`init_equivalents.py`**: Module equivalents table initialization, loads interchangeable faction module mappings from CSV files
+- **`init_equivalents.py`**: Module equivalents table initialization, loads interchangeable faction module mappings from CSV files. Uses raw sqlite3 (not libsql) because the libsql embedded replica dialect doesn't persist DDL changes to the local SQLite file
 - **`sync_state.py`**: Updates session state with local/remote database update times for sync tracking
 - **`set_targets.py`**: Ship target management from database with default fallback
 - **`logging_config.py`**: Centralized logging setup with rotating file handlers
@@ -318,6 +318,7 @@ df = get_all_mkt_stats()  # Returns cached pandas DataFrame
 - **Concurrent reads**: Multiple read operations can occur simultaneously thanks to RWLock
 - **Malformed DB recovery**: Built into `db_handler.py` read functions
 - **Lazy download generation**: Use `st.download_button(data=callable)` pattern for on-demand data generation. Pass a function reference (not the result) to defer data loading until user clicks download. See `pages/downloads.py` for examples.
+- **Batch API fetching for popovers**: Streamlit popover content executes on every page rerun even when closed. Avoid API calls inside popovers by batch-fetching data before render loops. See `prefetch_popover_data()` in `pages/doctrine_status.py` for the pattern.
 
 ### Data Synchronization
 
