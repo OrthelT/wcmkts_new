@@ -140,7 +140,7 @@ def main():
         st.image(wclogo, width=125)
     with col2:
         st.title("4-HWWF Low Stock Tool")
-    
+
     st.markdown("""
     This page shows items that are running low on the market. The **Days Remaining** column shows how many days of sales
     can be sustained by the current stock based on historical average sales. Items with fewer days remaining need attention. The **Used In Fits** column shows the doctrine ships that use the item (if any) and the number of fits that the current market stock of the item can support.
@@ -228,18 +228,6 @@ def main():
             'group_name': st.column_config.TextColumn('Group', help='group of the item'),
         }
 
-        # manual column config replaced with st.column_config
-
-        # Rename columns
-        # column_renames = {
-        #     'type_name': 'Item',
-        #     'group_name': 'Group',
-        # }
-        # display_df = display_df.rename(columns=column_renames)
-
-        # Reorder columns
-        # column_order = ['Item', 'days_remaining', 'price', 'total_volume_remain', 'avg_volume', 'Used In Fits', 'Category', 'Group']
-        # display_df = display_df[column_order]
 
         # Add a color indicator for critical items
         def highlight_critical(val):

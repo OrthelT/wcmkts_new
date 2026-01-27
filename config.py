@@ -115,8 +115,6 @@ class DatabaseConfig:
     settings = get_settings()
     wcdbmap = settings['env_db_aliases'][settings['env']['env']]  # master config variable for the database to use
 
-    logger.info(wcdbmap)
-
     _db_paths = {
         "wcmktprod": settings['db_paths']['wcmktprod'],  # production database
         "sde": settings['db_paths']['sde'],

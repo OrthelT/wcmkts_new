@@ -18,7 +18,7 @@ from millify import millify
 from logging_config import setup_logging
 from services import get_pricer_service
 from domain import InputFormat
-
+from state import ss_get, ss_has
 logger = setup_logging(__name__, log_file="pricer.log")
 
 
@@ -59,6 +59,22 @@ def get_pricer_column_config() -> dict:
             help="Quantity",
             format="localized"
         ),
+        "Slot": st.column_config.TextColumn(
+            "Slot",
+            help="Slot type",
+            width="small",
+        ),
+        "4-HWWF Sell": st.column_config.NumberColumn(
+            "4H Sell",
+            help="4-HWWF minimum sell price per unit",
+            format="localized",
+        ),
+        "4-HWWF Sell Vol": st.column_config.NumberColumn(
+            "4H Vol",
+            help="4-HWWF sell volume",
+            format="localized",
+        ),
+
         "Jita Sell": st.column_config.NumberColumn(
             "Jita Sell",
             help="Jita sell price per unit",
@@ -79,11 +95,7 @@ def get_pricer_column_config() -> dict:
             help="Total Jita buy value",
             format="localized",
         ),
-        "4-HWWF Sell": st.column_config.NumberColumn(
-            "4H Sell",
-            help="4-HWWF minimum sell price per unit",
-            format="localized",
-        ),
+
         "4-HWWF Buy": st.column_config.NumberColumn(
             "4H Buy",
             help="4-HWWF maximum buy price per unit",
@@ -200,31 +212,32 @@ Tab-separated (qty first):
         if result.items:
             st.subheader("Totals")
 
-            col1, col2, col3, col4 = st.columns(4)
+            col1, col2 = st.columns(2)
 
             with col1:
-                st.metric(
-                    "Jita Sell",
-                    format_isk(result.jita_sell_grand_total),
-                    help="Total value at Jita sell prices"
-                )
-            with col2:
-                st.metric(
-                    "Jita Buy",
-                    format_isk(result.jita_buy_grand_total),
-                    help="Total value at Jita buy prices"
-                )
-            with col3:
                 st.metric(
                     "4-HWWF Sell",
                     format_isk(result.local_sell_grand_total),
                     help="Total value at 4-HWWF sell prices"
                 )
-            with col4:
+            with col2:
                 st.metric(
                     "4-HWWF Buy",
                     format_isk(result.local_buy_grand_total),
                     help="Total value at 4-HWWF buy prices"
+                )
+            col3, col4 = st.columns(2)
+            with col3:
+                st.metric(
+                    "Jita Sell",
+                    format_isk(result.jita_sell_grand_total),
+                    help="Total value at Jita sell prices"
+                )
+            with col4:
+                st.metric(
+                    "Jita Buy",
+                    format_isk(result.jita_buy_grand_total),
+                    help="Total value at Jita buy prices"
                 )
 
             # Volume metric
@@ -240,39 +253,46 @@ Tab-separated (qty first):
 
             # Define column groups
             static_columns = ["image_url", "type_id", "Item", "Qty"]
-            item_price_columns = ["Jita Sell", "Jita Buy", "4-HWWF Sell", "4-HWWF Buy", "Volume"]
-            total_price_columns = ["Jita Sell Total", "Jita Buy Total", "4-HWWF Sell Total", "4-HWWF Buy Total", "Total Volume"]
+            all_price_columns = [ "4-HWWF Sell", "4-HWWF Buy", "4-HWWF Sell Vol", "Jita Sell", "Jita Buy", "Volume"]
+            price_columns_4hwwf = [ "4-HWWF Sell", "4-HWWF Buy", "4-HWWF Sell Vol", "Volume"]
+
+
+
             always_show_columns = ["Category"]
 
-            display_selector = st.pills(
-                label="Display",
-                options=["item prices", "total prices"],
-                default="item prices",
-                key="display_pill",
-                help="Toggle between per-unit prices and totals"
-            )
+            col1, col2 = st.columns(2)
+            with col1:
+                display_selector = st.pills(
+                    label="Display",
+                    options=["item prices", "total prices"],
+                    default="item prices",
+                    key="display_pill",
+                    help="Toggle between per-unit prices and totals"
+                )
+            with col2:
+                st.checkbox("Show Jita Prices", value=True, key="show_jita_prices")
 
-            # Select price columns based on toggle
-            if display_selector == "total prices":
-                price_columns = total_price_columns
-            else:
-                price_columns = item_price_columns
+            price_columns = all_price_columns if ss_has("show_jita_prices") and ss_get("show_jita_prices") else price_columns_4hwwf
+
+            # # Select price columns based on toggle
+            # if display_selector == "total prices":
+            #     price_columns = all_price_columns
+            # else:
+            #     price_columns = price_columns
 
             if not df.empty:
-                # Round numeric columns for display
-                df = round_columns(df, price_columns)
 
                 # Build column order: static + selected prices + always-show
                 column_order = static_columns + price_columns + always_show_columns
                 column_order = [c for c in column_order if c in df.columns]
-                
+
                 st.data_editor(
                     df,
                     hide_index=True,
                     column_config=get_pricer_column_config(),
                     width="content",
                     column_order=column_order,
-                )   
+                )
 
                 # Download button
                 csv_data = df.to_csv(index=False)

@@ -429,9 +429,13 @@ class PricerService:
             jita_data = jita_prices.get(type_id, JitaPriceData(type_id=type_id))
             local_data = local_prices.get(type_id, LocalPriceData(type_id=type_id))
 
+            category_name = item.category_name
+            print(category_name)
+            isship = True if category_name == "Ship" else False
+
             priced_items.append(PricedItem(
                 item=item,
-                image_url=get_image_url(type_id, size=64),
+                image_url=get_image_url(type_id, size=64, isship=isship),
                 jita_sell=jita_data.sell_price,
                 jita_buy=jita_data.buy_price,
                 local_sell=local_data.min_sell_price,
@@ -439,6 +443,7 @@ class PricerService:
                 local_sell_volume=local_data.total_sell_volume,
                 local_buy_volume=local_data.total_buy_volume,
             ))
+            print(f"Image URL: {priced_items[-1].image_url}")
 
         self._logger.info(
             f"Priced {len(priced_items)} items "

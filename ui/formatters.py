@@ -248,11 +248,11 @@ def get_doctrine_report_column_config() -> dict:
                 "Total Cost",
                 format="compact",
                 help="Total cost of the fit"
-            ) 
+            )
             }
     return config
 
-def get_image_url(type_id: int, size: int = 64) -> str:
+def get_image_url(type_id: int, size: int = 64, isship: bool = False) -> str:
     """
     Get the image URL for a type.
 
@@ -263,6 +263,8 @@ def get_image_url(type_id: int, size: int = 64) -> str:
     Returns:
         Image URL for the type
     """
-    image_url = f"https://images.evetech.net/types/{type_id}/render?size={size}"
+    if isship:
+        image_url = f"https://images.evetech.net/types/{type_id}/render?size={size}"
+    else:
+        image_url = f"https://images.evetech.net/types/{type_id}/icon"
     return image_url
-
