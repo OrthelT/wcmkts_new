@@ -40,23 +40,23 @@ def get_item_market_data(type_id: int, type_name: str) -> dict:
 
     try:
         stats_df = get_all_mkt_stats()
-        item_stats = stats_df[stats_df['type_id'] == type_id]
+        item_stats = stats_df[stats_df["type_id"] == type_id]
 
         if item_stats.empty:
             return {}
 
         row = item_stats.iloc[0]
         return {
-            'type_id': type_id,
-            'type_name': type_name,
-            'price': row.get('price', 0),
-            'min_price': row.get('min_price', 0),
-            'avg_price': row.get('avg_price', 0),
-            'avg_volume': row.get('avg_volume', 0),
-            'total_volume_remain': row.get('total_volume_remain', 0),
-            'days_remaining': row.get('days_remaining', 0),
-            'category_name': row.get('category_name', ''),
-            'group_name': row.get('group_name', ''),
+            "type_id": type_id,
+            "type_name": type_name,
+            "price": row.get("price", 0),
+            "min_price": row.get("min_price", 0),
+            "avg_price": row.get("avg_price", 0),
+            "avg_volume": row.get("avg_volume", 0),
+            "total_volume_remain": row.get("total_volume_remain", 0),
+            "days_remaining": row.get("days_remaining", 0),
+            "category_name": row.get("category_name", ""),
+            "group_name": row.get("group_name", ""),
         }
 
     except Exception:
@@ -87,7 +87,7 @@ def get_doctrine_usage(type_id: int) -> list[dict]:
         with mkt_db.engine.connect() as conn:
             df = pd.read_sql_query(query, conn, params={"type_id": type_id})
 
-        return df.to_dict('records')
+        return df.to_dict("records")
 
     except Exception:
         return []
@@ -115,10 +115,10 @@ def get_equivalent_modules(type_id: int) -> list[dict]:
 
         return [
             {
-                'type_id': m.type_id,
-                'type_name': m.type_name,
-                'stock': m.stock,
-                'price': m.price,
+                "type_id": m.type_id,
+                "type_name": m.type_name,
+                "stock": m.stock,
+                "price": m.price,
             }
             for m in group.modules
         ]
@@ -192,7 +192,7 @@ def render_market_popover(
     show_jita: bool = False,
     show_equivalents: bool = True,
     key_suffix: str = "",
-    jita_prices: Optional[dict[int, float]] = None
+    jita_prices: Optional[dict[int, float]] = None,
 ) -> None:
     """
     Render a clickable item name with a market data popover.
@@ -211,14 +211,14 @@ def render_market_popover(
     display = display_text or type_name
     unique_key = f"popover_{type_id}_{key_suffix}"
 
-    with st.popover(display, use_container_width=False):
+    with st.popover(display, width="content", type="tertiary"):
         # Header with image
         col1, col2 = st.columns([0.25, 0.75])
 
         with col1:
             is_ship = False
             market_data = get_item_market_data(type_id, type_name)
-            if market_data.get('category_name') == 'Ship':
+            if market_data.get("category_name") == "Ship":
                 is_ship = True
             st.image(get_image_url(type_id, 64, isship=is_ship), width=64)
 
@@ -241,24 +241,24 @@ def render_market_popover(
 
             # If has equivalents, show combined stock
             if equiv_modules:
-                combined_stock = sum(m['stock'] for m in equiv_modules)
+                combined_stock = sum(m["stock"] for m in equiv_modules)
                 col1, col2 = st.columns(2)
                 with col1:
-                    st.metric("Price", format_price(market_data.get('price', 0)))
+                    st.metric("Price", format_price(market_data.get("price", 0)))
                 with col2:
                     st.metric("Stock (Combined)", f"{combined_stock:,}")
             else:
                 col1, col2 = st.columns(2)
                 with col1:
-                    st.metric("Price", format_price(market_data.get('price', 0)))
+                    st.metric("Price", format_price(market_data.get("price", 0)))
                 with col2:
                     st.metric("Stock", f"{market_data.get('total_volume_remain', 0):,}")
 
             col1, col2 = st.columns(2)
             with col1:
-                st.metric("Avg/Day", format_price(market_data.get('avg_volume', 0)))
+                st.metric("Avg/Day", format_price(market_data.get("avg_volume", 0)))
             with col2:
-                days = market_data.get('days_remaining', 0)
+                days = market_data.get("days_remaining", 0)
                 if days > 0:
                     st.metric("Days Stock", f"{days:.1f}")
                 else:
@@ -277,7 +277,7 @@ def render_market_popover(
                 if jita_price > 0:
                     st.divider()
                     st.markdown("**Jita**")
-                    local_price = market_data.get('price', 0)
+                    local_price = market_data.get("price", 0)
 
                     col1, col2 = st.columns(2)
                     with col1:
@@ -294,13 +294,13 @@ def render_market_popover(
         if equiv_modules:
             st.divider()
             st.markdown("**Equivalent Modules**")
-            combined_stock = sum(m['stock'] for m in equiv_modules)
+            combined_stock = sum(m["stock"] for m in equiv_modules)
 
             for mod in equiv_modules:
-                mod_name = mod['type_name']
-                mod_stock = mod['stock']
+                mod_name = mod["type_name"]
+                mod_stock = mod["stock"]
                 # Highlight current module
-                if mod['type_id'] == type_id:
+                if mod["type_id"] == type_id:
                     st.text(f"  {mod_name}: {mod_stock:,}")
                 else:
                     st.text(f"  {mod_name}: {mod_stock:,}")
@@ -314,9 +314,9 @@ def render_market_popover(
                 st.divider()
                 st.markdown("**Used In Fits**")
                 for item in usage[:5]:  # Limit to 5 fits
-                    ship = item.get('ship_name', 'Unknown')
-                    qty = item.get('fit_qty', 0)
-                    fits = item.get('fits_on_mkt', 0)
+                    ship = item.get("ship_name", "Unknown")
+                    qty = item.get("fit_qty", 0)
+                    fits = item.get("fits_on_mkt", 0)
                     st.text(f"  {ship}: {qty}x ({int(fits)} fits)")
 
                 if len(usage) > 5:
@@ -329,7 +329,7 @@ def render_item_with_popover(
     quantity: int = 1,
     stock: int = 0,
     show_stock: bool = True,
-    key_suffix: str = ""
+    key_suffix: str = "",
 ) -> None:
     """
     Render an item display with market popover.
@@ -354,7 +354,7 @@ def render_item_with_popover(
         type_name=type_name,
         quantity=quantity,
         display_text=display_text,
-        key_suffix=key_suffix
+        key_suffix=key_suffix,
     )
 
 
@@ -364,7 +364,7 @@ def render_ship_with_popover(
     fits: int = 0,
     hulls: int = 0,
     target: int = 0,
-    key_suffix: str = ""
+    key_suffix: str = "",
 ) -> None:
     """
     Render a ship display with market popover.
@@ -377,7 +377,7 @@ def render_ship_with_popover(
         target: Target stock level
         key_suffix: Unique key suffix
     """
-    with st.popover(ship_name, use_container_width=False):
+    with st.popover(ship_name, width="content", type="tertiary"):
         # Header with ship image
         col1, col2 = st.columns([0.3, 0.7])
 
@@ -407,13 +407,13 @@ def render_ship_with_popover(
 
             col1, col2 = st.columns(2)
             with col1:
-                st.metric("Price", format_price(market_data.get('price', 0)))
+                st.metric("Price", format_price(market_data.get("price", 0)))
             with col2:
                 st.metric("Stock", f"{market_data.get('total_volume_remain', 0):,}")
 
             col1, col2 = st.columns(2)
             with col1:
-                st.metric("Avg/Day", format_price(market_data.get('avg_volume', 0)))
+                st.metric("Avg/Day", format_price(market_data.get("avg_volume", 0)))
             with col2:
-                days = market_data.get('days_remaining', 0)
+                days = market_data.get("days_remaining", 0)
                 st.metric("Days Stock", f"{days:.1f}" if days > 0 else "N/A")
