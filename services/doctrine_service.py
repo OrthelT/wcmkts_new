@@ -652,7 +652,11 @@ class FitDataBuilder:
             self._summary_df['ship_target'] = 0
             self._summary_df['fit_name'] = ''
         else:
+            targets_df = targets_df[targets_df['fit_name'].str.len() > 2]
+            targets_df = targets_df.reset_index(drop=True)
+            targets_df['fit_name'] = targets_df['fit_name'].apply(lambda x: x.strip() if x else x)
             targets_df = targets_df.drop_duplicates(subset=['fit_id'], keep='first')
+
             # Include fit_name along with ship_target
             targets_df = targets_df[['fit_id', 'ship_target', 'fit_name']]
             self._summary_df = self._summary_df.merge(targets_df, on='fit_id', how='left')
