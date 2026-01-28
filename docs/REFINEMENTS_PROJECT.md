@@ -425,6 +425,48 @@ conn.close()
 
 ---
 
+## PHASE 8: Revert Popovers Implementation and Address Code Bloat
+
+- Develop a plan to address the issues below with our refactor of doctrine_status.py. Your plan should prioritize performance, simplicity and consistency with our new architectural framework. 
+
+- If there is not an existing interface within the service layer that is appropriate, either refactor the feature to use an existing service or design a new interface that is able to uses it. Do not create functions that are lazy crutches to avoid properly implementing our architecture. 
+
+- You were the chief designer of our app's new architecture. But, you will always simplify it whenever possible and are committed to ruthlessly enforcing consistency with it throughout our code. 
+
+- Reduce complexity and redundancy at every opportunity. Make performance and simplicity your top priority. 
+
+### Issue 1: Popovers Reversion
+- Popovers cannot lazy-load. The performance regressions from using them are too great.
+- Revert the popover feature. 
+
+### Issue 2: Code Bloat and Architectural Drift
+- Further, we are loading data in very inefficiently. Here we call service.build_fit_data() but never actually use it. 
+- Instead, we do build fit summaries, which calls service.get_all_fit_summaries(), which builds a fit dataframe, and then turns it into fit summary objects, which we then iterate over the fitsummaries to build them back into a dataframe again. If there is a less performant way to do it, I don't know what it is.
+- Refactor code to use the service architecture.
+- Review the code on this page for similar inefficient and repetitive code. Revise it to reflect our project architecture. 
+- Prioritize simplicity and performance always. 
+
+### Issue 3: Checkbox Reloads
+- There appears to be no way to prevent full app reloads upon checkbox interaction as currently designed. 
+- devise a refactor plan to implement st.forms with st.forms submit that uses a callback decorated by @st.fragment to avoid code execution.
+- move ship checkbox to the right hand column. Remove the low stock module label. Put the ship name with a checkbox at the top of the low stock model list. 
+- Display the ship name above the ship image in column 1. 
+
+### Issue 4: Merge Ship and Module selection
+- There does not appear to be any good reason to maintain separate list compilations for ships and modules. 
+- develop a plan to merge this functionality into one interface.
+
+### Issue 5: Fit names do not display in column
+- All fit names are rendering blank text. 
+
+### Issue 6: Implement a single status filter
+- Doctrine status and Module status does not need to be independently selectable.
+- Refactor to a single "Stock Status" selectbox that filters based on the status of the entire fit (as displayed in column 1)
+
+### Add feature
+- Introduce a selectbox to filter by doctrine. 
+
+
 ## Testing & Debugging Notes
 
 ### Running the Application
@@ -485,6 +527,8 @@ The new services query these tables:
    - `test_popovers.py` (if feasible)
 
 3. ~~**Popover performance:** If popovers are slow, consider pre-fetching market data for visible items.~~ ✅ **RESOLVED in Phase 7** - Implemented batch prefetching in `doctrine_status.py`
+Phase 7 proved a failure upon further testing. Phase 8 will seek to resolve it. 
+
 
 4. **Apply patterns to doctrine_stats.py:** Task mentioned applying patterns to this page - not yet done if it exists separately from doctrine_status.py.
 
