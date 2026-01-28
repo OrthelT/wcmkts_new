@@ -645,16 +645,19 @@ class FitDataBuilder:
 
         self._logger.info("Merging target data")
 
-        # Get targets from repository
+        # Get targets from repository (includes fit_name)
         targets_df = self._repo.get_all_targets()
         if targets_df.empty:
             self._logger.warning("No targets found")
             self._summary_df['ship_target'] = 0
+            self._summary_df['fit_name'] = ''
         else:
             targets_df = targets_df.drop_duplicates(subset=['fit_id'], keep='first')
-            targets_df = targets_df[['fit_id', 'ship_target']]
+            # Include fit_name along with ship_target
+            targets_df = targets_df[['fit_id', 'ship_target', 'fit_name']]
             self._summary_df = self._summary_df.merge(targets_df, on='fit_id', how='left')
             self._summary_df['ship_target'] = self._summary_df['ship_target'].fillna(0)
+            self._summary_df['fit_name'] = self._summary_df['fit_name'].fillna('')
 
         # Calculate target percentage (vectorized)
         self._summary_df['target_percentage'] = (
@@ -713,7 +716,7 @@ class FitDataBuilder:
         expected_columns = [
             'fit_id', 'ship_name', 'ship_id', 'hulls', 'fits',
             'ship_group', 'price', 'total_cost', 'ship_target',
-            'target_percentage', 'daily_avg'
+            'target_percentage', 'daily_avg', 'fit_name'
         ]
 
         # Only include columns that exist
@@ -760,8 +763,10 @@ class FitDataBuilder:
                 metadata=self._metadata
             )
 
-        # Build domain models from summary
+        # Build domain models from summary and collect lowest_modules for DataFrame
         summaries = []
+        lowest_modules_map = {}  # fit_id -> list of lowest module strings
+
         if self._summary_df is not None and not self._summary_df.empty:
             for _, row in self._summary_df.iterrows():
                 fit_id = int(row['fit_id'])
@@ -779,8 +784,14 @@ class FitDataBuilder:
                     if pd.notna(r['type_name']) and pd.notna(r['fits_on_mkt'])
                 ]
 
+                # Store for DataFrame column
+                lowest_modules_map[fit_id] = lowest_modules
+
                 summary = FitSummary.from_dataframe_row(row, lowest_modules=lowest_modules)
                 summaries.append(summary)
+
+            # Add lowest_modules column to summary_df
+            self._summary_df['lowest_modules'] = self._summary_df['fit_id'].map(lowest_modules_map)
 
         self._end_step('build')
         self._finalize_metadata()

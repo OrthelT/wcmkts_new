@@ -9,12 +9,16 @@ import pandas as pd
 from millify import millify
 from logging_config import setup_logging
 from db_handler import get_update_time
-from services import get_doctrine_service, get_price_service
+from services import get_doctrine_service
 from domain import StockStatus
 from ui import get_fitting_column_config, render_progress_bar_html
-from ui.popovers import render_ship_with_popover, render_market_popover, has_equivalent_modules
 from services import get_status_filter_options
 from state import ss_init, ss_get
+
+# DISABLED: Jita prices - restore when backend caching implemented
+# from services import get_price_service
+# DISABLED: Popovers - removed for performance (execute on every rerun even when closed)
+# from ui.popovers import render_ship_with_popover, render_market_popover, has_equivalent_modules
 
 # Insert centralized logging configuration
 logger = setup_logging(__name__, log_file="doctrine_status.log")
@@ -25,38 +29,9 @@ fit_build_result = service.build_fit_data()
 all_fits_df = fit_build_result.raw_df
 summary_df = fit_build_result.summary_df
 
-def get_fit_summary() -> pd.DataFrame:
-    """Get a summary of all doctrine fits using service."""
-    logger.debug("Getting fit summary via service")
-
-    # Use service to get all fit summaries as domain models
-    summaries = service.get_all_fit_summaries()
-
-    if not summaries:
-        return pd.DataFrame()
-
-    # Convert domain models to DataFrame for compatibility with existing UI code
-    fit_summary = []
-    for summary in summaries:
-        # lowest_modules is already a tuple of formatted strings
-        lowest_modules_list = list(summary.lowest_modules)
-
-        fit_summary.append({
-            'fit_id': summary.fit_id,
-            'ship_id': summary.ship_id,
-            'ship_name': summary.ship_name,
-            'fit': summary.fit_name,
-            'ship': summary.ship_name,
-            'fits': summary.fits,
-            'hulls': summary.hulls,
-            'target': summary.ship_target,
-            'target_percentage': summary.target_percentage,
-            'lowest_modules': lowest_modules_list,
-            'daily_avg': summary.daily_avg,
-            'ship_group': summary.ship_group,
-            'total_cost': summary.total_cost
-        })
-    return pd.DataFrame(fit_summary)
+# get_fit_summary() REMOVED - now using summary_df directly from FitBuildResult
+# summary_df already contains: fit_id, ship_name, ship_id, hulls, fits, ship_group,
+# price, total_cost, ship_target, target_percentage, daily_avg, fit_name, lowest_modules
 
 def format_module_list(modules_list):
     """Format the list of modules for display"""
@@ -174,93 +149,47 @@ def get_fit_detail_data(fit_id: int) -> pd.DataFrame:
         logger.error(f"Error getting fit detail data for fit_id {fit_id}: {e}")
         return pd.DataFrame()
 
-def fetch_jita_prices_for_types(type_ids: tuple[int, ...]) -> dict[int, float]:
-    """
-    Fetch Jita prices for a set of type_ids using a single API call.
-    Cached for 1 hour to reduce external requests.
-    """
-    if not type_ids:
-        return {}
-    price_service = get_price_service()
-    prices = price_service.get_jita_prices(list(type_ids))
-    return prices.prices
+# DISABLED: Jita prices - restore when backend caching implemented
+# def fetch_jita_prices_for_types(type_ids: tuple[int, ...]) -> dict[int, float]:
+#     """
+#     Fetch Jita prices for a set of type_ids using a single API call.
+#     Cached for 1 hour to reduce external requests.
+#     """
+#     if not type_ids:
+#         return {}
+#     price_service = get_price_service()
+#     prices = price_service.get_jita_prices(list(type_ids))
+#     return prices.prices
 
-def calculate_all_jita_deltas(force_refresh: bool = False):
-    """
-    Calculate Jita price deltas for all fits in the background.
-    Stores results in session state for display.
+# DISABLED: Jita prices - restore when backend caching implemented
+# def calculate_all_jita_deltas(force_refresh: bool = False):
+#     """
+#     Calculate Jita price deltas for all fits in the background.
+#     Stores results in session state for display.
+#
+#     Args:
+#         force_refresh: If True, bypasses cache and fetches fresh prices
+#     """
+#     import datetime
+#
+#     ss_init({'jita_deltas': {}})
+#
+#     # Use service to calculate all jita deltas
+#     try:
+#         st.session_state.jita_deltas = service.calculate_all_jita_deltas()
+#         st.session_state.jita_deltas_last_updated = datetime.datetime.now()
+#         logger.info(f"Calculated Jita deltas for {len(st.session_state.jita_deltas)} fits at {st.session_state.jita_deltas_last_updated}")
+#     except Exception as e:
+#         logger.error(f"Error calculating Jita deltas: {e}")
+#         st.session_state.jita_deltas = {}
+#         st.session_state.jita_deltas_last_updated = datetime.datetime.now()
 
-    Args:
-        force_refresh: If True, bypasses cache and fetches fresh prices
-    """
-    import datetime
-
-    ss_init({'jita_deltas': {}})
-
-    # Use service to calculate all jita deltas
-    try:
-        st.session_state.jita_deltas = service.calculate_all_jita_deltas()
-        st.session_state.jita_deltas_last_updated = datetime.datetime.now()
-        logger.info(f"Calculated Jita deltas for {len(st.session_state.jita_deltas)} fits at {st.session_state.jita_deltas_last_updated}")
-    except Exception as e:
-        logger.error(f"Error calculating Jita deltas: {e}")
-        st.session_state.jita_deltas = {}
-        st.session_state.jita_deltas_last_updated = datetime.datetime.now()
-
-
-def prefetch_popover_data(filtered_df: pd.DataFrame) -> tuple[dict[str, int], dict[int, float]]:
-    """
-    Pre-fetch all data needed for popovers to avoid per-item API calls.
-
-    Collects all unique module names from lowest_modules, fetches their type_ids
-    via batch lookup, then fetches Jita prices for all type_ids in one API call.
-
-    Args:
-        filtered_df: The filtered DataFrame with fit summaries
-
-    Returns:
-        Tuple of (module_name_to_type_id, jita_prices)
-        - module_name_to_type_id: dict mapping module name -> type_id
-        - jita_prices: dict mapping type_id -> Jita price
-    """
-    # Collect all unique module names from lowest_modules
-    all_module_names = set()
-    all_ship_ids = set()
-
-    for _, row in filtered_df.iterrows():
-        # Collect ship_id
-        if pd.notna(row.get('ship_id')):
-            all_ship_ids.add(int(row['ship_id']))
-
-        # Extract module names from lowest_modules
-        lowest_modules = row.get('lowest_modules', [])
-        if lowest_modules:
-            for module in lowest_modules:
-                if isinstance(module, str) and ' (' in module:
-                    module_name = module.split(' (')[0]
-                    all_module_names.add(module_name)
-
-    logger.debug(f"Prefetching data for {len(all_module_names)} modules and {len(all_ship_ids)} ships")
-
-    # Batch fetch module stocks to get type_ids
-    module_name_to_type_id = {}
-    if all_module_names:
-        module_stocks = service.repository.get_multiple_module_stocks(list(all_module_names))
-        for name, stock in module_stocks.items():
-            module_name_to_type_id[name] = stock.type_id
-
-    # Collect all type_ids for Jita price fetch
-    all_type_ids = list(all_ship_ids) + list(module_name_to_type_id.values())
-
-    # Batch fetch Jita prices
-    jita_prices = {}
-    if all_type_ids:
-        price_service = get_price_service()
-        batch_result = price_service.get_jita_prices(all_type_ids)
-        jita_prices = batch_result.to_dict()
-        logger.debug(f"Prefetched {len(jita_prices)} Jita prices")
-
-    return module_name_to_type_id, jita_prices
+# DISABLED: Popovers - removed for performance (execute on every rerun even when closed)
+# def prefetch_popover_data(filtered_df: pd.DataFrame) -> tuple[dict[str, int], dict[int, float]]:
+#     """
+#     Pre-fetch all data needed for popovers to avoid per-item API calls.
+#     """
+#     pass
 
 
 def main():
@@ -278,16 +207,14 @@ def main():
         st.markdown("&nbsp;")
         st.title("4-HWWF Doctrine Status")
     with col3:
-        try:
-            fit_summary = get_fit_summary()
-            st.markdown("&nbsp;")
-            st.markdown("&nbsp;")
-            st.markdown("<span style='font-size: 12px; color: #666;'>*Use Downloads page for full data export*</span>", unsafe_allow_html=True)
-
-        except Exception as e:
-            logger.error(f"Error getting fit summary: {e}")
+        # Use summary_df directly from FitBuildResult (no redundant get_fit_summary call)
+        if summary_df.empty:
             st.warning("No doctrine fits found in the database.")
             return
+        fit_summary = summary_df.copy()
+        st.markdown("&nbsp;")
+        st.markdown("&nbsp;")
+        st.markdown("<span style='font-size: 12px; color: #666;'>*Use Downloads page for full data export*</span>", unsafe_allow_html=True)
 
     # Add filters in the sidebar
     st.sidebar.header("Filters")
@@ -300,9 +227,14 @@ def main():
         st.session_state.ds_target_multiplier = ds_target_multiplier
         st.sidebar.write(f"Target Multiplier: {ds_target_multiplier}")
 
-    # Status filter - use service layer options
+    # Doctrine filter - filter by fleet doctrine composition
+    doctrine_comps = service.repository.get_all_doctrine_compositions()
+    doctrine_names = ["All"] + sorted(doctrine_comps['doctrine_name'].unique().tolist()) if not doctrine_comps.empty else ["All"]
+    selected_doctrine = st.sidebar.selectbox("Doctrine:", doctrine_names)
+
+    # Stock Status filter (renamed from "Doctrine Status" for clarity - single unified filter)
     status_options = get_status_filter_options()
-    selected_status = st.sidebar.selectbox("Doctrine Status:", status_options)
+    selected_status = st.sidebar.selectbox("Stock Status:", status_options)
 
     # Ship group filter
     ship_groups = ["All"] + sorted(fit_summary["ship_group"].unique().tolist())
@@ -317,18 +249,13 @@ def main():
         'displayed_ships': unique_ships.copy(),
     })
 
-    # Module status filter - use service layer options
-    st.sidebar.subheader("Module Filters")
-    module_status_options = get_status_filter_options()
-    selected_module_status = st.sidebar.selectbox("Module Status:", module_status_options)
-
-    # Apply filters
+    # Apply filters - summary_df uses 'ship_target' column
     filtered_df = fit_summary.copy()
-    filtered_df['target'] = filtered_df['target'] * ds_target_multiplier
+    filtered_df['ship_target'] = filtered_df['ship_target'] * ds_target_multiplier
 
     # Recalculate target_percentage with multiplier (capped at 100)
     filtered_df['target_percentage'] = (
-        (filtered_df['fits'] / filtered_df['target'] * 100)
+        (filtered_df['fits'] / filtered_df['ship_target'] * 100)
         .clip(upper=100)
         .fillna(0)
         .astype(int)
@@ -354,6 +281,13 @@ def main():
     if selected_group != "All":
         filtered_df = filtered_df[filtered_df['ship_group'] == selected_group]
 
+    # Apply doctrine filter
+    if selected_doctrine != "All":
+        doctrine_fit_ids = doctrine_comps[
+            doctrine_comps['doctrine_name'] == selected_doctrine
+        ]['fit_id'].unique()
+        filtered_df = filtered_df[filtered_df['fit_id'].isin(doctrine_fit_ids)]
+
     # Update the displayed ships based on filters
     st.session_state.displayed_ships = filtered_df['ship_name'].unique().tolist()
 
@@ -364,14 +298,14 @@ def main():
     # Initialize module selection for export
     ss_init({'selected_modules': []})
 
-    # Pre-fetch all Jita prices and module type_ids for popovers
-    # This makes ONE batch API call instead of per-popover calls
-    module_type_ids, jita_prices = prefetch_popover_data(filtered_df)
-    logger.debug(f"Prefetched {len(module_type_ids)} module type_ids and {len(jita_prices)} Jita prices")
-
-    # Auto-calculate Jita deltas for fit costs on first load
-    if 'jita_deltas' not in st.session_state or not st.session_state.jita_deltas:
-        calculate_all_jita_deltas()
+    # DISABLED: Popovers and Jita prices - restore when backend caching implemented
+    # # Pre-fetch all Jita prices and module type_ids for popovers
+    # module_type_ids, jita_prices = prefetch_popover_data(filtered_df)
+    # logger.debug(f"Prefetched {len(module_type_ids)} module type_ids and {len(jita_prices)} Jita prices")
+    #
+    # # Auto-calculate Jita deltas for fit costs on first load
+    # if 'jita_deltas' not in st.session_state or not st.session_state.jita_deltas:
+    #     calculate_all_jita_deltas()
 
     # Group the data by ship_group
     grouped_fits = filtered_df.groupby('ship_group')
@@ -388,7 +322,7 @@ def main():
             col1, col2, col3 = st.columns([1,3,2])
 
             target_pct = row['target_percentage']
-            target = int(row['target']) if pd.notna(row['target']) else 0
+            target = int(row['ship_target']) if pd.notna(row['ship_target']) else 0
             fits = int(row['fits']) if pd.notna(row['fits']) else 0
             hulls = int(row['hulls']) if pd.notna(row['hulls']) else 0
             fit_cost = millify(int(row['total_cost']), precision=2) if pd.notna(row['total_cost']) else 'N/A'
@@ -407,7 +341,7 @@ def main():
                 color = stock_status.display_color
                 status = stock_status.display_name
                 fit_id = row['fit_id']
-                fit_name = row['fit']  # Already available from summary DataFrame
+                fit_name = row['fit_name']  # Now available directly from summary_df
                 st.badge(status, color=color)
                 st.text(f"ID: {fit_id}")
                 st.text(f"Fit: {fit_name}")
@@ -435,15 +369,8 @@ def main():
                             st.session_state.selected_ships.remove(row['ship_name'])
 
                     with ship_cols[1]:
-                        # Ship name with market data popover
-                        render_ship_with_popover(
-                            ship_id=int(row['ship_id']),
-                            ship_name=row['ship_name'],
-                            fits=fits,
-                            hulls=hulls,
-                            target=target,
-                            key_suffix=f"ds_{row['fit_id']}"
-                        )
+                        # Ship name display (popovers removed for performance)
+                        st.markdown(f"**{row['ship_name']}**")
 
                     # Display metrics in a single row
                     metric_cols = st.columns(4)
@@ -470,18 +397,9 @@ def main():
                             st.metric(label="Target", value="0")
 
                     with metric_cols[3]:
+                        # DISABLED: Jita delta display - restore when backend caching implemented
                         if fit_cost and fit_cost != 'N/A':
-                            # Get the Jita cost delta from session state
-                            jita_delta = None
-                            if 'jita_deltas' in st.session_state and row['fit_id'] in st.session_state.jita_deltas:
-                                jita_delta = st.session_state.jita_deltas[row['fit_id']]
-                            
-                            if jita_delta is not None and pd.notna(jita_delta):
-                                # Format delta as percentage with 2 decimal places
-                                delta_str = f"{jita_delta:.2f}%"
-                                st.metric(label="Fit Cost", value=f"{fit_cost}", delta=delta_str)
-                            else:
-                                st.metric(label="Fit Cost", value=f"{fit_cost}")
+                            st.metric(label="Fit Cost", value=f"{fit_cost}")
                         else:
                             st.metric(label="Fit Cost", value="N/A")
                             
@@ -492,10 +410,7 @@ def main():
                     with col3:
                         # Low stock modules with selection checkboxes
                         st.markdown(":blue[**Low Stock Modules:**]")
-                        target = int(row['target']) if pd.notna(row['target']) else 0
-
-                        # Track if any module has equivalents for caption
-                        fit_has_equivalents = False
+                        target = int(row['ship_target']) if pd.notna(row['ship_target']) else 0
 
                         for i, module in enumerate(row['lowest_modules']):
                             module_qty = module.split("(")[1].split(")")[0]
@@ -506,15 +421,6 @@ def main():
 
                             # Use StockStatus for consistent module categorization
                             mod_stock_status = StockStatus.from_stock_and_target(int(module_qty), target)
-                            module_status = mod_stock_status.display_name
-
-                            # Apply module status filter
-                            if selected_module_status == "All Low Stock":
-                                # "All Low Stock" = not Good (i.e., <=90% of target)
-                                if mod_stock_status != StockStatus.GOOD:
-                                    module_status = "All Low Stock"
-                            if selected_module_status != "All" and selected_module_status != module_status:
-                                continue
 
                             col_a, col_b = st.columns([0.1, 0.9])
                             with col_a:
@@ -531,51 +437,13 @@ def main():
                                     st.session_state.selected_modules.remove(display_key)
 
                             with col_b:
-                                # Display with color based on status and market popover
-                                # Use pre-fetched type_id from batch lookup
-                                module_type_id = module_type_ids.get(module_name, 0)
-
-                                # Check if module has equivalents and add indicator
-                                module_has_equiv = has_equivalent_modules(module_type_id) if module_type_id else False
-                                if module_has_equiv:
-                                    fit_has_equivalents = True
-                                    display_module = f"🔄 {module}"
-                                else:
-                                    display_module = module
-
+                                # Display module with status badge (popovers removed for performance)
                                 if mod_stock_status == StockStatus.CRITICAL:
-                                    st.markdown(f":red-badge[:material/error:]", help="Critical stock level")
-                                    render_market_popover(
-                                        type_id=module_type_id,
-                                        type_name=module_name,
-                                        quantity=int(module_qty),
-                                        display_text=display_module,
-                                        key_suffix=f"mod_{row['fit_id']}_{i}",
-                                        jita_prices=jita_prices
-                                    )
+                                    st.markdown(f":red-badge[:material/error:] {module}", help="Critical stock level")
                                 elif mod_stock_status == StockStatus.NEEDS_ATTENTION:
-                                    st.markdown(f":orange-badge[:material/error:]", help="Low stock")
-                                    render_market_popover(
-                                        type_id=module_type_id,
-                                        type_name=module_name,
-                                        quantity=int(module_qty),
-                                        display_text=display_module,
-                                        key_suffix=f"mod_{row['fit_id']}_{i}",
-                                        jita_prices=jita_prices
-                                    )
+                                    st.markdown(f":orange-badge[:material/error:] {module}", help="Low stock")
                                 else:
-                                    render_market_popover(
-                                        type_id=module_type_id,
-                                        type_name=module_name,
-                                        quantity=int(module_qty),
-                                        display_text=display_module,
-                                        key_suffix=f"mod_{row['fit_id']}_{i}",
-                                        jita_prices=jita_prices
-                                    )
-
-                        # Show caption if any module has equivalents
-                        if fit_has_equivalents:
-                            st.caption("🔄 Stock includes equivalent modules")
+                                    st.text(module)
                     with tab2:
                         ship_name = row['ship_name']
                         st.write(f"{ship_name} - Fit {fit_id}")
@@ -647,46 +515,22 @@ def main():
 
     # Add "Select All Modules" functionality
     if col1.button("📋 Select All Modules", width='content'):
-        # Create a list to collect all module keys that are currently visible based on filters
+        # Collect all modules from currently visible fits
         visible_modules = []
-        low_stock_modules = []
         for _, group_data in grouped_fits:
             for _, row in group_data.iterrows():
                 # Only include ships that are displayed (match filters)
                 if row['ship_name'] not in st.session_state.displayed_ships:
                     continue
 
-                target = int(row['target']) if pd.notna(row['target']) else 0
-
                 for module in row['lowest_modules']:
                     module_qty = module.split("(")[1].split(")")[0]
                     module_name = module.split(" (")[0]
                     display_key = f"{module_name}_{module_qty}"
-
-                    # Use StockStatus for consistent module categorization
-                    mod_stock_status = StockStatus.from_stock_and_target(int(module_qty), target)
-                    module_status = mod_stock_status.display_name
-
-                    # Handle "All Low Stock" filter
-                    if selected_module_status == "All Low Stock":
-                        if mod_stock_status != StockStatus.GOOD:
-                            low_stock_modules.append(display_key)
-                        continue
-
-                    # Apply module status filter
-                    if selected_module_status != "All" and selected_module_status != module_status:
-                        continue
-
-                    logger.info(f"Module status: {module_status}")
-                    logger.info(f"Module qty: {display_key}")
-
                     visible_modules.append(display_key)
 
         # Update session state with all visible modules
-        if selected_module_status == "All Low Stock":
-            st.session_state.selected_modules = list(set(low_stock_modules))
-        else:
-            st.session_state.selected_modules = list(set(visible_modules))
+        st.session_state.selected_modules = list(set(visible_modules))
         # Clear all module checkbox states so they reinitialize on next render
         keys_to_clear = [key for key in st.session_state.keys() if "_" in key and key.split("_")[0].isdigit()]
         for key in keys_to_clear:
@@ -796,26 +640,23 @@ def main():
 
 
     
-    # Jita Price Delta Section
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Jita Price Comparison")
+    # DISABLED: Jita Price Delta Section - restore when backend caching implemented
+    # st.sidebar.markdown("---")
+    # st.sidebar.subheader("Jita Price Comparison")
+    # jita_deltas = ss_get('jita_deltas', {})
+    # if jita_deltas:
+    #     st.sidebar.success(f"✓ Jita prices loaded for {len(jita_deltas)} fits")
+    #     if 'jita_deltas_last_updated' in st.session_state:
+    #         timestamp = st.session_state.jita_deltas_last_updated
+    #         time_str = timestamp.strftime("%H:%M:%S")
+    #         st.sidebar.caption(f"Last updated: {time_str}")
+    #     if st.sidebar.button("🔄 Refresh Jita Prices", help="Fetch latest Jita prices"):
+    #         st.session_state.jita_deltas = {}
+    #         calculate_all_jita_deltas(force_refresh=True)
+    #         st.rerun()
+    # else:
+    #     st.sidebar.info("Jita prices loading...")
 
-    jita_deltas = ss_get('jita_deltas', {})
-
-    if jita_deltas:
-        st.sidebar.success(f"✓ Jita prices loaded for {len(jita_deltas)} fits")
-
-        if 'jita_deltas_last_updated' in st.session_state:
-            timestamp = st.session_state.jita_deltas_last_updated
-            time_str = timestamp.strftime("%H:%M:%S")
-            st.sidebar.caption(f"Last updated: {time_str}")
-
-        if st.sidebar.button("🔄 Refresh Jita Prices", help="Fetch latest Jita prices"):
-            st.session_state.jita_deltas = {}
-            calculate_all_jita_deltas(force_refresh=True)
-            st.rerun()
-    else:
-        st.sidebar.info("Jita prices loading...")
     # Display last update timestamp
     st.sidebar.markdown("---")
     st.sidebar.write(f"Last ESI update: {get_update_time()}")
