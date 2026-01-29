@@ -652,16 +652,30 @@ class FitDataBuilder:
             self._summary_df['ship_target'] = 0
             self._summary_df['fit_name'] = ''
         else:
-            targets_df = targets_df[targets_df['fit_name'].str.len() > 2]
-            targets_df = targets_df.reset_index(drop=True)
-            targets_df['fit_name'] = targets_df['fit_name'].apply(lambda x: x.strip() if x else x)
             targets_df = targets_df.drop_duplicates(subset=['fit_id'], keep='first')
+            targets_df['fit_name'] = targets_df['fit_name'].fillna('').apply(
+                lambda x: x.strip() if isinstance(x, str) else ''
+            )
 
             # Include fit_name along with ship_target
             targets_df = targets_df[['fit_id', 'ship_target', 'fit_name']]
             self._summary_df = self._summary_df.merge(targets_df, on='fit_id', how='left')
             self._summary_df['ship_target'] = self._summary_df['ship_target'].fillna(0)
             self._summary_df['fit_name'] = self._summary_df['fit_name'].fillna('')
+
+            # Fill any remaining empty fit_names from doctrine_fits table
+            missing_mask = self._summary_df['fit_name'] == ''
+            if missing_mask.any():
+                missing_ids = self._summary_df.loc[missing_mask, 'fit_id'].tolist()
+                self._logger.info(
+                    f"Filling {len(missing_ids)} missing fit_names from doctrine_fits"
+                )
+                for fit_id in missing_ids:
+                    name = self._repo.get_fit_name(int(fit_id))
+                    if name and name != "Unknown Fit":
+                        self._summary_df.loc[
+                            self._summary_df['fit_id'] == fit_id, 'fit_name'
+                        ] = name
 
         # Calculate target percentage (vectorized)
         self._summary_df['target_percentage'] = (

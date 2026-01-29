@@ -724,20 +724,34 @@ def get_target_by_ship_id_with_cache(ship_id: int, default: int = DEFAULT_SHIP_T
 
 @st.cache_data(ttl=600, show_spinner="Getting fit name for {fit_id}...")
 def get_fit_name_with_cache(fit_id: int, default: str = "Unknown Fit") -> str:
-    logger.debug(f"Getting fit name for {fit_id}...")
     """
     Get the display name for a fit.
+
+    Checks ship_targets first, then falls back to doctrine_fits.
 
     Returns:
         Fit name string
     """
-    query = text("SELECT fit_name FROM ship_targets WHERE fit_id = :fit_id")
+    logger.debug(f"Getting fit name for {fit_id}...")
     engine = DatabaseConfig("wcmkt").engine
     try:
         with engine.connect() as conn:
+            # Try ship_targets first
+            query = text("SELECT fit_name FROM ship_targets WHERE fit_id = :fit_id")
             df = pd.read_sql_query(query, conn, params={"fit_id": fit_id})
             if not df.empty:
-                return str(df.iloc[0]['fit_name'])
+                name = df.iloc[0]['fit_name']
+                if pd.notna(name) and str(name).strip():
+                    return str(name).strip()
+
+            # Fall back to doctrine_fits
+            query = text("SELECT fit_name FROM doctrine_fits WHERE fit_id = :fit_id LIMIT 1")
+            df = pd.read_sql_query(query, conn, params={"fit_id": fit_id})
+            if not df.empty:
+                name = df.iloc[0]['fit_name']
+                if pd.notna(name) and str(name).strip():
+                    return str(name).strip()
+
             return default
     except Exception as e:
         logger.error(f"Failed to get fit name for {fit_id}: {e}")
