@@ -439,3 +439,444 @@ After all three projects, the codebase should satisfy:
 6. **Every `render_*` function lives in `pages/`** (UI code stays in the UI layer)
 7. **All repositories are testable** with an in-memory SQLite database
 8. **All services are testable** without Streamlit imports
+
+---
+
+## Project 4: Session State and Caching Strategy
+
+Streamlit re-runs the entire script on every user interaction. This makes session state management and caching strategy critical to performance -- every unnecessary recomputation, redundant state read, or poorly-scoped cache invalidation directly impacts response time.
+
+### Current State Inventory
+
+#### All Session State Keys (41 keys across 12 files)
+
+**Market Stats page (14 keys):**
+
+| Key | Type | Read By | Written By |
+|-----|------|---------|------------|
+| `selected_item` | str | market_stats, market_metrics | market_stats |
+| `selected_item_id` | int | market_stats, market_metrics | market_stats, db_handler |
+| `selected_category` | str | market_stats, market_metrics | market_stats |
+| `selected_category_info` | dict | market_stats, db_handler | market_stats |
+| `jita_price` | float | market_stats, market_metrics | market_stats |
+| `current_price` | float | market_metrics | market_stats |
+| `db_initialized` | bool | market_stats | market_stats |
+| `db_init_time` | datetime | market_stats | market_stats |
+| `last_check` | float | market_stats | market_stats |
+| `chart_start_date` | datetime | market_metrics | market_metrics (widget) |
+| `chart_end_date` | datetime | market_metrics | market_metrics (widget) |
+| `chart_date_period_radio` | str | market_metrics | market_metrics (widget) |
+| `week_month_pill` | int | market_metrics | market_metrics (widget) |
+| `daily_total_pill` | int | market_metrics | market_metrics (widget) |
+
+**Sync/DB state (5 keys):**
+
+| Key | Type | Read By | Written By |
+|-----|------|---------|------------|
+| `local_update_status` | dict | sync_state, market_stats, db_handler, market_metrics | sync_state |
+| `remote_update_status` | dict | sync_state, market_stats | sync_state |
+| `sync_status` | str | config | config |
+| `sync_check` | bool | config | config |
+| `isk_volume_pill` | int | market_metrics | market_metrics (widget) |
+
+**Build Costs page (8 keys):**
+
+| Key | Type | Read By | Written By |
+|-----|------|---------|------------|
+| `super` | bool | build_costs | build_costs |
+| `initialised` | bool | build_costs | build_costs |
+| `price_source` | str | build_costs | build_costs |
+| `price_source_name` | str | build_costs | build_costs |
+| `async_mode` | bool | build_costs | build_costs |
+| `calculate_clicked` | bool | build_costs | build_costs |
+| `current_job_params` | dict | build_costs | build_costs |
+| `cost_results` | dict | build_costs | build_costs |
+
+**Doctrine pages (9 keys):**
+
+| Key | Type | Read By | Written By |
+|-----|------|---------|------------|
+| `module_list_state` | dict | doctrine_report, doctrine_status | doctrine_report, doctrine_status |
+| `csv_module_list_state` | dict | doctrine_report, doctrine_status | doctrine_report, doctrine_status |
+| `target_multiplier` | float | doctrine_report | doctrine_report |
+| `selected_modules` | list | doctrine_report, doctrine_status | doctrine_report, doctrine_status |
+| `ship_list_state` | dict | doctrine_status | doctrine_status |
+| `csv_ship_list_state` | dict | doctrine_status | doctrine_status |
+| `ds_target_multiplier` | float | doctrine_status | doctrine_status |
+| `selected_ships` | list | doctrine_status | doctrine_status |
+| `jita_deltas` | dict | doctrine_status | doctrine_status |
+
+**External API state (3 keys):**
+
+| Key | Type | Read By | Written By |
+|-----|------|---------|------------|
+| `etag` | str | utils | utils |
+| `sci_last_modified` | datetime | utils, build_costs | utils |
+| `sci_expires` | datetime | utils, build_costs | utils |
+
+**Dynamic keys (created per-item):**
+
+| Pattern | Type | Used By |
+|---------|------|---------|
+| `ship_<id>` | bool | doctrine_status (checkbox per ship) |
+| `<id>_<module>` | bool | doctrine_status (checkbox per module) |
+| `top_items_count` | int | market_metrics |
+
+#### All Cached Functions (37 functions)
+
+| Function | File | TTL | Notes |
+|----------|------|-----|-------|
+| `get_settings()` | config.py | 3600s | Settings file |
+| `get_all_mkt_stats()` | db_handler.py | 600s | `SELECT * FROM marketstats` |
+| `get_all_mkt_orders()` | db_handler.py | 1800s | `SELECT * FROM marketorders` |
+| `request_type_names()` | db_handler.py | 3600s | ESI API call |
+| `clean_mkt_data()` | db_handler.py | 1800s | DataFrame transform |
+| `get_stats()` | db_handler.py | 600s | Market stats query |
+| `get_market_history()` | db_handler.py | 3600s | Single-item history |
+| `get_all_market_history()` | db_handler.py | 3600s | Full history table |
+| `get_groups_for_category()` | db_handler.py | 3600s | SDE groups |
+| `get_types_for_group()` | db_handler.py | 3600s | SDE types |
+| `get_category_type_ids()` | market_metrics.py | 3600s | SDE type IDs by category |
+| `get_market_history_by_type_ids()` | market_metrics.py | 1800s | Multi-item history |
+| `get_available_date_range()` | market_metrics.py | 3600s | Min/max history dates |
+| `get_watchlist_type_ids()` | market_stats.py | 3600s | Watchlist IDs |
+| `get_market_type_ids()` | market_stats.py | 1800s | All market type IDs |
+| `all_sde_info()` | market_stats.py | 1800s | SDE info for market items |
+| `check_for_db_updates()` | market_stats.py | 1800s | DB sync validation |
+| `get_valid_rigs()` | build_costs.py | 3600s | Rig data |
+| `fetch_rigs()` | build_costs.py | 3600s | Rig names/IDs |
+| `get_structure_rigs()` | build_costs.py | 3600s | Structure rig mapping |
+| `get_4H_manufacturing_cost_index()` | build_costs.py | 3600s | Build cost index |
+| `get_all_structures()` | build_costs.py | 3600s | Structure list |
+| `get_filter_options()` | low_stock.py | 600s | Category/item lists |
+| `get_market_stats()` | low_stock.py | 600s | Low stock data |
+| `get_jita_price()` | utils.py | 600s | Fuzzwork API |
+| `get_janice_price()` | utils.py | 3600s | Janice API |
+| `get_fit_metadata()` | doctrine_repo.py | 3600s | Fit metadata |
+| `get_all_fits()` | doctrine_repo.py | 600s | All doctrine fits |
+| `get_fit_by_id()` | doctrine_repo.py | 600s | Single fit |
+| `get_all_ship_targets()` | doctrine_repo.py | 600s | Ship targets |
+| `get_target_for_fit()` | doctrine_repo.py | 600s | Fit target |
+| `get_target_for_ship()` | doctrine_repo.py | 600s | Ship target |
+| `get_fit_name()` | doctrine_repo.py | 600s | Fit name |
+| 8 download functions | downloads.py | 600s | Export data |
+| 3 download functions | downloads.py | 1800s | Export data |
+
+### Problem 1: Aggressive Global Cache Invalidation
+
+**Location:** `config.py:327-328` and `pages/market_stats.py:362-363`
+
+```python
+# config.py sync() method:
+st.cache_data.clear()       # Nukes ALL 37 cached functions
+st.cache_resource.clear()   # Nukes ALL cached resources
+```
+
+When a database sync happens (triggered by `check_db()` every 10 minutes or manually), **every cached function in the entire application is invalidated**. This means:
+
+- `get_jita_price()` results are thrown away (requires re-fetching from Fuzzwork API)
+- `request_type_names()` results are thrown away (requires re-fetching from ESI API)
+- `get_settings()` is thrown away (requires re-reading settings.toml)
+- `get_all_structures()`, `get_valid_rigs()`, etc. are thrown away (build cost data is unaffected by market sync)
+- All SDE queries are thrown away (SDE data never changes during runtime)
+
+The sync only updates market data tables (`marketstats`, `marketorders`, `market_history`). Clearing caches for SDE data, external API results, build cost structures, and settings is pure waste.
+
+**Fix: Targeted cache invalidation.** After sync, only clear market-data caches:
+
+```python
+# In the caller (page or sync service), NOT in DatabaseConfig.sync():
+def invalidate_market_caches():
+    """Clear only caches that depend on market data."""
+    get_all_mkt_stats.clear()
+    get_all_mkt_orders.clear()
+    get_all_market_history.clear()
+    get_stats.clear()
+    get_market_history.clear()           # per-item history
+    get_market_history_by_type_ids.clear()
+    clean_mkt_data.clear()
+    check_for_db_updates.clear()
+```
+
+This preserves SDE caches, external API caches, build cost caches, and settings -- all of which are expensive to reconstruct and unrelated to market data sync.
+
+### Problem 2: `st.cache_data` in Non-UI Code
+
+Every `@st.cache_data` decorator couples the decorated function to Streamlit's runtime. This means:
+
+- Functions cannot be tested without a Streamlit context
+- Cache behavior is invisible (no way to inspect what's cached or measure hit rates)
+- Cache keys are based on argument hashing, which can produce collisions with mutable arguments (DataFrames)
+- `clean_mkt_data()` is cached with a DataFrame as input -- Streamlit hashes the entire DataFrame to generate the cache key, which is expensive for large frames
+
+**Current locations of `@st.cache_data` in non-UI code:**
+
+| File | Functions | Should Be Cached Here? |
+|------|-----------|----------------------|
+| `db_handler.py` | 9 functions | No -- move to repository layer |
+| `market_metrics.py` | 3 functions | No -- move to repository/service |
+| `config.py` | `get_settings()` | Acceptable (infrastructure) |
+| `utils.py` | `get_jita_price()`, `get_janice_price()` | No -- move to price service |
+| `repositories/doctrine_repo.py` | 7 functions | Acceptable pattern, but see below |
+
+**Recommended caching strategy after refactoring:**
+
+```
+Page Layer:       No @st.cache_data (pages re-run, call services)
+Service Layer:    No @st.cache_data (pure logic, stateless)
+Repository Layer: @st.cache_data on query methods (TTL-based)
+Config Layer:     @st.cache_data on settings load only
+```
+
+The repository is the right place for `@st.cache_data` because:
+1. Repository methods have stable, hashable arguments (type_id, category_name, etc.)
+2. Repository return values are DataFrames or simple types that cache well
+3. Cache invalidation can be targeted per-repository after sync
+
+The doctrine repository already follows this pattern. The new `MarketRepository` and `BuildCostRepository` should do the same.
+
+### Problem 3: Redundant Work on Every Rerun
+
+Streamlit re-runs the entire page script on every interaction. Several patterns in the codebase cause unnecessary work on each rerun:
+
+#### 3a. Module-level DatabaseConfig instantiation
+
+```python
+# db_handler.py (lines 12-14) -- runs on import, every rerun
+mkt_db = DatabaseConfig("wcmkt")
+sde_db = DatabaseConfig("sde")
+build_cost_db = DatabaseConfig("build_cost")
+
+# pages/market_stats.py (lines 25-27) -- DUPLICATE, runs on import
+mkt_db = DatabaseConfig("wcmkt")
+sde_db = DatabaseConfig("sde")
+build_cost_db = DatabaseConfig("build_cost")
+```
+
+`DatabaseConfig.__init__` resolves aliases, checks file paths, and sets up lazy engine properties. The engines themselves are cached at the class level, so the per-instance cost is low but not zero. Having two files each create their own instances of the same three configs is redundant.
+
+**Fix:** After the repository refactoring, each repository receives its `DatabaseConfig` via constructor injection. The factories (`get_market_repo()`, etc.) handle instantiation once and cache the repository in session state via the service registry.
+
+#### 3b. Service initialization at module level
+
+```python
+# market_metrics.py (line 17) -- runs on import
+service = get_doctrine_service()
+
+# pages/doctrine_report.py (line 22) -- runs on import
+service = get_doctrine_service()
+
+# pages/doctrine_status.py (line 21) -- runs on import
+service = get_doctrine_service()
+```
+
+Three files eagerly call `get_doctrine_service()` at module scope. The service registry (`state/service_registry.py`) caches the instance in session state, so subsequent calls are cheap. But the first call in a session constructs the entire service + repository chain, and if this happens before `init_db()` has run, it can fail or produce stale results.
+
+**Fix:** Always use lazy initialization:
+
+```python
+# Correct pattern (already used in market_stats.py:39-41):
+def _get_service():
+    return get_doctrine_service()
+
+# Call _get_service() only when needed, never at module level
+```
+
+#### 3c. Module-level settings file reads
+
+```python
+# market_metrics.py (lines 19-22) -- runs on import, BYPASSES cache
+import tomllib
+with open("settings.toml", "rb") as f:
+    settings = tomllib.load(f)
+default_outliers_method = settings['outliers']['default_method']
+```
+
+This reads and parses `settings.toml` on every import of `market_metrics.py`, completely bypassing the `get_settings()` cache in `config.py`. Since `market_metrics.py` is imported by `market_stats.py`, this file I/O happens on every page load.
+
+**Fix:** Use the cached `get_settings()` from config:
+
+```python
+from config import get_settings
+# Access at call time, not import time:
+def _get_default_outlier_method():
+    return get_settings()['outliers']['default_method']
+```
+
+#### 3d. Redundant session state reads in market_stats.py main()
+
+`st.session_state.selected_item` is read 10+ times across the 400-line `main()` function (lines 693, 705, 776, 777, 841, 864, 903, 908, 912, 929). Each read is individually cheap, but the pattern reflects a lack of local variable caching:
+
+```python
+# Current (repeated reads):
+if ss_has('selected_item'):
+    selected_item = st.session_state.selected_item       # read 1
+    sell_data = sell_data[sell_data['type_name'] == selected_item]
+# ... 50 lines later ...
+if ss_has('selected_item'):
+    selected_item = st.session_state.selected_item       # read 2 (same value)
+    st.subheader("Sell Orders for " + selected_item)
+# ... 70 lines later ...
+if st.session_state.get('selected_item') is not None:    # read 3 (different API)
+    st.subheader("Market History - " + st.session_state.get('selected_item'))
+```
+
+**Fix:** Read once at the top of `main()`, use local variables throughout:
+
+```python
+def main():
+    selected_item = ss_get('selected_item')
+    selected_item_id = ss_get('selected_item_id')
+    selected_category = ss_get('selected_category')
+    # Use local variables everywhere below
+```
+
+#### 3e. Duplicate computation in `wrap_top_n_items()`
+
+`market_metrics.py:92-126` contains a copy-paste duplication where the same filtering logic runs twice:
+
+```python
+# Lines 98-106: first computation
+if st.session_state.week_month_pill == 0:
+    top_n_items = df_7days.copy()
+else:
+    top_n_items = df_30days.copy()
+if st.session_state.daily_total_pill == 0:
+    top_n_items = top_n_items.groupby('type_name').agg(...)
+else:
+    top_n_items = top_n_items.groupby('type_name').agg(...)
+
+# Lines 108-116: IDENTICAL computation (overwrites result from above)
+if st.session_state.week_month_pill == 0:
+    top_n_items = df_7days.copy()
+else:
+    top_n_items = df_30days.copy()
+if st.session_state.daily_total_pill == 0:
+    top_n_items = top_n_items.groupby('type_name').agg(...)
+else:
+    top_n_items = top_n_items.groupby('type_name').agg(...)
+```
+
+The second block completely overwrites the first. This is a copy-paste bug that doubles the computation.
+
+### Problem 4: Cache TTL Inconsistencies
+
+The current TTLs don't align with data volatility:
+
+| Data Type | Current TTL | Data Changes | Recommended TTL |
+|-----------|-------------|-------------|-----------------|
+| Market orders | 1800s | Every ESI pull (~5 min) | 600s (sync-triggered invalidation) |
+| Market stats | 600s | Every ESI pull | 600s (sync-triggered invalidation) |
+| Market history | 3600s | Daily | 3600s (correct) |
+| SDE data | 3600s | Never during runtime | 86400s or `@st.cache_resource` |
+| Settings file | 3600s | Never during runtime | `@st.cache_resource` (no TTL) |
+| Fit metadata | 3600s | Rarely | 3600s (correct) |
+| External API prices | 600s | External | 1800s (reduce API calls) |
+| Doctrine fits | 600s | Only on manual update | 1800s (event-triggered invalidation) |
+
+Key observations:
+
+1. **SDE data has a 1-hour TTL but never changes.** `get_category_type_ids()`, `get_groups_for_category()`, `get_types_for_group()`, `all_sde_info()` query static data (EVE Online's Static Data Export). These should use `@st.cache_resource` (permanent cache) rather than `@st.cache_data(ttl=3600)`. This eliminates unnecessary re-queries of data that is loaded once per deployment.
+
+2. **External API prices have a 10-minute TTL.** `get_jita_price()` calls the Fuzzwork API on every expiry. Increasing to 30 minutes reduces external API load by 3x with minimal staleness impact (Jita prices don't move that fast for market stocking decisions).
+
+3. **Market data has time-based TTLs but should use event-based invalidation.** The current approach expires market caches on a timer (600s for stats, 1800s for orders). But the data only changes when a sync occurs. With targeted invalidation (Problem 1 fix), these functions can use longer TTLs and get explicitly cleared when sync happens:
+
+```python
+@st.cache_data(ttl=3600)  # Long TTL as safety net
+def get_all_mkt_stats():
+    ...
+
+# After sync, explicitly clear:
+get_all_mkt_stats.clear()
+```
+
+This gives both responsiveness (fresh data immediately after sync) and efficiency (no re-queries between syncs).
+
+### Problem 5: Session State Written from Infrastructure Code
+
+Several non-UI modules write directly to `st.session_state`, creating hidden dependencies and making those modules untestable:
+
+| Module | Keys Written | Why It's a Problem |
+|--------|-------------|-------------------|
+| `config.py` (sync()) | `sync_status`, `sync_check` | DB config class coupled to Streamlit |
+| `sync_state.py` | `local_update_status`, `remote_update_status` | Infrastructure writes to UI state |
+| `db_handler.py` (new_get_market_data) | Reads from session state | Data layer reads UI state for filtering |
+
+**Fix:** These functions should return values and let the caller write to session state:
+
+```python
+# sync_state.py -- BEFORE:
+def update_wcmkt_state():
+    local_status = {...}
+    st.session_state.local_update_status = local_status  # side effect
+
+# sync_state.py -- AFTER:
+def get_wcmkt_state() -> tuple[dict, dict]:
+    local_status = {...}
+    remote_status = {...}
+    return local_status, remote_status
+
+# Caller (page):
+local, remote = get_wcmkt_state()
+ss_set('local_update_status', local)
+ss_set('remote_update_status', remote)
+```
+
+Similarly, `config.py`'s `sync()` should not call `st.cache_data.clear()`, `st.toast()`, or write to `st.session_state`. It should return a status, and the calling page handles UI feedback and cache invalidation.
+
+### Problem 6: Inconsistent State Access Patterns
+
+The codebase uses three different patterns to read session state:
+
+```python
+# Pattern 1: Wrapper functions (state/ module)
+from state import ss_get, ss_has
+value = ss_get('key', default)          # 14 call sites
+exists = ss_has('key')                  # 8 call sites
+
+# Pattern 2: Direct attribute access
+value = st.session_state.selected_item  # 100+ call sites
+value = st.session_state['key']         # 20+ call sites
+
+# Pattern 3: .get() method
+value = st.session_state.get('key')     # 15+ call sites
+value = st.session_state.get('key', default)  # 10+ call sites
+```
+
+The wrapper functions (`ss_get`, `ss_has`) provide None-safety (they treat None values as absent), but 80% of the codebase uses direct access, which throws `AttributeError` on missing keys or returns None without distinguishing "key absent" from "key is None".
+
+**Fix:** Standardize on the wrapper functions. The wrappers are well-designed -- they just need consistent adoption:
+
+```python
+# Replace all direct access:
+st.session_state.selected_item           -> ss_get('selected_item')
+st.session_state.get('key')              -> ss_get('key')
+st.session_state.get('key', default)     -> ss_get('key', default)
+'key' in st.session_state               -> ss_has('key')
+st.session_state['key'] = value          -> ss_set('key', value)
+```
+
+This makes state access grep-able, adds consistent None-handling, and keeps the door open for future enhancements (logging, validation, type checking) in one place.
+
+### Recommended Implementation Order
+
+These fixes have different dependencies and can be phased:
+
+**Phase A (standalone, do first):**
+1. Fix `wrap_top_n_items()` duplicate computation (1 line delete)
+2. Fix module-level service init in `market_metrics.py`, `doctrine_report.py`, `doctrine_status.py` (3 files, small change each)
+3. Fix module-level settings read in `market_metrics.py` (use `get_settings()`)
+4. Change SDE query caches from `@st.cache_data(ttl=3600)` to `@st.cache_resource`
+
+**Phase B (with Project 1 - Market Data Refactoring):**
+5. Move `@st.cache_data` from `db_handler.py` functions to `MarketRepository` methods
+6. Implement targeted cache invalidation (replace global `st.cache_data.clear()`)
+7. Extract session state writes from `config.py` sync() into page-level code
+8. Consolidate `local_update_status` / `remote_update_status` reads into `sync_state.py` returning values
+
+**Phase C (with Project 3 - Consolidation):**
+9. Standardize all session state access on `ss_get`/`ss_has`/`ss_set`
+10. Increase external API TTLs to 1800s
+11. Switch SDE repository to `@st.cache_resource` (permanent cache)
+12. Eliminate module-level `DatabaseConfig` instantiation in favor of repository injection
