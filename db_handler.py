@@ -116,6 +116,7 @@ def get_update_time(local_update_status: Optional[dict] = None) -> Optional[str]
 # =============================================================================
 
 def get_price_from_mkt_orders(type_id):
+    """DEPRECATED: Use MarketRepository.get_price() instead."""
     df = get_all_mkt_orders()
     df = df[df['type_id'] == type_id]
     df = df.reset_index(drop=True)
@@ -142,6 +143,7 @@ def request_type_names(type_ids):
 
 @st.cache_data(ttl=1800)
 def clean_mkt_data(df):
+    """DEPRECATED: Use MarketService.clean_order_data() instead."""
     # Create a copy first
     df = df.copy()
     df = df.reset_index(drop=True)
@@ -171,6 +173,7 @@ def clean_mkt_data(df):
 
 @st.cache_data(ttl=600)
 def get_stats(stats_query=None):
+    """DEPRECATED: Use MarketRepository.get_all_stats() instead."""
     if stats_query is None:
         stats_query = """
             SELECT * FROM marketstats
@@ -216,15 +219,7 @@ def get_4H_price(type_id):
         return None
 
 def new_get_market_data(show_all, category_info: Optional[dict] = None, selected_item_id: Optional[int] = None):
-    """Get market data with optional filtering.
-
-    Args:
-        show_all: Whether to show all data (unused currently)
-        category_info: Optional category filter info dict with 'type_ids' key.
-                      If None, attempts to read from session state.
-        selected_item_id: Optional specific item ID to filter by.
-                         If None, attempts to read from session state.
-    """
+    """DEPRECATED: Use MarketService.get_market_data() instead."""
     df = get_all_mkt_orders()
 
     # Try to get filter values from session state if not provided
@@ -264,12 +259,6 @@ def new_get_market_data(show_all, category_info: Optional[dict] = None, selected
         buy_orders_df = clean_mkt_data(buy_orders_df)
 
     return sell_orders_df, buy_orders_df, stats_df
-
-def get_chart_table_data()->pd.DataFrame:
-    df = get_all_market_history()
-    df = df.sort_values(by='date', ascending=False)
-    df = df.reset_index(drop=True)
-    return df
 
 # =============================================================================
 # SDE Functions (will be migrated in Phase 12)

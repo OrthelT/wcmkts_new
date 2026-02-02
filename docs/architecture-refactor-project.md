@@ -4,19 +4,21 @@ Extends the Domain -> Repository -> Service -> Page pattern established in Phase
 
 ## Quick Resume Guide
 
-**Current Status:** Phase 9 COMPLETE. Ready to begin Phase 10.
+**Current Status:** Phase 10 COMPLETE. Ready to begin Phase 11.
 
 **Branch:** `architecture-review`
 
-**Run tests:** `uv run pytest -q` (61 tests, all passing)
+**Run tests:** `uv run pytest -q` (87 tests, all passing)
 
 **Key context for next session:**
-- Phase 9 created `MarketRepository` with targeted cache invalidation
-- `config.py` sync() decoupled from Streamlit (no more `st.cache_data.clear()`, `st.toast()`, `st.session_state` inside sync)
-- `db_handler.py` market functions are now thin shims delegating to `repositories/market_repo.py`
-- Pages (`downloads`, `low_stock`, `doctrine_status`, `doctrine_report`) and `ui/popovers.py` now use `MarketRepository`
-- `invalidate_market_caches()` replaces global `st.cache_data.clear()` for sync operations
-- `market_stats.py` and `market_metrics.py` still use db_handler imports (Phase 10 target)
+- Phase 10 created `MarketService` (pure logic), `pages/components/market_components.py` (Streamlit rendering)
+- `market_metrics.py` (907 lines) deleted - all functions migrated to service/components
+- `pages/market_stats.py` refactored from 1001 to ~629 lines, no more `db_handler` imports
+- `MarketRepository` expanded with 5 new query methods (SDE, watchlist, market type IDs, history by type_ids)
+- `db_handler.py` functions `new_get_market_data`, `clean_mkt_data`, `get_stats`, `get_price_from_mkt_orders` marked DEPRECATED
+- Dead code `get_chart_table_data()` deleted from db_handler.py
+- `services/__init__.py` exports `MarketService`, `get_market_service`
+- Architecture: Page -> Service -> Repository pattern fully implemented for market data
 - The full phase plan is at the bottom of this file (copied from the planning session)
 
 ---
@@ -104,13 +106,53 @@ Extends the Domain -> Repository -> Service -> Page pattern established in Phase
 
 ---
 
-## Upcoming Phases
+### Phase 10: Market Service & Page Migration - COMPLETE
 
-### Phase 10: Market Service & Page Migration
-- Create `services/market_service.py` (pure calculation logic)
-- Create `pages/components/market_components.py` (UI rendering)
-- Refactor `pages/market_stats.py` as orchestrator
-- Delete `market_metrics.py`
+**Date:** 2026-02-02
+
+**Files Created:**
+| File | Purpose |
+|------|---------|
+| `services/market_service.py` | MarketService with pure calculation logic, chart creation (Plotly), ISK volume aggregation, outlier handling, factory function |
+| `pages/components/__init__.py` | Package init for page components |
+| `pages/components/market_components.py` | Streamlit rendering functions extracted from market_metrics.py: ISK volume chart/table UI, 30-day metrics, current market status, top N items, history display, column configs |
+| `tests/test_market_service.py` | 26 tests: 30-day metrics, ISK volume by period, outlier detection/handling, chart creation, top N items, clean order data, get_market_data |
+
+**Files Modified:**
+| File | Changes |
+|------|---------|
+| `repositories/market_repo.py` | Added 5 query methods (`get_history_by_type_ids`, `get_category_type_ids`, `get_watchlist_type_ids`, `get_market_type_ids`, `get_sde_info`) with `_impl()`/`_cached()` pattern. Added `bindparam` import. Updated `invalidate_market_caches()` to clear new caches. |
+| `pages/market_stats.py` | Refactored from 1001 to ~629 lines. Removed all `db_handler` imports. Uses `MarketService` for data access/calculations and `market_components` for rendering. Removed inline `create_price_volume_chart`, `create_history_chart`, `display_history_data`, `display_history_metrics`, `get_fitting_col_config`, `get_display_formats`, `all_sde_info`, `get_watchlist_type_ids`, `get_market_type_ids`. |
+| `services/__init__.py` | Added `MarketService`, `get_market_service` exports |
+| `db_handler.py` | Marked `new_get_market_data()`, `clean_mkt_data()`, `get_stats()`, `get_price_from_mkt_orders()` as DEPRECATED. Deleted dead code `get_chart_table_data()`. |
+
+**Files Deleted:**
+| File | Reason |
+|------|--------|
+| `market_metrics.py` (907 lines) | All functions migrated to `services/market_service.py` (pure logic) and `pages/components/market_components.py` (Streamlit rendering) |
+
+**Verification:**
+- 87 tests pass (`uv run pytest -q`)
+- Ruff check passes on all modified/created files
+- No circular imports (verified via direct Python import test)
+- No remaining `from db_handler import` in market_stats.py
+- No remaining `from market_metrics` imports anywhere
+- `market_metrics.py` deleted
+
+**Design Decisions:**
+- **Service takes repository via DI**: `MarketService.__init__(market_repo)` enables full mocking in tests. All 26 service tests use synthetic DataFrames, no DB needed.
+- **Chart creation in service layer**: Returns `go.Figure` (Plotly is a pure data structure). The page layer only calls `st.plotly_chart(fig)`. This keeps chart logic testable without Streamlit.
+- **Static methods for pure transforms**: `detect_outliers()`, `handle_outliers()`, `clean_order_data()`, `get_top_n_items()` are static because they don't need repo access. Callable without service instantiation.
+- **Components receive service, not data**: `render_30day_metrics_ui(service)` calls service methods internally, keeping the page orchestrator thin. Exception: `render_current_market_status_ui` receives pre-computed data since it renders multiple unrelated metrics.
+- **SDE queries use `cache_resource`**: `get_sde_info()` and `get_watchlist_type_ids()` use `@st.cache_resource` (no TTL) because SDE data is immutable at runtime. Market data queries use `@st.cache_data` with TTLs.
+- **`get_filter_options()` stays in page**: It manages session state (`selected_category_info`), which is presentation-layer responsibility. It accesses the repo through the service's `_repo` attribute.
+
+**New features/functionality for documentation updates:**
+- None (internal refactoring only)
+
+---
+
+## Upcoming Phases
 
 ### Phase 11: Build Cost Repository & Service
 - Create `repositories/build_cost_repo.py`
@@ -132,7 +174,7 @@ Extends the Domain -> Repository -> Service -> Page pattern established in Phase
 **Execution order:**
 ```
 Phase 8 (DONE)
-  |-- Phase 9 (DONE) -> Phase 10
+  |-- Phase 9 (DONE) -> Phase 10 (DONE)
   |-- Phase 11 (independent of 9-10, requires 8)
        |-- Phase 12 (requires 9-11) -> Phase 13
 ```

@@ -108,6 +108,12 @@ from services.module_equivalents_service import (
     EquivalenceGroup,
 )
 
+from services.market_service import (
+    # Main service
+    MarketService,
+    get_market_service,
+)
+
 __all__ = [
     # Price Service
     'PriceService',
@@ -167,4 +173,8 @@ __all__ = [
     'get_module_equivalents_service',
     'EquivalentModule',
     'EquivalenceGroup',
+
+    # Market Service
+    'MarketService',
+    'get_market_service',
 ]
