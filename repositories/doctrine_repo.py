@@ -129,9 +129,8 @@ class DoctrineRepository:
         query = "SELECT * FROM doctrine_fits"
 
         try:
-            with self._db.local_access():
-                with self._db.engine.connect() as conn:
-                    return pd.read_sql_query(query, conn)
+            with self._db.engine.connect() as conn:
+                return pd.read_sql_query(query, conn)
         except Exception as e:
             self._logger.error(f"Failed to get doctrine compositions: {e}")
             return pd.DataFrame()
@@ -168,9 +167,8 @@ class DoctrineRepository:
         query = text("SELECT lead_ship FROM lead_ships WHERE doctrine_id = :doctrine_id")
 
         try:
-            with self._db.local_access():
-                with self._db.engine.connect() as conn:
-                    df = pd.read_sql_query(query, conn, params={"doctrine_id": doctrine_id})
+            with self._db.engine.connect() as conn:
+                df = pd.read_sql_query(query, conn, params={"doctrine_id": doctrine_id})
 
             if not df.empty and pd.notna(df.loc[0, 'lead_ship']):
                 return int(df.loc[0, 'lead_ship'])
@@ -276,9 +274,8 @@ class DoctrineRepository:
         """)
 
         try:
-            with self._db.local_access():
-                with self._db.engine.connect() as conn:
-                    return pd.read_sql_query(query, conn, params={"module_name": module_name})
+            with self._db.engine.connect() as conn:
+                return pd.read_sql_query(query, conn, params={"module_name": module_name})
         except Exception as e:
             self._logger.error(f"Failed to get module stock for {module_name}: {e}")
             return pd.DataFrame()
@@ -303,9 +300,8 @@ class DoctrineRepository:
         """)
 
         try:
-            with self._db.local_access():
-                with self._db.engine.connect() as conn:
-                    return pd.read_sql_query(query, conn, params={"module_name": module_name})
+            with self._db.engine.connect() as conn:
+                return pd.read_sql_query(query, conn, params={"module_name": module_name})
         except Exception as e:
             self._logger.error(f"Failed to get module usage for {module_name}: {e}")
             return pd.DataFrame()
@@ -389,9 +385,8 @@ class DoctrineRepository:
             params = {"ship_name": ship_name}
 
         try:
-            with self._db.local_access():
-                with self._db.engine.connect() as conn:
-                    df = pd.read_sql_query(query, conn, params=params)
+            with self._db.engine.connect() as conn:
+                df = pd.read_sql_query(query, conn, params=params)
 
             if df.empty:
                 self._logger.warning(f"No stock data found for ship: {ship_name}")
@@ -454,9 +449,8 @@ class DoctrineRepository:
         query = f"SELECT type_id, avg_price FROM marketstats WHERE type_id IN ({placeholders})"
 
         try:
-            with self._db.local_access():
-                with self._db.engine.connect() as conn:
-                    df = pd.read_sql_query(query, conn, params=tuple(type_ids))
+            with self._db.engine.connect() as conn:
+                df = pd.read_sql_query(query, conn, params=tuple(type_ids))
 
             return dict(zip(df['type_id'], df['avg_price']))
 

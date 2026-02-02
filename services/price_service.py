@@ -369,9 +369,8 @@ class LocalMarketProvider:
             placeholders = ','.join(['?'] * len(type_ids))
             query = f"SELECT type_id, price, avg_price FROM marketstats WHERE type_id IN ({placeholders})"
 
-            with self._db.local_access():
-                with self._db.engine.connect() as conn:
-                    df = pd.read_sql_query(query, conn, params=tuple(type_ids))
+            with self._db.engine.connect() as conn:
+                df = pd.read_sql_query(query, conn, params=tuple(type_ids))
 
             return self._parse_dataframe(df, type_ids)
 

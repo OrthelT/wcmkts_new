@@ -46,7 +46,7 @@ logger.info(f"streamlit version: {st.__version__}")
 logger.info("-"*100)
 
 
-@st.cache_data(ttl=3600)
+@st.cache_resource
 def get_watchlist_type_ids()->list:
     # Get all type_ids from watchlist
     watchlist_query = """
@@ -73,7 +73,7 @@ def get_market_type_ids()->list:
     return type_ids
 
 # Function to get unique categories and item names
-@st.cache_data(ttl=1800)
+@st.cache_resource
 def all_sde_info(type_ids: list = None)->pd.DataFrame:
     if not type_ids:
         type_ids = get_market_type_ids()

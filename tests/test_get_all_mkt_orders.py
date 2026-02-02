@@ -42,8 +42,6 @@ class TestGetAllMktOrders:
         mock_engine.connect.return_value = mock_conn
 
         mock_mkt_db.integrity_check.return_value = True
-        mock_mkt_db.local_access.return_value.__enter__ = Mock(return_value=None)
-        mock_mkt_db.local_access.return_value.__exit__ = Mock(return_value=None)
         mock_mkt_db.engine = mock_engine
 
         result = get_all_mkt_orders()

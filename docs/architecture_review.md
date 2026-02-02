@@ -1,5 +1,29 @@
 # Architecture Review: Three Refactoring Proposals
 
+## USER INSTRUCTIONS
+Review this document and develop a plan for implementing its recommendations. Your plan should prioritize reducing complexity and increasing performance. Avoid long files. Split functionality into separate files when it is logically cohesive and generally in keeping with architecture. It should also consider Streamlit's execution model which re-runs on every interaction. Therefore caching and use of session_state in-memory cache is critical to performance. Divide the plan into reasonable phases. Each phase should be able to fit within your context window. You are the senior developer on this project and most maintain a clear picture of the overall objections and work involved. Use sub-agents as needed to preserve your context window. 
+
+### Additional considerations
+- The read-write lock functionality at the top of config.py was intended to handle a bug in the database engine that has subsequently been addressed. Locking should be handled properly by the database engine, making this code unnecessary. 
+- At some point in the future, I'd like to make the market context selectable by the user. I'd also like to make the app easily configurable for new markets so it can be implemented by others. This does not need to be implemented as part of this project, but thought it was worth noting so that you can consider it in your architecture design.
+
+
+### Project Plan Document
+Create a docs/architecture-refactor-project.md file to document your and to continually track progress. It should include a record of the work completed with each phase and the information a new Claude instance will need to continue with the next phase as well as any handoff instructions. Record any new features or functionality introduced that will need to be updated in the apps documentation so they can be easily identified for documentation updates at the end of the project. 
+
+### Workflow for Each Phase
+At the beginning of each phase:
+- Write tests that verify correctness.
+- Add additional tests as work progresses to adjust to any adjustments. 
+
+The conclusion of each phase should include:
+- A review of the implementation for simplicity and consistency with the architecture
+- Testing of the refactored code
+- A refactoring phase to address any issues identified. 
+- Updates to docs/architecture-refactor-project.md as described above.
+- If the full work planned for a phase cannot be completed before your context window is exhausted, add a sub-phase to the project plan with instructions for a new Claude instance to complete the work. 
+
+
 ## Executive Summary
 
 The doctrine module refactoring (Phases 1-7) established a clean Domain -> Repository -> Service pattern that is working well. However, the rest of the codebase has not adopted this architecture. Three modules -- `market_metrics.py`, `db_handler.py`, and `pages/build_costs.py` -- contain the most severe architectural violations and account for the bulk of the remaining technical debt.
@@ -59,6 +83,9 @@ However, the doctrine refactoring introduced several layers of overhead that sho
 ### What to Simplify
 
 1. **Drop the Facade layer entirely.** It was documented as complete in REFACTOR_PLAN.md (27 methods) but no page actually imports from `facades/`. The pages use services directly, and this is the right call. A Facade adds indirection without value when pages can just call service methods. Don't resurrect it for future refactoring.
+
+**USER COMMENTS:**
+The Facade layer has already been removed. Please update the documentation to make this clear if it isn't alresdy. 
 
 2. **Simplify factory functions.** Every service has a `get_*_service()` factory that goes through `state/service_registry.py` -> `st.session_state`. For most services in a Streamlit app, a module-level `@st.cache_resource` singleton is simpler and achieves the same thing. The `state/` package adds a layer of abstraction over what is essentially `st.session_state.setdefault()`.
 
@@ -602,6 +629,14 @@ This preserves SDE caches, external API caches, build cost caches, and settings 
 
 ### Problem 2: `st.cache_data` in Non-UI Code
 
+
+**USER COMMENTS:**
+Streamlit's st.cache_data() and st.cache_resource() decorators can only be used on functions with hashable arguments. So, it cannot normally be applied to class methods that take self as an argument. Streamlit's documentation offers two solutions that may be relevant:
+- Streamlit caching functions will ignore any argument prepended with an underscore. For instants, a class method get_fit_price(_self, fit_id) can be used with st.cache_data. Self will be ignored and the return value will be cached. However, if pertinent values are passed from the cache, they will be ignored and the cached result will still be returned as long as fit_id is the same.
+- Streamlit's st.cache decorators can also accept a hash_funcs() argument to specify the caching strategy. 
+Review Streamlit's cache documentation here and consider it in your refactor plan. https://docs.streamlit.io/develop/concepts/architecture/caching
+
+
 Every `@st.cache_data` decorator couples the decorated function to Streamlit's runtime. This means:
 
 - Functions cannot be tested without a Streamlit context
@@ -634,6 +669,13 @@ The repository is the right place for `@st.cache_data` because:
 3. Cache invalidation can be targeted per-repository after sync
 
 The doctrine repository already follows this pattern. The new `MarketRepository` and `BuildCostRepository` should do the same.
+
+### USER COMMENT: 
+Streamlit's st.cache_data() and st.cache_resource() decorators can only be used on functions with hashable arguments. So, it cannot normally be applied to class methods that take self as an argument. Streamlit's documentation offers two solutions that may be relevant:
+- Streamlit caching functions will ignore any argument prepended with an underscore. For instants, a class method get_fit_price(_self, fit_id) can be used with st.cache_data. Self will be ignored and the return value will be cached. However, if pertinent values are passed from the cache, they will be ignored and the cached result will still be returned as long as fit_id is the same.
+- Streamlit's st.cache decorators can also accept a hash_funcs() argument to specify the caching strategy. 
+Review Streamlit's cache documentation here and consider it in your refactor plan. https://docs.streamlit.io/develop/concepts/architecture/caching
+
 
 ### Problem 3: Redundant Work on Every Rerun
 

@@ -32,8 +32,6 @@ class TestGetMarketHistory:
         mock_engine = Mock()
         mock_engine.connect.return_value = mock_conn
 
-        mock_mkt_db.local_access.return_value.__enter__ = Mock(return_value=None)
-        mock_mkt_db.local_access.return_value.__exit__ = Mock(return_value=None)
         mock_mkt_db.engine = mock_engine
 
         # Mock pd.read_sql_query
@@ -71,8 +69,6 @@ class TestGetMarketHistory:
         mock_engine = Mock()
         mock_engine.connect.return_value = mock_conn
 
-        mock_mkt_db.local_access.return_value.__enter__ = Mock(return_value=None)
-        mock_mkt_db.local_access.return_value.__exit__ = Mock(return_value=None)
         mock_mkt_db.engine = mock_engine
 
         with patch('db_handler.pd.read_sql_query', return_value=mock_data):
@@ -98,8 +94,6 @@ class TestGetMarketHistory:
         mock_engine = Mock()
         mock_engine.connect.return_value = mock_conn
 
-        mock_mkt_db.local_access.return_value.__enter__ = Mock(return_value=None)
-        mock_mkt_db.local_access.return_value.__exit__ = Mock(return_value=None)
         mock_mkt_db.engine = mock_engine
 
         # Mock data
@@ -149,8 +143,6 @@ class TestGetMarketHistory:
             mock_engine = Mock()
             mock_engine.connect.return_value = mock_conn
 
-            mock_mkt_db.local_access.return_value.__enter__ = Mock(return_value=None)
-            mock_mkt_db.local_access.return_value.__exit__ = Mock(return_value=None)
             mock_mkt_db.engine = mock_engine
 
             # Mock data
@@ -190,8 +182,6 @@ class TestGetMarketHistory:
         mock_engine = Mock()
         mock_engine.connect.return_value = mock_conn
 
-        mock_mkt_db.local_access.return_value.__enter__ = Mock(return_value=None)
-        mock_mkt_db.local_access.return_value.__exit__ = Mock(return_value=None)
         mock_mkt_db.engine = mock_engine
 
         with patch('db_handler.pd.read_sql_query', return_value=mock_data):

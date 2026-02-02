@@ -25,7 +25,7 @@ def read_df(
 ) -> pd.DataFrame:
     """Execute a read-only SQL query and return a DataFrame.
 
-    - Uses `db.local_access()` + `db.engine.connect()` for local reads.
+    - Uses `db.engine.connect()` for local reads.
     - Optionally falls back to remote on malformed/corrupt local DB.
     - Accepts raw SQL strings or SQLAlchemy TextClause; params are optional.
     """
@@ -67,9 +67,8 @@ def read_df(
 def new_read_df(db: DatabaseConfig, query: Any, params: Mapping[str, Any] | None = None) -> pd.DataFrame:
     """Execute a read-only SQL query and return a DataFrame."""
     def _read_all():
-        with db.local_access():
-            with db.engine.connect() as conn:
-                return pd.read_sql_query(query, conn, params=params)
+        with db.engine.connect() as conn:
+            return pd.read_sql_query(query, conn, params=params)
 
     try:
         return _read_all()
@@ -90,9 +89,8 @@ def get_all_mkt_stats()->pd.DataFrame:
     SELECT * FROM marketstats
     """
     def _read_all():
-        with mkt_db.local_access():
-            with mkt_db.engine.connect() as conn:
-                return pd.read_sql_query(query, conn)
+        with mkt_db.engine.connect() as conn:
+            return pd.read_sql_query(query, conn)
     try:
         df = _read_all()
     except Exception as e:
@@ -210,9 +208,8 @@ def get_stats(stats_query=None):
         """
     engine = mkt_db.engine
     try:
-        with mkt_db.local_access():
-            with engine.connect() as conn:
-                stats = pd.read_sql_query(stats_query, conn)
+        with engine.connect() as conn:
+            stats = pd.read_sql_query(stats_query, conn)
     except Exception as e:
         msg = str(e).lower()
         if "malform" in msg or "database disk image is malformed" in msg or "no such table" in msg:
@@ -245,9 +242,8 @@ def get_market_history(type_id: int)->pd.DataFrame:
         WHERE type_id = :type_id
         ORDER BY date DESC
     """
-    with mkt_db.local_access():
-        with mkt_db.engine.connect() as conn:
-            return pd.read_sql_query(text(query), conn, params={"type_id": type_id})
+    with mkt_db.engine.connect() as conn:
+        return pd.read_sql_query(text(query), conn, params={"type_id": type_id})
 
 @st.cache_data(ttl=3600)
 def get_all_market_history()->pd.DataFrame:
@@ -255,9 +251,8 @@ def get_all_market_history()->pd.DataFrame:
         SELECT * FROM market_history
     """
     def _read_all():
-        with mkt_db.local_access():
-            with mkt_db.engine.connect() as conn:
-                return pd.read_sql_query(query, conn)
+        with mkt_db.engine.connect() as conn:
+            return pd.read_sql_query(query, conn)
     try:
         df = _read_all()
     except Exception as e:
@@ -300,7 +295,7 @@ def get_update_time(local_update_status: Optional[dict] = None) -> Optional[str]
                 logger.error(f"Failed to format local_update_status.updated: {e}")
     return None
 
-@st.cache_data(ttl=3600)
+@st.cache_resource
 def get_groups_for_category(category_id: int)->pd.DataFrame:
     sde2_db = DatabaseConfig("sde")
     if category_id == 17:
@@ -318,7 +313,7 @@ def get_groups_for_category(category_id: int)->pd.DataFrame:
         df = pd.read_sql_query(text(query), conn, params={"category_id": category_id})
     return df
 
-@st.cache_data(ttl=3600)
+@st.cache_resource
 def get_types_for_group(group_id: int)->pd.DataFrame:
     sde2_db = DatabaseConfig("sde")
     query = """

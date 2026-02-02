@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session
 import threading
-from contextlib import suppress, contextmanager
+from contextlib import suppress
 from time import perf_counter
 import tomllib
 from pathlib import Path
@@ -43,74 +43,6 @@ def get_settings()->dict:
         logger.error(f"Failed to load settings from settings.toml: {e}")
         raise e
 
-class RWLock:
-    """Read-Write lock implementation.
-
-    Allows multiple concurrent readers OR one exclusive writer.
-    Writers wait for all readers to finish before acquiring.
-    """
-
-    def __init__(self):
-        self._readers = 0
-        self._writers = 0
-        self._read_ready = threading.Condition(threading.Lock())
-        self._write_ready = threading.Condition(threading.Lock())
-
-    def acquire_read(self):
-        """Acquire a read lock. Multiple readers can hold the lock simultaneously."""
-        self._read_ready.acquire()
-        try:
-            while self._writers > 0:
-                self._read_ready.wait()
-            self._readers += 1
-        finally:
-            self._read_ready.release()
-
-    def release_read(self):
-        """Release a read lock."""
-        self._read_ready.acquire()
-        try:
-            self._readers -= 1
-            if self._readers == 0:
-                self._read_ready.notify_all()
-        finally:
-            self._read_ready.release()
-
-    def acquire_write(self):
-        """Acquire a write lock. Exclusive access - blocks all readers and writers."""
-        self._write_ready.acquire()
-        self._writers += 1
-        self._write_ready.release()
-
-        self._read_ready.acquire()
-        while self._readers > 0:
-            self._read_ready.wait()
-
-    def release_write(self):
-        """Release a write lock."""
-        self._writers -= 1
-        self._read_ready.notify_all()
-        self._read_ready.release()
-
-    @contextmanager
-    def read_lock(self):
-        """Context manager for read lock."""
-        self.acquire_read()
-        try:
-            yield
-        finally:
-            self.release_read()
-
-    @contextmanager
-    def write_lock(self):
-        """Context manager for write lock."""
-        self.acquire_write()
-        try:
-            yield
-        finally:
-            self.release_write()
-
-
 class DatabaseConfig:
     settings = get_settings()
     wcdbmap = settings['env_db_aliases'][settings['env']['env']]  # master config variable for the database to use
@@ -142,7 +74,6 @@ class DatabaseConfig:
     _libsql_connects: dict[str, object] = {}
     _libsql_sync_connects: dict[str, object] = {}
     _sqlite_local_connects: dict[str, object] = {}
-    _local_locks: dict[str, RWLock] = {}  # Changed from RLock to RWLock
     _ro_engines: dict[str, object] = {}
 
     def __init__(self, alias: str, dialect: str = "sqlite+libsql"):
@@ -267,32 +198,6 @@ class DatabaseConfig:
             with suppress(Exception):
                 ro_engine.dispose()
 
-    def _get_local_lock(self) -> RWLock:
-        """Get or create a read-write lock for this database alias."""
-        lock = DatabaseConfig._local_locks.get(self.alias)
-        if lock is None:
-            lock = RWLock()
-            DatabaseConfig._local_locks[self.alias] = lock
-        return lock
-
-    @contextmanager
-    def local_access(self, write: bool = False):
-        """Guard local DB access to avoid overlapping with sync.
-
-        Args:
-            write: If True, acquire exclusive write lock. If False, acquire shared read lock.
-                   Multiple readers can access simultaneously, but writes are exclusive.
-        """
-        lock = self._get_local_lock()
-        if write:
-            with lock.write_lock():
-                logger.debug(f"local_access() write lock acquired for {self.alias}")
-                yield
-        else:
-            with lock.read_lock():
-                logger.debug(f"local_access() read lock acquired for {self.alias}")
-                yield
-
     def integrity_check(self) -> bool:
         """Run PRAGMA integrity_check on the local database.
 
@@ -313,9 +218,8 @@ class DatabaseConfig:
     def sync(self):
         """Synchronize the local database with the remote Turso replica safely.
 
-        Uses a write lock to block all access during sync, and disposes local
-        connections to prevent corruption. Read-only engine is preserved for
-        minimal disruption to concurrent reads after sync completes.
+        Uses _SYNC_LOCK to serialize sync operations and disposes local
+        connections to prevent corruption.
         """
         sync_start = perf_counter()
         logger.info("-" * 40)
@@ -325,58 +229,45 @@ class DatabaseConfig:
             }"
         )
 
-        # Acquire write lock to block all access during sync
-        lock = self._get_local_lock()
-        with lock.write_lock():
-            with _SYNC_LOCK:
-                self._dispose_local_connections()
-                logger.debug("Disposing local connections and syncing database…")
-                conn = None
-                try:
-                    st.cache_data.clear()
-                    st.cache_resource.clear()
-                    # Explicitly manage connection lifecycle; avoid relying on context manager
-                    conn = libsql.connect(
-                        self.path, sync_url=self.turso_url, auth_token=self.token
-                    )
-                    conn.sync()
-                    sync_end = perf_counter()
-                    sync_time = round((sync_end - sync_start) * 1000, 2)
-                    logger.info(
-                        f"sync() completed for {self.alias} in {sync_time} ms at {
-                            datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
-                        }"
-                    )
-                    logger.info("-" * 40)
-                except Exception as e:
-                    logger.error(f"Database sync failed: {e}")
-                    raise
-                finally:
-                    if conn is not None:
-                        with suppress(Exception):
-                            conn.close()
-                            logger.info("Connection closed")
+        with _SYNC_LOCK:
+            self._dispose_local_connections()
+            logger.debug("Disposing local connections and syncing database...")
+            conn = None
+            try:
+                st.cache_data.clear()
+                st.cache_resource.clear()
+                conn = libsql.connect(self.path, sync_url=self.turso_url, auth_token=self.token)
+                conn.sync()
+                sync_end = perf_counter()
+                sync_time = round((sync_end - sync_start)*1000, 2)
+                logger.info(f"sync() completed for {self.alias} in {sync_time} ms at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
+                logger.info("-"*40)
+            except Exception as e:
+                logger.error(f"Database sync failed: {e}")
+                raise
+            finally:
+                if conn is not None:
+                    with suppress(Exception):
+                        conn.close()
+                        logger.info("Connection closed")
 
-                update_time = datetime.now(timezone.utc)
-                logger.info(f"Database synced at {update_time} UTC")
+            update_time = datetime.now(timezone.utc)
+            logger.info(f"Database synced at {update_time} UTC")
 
-                # Post-sync integrity validation
-                ok = self.integrity_check()
-                if not ok:
-                    logger.error("Post-sync integrity check failed.")
+            # Post-sync integrity validation
+            ok = self.integrity_check()
+            if not ok:
+                logger.error("Post-sync integrity check failed.")
 
-                # For market DBs, also validate last_update parity if integrity ok
-                if self.alias == "wcmkt2":
-                    validation_test = self.validate_sync() if ok else False
-                    st.session_state.sync_status = (
-                        "Success" if validation_test else "Failed"
-                    )
-                    if st.session_state.sync_status == "Success":
-                        st.toast("Database synced successfully", icon="✅")
-                    else:
-                        st.toast("Database sync failed", icon="❌")
-                st.session_state.sync_check = False
-                logger.debug(f"Write lock will be released for {self.alias}")
+            # For market DBs, also validate last_update parity if integrity ok
+            if self.alias == "wcmkt2":
+                validation_test = self.validate_sync() if ok else False
+                st.session_state.sync_status = "Success" if validation_test else "Failed"
+                if st.session_state.sync_status == "Success":
+                    st.toast("Database synced successfully", icon="✅")
+                else:
+                    st.toast("Database sync failed", icon="❌")
+            st.session_state.sync_check = False
 
     def validate_sync(self) -> bool:
         alias = self.alias

@@ -40,14 +40,14 @@ def create_module_equivalents_table(db: DatabaseConfig) -> bool:
         # Use raw sqlite3 to create table directly in local file
         conn = sql.connect(db.path)
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS module_equivalents (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 group_id INTEGER NOT NULL,
                 type_id INTEGER NOT NULL,
                 type_name VARCHAR(255) NOT NULL
             )
-        ''')
+        """)
         conn.commit()
         conn.close()
         logger.info("module_equivalents table created or verified")
@@ -57,11 +57,7 @@ def create_module_equivalents_table(db: DatabaseConfig) -> bool:
         return False
 
 
-def load_equivalents_from_csv(
-    db: DatabaseConfig,
-    csv_path: Path,
-    group_id: int
-) -> int:
+def load_equivalents_from_csv(db: DatabaseConfig, csv_path: Path, group_id: int) -> int:
     """
     Load module equivalents from a CSV file.
 
@@ -85,34 +81,38 @@ def load_equivalents_from_csv(
         conn = sql.connect(db.path)
         cursor = conn.cursor()
 
-        with open(csv_path, 'r', encoding='utf-8-sig') as f:
+        with open(csv_path, "r", encoding="utf-8-sig") as f:
             reader = csv.DictReader(f)
 
             for row in reader:
-                type_id = int(row['type_id'])
-                type_name = row['type_name'].strip()
+                type_id = int(row["type_id"])
+                type_name = row["type_name"].strip()
 
                 # Check if this type_id already exists in the group
                 cursor.execute(
                     "SELECT id FROM module_equivalents WHERE group_id = ? AND type_id = ?",
-                    (group_id, type_id)
+                    (group_id, type_id),
                 )
                 existing = cursor.fetchone()
 
                 if existing:
-                    logger.debug(f"Skipping existing entry: {type_name} (type_id={type_id})")
+                    logger.debug(
+                        f"Skipping existing entry: {
+                            type_name} (type_id={type_id})"
+                    )
                     continue
 
                 cursor.execute(
                     "INSERT INTO module_equivalents (group_id, type_id, type_name) VALUES (?, ?, ?)",
-                    (group_id, type_id, type_name)
+                    (group_id, type_id, type_name),
                 )
                 rows_inserted += 1
 
         conn.commit()
         conn.close()
 
-        logger.info(f"Loaded {rows_inserted} module equivalents from {csv_path.name}")
+        logger.info(f"Loaded {rows_inserted} module equivalents from {
+                    csv_path.name}")
         return rows_inserted
 
     except Exception as e:
@@ -146,8 +146,7 @@ def clear_equivalents_table(db: DatabaseConfig) -> bool:
 
 
 def init_module_equivalents(
-    db: DatabaseConfig = None,
-    clear_existing: bool = False
+    db: DatabaseConfig = None, clear_existing: bool = False
 ) -> bool:
     """
     Initialize the module_equivalents table and load data from CSV files.
@@ -232,11 +231,4 @@ def get_equivalents_count(db: DatabaseConfig = None) -> int:
 
 
 if __name__ == "__main__":
-    # Run initialization when executed directly
-    db = DatabaseConfig("wcmkt")
-    success = init_module_equivalents(db, clear_existing=True)
-    if success:
-        count = get_equivalents_count(db)
-        print(f"Successfully initialized module_equivalents table with {count} entries")
-    else:
-        print("Failed to initialize module_equivalents table")
+    pass

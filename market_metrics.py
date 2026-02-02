@@ -1,5 +1,5 @@
 from db_handler import get_all_market_history, read_df, get_price_from_mkt_orders
-from config import DatabaseConfig
+from config import DatabaseConfig, get_settings
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -7,19 +7,22 @@ from sqlalchemy import text
 from logging_config import setup_logging
 from datetime import datetime, timedelta
 import millify
-from services import get_doctrine_service
 import numpy as np
 from state import ss_has
 
 logger = setup_logging(__name__)
 
-# Initialize service (cached in session state)
-service = get_doctrine_service()
 
-import tomllib
-with open("settings.toml", "rb") as f:
-    settings = tomllib.load(f)
-default_outliers_method = settings['outliers']['default_method']
+def _get_service():
+    """Get doctrine service lazily to avoid database access at module import time."""
+    from services import get_doctrine_service
+    return get_doctrine_service()
+
+
+def _get_default_outliers_method() -> str:
+    """Get the default outliers method from settings."""
+    settings = get_settings()
+    return settings['outliers']['default_method']
 
 @st.cache_data(ttl=3600)
 def get_category_type_ids(selected_category=None)->list:
@@ -94,16 +97,6 @@ def wrap_top_n_items(df_7days: pd.DataFrame, df_30days: pd.DataFrame) -> pd.Data
         if ss_has("week_month_pill", "daily_total_pill", "isk_volume_pill", "top_items_count"):
             if df_7days.empty or df_30days.empty:
                 return None
-            else:
-                if st.session_state.week_month_pill == 0:
-                    top_n_items = df_7days.copy()
-                else:
-                    top_n_items = df_30days.copy()
-
-                if st.session_state.daily_total_pill == 0:
-                    top_n_items = top_n_items.groupby('type_name').agg({'daily_isk_volume': 'mean', 'volume': 'mean'})
-                else:
-                    top_n_items = top_n_items.groupby('type_name').agg({'daily_isk_volume': 'sum', 'volume': 'sum'})
 
             if st.session_state.week_month_pill == 0:
                 top_n_items = df_7days.copy()
@@ -310,7 +303,7 @@ def detect_outliers(series, method='iqr', threshold=1.5):
     else:
         raise ValueError("Method must be 'iqr' or 'zscore'")
 
-def handle_outliers(series, method=default_outliers_method, outlier_threshold=1.5, cap_percentile=95):
+def handle_outliers(series, method=None, outlier_threshold=1.5, cap_percentile=95):
     """
     Handle outliers in a pandas Series
 
@@ -323,6 +316,8 @@ def handle_outliers(series, method=default_outliers_method, outlier_threshold=1.
     Returns:
         pandas Series: data with outliers handled
     """
+    if method is None:
+        method = _get_default_outliers_method()
     logger.info(f"Handling outliers with method: {method}")
     if method == 'none':
         return series
@@ -342,7 +337,7 @@ def handle_outliers(series, method=default_outliers_method, outlier_threshold=1.
         raise ValueError("Method must be 'remove', 'cap', or 'none'")
 
 def create_ISK_volume_chart(moving_avg_period=14, date_period='daily', start_date=None, end_date=None,
-                            outlier_method=default_outliers_method, outlier_threshold=1.5, cap_percentile=95, selected_category=None):
+                            outlier_method=None, outlier_threshold=1.5, cap_percentile=95, selected_category=None):
     """
     Create an interactive ISK volume chart with moving average and outlier handling
 
@@ -359,6 +354,8 @@ def create_ISK_volume_chart(moving_avg_period=14, date_period='daily', start_dat
     Returns:
         plotly.graph_objects.Figure: The chart figure
     """
+    if outlier_method is None:
+        outlier_method = _get_default_outliers_method()
     logger.info(f"Creating ISK volume chart with outlier method: {outlier_method}")
     # Get the data based on selected parameters
     df = calculate_ISK_volume_by_period(date_period, start_date, end_date, selected_category)
@@ -529,11 +526,12 @@ def render_ISK_volume_chart_ui():
             col5, col6, col7 = st.columns(3)
 
             with col5:
-                if default_outliers_method == 'none':
+                _default_method = _get_default_outliers_method()
+                if _default_method == 'none':
                     index = 2
-                elif default_outliers_method == 'remove':
+                elif _default_method == 'remove':
                     index = 1
-                elif default_outliers_method == 'cap':
+                elif _default_method == 'cap':
                     index = 0
                 else:
                     index = 0
@@ -882,6 +880,7 @@ def render_current_market_status_ui(sell_data, stats, selected_item, sell_order_
                 fits = fit_df['fit_id'].unique()
                 display_fits_on_mkt = f"{fits_on_mkt:,.0f}"
                 target = None
+                service = _get_service()
                 if len(fits) == 1:
                     target = service.repository.get_target_by_fit_id(fits[0])
                     fits_on_mkt_delta = round(fits_on_mkt - target, 0)
