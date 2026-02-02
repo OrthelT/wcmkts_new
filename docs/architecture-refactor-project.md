@@ -4,17 +4,19 @@ Extends the Domain -> Repository -> Service -> Page pattern established in Phase
 
 ## Quick Resume Guide
 
-**Current Status:** Phase 8 COMPLETE. Ready to begin Phase 9.
+**Current Status:** Phase 9 COMPLETE. Ready to begin Phase 10.
 
 **Branch:** `architecture-review`
 
-**Run tests:** `uv run pytest -q` (41 tests, all passing)
+**Run tests:** `uv run pytest -q` (61 tests, all passing)
 
 **Key context for next session:**
-- Phase 8 removed RWLock and local_access() from the entire codebase
-- `repositories/base.py` now provides `BaseRepository.read_df()` with malformed-DB recovery
-- `market_metrics.py` bugs fixed (module-level side effects, duplicate computation block)
-- SDE caches changed from `@st.cache_data(ttl=3600)` to `@st.cache_resource`
+- Phase 9 created `MarketRepository` with targeted cache invalidation
+- `config.py` sync() decoupled from Streamlit (no more `st.cache_data.clear()`, `st.toast()`, `st.session_state` inside sync)
+- `db_handler.py` market functions are now thin shims delegating to `repositories/market_repo.py`
+- Pages (`downloads`, `low_stock`, `doctrine_status`, `doctrine_report`) and `ui/popovers.py` now use `MarketRepository`
+- `invalidate_market_caches()` replaces global `st.cache_data.clear()` for sync operations
+- `market_stats.py` and `market_metrics.py` still use db_handler imports (Phase 10 target)
 - The full phase plan is at the bottom of this file (copied from the planning session)
 
 ---
@@ -62,14 +64,47 @@ Extends the Domain -> Repository -> Service -> Page pattern established in Phase
 
 ---
 
-## Upcoming Phases
+### Phase 9: Market Repository & Cache Strategy - COMPLETE
 
-### Phase 9: Market Repository & Cache Strategy
-- Create `repositories/market_repo.py` (MarketRepository inheriting BaseRepository)
-- Create targeted cache invalidation (replace global `st.cache_data.clear()`)
-- Extract `sync()` Streamlit coupling from `config.py`
-- Update `pages/downloads.py`, `pages/low_stock.py`, `pages/doctrine_status.py`, `pages/doctrine_report.py`, `ui/popovers.py` to use MarketRepository
-- Add backward-compat shims in `db_handler.py` (marked DEPRECATED)
+**Date:** 2026-02-02
+
+**Files Created:**
+| File | Purpose |
+|------|---------|
+| `repositories/market_repo.py` | MarketRepository with cached stats/orders/history, targeted invalidation, factory function |
+| `tests/test_market_repo.py` | 16 tests: cached functions, malformed recovery, class delegation, update time, invalidation, factory |
+
+**Files Modified:**
+| File | Changes |
+|------|---------|
+| `config.py` | Removed `st.cache_data.clear()`, `st.cache_resource.clear()`, `st.toast()`, `st.session_state` mutations from `sync()`. Returns `bool` now. Removed dead `self.alias == "wcmkt2"` branch. |
+| `db_handler.py` | Converted `get_all_mkt_stats`, `get_all_mkt_orders`, `get_all_market_history`, `get_market_history`, `get_update_time` to DEPRECATED shims delegating to `market_repo`. Removed ~120 lines of duplicated query/recovery logic. |
+| `repositories/__init__.py` | Added `MarketRepository`, `get_market_repository`, `invalidate_market_caches`, `get_update_time` exports. |
+| `pages/downloads.py` | Replaced `get_all_mkt_orders/stats/history` imports with `get_market_repository()`. |
+| `pages/low_stock.py` | Replaced `from db_handler import get_update_time` with `from repositories import get_update_time`. |
+| `pages/doctrine_status.py` | Same as low_stock.py. |
+| `pages/doctrine_report.py` | Same as low_stock.py. |
+| `ui/popovers.py` | Replaced lazy `from db_handler import get_all_mkt_stats` with `from repositories import get_market_repository`. |
+| `pages/market_stats.py` | Added `from repositories import invalidate_market_caches`. Replaced global `st.cache_data.clear()` with `invalidate_market_caches()`. Added toast feedback after sync (moved from config.py). |
+| `tests/test_database_config_concurrency.py` | Added 4 tests verifying sync() no longer calls Streamlit APIs. |
+
+**Verification:**
+- 61 tests pass (`uv run pytest -q`)
+- Import checks confirm: no circular imports, shims delegate correctly to market_repo
+- Single cache per function (db_handler shims -> market_repo cached functions)
+
+**Design Decisions:**
+- **Two-layer caching**: `_impl()` functions contain query + recovery logic (testable), `_cached()` wrappers add `@st.cache_data` (Streamlit integration). This separates concerns and simplifies testing.
+- **Shim pattern**: db_handler functions become thin wrappers delegating to market_repo's cached functions. This ensures a single cache entry per query while maintaining backward compatibility for Phase 10 targets (market_stats.py, market_metrics.py).
+- **sync() returns bool**: Callers handle UI feedback (toasts, session state). This makes sync() testable outside Streamlit and eliminates the double-clear bug where caches were cleared twice per sync.
+- **Dead code removed**: `self.alias == "wcmkt2"` branch in sync() was unreachable because the constructor remaps "wcmkt2" → "wcmktprod"/"wcmkttest". Removed along with its st.toast/st.session_state calls.
+
+**New features/functionality for documentation updates:**
+- None (internal refactoring only)
+
+---
+
+## Upcoming Phases
 
 ### Phase 10: Market Service & Page Migration
 - Create `services/market_service.py` (pure calculation logic)
@@ -97,7 +132,28 @@ Extends the Domain -> Repository -> Service -> Page pattern established in Phase
 **Execution order:**
 ```
 Phase 8 (DONE)
-  |-- Phase 9 -> Phase 10
+  |-- Phase 9 (DONE) -> Phase 10
   |-- Phase 11 (independent of 9-10, requires 8)
        |-- Phase 12 (requires 9-11) -> Phase 13
 ```
+
+# USER INSTRUCTIONS
+Prioritize reducing complexity and increasing performance. Avoid long files. Split functionality into separate files when it is logically cohesive and generally in keeping with architecture. Consider Streamlit's execution model which re-runs on every interaction. Caching and use of session_state in-memory cache is critical to performance. Each phase should be able to fit within your context window. You are the senior developer on this project and most maintain a clear picture of the overall objections and work involved. Use sub-agents as needed to preserve your context window. 
+
+### Project Plan Document
+Use this file (docs/architecture-refactor-project.md) to document your work and to continually track progress. It should include a record of the work completed with each phase and the information a new Claude instance will need to continue with the next phase as well as any handoff instructions. Record any new features or functionality introduced that will need to be updated in the apps documentation so they can be easily identified for documentation updates at the end of the project. 
+
+### Workflow for Each Phase
+*At the beginning of each phase:*
+- Write tests that verify correctness of upcoming work.
+- Add additional tests as work progresses to reflect any adjustments. 
+
+*The conclusion of each phase should include:*
+- A review of the implementation for simplicity and consistency with the architecture
+- Testing of the refactored code
+- A refactoring phase to address any issues identified. 
+- Updates to docs/architecture-refactor-project.md as described above.
+- If the full work planned for a phase cannot be completed before your context window is exhausted, add a sub-phase to the project plan with instructions for a new Claude instance to complete the work. 
+
+### Additional information
+- docs/architecture_review.md (note USER COMMENTS)

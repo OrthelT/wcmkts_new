@@ -51,7 +51,7 @@ def read_df(
     except Exception as e:
         msg = str(e).lower()
         if fallback_remote_on_malformed and (
-            "malform" in msg 
+            "malform" in msg
             or "database disk image is malformed" in msg
             or "no such table" in msg
         ):
@@ -81,70 +81,39 @@ def new_read_df(db: DatabaseConfig, query: Any, params: Mapping[str, Any] | None
             logger.error(f"Failed to read data after sync: {str(e2)}")
             raise
 
-@st.cache_data(ttl=600)
-def get_all_mkt_stats()->pd.DataFrame:
-    logger.info("-"*40)
-    all_mkt_start = time.perf_counter()
-    query = """
-    SELECT * FROM marketstats
-    """
-    def _read_all():
-        with mkt_db.engine.connect() as conn:
-            return pd.read_sql_query(query, conn)
-    try:
-        df = _read_all()
-    except Exception as e:
-        logger.error(f"Failed to get market stats: {str(e)}")
-        try:
-            mkt_db.sync()
-            df = _read_all()
-        except Exception as e2:
-            logger.error(f"Failed to get market stats after sync: {str(e2)}")
-            raise
-    all_mkt_end = time.perf_counter()
-    elapsed_time = round((all_mkt_end - all_mkt_start)*1000, 2)
-    logger.info(f"TIME get_all_mkt_stats() = {elapsed_time} ms")
-    logger.info("-"*40)
-    df = df.reset_index(drop=True)
-    return df
+# =============================================================================
+# DEPRECATED: Market data shims - delegate to repositories.market_repo
+# These will be removed in Phase 13. Use MarketRepository instead.
+# =============================================================================
 
-@st.cache_data(ttl=1800)
-def get_all_mkt_orders()->pd.DataFrame:
-    logger.info("-"*40)
-    all_mkt_start = time.perf_counter()
-    query = """
-    SELECT * FROM marketorders
-    """
+def get_all_mkt_stats() -> pd.DataFrame:
+    """DEPRECATED: Use MarketRepository.get_all_stats() instead."""
+    from repositories.market_repo import _get_all_stats_cached
+    return _get_all_stats_cached()
 
-    def _read_all():
-        with mkt_db.engine.connect() as conn:
-            return pd.read_sql_query(query, conn)
+def get_all_mkt_orders() -> pd.DataFrame:
+    """DEPRECATED: Use MarketRepository.get_all_orders() instead."""
+    from repositories.market_repo import _get_all_orders_cached
+    return _get_all_orders_cached()
 
-    try:
-        df = _read_all()
-    except Exception as e:
-        # Handle on-the-fly corruption by resyncing and retrying once
-        msg = str(e).lower()
-        if "malform" in msg or "database disk image is malformed" in msg or "no such table" in msg:
-            logger.error(f"Detected DB error ('{msg}') during read; resyncing and retrying once…")
-            try:
-                mkt_db.sync()
-                df = _read_all()
-            except Exception as e2:
-                msg2 = str(e2).lower()
-                logger.error(f"Retry after sync failed: {msg2}. Falling back to remote read.")
-                # Final fallback: read directly from remote so UI stays up
-                with mkt_db.remote_engine.connect() as conn:
-                    df = pd.read_sql_query(query, conn)
-        else:
-            raise
+def get_all_market_history() -> pd.DataFrame:
+    """DEPRECATED: Use MarketRepository.get_all_history() instead."""
+    from repositories.market_repo import _get_all_history_cached
+    return _get_all_history_cached()
 
-    all_mkt_end = time.perf_counter()
-    elapsed_time = round((all_mkt_end - all_mkt_start)*1000, 2)
-    logger.info(f"TIME get_all_mkt_orders() = {elapsed_time} ms")
-    logger.info("-"*40)
-    df = df.reset_index(drop=True)
-    return df
+def get_market_history(type_id: int) -> pd.DataFrame:
+    """DEPRECATED: Use MarketRepository.get_history_by_type() instead."""
+    from repositories.market_repo import _get_history_by_type_cached
+    return _get_history_by_type_cached(type_id)
+
+def get_update_time(local_update_status: Optional[dict] = None) -> Optional[str]:
+    """DEPRECATED: Use repositories.market_repo.get_update_time() instead."""
+    from repositories.market_repo import get_update_time as _get_update_time
+    return _get_update_time(local_update_status)
+
+# =============================================================================
+# Non-market functions (not yet migrated)
+# =============================================================================
 
 def get_price_from_mkt_orders(type_id):
     df = get_all_mkt_orders()
@@ -234,129 +203,6 @@ def safe_format(value, format_string):
     except (ValueError, TypeError):
         return ''
 
-@st.cache_data(ttl=3600)
-def get_market_history(type_id: int)->pd.DataFrame:
-    query = """
-        SELECT date, average, volume
-        FROM market_history
-        WHERE type_id = :type_id
-        ORDER BY date DESC
-    """
-    with mkt_db.engine.connect() as conn:
-        return pd.read_sql_query(text(query), conn, params={"type_id": type_id})
-
-@st.cache_data(ttl=3600)
-def get_all_market_history()->pd.DataFrame:
-    query = """
-        SELECT * FROM market_history
-    """
-    def _read_all():
-        with mkt_db.engine.connect() as conn:
-            return pd.read_sql_query(query, conn)
-    try:
-        df = _read_all()
-    except Exception as e:
-        logger.error(f"Failed to get market history: {str(e)}")
-        try:
-            mkt_db.sync()
-            df = _read_all()
-        except Exception as e2:
-            logger.error(f"Failed to get market history after sync: {e2}. Falling back to remote.")
-            with mkt_db.remote_engine.connect() as conn:
-                df = pd.read_sql_query(query, conn)
-            # If remote also fails, we let it raise
-    df = df.reset_index(drop=True)
-    return df
-
-def get_update_time(local_update_status: Optional[dict] = None) -> Optional[str]:
-    """Return last local update time as formatted string, handling stale/bool state.
-
-    Args:
-        local_update_status: Optional dict containing update status.
-                            If None, attempts to read from session state.
-
-    Returns:
-        Formatted timestamp string or None if unavailable.
-    """
-    # If no parameter passed, try to get from session state
-    if local_update_status is None:
-        try:
-            from state import ss_get
-            local_update_status = ss_get("local_update_status")
-        except ImportError:
-            logger.debug("state module unavailable, cannot retrieve local_update_status")
-            return None
-
-    if local_update_status:
-        if isinstance(local_update_status, dict) and local_update_status.get("updated"):
-            try:
-                return local_update_status["updated"].strftime("%Y-%m-%d | %H:%M UTC")
-            except Exception as e:
-                logger.error(f"Failed to format local_update_status.updated: {e}")
-    return None
-
-@st.cache_resource
-def get_groups_for_category(category_id: int)->pd.DataFrame:
-    sde2_db = DatabaseConfig("sde")
-    if category_id == 17:
-        df = pd.read_csv("csvfiles/build_commodity_groups.csv")
-        return df
-    elif category_id == 4:
-        query = """
-            SELECT DISTINCT groupID, groupName FROM invGroups WHERE categoryID = :category_id AND groupID = 1136
-        """
-    else:
-        query = """
-            SELECT DISTINCT groupID, groupName FROM invGroups WHERE categoryID = :category_id
-        """
-    with sde2_db.engine.connect() as conn:
-        df = pd.read_sql_query(text(query), conn, params={"category_id": category_id})
-    return df
-
-@st.cache_resource
-def get_types_for_group(group_id: int)->pd.DataFrame:
-    sde2_db = DatabaseConfig("sde")
-    query = """
-        SELECT DISTINCT t.typeID, t.typeName 
-        FROM invTypes t
-        JOIN industryActivityProducts iap ON t.typeID = iap.productTypeID
-        WHERE t.groupID = :group_id 
-        AND iap.activityID = 1
-        ORDER BY t.typeName
-    """
-    
-    def _run_local():
-        with sde2_db.engine.connect() as conn:
-            return pd.read_sql_query(text(query), conn, params={"group_id": group_id})
-            
-    def _run_remote():
-        with sde2_db.remote_engine.connect() as conn:
-            return pd.read_sql_query(text(query), conn, params={"group_id": group_id})
-
-    try:
-        df = _run_local()
-    except Exception as e:
-        msg = str(e).lower()
-        logger.error(f"Error fetching types for group {group_id}: {e}")
-        if "no such table" in msg or "malform" in msg:
-            logger.warn(f"Attempting sync/fallback for SDE group fetch due to error: {msg}")
-            # Use remote ONLY to avoid infinite sync loops on persistent local errors
-            try:
-                logger.info("Skipping sync and falling back directly to remote SDE read to prevent loops")
-                df = _run_remote()
-            except Exception as e_remote:
-                logger.error(f"Remote fallback also failed: {e_remote}")
-                return pd.DataFrame(columns=['typeID', 'typeName'])
-        else:
-            logger.error(f"sde2_db: {sde2_db.path}")
-            return pd.DataFrame(columns=['typeID', 'typeName'])
-
-    if group_id == 332 and not df.empty:
-        df = df[df['typeName'].str.contains("R.A.M.") | df['typeName'].str.contains("R.Db")]
-        df = df.reset_index(drop=True)
-
-    return df
-
 def get_4H_price(type_id):
     query = """
         SELECT * FROM marketstats WHERE type_id = :type_id
@@ -425,27 +271,93 @@ def get_chart_table_data()->pd.DataFrame:
     df = df.reset_index(drop=True)
     return df
 
+# =============================================================================
+# SDE Functions (will be migrated in Phase 12)
+# =============================================================================
+
+@st.cache_resource
+def get_groups_for_category(category_id: int)->pd.DataFrame:
+    sde2_db = DatabaseConfig("sde")
+    if category_id == 17:
+        df = pd.read_csv("csvfiles/build_commodity_groups.csv")
+        return df
+    elif category_id == 4:
+        query = """
+            SELECT DISTINCT groupID, groupName FROM invGroups WHERE categoryID = :category_id AND groupID = 1136
+        """
+    else:
+        query = """
+            SELECT DISTINCT groupID, groupName FROM invGroups WHERE categoryID = :category_id
+        """
+    with sde2_db.engine.connect() as conn:
+        df = pd.read_sql_query(text(query), conn, params={"category_id": category_id})
+    return df
+
+@st.cache_resource
+def get_types_for_group(group_id: int)->pd.DataFrame:
+    sde2_db = DatabaseConfig("sde")
+    query = """
+        SELECT DISTINCT t.typeID, t.typeName
+        FROM invTypes t
+        JOIN industryActivityProducts iap ON t.typeID = iap.productTypeID
+        WHERE t.groupID = :group_id
+        AND iap.activityID = 1
+        ORDER BY t.typeName
+    """
+
+    def _run_local():
+        with sde2_db.engine.connect() as conn:
+            return pd.read_sql_query(text(query), conn, params={"group_id": group_id})
+
+    def _run_remote():
+        with sde2_db.remote_engine.connect() as conn:
+            return pd.read_sql_query(text(query), conn, params={"group_id": group_id})
+
+    try:
+        df = _run_local()
+    except Exception as e:
+        msg = str(e).lower()
+        logger.error(f"Error fetching types for group {group_id}: {e}")
+        if "no such table" in msg or "malform" in msg:
+            logger.warn(f"Attempting sync/fallback for SDE group fetch due to error: {msg}")
+            # Use remote ONLY to avoid infinite sync loops on persistent local errors
+            try:
+                logger.info("Skipping sync and falling back directly to remote SDE read to prevent loops")
+                df = _run_remote()
+            except Exception as e_remote:
+                logger.error(f"Remote fallback also failed: {e_remote}")
+                return pd.DataFrame(columns=['typeID', 'typeName'])
+        else:
+            logger.error(f"sde2_db: {sde2_db.path}")
+            return pd.DataFrame(columns=['typeID', 'typeName'])
+
+    if group_id == 332 and not df.empty:
+        df = df[df['typeName'].str.contains("R.A.M.") | df['typeName'].str.contains("R.Db")]
+        df = df.reset_index(drop=True)
+
+    return df
+
 def extract_sde_info(sde_table: str, table_name: str = None, params: dict = None, query: str = None,local: bool = True, fallback_remote: bool = True)->pd.DataFrame:
     db = DatabaseConfig("sde")
-    
+
     if table_name is None and params and "table_name" in params:
         table_name = params["table_name"]
-        
+
     if query is None:
         if not table_name:
             raise ValueError("Table name is required")
         query = f"SELECT * FROM {table_name}"
-        
+
     # Remove table_name from params if it exists, as we've handled it via string injection
     # and table names cannot be bound as parameters
     run_params = params.copy() if params else {}
     if "table_name" in run_params:
         del run_params["table_name"]
-    
+
     # If params is empty dict, pass None to avoid driver issues with empty dict vs tuple
     if not run_params:
         run_params = None
-        
+
     df = new_read_df(db, query, params=run_params)
     df = df.reset_index(drop=True)
     return df

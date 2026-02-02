@@ -50,6 +50,40 @@ class TestDatabaseConfigSyncSerialization(unittest.TestCase):
             engine = db.engine
             self.assertIsNotNone(engine)
 
+    def test_sync_no_streamlit_cache_calls(self):
+        """Test that sync() does not call st.cache_data.clear() or st.cache_resource.clear()"""
+        import inspect
+        from config import DatabaseConfig
+        source = inspect.getsource(DatabaseConfig.sync)
+        self.assertNotIn("st.cache_data.clear", source,
+                        "sync() should not call st.cache_data.clear()")
+        self.assertNotIn("st.cache_resource.clear", source,
+                        "sync() should not call st.cache_resource.clear()")
+
+    def test_sync_no_streamlit_toast(self):
+        """Test that sync() does not call st.toast()"""
+        import inspect
+        from config import DatabaseConfig
+        source = inspect.getsource(DatabaseConfig.sync)
+        self.assertNotIn("st.toast", source,
+                        "sync() should not call st.toast()")
+
+    def test_sync_no_session_state_mutation(self):
+        """Test that sync() does not mutate st.session_state"""
+        import inspect
+        from config import DatabaseConfig
+        source = inspect.getsource(DatabaseConfig.sync)
+        self.assertNotIn("st.session_state", source,
+                        "sync() should not mutate st.session_state")
+
+    def test_sync_returns_bool(self):
+        """Test that sync() has bool return type annotation"""
+        import inspect
+        from config import DatabaseConfig
+        sig = inspect.signature(DatabaseConfig.sync)
+        self.assertEqual(sig.return_annotation, bool,
+                        "sync() should return bool")
+
 
 if __name__ == "__main__":
     unittest.main()

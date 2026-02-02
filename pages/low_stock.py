@@ -11,7 +11,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-from db_handler import get_update_time
+from repositories import get_update_time
 from logging_config import setup_logging
 from services import get_low_stock_service, LowStockFilters
 from ui.formatters import get_image_url

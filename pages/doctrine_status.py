@@ -8,7 +8,7 @@ import streamlit as st
 import pandas as pd
 from millify import millify
 from logging_config import setup_logging
-from db_handler import get_update_time
+from repositories import get_update_time
 from services import get_doctrine_service
 from domain import StockStatus
 from ui import get_fitting_column_config, render_progress_bar_html

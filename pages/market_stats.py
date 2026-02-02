@@ -21,6 +21,7 @@ from type_info import get_type_id_with_fallback
 from market_metrics import render_ISK_volume_chart_ui, render_ISK_volume_table_ui, render_30day_metrics_ui, render_current_market_status_ui
 from utils import get_jita_price
 from state import ss_has, ss_get
+from repositories import invalidate_market_caches
 
 mkt_db = DatabaseConfig("wcmkt")
 sde_db = DatabaseConfig("sde")
@@ -359,15 +360,16 @@ def check_db(manual_override: bool = False):
         st.toast("More recent remote database data available, syncing local database", icon="🕧")
         logger.info("check_db() check is False, syncing local database 🛜")
         db = DatabaseConfig("wcmkt")
-        st.cache_data.clear()
-        st.cache_resource.clear()
+        invalidate_market_caches()
         db.sync()
 
         if db.validate_sync():
             logger.info("Local database synced and validated🟢")
+            st.toast("Database synced successfully", icon="✅")
             update_wcmkt_state()
         else:
             logger.info("Local database synced but validation failed❌")
+            st.toast("Database sync failed", icon="❌")
     else:
         if 'local_update_status' in st.session_state:
             local_update_since = st.session_state.local_update_status["time_since"]

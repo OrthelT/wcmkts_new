@@ -8,7 +8,7 @@ import streamlit as st
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from db_handler import get_update_time
+from repositories import get_update_time
 from domain import StockStatus
 from logging_config import setup_logging
 from services import get_doctrine_service

@@ -215,11 +215,15 @@ class DatabaseConfig:
             logger.error(f"Integrity check error ({self.alias}): {e}")
             return False
 
-    def sync(self):
+    def sync(self) -> bool:
         """Synchronize the local database with the remote Turso replica safely.
 
         Uses _SYNC_LOCK to serialize sync operations and disposes local
         connections to prevent corruption.
+
+        Returns:
+            True if sync and integrity check succeeded, False otherwise.
+            Callers are responsible for cache invalidation and UI feedback.
         """
         sync_start = perf_counter()
         logger.info("-" * 40)
@@ -234,8 +238,6 @@ class DatabaseConfig:
             logger.debug("Disposing local connections and syncing database...")
             conn = None
             try:
-                st.cache_data.clear()
-                st.cache_resource.clear()
                 conn = libsql.connect(self.path, sync_url=self.turso_url, auth_token=self.token)
                 conn.sync()
                 sync_end = perf_counter()
@@ -259,15 +261,7 @@ class DatabaseConfig:
             if not ok:
                 logger.error("Post-sync integrity check failed.")
 
-            # For market DBs, also validate last_update parity if integrity ok
-            if self.alias == "wcmkt2":
-                validation_test = self.validate_sync() if ok else False
-                st.session_state.sync_status = "Success" if validation_test else "Failed"
-                if st.session_state.sync_status == "Success":
-                    st.toast("Database synced successfully", icon="✅")
-                else:
-                    st.toast("Database sync failed", icon="❌")
-            st.session_state.sync_check = False
+            return ok
 
     def validate_sync(self) -> bool:
         alias = self.alias

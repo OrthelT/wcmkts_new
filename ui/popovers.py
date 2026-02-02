@@ -36,10 +36,11 @@ def get_item_market_data(type_id: int, type_name: str) -> dict:
     Returns:
         Dict with market stats or empty dict if not found
     """
-    from db_handler import get_all_mkt_stats
+    from repositories import get_market_repository
 
     try:
-        stats_df = get_all_mkt_stats()
+        repo = get_market_repository()
+        stats_df = repo.get_all_stats()
         item_stats = stats_df[stats_df["type_id"] == type_id]
 
         if item_stats.empty:

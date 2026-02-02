@@ -25,7 +25,8 @@ import pandas as pd
 from logging_config import setup_logging
 from config import DatabaseConfig, get_settings
 from services import get_doctrine_service
-from db_handler import get_all_mkt_orders, get_all_mkt_stats, get_all_market_history, extract_sde_info, read_df
+from repositories import get_market_repository
+from db_handler import extract_sde_info, read_df
 
 logger = setup_logging(__name__, log_file="downloads.log")
 
@@ -40,21 +41,24 @@ market_short_name = settings['market']['short_name']
 @st.cache_data(ttl=1800, show_spinner=False)
 def _get_market_orders_csv() -> bytes:
     """Lazily load and convert market orders to CSV bytes."""
-    df = get_all_mkt_orders()
+    repo = get_market_repository()
+    df = repo.get_all_orders()
     return df.to_csv(index=False).encode('utf-8')
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def _get_market_stats_csv() -> bytes:
     """Lazily load and convert market stats to CSV bytes."""
-    df = get_all_mkt_stats()
+    repo = get_market_repository()
+    df = repo.get_all_stats()
     return df.to_csv(index=False).encode('utf-8')
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def _get_market_history_csv() -> bytes:
     """Lazily load and convert market history to CSV bytes."""
-    df = get_all_market_history()
+    repo = get_market_repository()
+    df = repo.get_all_history()
     return df.to_csv(index=False).encode('utf-8')
 
 
