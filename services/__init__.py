@@ -114,6 +114,18 @@ from services.market_service import (
     get_market_service,
 )
 
+from services.build_cost_service import (
+    # Main service
+    BuildCostService,
+    get_build_cost_service,
+
+    # Domain model
+    BuildCostJob,
+
+    # Constants
+    PRICE_SOURCE_MAP,
+)
+
 __all__ = [
     # Price Service
     'PriceService',
@@ -177,4 +189,10 @@ __all__ = [
     # Market Service
     'MarketService',
     'get_market_service',
+
+    # Build Cost Service
+    'BuildCostService',
+    'get_build_cost_service',
+    'BuildCostJob',
+    'PRICE_SOURCE_MAP',
 ]

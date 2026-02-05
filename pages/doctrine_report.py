@@ -17,7 +17,7 @@ from ui.formatters import get_doctrine_report_column_config, get_image_url, get_
 from ui.popovers import render_ship_with_popover, render_market_popover, has_equivalent_modules
 from state import ss_init, ss_get
 
-logger = setup_logging(__name__, log_file=__name__)
+logger = setup_logging(__name__, log_file="doctrine_report.log")
 
 # Initialize service (cached in session state)
 service = get_doctrine_service()
