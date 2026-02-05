@@ -155,6 +155,7 @@ Extends the Domain -> Repository -> Service -> Page pattern established in Phase
 ## Upcoming Phases
 
 ### Phase 11: Build Cost Repository & Service
+- Save log files in ./logs instead of in the root directory
 - Create `repositories/build_cost_repo.py`
 - Create `services/build_cost_service.py`
 - Slim `pages/build_costs.py` to UI-only

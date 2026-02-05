@@ -64,7 +64,7 @@
 
 [db_paths]
     "wcmktprod" = "wcmktprod.db" #production database
-    "sde" = "sdelite2.db"
+    "sde" = "sdelite.db"
     "build_cost" = "buildcost.db"
     "wcmkttest" = "wcmkttest.db" #testing db
 

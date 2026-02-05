@@ -14,6 +14,7 @@ from contextlib import suppress
 from time import perf_counter
 import tomllib
 from pathlib import Path
+
 logger = setup_logging(__name__)
 
 # =============================================================================
@@ -32,8 +33,9 @@ DEFAULT_SHIP_TARGET = 20
 # Global lock to serialize sync operations within the process
 _SYNC_LOCK = threading.Lock()
 
+
 @st.cache_data(ttl=3600)
-def get_settings()->dict:
+def get_settings() -> dict:
     """Get the settings from the settings.toml file."""
     settings_path = Path("settings.toml")
     try:
@@ -43,15 +45,17 @@ def get_settings()->dict:
         logger.error(f"Failed to load settings from settings.toml: {e}")
         raise e
 
+
 class DatabaseConfig:
     settings = get_settings()
-    wcdbmap = settings['env_db_aliases'][settings['env']['env']]  # master config variable for the database to use
+    # master config variable for the database to use
+    wcdbmap = settings["env_db_aliases"][settings["env"]["env"]]
 
     _db_paths = {
-        "wcmktprod": settings['db_paths']['wcmktprod'],  # production database
-        "sde": settings['db_paths']['sde'],
-        "build_cost": settings['db_paths']['build_cost'],
-        "wcmkttest": settings['db_paths']['wcmkttest'],  # testing db
+        "wcmktprod": settings["db_paths"]["wcmktprod"],  # production database
+        "sde": settings["db_paths"]["sde"],
+        "build_cost": settings["db_paths"]["build_cost"],
+        "wcmkttest": settings["db_paths"]["wcmkttest"],  # testing db
     }
 
     _db_turso_urls = {
@@ -238,12 +242,18 @@ class DatabaseConfig:
             logger.debug("Disposing local connections and syncing database...")
             conn = None
             try:
-                conn = libsql.connect(self.path, sync_url=self.turso_url, auth_token=self.token)
+                conn = libsql.connect(
+                    self.path, sync_url=self.turso_url, auth_token=self.token
+                )
                 conn.sync()
                 sync_end = perf_counter()
-                sync_time = round((sync_end - sync_start)*1000, 2)
-                logger.info(f"sync() completed for {self.alias} in {sync_time} ms at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
-                logger.info("-"*40)
+                sync_time = round((sync_end - sync_start) * 1000, 2)
+                logger.info(
+                    f"sync() completed for {self.alias} in {sync_time} ms at {
+                        datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+                    }"
+                )
+                logger.info("-" * 40)
             except Exception as e:
                 logger.error(f"Database sync failed: {e}")
                 raise

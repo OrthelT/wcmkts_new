@@ -140,7 +140,7 @@ All pages follow consistent patterns with Streamlit best practices:
 
 **Primary Databases:**
 - **`wcmktprod.db`**: Market orders and statistics (synced from Turso via backend repo)
-- **`sdelite2.db`**: EVE Online Static Data Export (lightweight version)
+- **`sdelite.db`**: EVE Online Static Data Export (lightweight version)
 - **`buildcost.db`**: Manufacturing and structure data
 
 **Database Tables:**
@@ -161,7 +161,7 @@ All pages follow consistent patterns with Streamlit best practices:
 - `updatelog`: Database update tracking
 - `module_equivalents`: Interchangeable faction module mappings for aggregated stock calculations
 
-*sdelite2.db tables:*
+*sdelite.db tables:*
 - `invTypes`: EVE Online item definitions
 - `invGroups`: Item group classifications
 - `invCategories`: High-level item categories
@@ -192,7 +192,7 @@ All pages follow consistent patterns with Streamlit best practices:
 ### Turso Embedded Replica Pattern
 
 The application uses Turso's embedded-replica feature for optimal performance:
-- Local SQLite databases (`wcmktprod.db`, `sdelite2.db`) provide fast reads
+- Local SQLite databases (`wcmktprod.db`, `sdelite.db`) provide fast reads
 - Automatic synchronization with remote Turso database via libsql
 - Background sync managed by DatabaseConfig with RWLock concurrency control
 - Integrity checks with `PRAGMA integrity_check` before and after sync
@@ -217,7 +217,7 @@ from config import DatabaseConfig
 db = DatabaseConfig()
 # Access engines
 mkt_engine = db.mkt_engine  # wcmktprod.db
-sde_engine = db.sde_engine  # sdelite2.db
+sde_engine = db.sde_engine  # sdelite.db
 bc_engine = db.bc_engine    # buildcost.db
 
 # Sync from remote
@@ -242,7 +242,7 @@ JANICE_API_KEY = "your_janice_api_key"  # For Pricer page Jita price lookups
 ```
 
 ### Local Development Notes
-- Ensure local database files exist: `wcmktprod.db`, `sdelite2.db`, `buildcost.db`
+- Ensure local database files exist: `wcmktprod.db`, `sdelite.db`, `buildcost.db`
 - The application will use local SQLite files if sync credentials are not available
 - Database files are git-ignored (*.db, *.db-shm, *.db-wal)
 - Logs are stored in `logs/` directory (git-ignored)
@@ -418,7 +418,7 @@ Include in PR description:
 │              DatabaseConfig (config.py)                     │
    │              RWLock Concurrency Control                     │
    │  ┌──────────┬──────────┬──────────┐                        │
-   │  │ wcmktprod│ sdelite2 │buildcost │                        │
+   │  │ wcmktprod│ sdelite │buildcost │                        │
    │  │ .db      │ .db      │.db       │                        │
    │  └────┬─────┴──────────┴──────────┘                        │
    │       │ Sync (libsql)                                       │
