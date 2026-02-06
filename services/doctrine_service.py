@@ -783,11 +783,12 @@ class FitDataBuilder:
 
         # Build domain models from summary and collect lowest_modules for DataFrame
         summaries = []
-        lowest_modules_map = {}  # fit_id -> list of lowest module strings
+        lowest_modules_map = {}  # fit_id -> list of lowest module dicts
 
         if self._summary_df is not None and not self._summary_df.empty:
             for _, row in self._summary_df.iterrows():
                 fit_id = int(row['fit_id'])
+                ship_target = int(row['ship_target']) if pd.notna(row.get('ship_target', 0)) else 0
 
                 # Get lowest stock modules for this fit
                 fit_items = self._raw_df[self._raw_df['fit_id'] == fit_id]
@@ -796,11 +797,18 @@ class FitDataBuilder:
                 # Exclude hull, sort by fits_on_mkt, get top 3
                 modules = fit_items[fit_items['type_id'] != ship_id]
                 lowest = modules.nsmallest(3, 'fits_on_mkt')
-                lowest_modules = [
-                    f"{r['type_name']} ({int(r['fits_on_mkt'])})"
-                    for _, r in lowest.iterrows()
-                    if pd.notna(r['type_name']) and pd.notna(r['fits_on_mkt'])
-                ]
+                lowest_modules = []
+                for idx, (_, r) in enumerate(lowest.iterrows()):
+                    if pd.notna(r['type_name']) and pd.notna(r['fits_on_mkt']):
+                        fits_on_mkt = int(r['fits_on_mkt'])
+                        fit_qty = int(r['fit_qty']) if pd.notna(r.get('fit_qty', 1)) else 1
+                        lowest_modules.append({
+                            'type_id': int(r['type_id']),
+                            'module_name': str(r['type_name']).strip(),
+                            'fits_on_market': fits_on_mkt,
+                            'position': idx + 1,
+                            'qty_needed': max(0, (ship_target - fits_on_mkt) * fit_qty),
+                        })
 
                 # Store for DataFrame column
                 lowest_modules_map[fit_id] = lowest_modules

@@ -139,7 +139,7 @@ class FitSummary:
     ship_group: str = ""  # Ship group (e.g., "Battlecruiser")
     hull_price: Price = 0.0  # Price of the ship hull
     daily_avg: float = 0.0  # Average daily sales volume
-    lowest_modules: tuple[str, ...] = field(default_factory=tuple)  # Names of lowest-stock modules
+    lowest_modules: tuple[dict, ...] = field(default_factory=tuple)  # Lowest-stock module dicts: {type_id, module_name, fits_on_market, position, qty_needed}
     items: tuple["FitItem", ...] = field(default_factory=tuple)  # All items in the fit
 
     @classmethod
@@ -147,7 +147,7 @@ class FitSummary:
         cls,
         row: pd.Series,
         items: Optional[list["FitItem"]] = None,
-        lowest_modules: Optional[list[str]] = None
+        lowest_modules: Optional[list[dict]] = None
     ) -> "FitSummary":
         """
         Factory method to create FitSummary from a summary DataFrame row.
