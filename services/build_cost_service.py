@@ -1,14 +1,8 @@
 """
 Build Cost Service
 
-Pure business logic for build cost calculations: URL construction, cost fetching
-(sync/async), industry index management. No Streamlit imports.
-
-Design Principles:
-1. Dependency Injection - BuildCostRepository passed in, not created
-2. Pure Functions - No session state, no UI, no caching (caching is in repo layer)
-3. Testable - Progress callbacks are protocol-based, not Streamlit-specific
-4. BuildCostJob dataclass replaces page-level JobQuery
+Pure business logic for build cost calculations: URL construction, async cost
+fetching, industry index management. No Streamlit imports.
 """
 
 import asyncio
@@ -39,7 +33,6 @@ SUPER_GROUP_IDS = [30, 659]
 
 API_TIMEOUT = 20.0
 MAX_CONCURRENCY = 6
-RETRIES = 2
 USER_AGENT = (
     "WCMKTS-BuildCosts/1.0 "
     "(https://github.com/OrthelT/wcmkts_production; orthel.toralen@gmail.com)"
@@ -150,79 +143,19 @@ class BuildCostService:
     def get_costs(
         self,
         job: BuildCostJob,
-        async_mode: bool = False,
         progress_callback: Optional[ProgressCallback] = None,
     ) -> tuple[dict, dict]:
-        """Fetch build costs from the EverRef API.
+        """Fetch build costs from the EverRef API using async HTTP.
 
         Args:
             job: Build cost job parameters.
-            async_mode: Use async HTTP client if True.
             progress_callback: Optional callback(current, total, message).
 
         Returns:
             (results_dict, status_log) tuple.
         """
         cb = progress_callback or _noop_progress
-
-        if async_mode:
-            return asyncio.run(self._get_costs_async(job, cb))
-        else:
-            return self._get_costs_sync(job, cb)
-
-    def _get_costs_sync(
-        self, job: BuildCostJob, progress_callback: ProgressCallback
-    ) -> tuple[dict, dict]:
-        """Synchronous cost fetching."""
-        urls = self.build_urls(job)
-        status_log = {
-            "req_count": 0,
-            "success_count": 0,
-            "error_count": 0,
-            "success_log": {},
-            "error_log": {},
-        }
-        results = {}
-        total = len(urls)
-
-        progress_callback(0, total, f"Fetching data from {total} structures...")
-
-        for i, (url, structure_name, structure_type) in enumerate(urls):
-            logger.info(structure_name)
-            status = f"Fetching {i + 1} of {total} structures: {structure_name}"
-            progress_callback(i, total, status)
-
-            response = requests.get(url, timeout=API_TIMEOUT)
-            status_log["req_count"] += 1
-
-            if response.status_code == 200:
-                status_log["success_count"] += 1
-                status_log["success_log"][structure_name] = (
-                    response.status_code,
-                    response.text,
-                )
-                data = response.json()
-                try:
-                    data2 = data["manufacturing"][str(job.item_id)]
-                except KeyError as e:
-                    logger.error(f"No data found for {job.item_id}: {e}")
-                    return {}, status_log
-            else:
-                status_log["error_count"] += 1
-                status_log["error_log"][structure_name] = (
-                    response.status_code,
-                    response.text,
-                )
-                logger.error(
-                    f"Error fetching data for {structure_name}: {response.status_code}"
-                )
-                continue
-
-            results[structure_name] = self._parse_cost_result(
-                data2, structure_type
-            )
-
-        return results, status_log
+        return asyncio.run(self._get_costs_async(job, cb))
 
     async def _get_costs_async(
         self, job: BuildCostJob, progress_callback: ProgressCallback
@@ -430,20 +363,6 @@ class BuildCostService:
     # -----------------------------------------------------------------
     # Static Utilities
     # -----------------------------------------------------------------
-
-    @staticmethod
-    def get_type_id(type_name: str) -> int:
-        """Look up a type_id by name using the Fuzzwork API."""
-        url = f"https://www.fuzzwork.co.uk/api/typeid.php?typename={type_name}"
-        response = requests.get(url)
-        if response.status_code == 200:
-            data = response.json()
-            return int(data["typeID"])
-        else:
-            logger.error(f"Error fetching type id: {response.status_code}")
-            raise ValueError(
-                f"Error fetching type id for {type_name}: {response.status_code}"
-            )
 
     @staticmethod
     def is_super_group(group_id: int) -> bool:

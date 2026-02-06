@@ -2,7 +2,7 @@
 
 import datetime
 import unittest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 from services.build_cost_service import (
     BuildCostJob,
@@ -152,57 +152,6 @@ class TestParseIndustryData(unittest.TestCase):
         self.assertIn("manufacturing", df.columns)
         self.assertEqual(len(df), 1)
         self.assertAlmostEqual(df["manufacturing"].iloc[0], 0.05)
-
-
-class TestGetCostsSync(unittest.TestCase):
-    @patch("services.build_cost_service.requests.get")
-    def test_sync_with_progress_callback(self, mock_get):
-        repo = MagicMock()
-        service = BuildCostService(repo)
-
-        structure = MagicMock()
-        structure.structure = "Test Station"
-        structure.structure_type = "Sotiyo"
-        structure.structure_type_id = 35827
-        structure.rig_1 = None
-        structure.rig_2 = None
-        structure.rig_3 = None
-        structure.system_id = 30004759
-        structure.tax = 0.1
-        repo.get_all_structures.return_value = [structure]
-        repo.get_valid_rigs.return_value = {}
-        repo.get_manufacturing_cost_index.return_value = 0.05
-
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "manufacturing": {
-                "24690": {
-                    "units": 1,
-                    "total_cost": 100000,
-                    "total_cost_per_unit": 100000,
-                    "total_material_cost": 80000,
-                    "facility_tax": 5000,
-                    "scc_surcharge": 3000,
-                    "system_cost_index": 2000,
-                    "total_job_cost": 10000,
-                    "materials": {},
-                }
-            }
-        }
-        mock_response.text = "{}"
-        mock_get.return_value = mock_response
-
-        progress_calls = []
-        def track_progress(c, t, m):
-            progress_calls.append((c, t, m))
-
-        job = BuildCostJob(item="Drake", item_id=24690, group_id=25, runs=1, me=0, te=0)
-        results, status_log = service._get_costs_sync(job, track_progress)
-
-        self.assertIn("Test Station", results)
-        self.assertEqual(status_log["success_count"], 1)
-        self.assertTrue(len(progress_calls) >= 1)
 
 
 if __name__ == "__main__":

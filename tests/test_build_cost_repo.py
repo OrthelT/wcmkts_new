@@ -11,8 +11,6 @@ from repositories.build_cost_repo import (
     _get_valid_rigs_impl,
     _get_manufacturing_cost_index_impl,
     _get_all_structures_impl,
-    _get_rig_id_impl,
-    _get_system_id_impl,
 )
 
 
@@ -84,32 +82,6 @@ class TestGetAllStructuresImpl(unittest.TestCase):
         sql = str(call_args[0][0])
         self.assertIn(f"structure_id != {SUPER_SHIPYARD_ID}", sql)
         self.assertEqual(len(result), 2)
-
-
-class TestGetRigIdImpl(unittest.TestCase):
-    def test_none_rig_name(self):
-        result = _get_rig_id_impl(MagicMock(), None)
-        self.assertIsNone(result)
-
-    def test_zero_rig_name(self):
-        result = _get_rig_id_impl(MagicMock(), "0")
-        self.assertIsNone(result)
-
-
-class TestGetSystemIdImpl(unittest.TestCase):
-    def test_returns_system_id(self):
-        mock_engine = MagicMock()
-        mock_conn = mock_engine.connect().__enter__()
-        mock_conn.execute.return_value.scalar.return_value = 30004759
-        result = _get_system_id_impl(mock_engine, "4-HWWF")
-        self.assertEqual(result, 30004759)
-
-    def test_raises_on_missing(self):
-        mock_engine = MagicMock()
-        mock_conn = mock_engine.connect().__enter__()
-        mock_conn.execute.return_value.scalar.return_value = None
-        with self.assertRaises(ValueError):
-            _get_system_id_impl(mock_engine, "Nonexistent")
 
 
 if __name__ == "__main__":

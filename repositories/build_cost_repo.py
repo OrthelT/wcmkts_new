@@ -3,12 +3,6 @@ Build Cost Repository
 
 Encapsulates all build cost database access: structures, rigs, industry indices.
 Extracts DB functions from pages/build_costs.py into the repository pattern.
-
-Design Principles:
-1. Single Responsibility - Only build cost data access, no business logic or UI
-2. Cached Functions - Module-level @st.cache_data functions (Streamlit can't hash `self`)
-3. Targeted Invalidation - invalidate_build_cost_caches() clears only build cost caches
-4. BaseRepository - Inherits read_df() with malformed-DB recovery for ad-hoc queries
 """
 
 import logging
@@ -17,11 +11,9 @@ from typing import Optional
 import pandas as pd
 import streamlit as st
 from sqlalchemy import text
-from sqlalchemy.orm import Session
 
 from config import DatabaseConfig
 from logging_config import setup_logging
-from build_cost_models import Structure, Rig, IndustryIndex
 from repositories.base import BaseRepository
 
 logger = setup_logging(__name__, log_file="build_cost_repo.log")
@@ -54,43 +46,11 @@ def _get_valid_rigs_impl(engine) -> dict[str, int]:
     return {name: tid for name, tid in all_rigs.items() if tid not in INVALID_RIG_IDS}
 
 
-def _get_rig_id_impl(engine, rig_name: str | None) -> int | None:
-    """Look up a rig type_id by name. Returns None for missing/invalid names."""
-    if rig_name is None or rig_name == str(0):
-        return None
-    try:
-        with Session(engine) as session:
-            rig = session.query(Rig).filter(Rig.type_name == rig_name).one()
-            return rig.type_id
-    except Exception as e:
-        logger.error(f"Error fetching rig id for {rig_name}: {e}")
-        return None
-
-
-def _get_structure_by_name_impl(engine, structure_name: str):
-    """Fetch a structure row by name."""
-    with engine.connect() as conn:
-        res = conn.execute(
-            text("SELECT * FROM structures WHERE structure = :name"),
-            {"name": structure_name},
-        )
-        row = res.fetchone()
-        if row is not None:
-            return row
-        raise ValueError(f"No structure found for {structure_name}")
-
-
 def _get_structure_rigs_impl(engine) -> dict[str, list[str]]:
     """Get rigs per structure as {structure_name: [rig_name, ...]}."""
     valid_rigs = _get_valid_rigs_impl(engine)
+    ids_str = ", ".join(str(tid) for tid in VALID_STRUCTURE_TYPE_IDS)
     with engine.connect() as conn:
-        stmt = text(
-            "SELECT structure, rig_1, rig_2, rig_3 FROM structures "
-            "WHERE structure_type_id IN :type_ids"
-        )
-        # SQLAlchemy text() doesn't support expanding params the same way,
-        # so build the IN clause manually
-        ids_str = ", ".join(str(tid) for tid in VALID_STRUCTURE_TYPE_IDS)
         res = conn.execute(
             text(f"SELECT structure, rig_1, rig_2, rig_3 FROM structures "
                  f"WHERE structure_type_id IN ({ids_str})")
@@ -120,19 +80,6 @@ def _get_manufacturing_cost_index_impl(engine, system_id: int) -> float:
         if index is not None:
             return float(index)
         raise ValueError(f"No manufacturing cost index found for system {system_id}")
-
-
-def _get_system_id_impl(engine, system_name: str) -> int:
-    """Get system_id for a structure's system name."""
-    with engine.connect() as conn:
-        res = conn.execute(
-            text("SELECT system_id FROM structures WHERE system = :name LIMIT 1"),
-            {"name": system_name},
-        )
-        system_id = res.scalar()
-        if system_id is not None:
-            return system_id
-        raise ValueError(f"No system id found for {system_name}")
 
 
 def _get_all_structures_impl(engine, is_super: bool):
@@ -224,14 +171,6 @@ class BuildCostRepository(BaseRepository):
         """Get valid rigs (excludes invalid rig IDs), cached TTL=3600s."""
         return _get_valid_rigs_cached(self._cache_key)
 
-    def get_rig_id(self, rig_name: str | None) -> int | None:
-        """Look up a rig type_id by name."""
-        return _get_rig_id_impl(self.db.engine, rig_name)
-
-    def get_structure_by_name(self, structure_name: str):
-        """Fetch a structure row by name."""
-        return _get_structure_by_name_impl(self.db.engine, structure_name)
-
     def get_structure_rigs(self) -> dict[str, list[str]]:
         """Get rigs per structure, cached TTL=3600s."""
         return _get_structure_rigs_cached(self._cache_key)
@@ -239,10 +178,6 @@ class BuildCostRepository(BaseRepository):
     def get_manufacturing_cost_index(self, system_id: int) -> float:
         """Get manufacturing cost index for a solar system, cached TTL=3600s."""
         return _get_manufacturing_cost_index_cached(self._cache_key, system_id)
-
-    def get_system_id(self, system_name: str) -> int:
-        """Get system_id for a structure's system name."""
-        return _get_system_id_impl(self.db.engine, system_name)
 
     def get_all_structures(self, is_super: bool = False):
         """Get structures filtered by super mode, cached TTL=3600s."""

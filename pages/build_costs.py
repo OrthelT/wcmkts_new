@@ -1,3 +1,21 @@
+import requests
+from state import ss_init
+from ui.formatters import display_build_cost_tool_description
+from utils import get_jita_price
+from db_handler import (
+    get_groups_for_category,
+    get_types_for_group,
+    get_4H_price,
+    request_type_names,
+)
+from repositories.build_cost_repo import get_build_cost_repository
+from services.build_cost_service import (
+    BuildCostJob,
+    BuildCostService,
+    get_build_cost_service,
+    PRICE_SOURCE_MAP,
+)
+from logging_config import setup_logging
 import os
 import sys
 import pathlib
@@ -8,24 +26,6 @@ from millify import millify
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from logging_config import setup_logging
-from services.build_cost_service import (
-    BuildCostJob,
-    BuildCostService,
-    get_build_cost_service,
-    PRICE_SOURCE_MAP,
-)
-from repositories.build_cost_repo import get_build_cost_repository
-from db_handler import (
-    get_groups_for_category,
-    get_types_for_group,
-    get_4H_price,
-    request_type_names,
-)
-from utils import get_jita_price
-from ui.formatters import display_build_cost_tool_description
-from state import ss_init
-import requests
 
 logger = setup_logging(__name__)
 
@@ -33,6 +33,7 @@ logger = setup_logging(__name__)
 # =============================================================================
 # UI Helpers
 # =============================================================================
+
 
 def is_valid_image_url(url: str) -> bool:
     """Check if the URL returns a valid image."""
@@ -54,7 +55,13 @@ def display_data(df: pd.DataFrame, selected_structure: str | None = None):
             "total_cost_per_unit"
         ].values[0]
         st.markdown(
-            f"**Selected structure:** <span style='color: orange;'>{selected_structure}</span> <br>    *Total cost:* <span style='color: orange;'>{millify(selected_total_cost, precision=2)}</span> <br>    *Cost per unit:* <span style='color: orange;'>{millify(selected_total_cost_per_unit, precision=2)}</span>",
+            f"**Selected structure:** <span style='color: orange;'>{
+                selected_structure
+            }</span> <br>    *Total cost:* <span style='color: orange;'>{
+                millify(selected_total_cost, precision=2)
+            }</span> <br>    *Cost per unit:* <span style='color: orange;'>{
+                millify(selected_total_cost_per_unit, precision=2)
+            }</span>",
             unsafe_allow_html=True,
         )
 
@@ -83,9 +90,7 @@ def display_data(df: pd.DataFrame, selected_structure: str | None = None):
         col_order.insert(3, "comparison_cost_per_unit")
 
     col_config = {
-        "_index": st.column_config.TextColumn(
-            label="structure", help="Structure Name"
-        ),
+        "_index": st.column_config.TextColumn(label="structure", help="Structure Name"),
         "structure_type": " type",
         "units": st.column_config.NumberColumn(
             "units", help="Number of units built", width=60
@@ -94,7 +99,7 @@ def display_data(df: pd.DataFrame, selected_structure: str | None = None):
             "total cost",
             help="Total cost of building the units",
             format="localized",
-            step=1
+            step=1,
         ),
         "total_cost_per_unit": st.column_config.NumberColumn(
             "cost per unit",
@@ -103,10 +108,7 @@ def display_data(df: pd.DataFrame, selected_structure: str | None = None):
             step=1,
         ),
         "total_material_cost": st.column_config.NumberColumn(
-            "material cost",
-            help="Total material cost",
-            format="localized",
-            step=1
+            "material cost", help="Total material cost", format="localized", step=1
         ),
         "total_job_cost": st.column_config.NumberColumn(
             "total job cost",
@@ -169,23 +171,25 @@ def style_dataframe(df: pd.DataFrame, selected_structure: str | None = None):
 # Session State & Industry Index
 # =============================================================================
 
+
 def initialise_session_state():
     logger.info("initialising build cost tool")
-    ss_init({
-        "sci_expires": None,
-        "sci_last_modified": None,
-        "etag": None,
-        "cost_results": None,
-        "current_job_params": None,
-        "selected_item_for_display": None,
-        "price_source": None,
-        "price_source_name": None,
-        "calculate_clicked": False,
-        "button_label": "Calculate",
-        "selected_structure": None,
-        "super": False,
-        "async_mode": False,
-    })
+    ss_init(
+        {
+            "sci_expires": None,
+            "sci_last_modified": None,
+            "etag": None,
+            "cost_results": None,
+            "current_job_params": None,
+            "selected_item_for_display": None,
+            "price_source": None,
+            "price_source_name": None,
+            "calculate_clicked": False,
+            "button_label": "Calculate",
+            "selected_structure": None,
+            "super": False,
+        }
+    )
     st.session_state.initialised = True
 
     try:
@@ -211,8 +215,11 @@ def check_industry_index_expiry():
 # Material Breakdown Fragment
 # =============================================================================
 
+
 @st.fragment()
-def display_material_costs(results: dict, selected_structure: str, structure_names_for_materials: list):
+def display_material_costs(
+    results: dict, selected_structure: str, structure_names_for_materials: list
+):
     """Display material costs for a selected structure with proper formatting."""
     default_index = 0
     if selected_structure and selected_structure in structure_names_for_materials:
@@ -264,7 +271,14 @@ def display_material_costs(results: dict, selected_structure: str, structure_nam
 
     st.subheader(f"Material Breakdown {selected_structure_for_materials}")
     st.markdown(
-        f"{st.session_state.selected_item_for_display} Material Cost: <span style='color: orange;'>**{millify(total_material_cost, precision=2)} ISK**</span> (*{millify(total_material_volume, precision=2)} m³*) - {material_price_source}",unsafe_allow_html=True
+        f"{
+            st.session_state.selected_item_for_display
+        } Material Cost: <span style='color: orange;'>**{
+            millify(total_material_cost, precision=2)
+        } ISK**</span> (*{millify(total_material_volume, precision=2)} m³*) - {
+            material_price_source
+        }",
+        unsafe_allow_html=True,
     )
 
     column_config = {
@@ -323,7 +337,7 @@ def display_material_costs(results: dict, selected_structure: str, structure_nam
                 "cost_percentage",
             ],
             hide_index=True,
-            width='stretch',
+            width="stretch",
         )
     with col2:
         st.bar_chart(
@@ -333,7 +347,7 @@ def display_material_costs(results: dict, selected_structure: str, structure_nam
             y_label="",
             x_label="",
             horizontal=True,
-            width='content',
+            width="content",
             height=310,
         )
 
@@ -345,6 +359,7 @@ def display_material_costs(results: dict, selected_structure: str, structure_nam
 # =============================================================================
 # Main Page
 # =============================================================================
+
 
 def main():
     logger.info("=" * 80)
@@ -373,15 +388,6 @@ def main():
     df = df.sort_values(by="category")
     categories = df["category"].unique().tolist()
     index = categories.index("Ship")
-
-    # Sidebar controls
-    async_mode = st.sidebar.checkbox(
-        "Async Mode",
-        value=True,
-        help="This turns on asynchronous mode, an experimental feature that significantly speeds up the calculation time. This is now enabled by default. Set to False and use synchronous mode if you experience issues.",
-    )
-    st.session_state.async_mode = async_mode
-    logger.info(f"Async mode: {'enabled' if async_mode else 'disabled'}")
 
     selected_category = st.sidebar.selectbox(
         "Select a category",
@@ -416,7 +422,9 @@ def main():
             selected_group = None
             selected_category = "Ship"
             index = categories.index("Ship")
-            selected_category = st.sidebar.selectbox("Select a category", categories, index=index)
+            selected_category = st.sidebar.selectbox(
+                "Select a category", categories, index=index
+            )
             category_id = df[df["category"] == selected_category]["id"].values[0]
             group_id = 1012
             st.rerun()
@@ -429,12 +437,18 @@ def main():
         selected_group = None
         selected_category = "Ship"
         index = categories.index("Ship")
-        selected_category = st.sidebar.selectbox("Select a category", categories, index=index)
+        selected_category = st.sidebar.selectbox(
+            "Select a category", categories, index=index
+        )
         category_id = df[df["category"] == selected_category]["id"].values[0]
         group_id = 1012
 
     # Only proceed if we have valid data
-    if 'selected_item' in locals() and 'type_names_list' in locals() and 'types_df' in locals():
+    if (
+        "selected_item" in locals()
+        and "type_names_list" in locals()
+        and "types_df" in locals()
+    ):
         try:
             if selected_item not in type_names_list:
                 st.warning(f"Selected item: {selected_item} not a buildable item")
@@ -442,7 +456,9 @@ def main():
             else:
                 filtered_df = types_df[types_df["typeName"] == selected_item]
                 if len(filtered_df) == 0:
-                    st.warning(f"Selected item: {selected_item} not found in types database")
+                    st.warning(
+                        f"Selected item: {selected_item} not found in types database"
+                    )
                     selected_item = None
                 else:
                     type_id = filtered_df["typeID"].values[0]
@@ -454,8 +470,12 @@ def main():
         selected_item = None
         type_id = None
 
-    if 'type_id' not in locals() or type_id is None:
-        st.warning(f"Selected item: {selected_item if 'selected_item' in locals() else 'None'} not a buildable item")
+    if "type_id" not in locals() or type_id is None:
+        st.warning(
+            f"Selected item: {
+                selected_item if 'selected_item' in locals() else 'None'
+            } not a buildable item"
+        )
         selected_item = None
         st.rerun()
 
@@ -533,7 +553,9 @@ def main():
     if st.session_state.sci_last_modified:
         st.sidebar.markdown("---")
         st.sidebar.markdown(
-            f"*Industry indexes last updated: {st.session_state.sci_last_modified.strftime('%Y-%m-%d %H:%M:%S UTC')}*"
+            f"*Industry indexes last updated: {
+                st.session_state.sci_last_modified.strftime('%Y-%m-%d %H:%M:%S UTC')
+            }*"
         )
 
     if st.session_state.calculate_clicked:
@@ -554,15 +576,20 @@ def main():
         progress_bar = st.progress(0, text="Fetching...")
         results, status_log = service.get_costs(
             job,
-            async_mode,
             progress_callback=lambda c, t, m: progress_bar.progress(
                 c / t if t > 0 else 0, text=m
             ),
         )
-        logger.debug(f"Status log: {status_log['success_count']} success, {status_log['error_count']} errors")
+        logger.debug(
+            f"Status log: {status_log['success_count']} success, {
+                status_log['error_count']
+            } errors"
+        )
 
         if not results:
-            st.error("No results returned. This is likely due to problems with the external industry data API. Please try again later.")
+            st.error(
+                "No results returned. This is likely due to problems with the external industry data API. Please try again later."
+            )
             return
 
         st.session_state.cost_results = results
@@ -612,11 +639,13 @@ def main():
             if is_valid_image_url(url):
                 st.image(url)
             else:
-                st.image(alt_url, width='stretch')
+                st.image(alt_url, width="stretch")
         with col2:
             st.header(f"Build cost for {selected_item}", divider="violet")
             st.write(
-                f"Build cost for {selected_item} with {runs} runs, {me} ME, {te} TE, {price_source} material price (type_id: {type_id})"
+                f"Build cost for {selected_item} with {runs} runs, {me} ME, {te} TE, {
+                    price_source
+                } material price (type_id: {type_id})"
             )
 
             col1, col2 = st.columns([0.5, 0.5])
@@ -627,7 +656,9 @@ def main():
                     help=f"Based on the lowest cost structure: {low_cost_structure}",
                 )
                 st.markdown(
-                    f"**Materials:** {millify(material_cost_per_unit, precision=2)} ISK | **Job cost:** {millify(job_cost_per_unit, precision=2)} ISK"
+                    f"**Materials:** {
+                        millify(material_cost_per_unit, precision=2)
+                    } ISK | **Job cost:** {millify(job_cost_per_unit, precision=2)} ISK"
                 )
             with col2:
                 st.metric(
@@ -635,7 +666,9 @@ def main():
                     value=f"{millify(total_cost, precision=2)} ISK",
                 )
                 st.markdown(
-                    f"**Materials:** {millify(material_cost, precision=2)} ISK | **Job cost:** {millify(job_cost, precision=2)} ISK"
+                    f"**Materials:** {
+                        millify(material_cost, precision=2)
+                    } ISK | **Job cost:** {millify(job_cost, precision=2)} ISK"
                 )
 
         if vale_price:
@@ -643,7 +676,11 @@ def main():
             percent_profit_vale = ((vale_price - low_cost) / vale_price) * 100
 
             st.markdown(
-                f"**4-HWWF price:** <span style='color: orange;'>{millify(vale_price, precision=2)} ISK</span> ({percent_profit_vale:.2f}% Jita | profit: {millify(profit_per_unit_vale, precision=2)} ISK)",
+                f"**4-HWWF price:** <span style='color: orange;'>{
+                    millify(vale_price, precision=2)
+                } ISK</span> ( profit: {
+                    millify(profit_per_unit_vale, precision=2)
+                } ISK |  {percent_profit_vale:.2f}%",
                 unsafe_allow_html=True,
             )
         else:
@@ -653,7 +690,11 @@ def main():
             profit_per_unit_jita = jita_price - low_cost
             percent_profit_jita = ((jita_price - low_cost) / jita_price) * 100
             st.markdown(
-                f"**Jita price:** <span style='color: orange;'>{millify(jita_price, precision=2)} ISK</span> (profit: {millify(profit_per_unit_jita, precision=2)} ISK {percent_profit_jita:.2f}%)",
+                f"**Jita price:** <span style='color: orange;'>{
+                    millify(jita_price, precision=2)
+                } ISK</span> (profit: {
+                    millify(profit_per_unit_jita, precision=2)
+                } ISK | {percent_profit_jita:.2f}%)",
                 unsafe_allow_html=True,
             )
         else:
@@ -666,12 +707,14 @@ def main():
             display_df,
             column_config=col_config,
             column_order=col_order,
-            width='stretch',
+            width="stretch",
         )
         if st.session_state.super:
             st.markdown(
                 """
-            <span style="font-weight: bold;">Note:</span> <span style="color: orange;"> Only structures in systems with the supercapital upgrade and configured for supercapital construction are displayed.
+            <span style="font-weight: bold;">Note:
+            </span> <span style="color: orange;">
+            Only structures configured for supercapital construction displayed.
             </span>
             """,
                 unsafe_allow_html=True,
@@ -687,7 +730,15 @@ def main():
     else:
         st.subheader("WC Markets Build Cost Tool", divider="violet")
         st.write(
-            "Find a build cost for an item by selecting a category, group, and item in the sidebar. The build cost will be calculated for all structures in the database, ordered by cost (lowest to highest) along with a table of materials required and their costs for a selected structure. You can also select a structure to compare the cost to build versus this structure. When you're ready, click the 'Calculate' button."
+            """
+            Find a build cost for an item by selecting a category, group, and
+            item in the sidebar. The build cost will be calculated for all
+            structures in the database, ordered by cost (lowest to highest)
+            along with a table of materials required and their costs for a
+            selected structure. You can also select a structure to compare the
+            cost to build versus this structure. When you're ready, click the
+            'Calculate' button.
+            """
         )
         st.markdown(
             display_build_cost_tool_description(),

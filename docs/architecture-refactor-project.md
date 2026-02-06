@@ -4,21 +4,19 @@ Extends the Domain -> Repository -> Service -> Page pattern established in Phase
 
 ## Quick Resume Guide
 
-**Current Status:** Phase 10 COMPLETE. Ready to begin Phase 11.
+**Current Status:** Phase 11 COMPLETE. Ready to begin Phase 12.
 
 **Branch:** `architecture-review`
 
-**Run tests:** `uv run pytest -q` (87 tests, all passing)
+**Run tests:** `uv run pytest -q` (111 tests, all passing)
 
 **Key context for next session:**
-- Phase 10 created `MarketService` (pure logic), `pages/components/market_components.py` (Streamlit rendering)
-- `market_metrics.py` (907 lines) deleted - all functions migrated to service/components
-- `pages/market_stats.py` refactored from 1001 to ~629 lines, no more `db_handler` imports
-- `MarketRepository` expanded with 5 new query methods (SDE, watchlist, market type IDs, history by type_ids)
-- `db_handler.py` functions `new_get_market_data`, `clean_mkt_data`, `get_stats`, `get_price_from_mkt_orders` marked DEPRECATED
-- Dead code `get_chart_table_data()` deleted from db_handler.py
-- `services/__init__.py` exports `MarketService`, `get_market_service`
-- Architecture: Page -> Service -> Repository pattern fully implemented for market data
+- Phase 11 created `BuildCostRepository` and `BuildCostService`, refactored `pages/build_costs.py` from 1137 to 699 lines
+- Post-Phase 11 cleanup: removed sync code path (async-only), removed 3 unused repo methods, removed unused `get_type_id`, fixed dead `stmt` variable
+- `logging_config.py` fixed to route all logs to `./logs/` instead of project root
+- `db_handler.py` functions `get_groups_for_category`, `get_types_for_group`, `get_4H_price`, `request_type_names` still imported by build_costs.py (migrate in Phase 12)
+- `utils.py` function `get_jita_price` still imported by build_costs.py (migrate in Phase 12)
+- Architecture: Page -> Service -> Repository pattern fully implemented for build costs and market data
 - The full phase plan is at the bottom of this file (copied from the planning session)
 
 ---
@@ -152,13 +150,52 @@ Extends the Domain -> Repository -> Service -> Page pattern established in Phase
 
 ---
 
+### Phase 11: Build Cost Repository & Service - COMPLETE
+
+**Date:** 2026-02-04
+
+**Files Created:**
+| File | Purpose |
+|------|---------|
+| `repositories/build_cost_repo.py` | BuildCostRepository with cached access to structures, rigs, industry indices. `_impl()`/`_cached()` pattern with `_url` cache key. |
+| `services/build_cost_service.py` | BuildCostService with async cost fetching (httpx), URL construction, industry index management, `BuildCostJob` dataclass. |
+| `tests/test_build_cost_repo.py` | 7 tests: rigs, valid rigs filtering, manufacturing cost index, structures (super/non-super) |
+| `tests/test_build_cost_service.py` | 14 tests: BuildCostJob properties, URL construction, rig filtering, super group detection, industry index check/parse |
+
+**Files Modified:**
+| File | Changes |
+|------|---------|
+| `pages/build_costs.py` | Refactored from 1137 to 699 lines. Extracted all DB access to repo, all business logic to service. Removed async mode toggle (async-only now). Page is UI-only. |
+| `logging_config.py` | Fixed log routing: all logs now go to `./logs/` relative to source file. `os.path.basename()` strips directory components. Absolute paths (test tmpdir) respected. |
+| `build_cost_models.py` | Minor cleanup, removed unused DatabaseConfig instantiation |
+| `config.py` | Added `bc_engine` property for build cost database access |
+| `repositories/__init__.py` | Added `BuildCostRepository`, `get_build_cost_repository` exports |
+| `services/__init__.py` | Added `BuildCostService`, `get_build_cost_service` exports |
+| `utils.py` | Removed `fetch_industry_indices()` (moved to BuildCostService) |
+
+**Verification:**
+- 111 tests pass (`uv run pytest -q`)
+- Ruff check passes on all modified files
+- No circular imports
+- No remaining inline DB queries in build_costs.py (except SDE lookups via db_handler, deferred to Phase 12)
+
+**Design Decisions:**
+- **Async-only cost fetching**: The sync path was the original implementation; async was added later and has been stable for months. The sync toggle and legacy code were removed during post-phase cleanup to reduce complexity.
+- **`_impl()` takes engine param**: Unlike market_repo (which creates DatabaseConfig internally for malformed-DB recovery), build_cost_repo `_impl()` functions take an engine param for direct testability with `MagicMock()`. Build cost data doesn't need the same recovery logic as market data.
+- **`_url` cache key in cached wrappers**: Follows the doctrine_repo pattern. Streamlit can't hash `self`, so module-level cached functions use the database URL string as a cache discriminator.
+- **BuildCostJob dataclass**: Replaces the old dict-based job parameters. The `is_super` property replaces standalone super-group checks, keeping the logic co-located with the data.
+- **ProgressCallback Protocol**: Enables progress reporting without Streamlit dependency. The page layer passes a lambda wrapping `st.progress()`.
+- **Dead code removed during cleanup**: `get_type_id()`, `get_structure_by_name()`, `get_rig_id()`, `get_system_id()` were extracted from the original page but never actually called. Removed along with their tests to keep the repo surface minimal.
+
+**New features/functionality for documentation updates:**
+- None (internal refactoring only)
+
+---
+
 ## Upcoming Phases
 
-### Phase 11: Build Cost Repository & Service
-- Save log files in ./logs instead of in the root directory
-- Create `repositories/build_cost_repo.py`
-- Create `services/build_cost_service.py`
-- Slim `pages/build_costs.py` to UI-only
+### Phase 11: COMPLETE
+- See Phase Log above for details
 
 ### Phase 12: Infrastructure Consolidation
 - Create `repositories/sde_repo.py`
@@ -176,7 +213,7 @@ Extends the Domain -> Repository -> Service -> Page pattern established in Phase
 ```
 Phase 8 (DONE)
   |-- Phase 9 (DONE) -> Phase 10 (DONE)
-  |-- Phase 11 (independent of 9-10, requires 8)
+  |-- Phase 11 (DONE)
        |-- Phase 12 (requires 9-11) -> Phase 13
 ```
 
