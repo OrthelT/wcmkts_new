@@ -112,6 +112,12 @@ from services.build_cost_service import (
     PRICE_SOURCE_MAP,
 )
 
+from services.type_resolution_service import (
+    # Main service
+    TypeResolutionService,
+    get_type_resolution_service,
+)
+
 __all__ = [
     # Price Service
     "PriceService",
@@ -173,4 +179,7 @@ __all__ = [
     "get_build_cost_service",
     "BuildCostJob",
     "PRICE_SOURCE_MAP",
+    # Type Resolution Service
+    "TypeResolutionService",
+    "get_type_resolution_service",
 ]

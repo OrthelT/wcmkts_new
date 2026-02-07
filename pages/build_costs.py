@@ -1,13 +1,8 @@
 import requests
 from state import ss_init
 from ui.formatters import display_build_cost_tool_description
-from utils import get_jita_price
-from db_handler import (
-    get_groups_for_category,
-    get_types_for_group,
-    get_4H_price,
-    request_type_names,
-)
+from services import get_jita_price, get_type_resolution_service
+from repositories import get_sde_repository, get_market_repository
 from repositories.build_cost_repo import get_build_cost_repository
 from services.build_cost_service import (
     BuildCostJob,
@@ -240,7 +235,7 @@ def display_material_costs(
     materials_data = results[selected_structure_for_materials]["materials"]
 
     type_ids = [int(k) for k in materials_data.keys()]
-    type_names = request_type_names(type_ids)
+    type_names = get_type_resolution_service().resolve_type_names(type_ids)
     type_names_dict = {item["id"]: item["name"] for item in type_names}
 
     materials_list = []
@@ -405,7 +400,7 @@ def main():
         selected_group = st.sidebar.selectbox("Select a group", groups)
         group_id = 1012
     else:
-        groups = get_groups_for_category(category_id)
+        groups = get_sde_repository().get_groups_for_category(category_id)
         groups = groups.sort_values(by="groupName")
         groups = groups.drop(groups[groups["groupName"] == "Abyssal Modules"].index)
         group_names = groups["groupName"].unique()
@@ -414,7 +409,7 @@ def main():
         logger.info(f"Selected group: {selected_group} ({group_id})")
 
     try:
-        types_df = get_types_for_group(group_id)
+        types_df = get_sde_repository().get_types_for_group(group_id)
         types_df = types_df.sort_values(by="typeName")
 
         if len(types_df) == 0:
@@ -602,7 +597,7 @@ def main():
         st.session_state.cost_results is not None
         and st.session_state.selected_item_for_display == selected_item
     ):
-        vale_price = get_4H_price(type_id)
+        vale_price = get_market_repository().get_local_price(type_id)
         jita_price = get_jita_price(type_id)
         if jita_price:
             jita_price = float(jita_price)

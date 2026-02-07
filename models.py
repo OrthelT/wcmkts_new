@@ -1,6 +1,6 @@
 from sqlalchemy import Integer, String, Float, Boolean, DateTime, event
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from type_info import get_type_name
+from repositories.sde_repo import get_type_name
 
 class Base(DeclarativeBase):
     pass

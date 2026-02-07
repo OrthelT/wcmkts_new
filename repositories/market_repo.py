@@ -181,6 +181,20 @@ def _get_market_type_ids_impl() -> list:
     return list(set(order_ids + watchlist_ids))
 
 
+def _get_local_price_impl(type_id: int) -> Optional[float]:
+    """Fetch the local market price for a type_id from marketstats."""
+    db = DatabaseConfig("wcmkt")
+    query = text("SELECT price FROM marketstats WHERE type_id = :type_id")
+    with db.engine.connect() as conn:
+        df = pd.read_sql_query(query, conn, params={"type_id": type_id})
+    if df.empty:
+        return None
+    try:
+        return float(df["price"].iloc[0])
+    except (IndexError, KeyError, ValueError):
+        return None
+
+
 def _get_sde_info_impl(type_ids: list) -> pd.DataFrame:
     """Fetch SDE info (name, group, category) for given type_ids."""
     if not type_ids:
@@ -241,6 +255,11 @@ def _get_market_type_ids_cached() -> list:
     return _get_market_type_ids_impl()
 
 
+@st.cache_data(ttl=600)
+def _get_local_price_cached(type_id: int) -> Optional[float]:
+    return _get_local_price_impl(type_id)
+
+
 @st.cache_resource
 def _get_sde_info_cached(type_ids: tuple) -> pd.DataFrame:
     return _get_sde_info_impl(list(type_ids))
@@ -261,6 +280,7 @@ def invalidate_market_caches():
     _get_history_by_type_cached.clear()
     _get_history_by_type_ids_cached.clear()
     _get_market_type_ids_cached.clear()
+    _get_local_price_cached.clear()
     logger.info("Market caches invalidated")
 
 
@@ -339,6 +359,14 @@ class MarketRepository(BaseRepository):
             return float(row["price"].iloc[0])
         except (IndexError, KeyError, ValueError):
             return None
+
+    def get_local_price(self, type_id: int) -> Optional[float]:
+        """Get local market price for a type (cached, TTL=600s).
+
+        Direct query against marketstats for a single type_id.
+        More efficient than get_price() when you don't need the full stats DataFrame.
+        """
+        return _get_local_price_cached(type_id)
 
     def get_history_by_type_ids(self, type_ids: list) -> pd.DataFrame:
         """Get market history for multiple type_ids (cached, TTL=1800s)."""

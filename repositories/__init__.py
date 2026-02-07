@@ -11,6 +11,7 @@ Key Components:
 - MarketRepository: Market stats, orders, and history with targeted cache invalidation
 - MarketOrdersRepository: Market order aggregation for Pricer feature
 - BuildCostRepository: Structures, rigs, and industry indices
+- SDERepository: Static Data Export lookups (types, groups, categories)
 """
 
 from repositories.base import BaseRepository
@@ -28,6 +29,7 @@ from repositories.build_cost_repo import (
     invalidate_build_cost_caches,
     invalidate_structure_caches,
 )
+from repositories.sde_repo import SDERepository, get_sde_repository
 
 __all__ = [
     "BaseRepository",
@@ -43,4 +45,6 @@ __all__ = [
     "get_build_cost_repository",
     "invalidate_build_cost_caches",
     "invalidate_structure_caches",
+    "SDERepository",
+    "get_sde_repository",
 ]

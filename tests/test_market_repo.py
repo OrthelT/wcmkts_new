@@ -282,6 +282,47 @@ class TestInvalidateMarketCaches:
         mock_history_type.clear.assert_called_once()
 
 
+class TestGetLocalPrice:
+    """Test the get_local_price impl function."""
+
+    def _mock_engine(self):
+        mock_conn = Mock()
+        mock_conn.__enter__ = Mock(return_value=mock_conn)
+        mock_conn.__exit__ = Mock(return_value=None)
+        mock_engine = Mock()
+        mock_engine.connect.return_value = mock_conn
+        return mock_engine, mock_conn
+
+    @patch("repositories.market_repo.DatabaseConfig")
+    @patch("pandas.read_sql_query")
+    def test_returns_price_when_found(self, mock_read_sql, mock_db_cls):
+        expected = pd.DataFrame({"price": [125.50]})
+        mock_read_sql.return_value = expected
+        mock_engine, _ = self._mock_engine()
+        mock_db = Mock()
+        mock_db.engine = mock_engine
+        mock_db_cls.return_value = mock_db
+
+        from repositories.market_repo import _get_local_price_impl
+        result = _get_local_price_impl(34)
+
+        assert result == 125.50
+
+    @patch("repositories.market_repo.DatabaseConfig")
+    @patch("pandas.read_sql_query")
+    def test_returns_none_when_not_found(self, mock_read_sql, mock_db_cls):
+        mock_read_sql.return_value = pd.DataFrame({"price": []})
+        mock_engine, _ = self._mock_engine()
+        mock_db = Mock()
+        mock_db.engine = mock_engine
+        mock_db_cls.return_value = mock_db
+
+        from repositories.market_repo import _get_local_price_impl
+        result = _get_local_price_impl(99999999)
+
+        assert result is None
+
+
 class TestMarketRepositoryFactory:
     """Test get_market_repository factory function."""
 

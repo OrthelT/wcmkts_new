@@ -25,8 +25,8 @@ import pandas as pd
 from logging_config import setup_logging
 from config import DatabaseConfig, get_settings
 from services import get_doctrine_service
-from repositories import get_market_repository
-from db_handler import extract_sde_info, read_df
+from repositories import get_market_repository, get_sde_repository
+from repositories.base import BaseRepository
 
 logger = setup_logging(__name__, log_file="downloads.log")
 
@@ -128,11 +128,9 @@ def _get_single_fit_csv(fit_id: int) -> bytes:
 def _get_low_stock_csv(max_days: float, doctrine_only: bool, tech2_only: bool) -> bytes:
     """Get low stock items as CSV bytes."""
     mktdb = DatabaseConfig("wcmkt")
-    sde_db = DatabaseConfig("sde")
 
     if tech2_only:
-        tech2_query = "SELECT typeID FROM sdetypes WHERE metaGroupID = 2"
-        tech2_type_ids = read_df(sde_db, tech2_query)['typeID'].tolist()
+        tech2_type_ids = get_sde_repository().get_tech2_type_ids()
 
     query = """
     SELECT ms.*,
@@ -143,7 +141,7 @@ def _get_low_stock_csv(max_days: float, doctrine_only: bool, tech2_only: bool) -
     LEFT JOIN doctrines d ON ms.type_id = d.type_id
     """
 
-    df = read_df(mktdb, query)
+    df = BaseRepository(mktdb).read_df(query)
 
     if doctrine_only:
         df = df[df['is_doctrine'] == 1]
@@ -176,7 +174,7 @@ def _get_low_stock_csv(max_days: float, doctrine_only: bool, tech2_only: bool) -
 @st.cache_data(ttl=3600, show_spinner=False)
 def _get_sde_table_csv(table_name: str) -> bytes:
     """Get SDE table as CSV bytes."""
-    df = extract_sde_info("sde", params={"table_name": table_name})
+    df = get_sde_repository().get_sde_table(table_name)
     return df.to_csv(index=False).encode('utf-8')
 
 

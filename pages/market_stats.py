@@ -12,7 +12,7 @@ from services import get_doctrine_service
 from services.market_service import get_market_service
 from init_db import init_db
 from sync_state import update_wcmkt_state
-from type_info import get_type_id_with_fallback
+from services import get_type_resolution_service
 from pages.components.market_components import (
     render_isk_volume_chart_ui,
     render_isk_volume_table_ui,
@@ -23,7 +23,7 @@ from pages.components.market_components import (
     get_fitting_col_config,
     get_display_formats,
 )
-from utils import get_jita_price
+from services import get_jita_price
 from state import ss_has, ss_get
 from repositories import invalidate_market_caches
 
@@ -35,10 +35,14 @@ header_env = f"[{env.upper()}]" if env != "prod" else ""
 
 logger = setup_logging(__name__)
 
-# Service is initialized lazily to avoid database access at module import time
+# Services are initialized lazily to avoid database access at module import time
 def _get_doctrine_service():
     """Get doctrine service lazily to avoid database access before init_db()."""
     return get_doctrine_service()
+
+def _resolve_type_id(type_name: str):
+    """Resolve a type name to its ID via TypeResolutionService."""
+    return get_type_resolution_service().resolve_type_id(type_name)
 
 logger.info("Application started")
 logger.info(f"streamlit version: {st.__version__}")
@@ -104,7 +108,7 @@ def check_selected_item(selected_item: str) -> str | None:
         logger.info(f"selected_item: {selected_item}")
         st.sidebar.text(f"Item: {selected_item}")
         st.session_state.selected_item = selected_item
-        st.session_state.selected_item_id = get_type_id_with_fallback(selected_item)
+        st.session_state.selected_item_id = _resolve_type_id(selected_item)
         jita_price = get_jita_price(st.session_state.selected_item_id)
         st.session_state.jita_price = jita_price if jita_price else None
         logger.info(f"selected_item_id: {st.session_state.selected_item_id}")
@@ -382,7 +386,7 @@ def main():
             if selected_item_id := ss_get('selected_item_id'):
                 pass
             else:
-                selected_item_id = get_type_id_with_fallback(selected_item)
+                selected_item_id = _resolve_type_id(selected_item)
                 st.session_state.selected_item_id = selected_item_id
 
             if selected_item_id:
@@ -436,7 +440,7 @@ def main():
             st.header("All Sell Orders", divider="green")
         elif ss_has('selected_item'):
             selected_item = st.session_state.selected_item
-            selected_item_id = ss_get('selected_item_id') or get_type_id_with_fallback(selected_item)
+            selected_item_id = ss_get('selected_item_id') or _resolve_type_id(selected_item)
             if 'selected_item_id' not in st.session_state:
                 st.session_state.selected_item_id = selected_item_id
             try:
@@ -561,7 +565,7 @@ def main():
             pass
         else:
             try:
-                selected_item_id = get_type_id_with_fallback(selected_item)
+                selected_item_id = _resolve_type_id(selected_item)
             except Exception:
                 selected_item_id = None
             st.session_state.selected_item_id = selected_item_id
@@ -599,7 +603,7 @@ def main():
     if not fit_df.empty:
         st.subheader("Fitting Data", divider="blue")
         selected_item = ss_get('selected_item', " ")
-        selected_item_id = ss_get('selected_item_id') or get_type_id_with_fallback(selected_item)
+        selected_item_id = ss_get('selected_item_id') or _resolve_type_id(selected_item)
         try:
             fit_id = fit_df['fit_id'].iloc[0]
         except Exception:

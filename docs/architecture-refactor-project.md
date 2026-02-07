@@ -4,19 +4,19 @@ Extends the Domain -> Repository -> Service -> Page pattern established in Phase
 
 ## Quick Resume Guide
 
-**Current Status:** Phase 11 COMPLETE. Ready to begin Phase 12.
+**Current Status:** Phase 12 COMPLETE. Ready to begin Phase 13.
 
 **Branch:** `architecture-review`
 
-**Run tests:** `uv run pytest -q` (111 tests, all passing)
+**Run tests:** `uv run pytest -q` (136 tests, all passing)
 
 **Key context for next session:**
-- Phase 11 created `BuildCostRepository` and `BuildCostService`, refactored `pages/build_costs.py` from 1137 to 699 lines
-- Post-Phase 11 cleanup: removed sync code path (async-only), removed 3 unused repo methods, removed unused `get_type_id`, fixed dead `stmt` variable
-- `logging_config.py` fixed to route all logs to `./logs/` instead of project root
-- `db_handler.py` functions `get_groups_for_category`, `get_types_for_group`, `get_4H_price`, `request_type_names` still imported by build_costs.py (migrate in Phase 12)
-- `utils.py` function `get_jita_price` still imported by build_costs.py (migrate in Phase 12)
-- Architecture: Page -> Service -> Repository pattern fully implemented for build costs and market data
+- Phase 12 eliminated 3 legacy files (`type_info.py`, `set_targets.py`, `utils.py`) and migrated all consumers
+- New: `repositories/sde_repo.py` (SDERepository), `services/type_resolution_service.py` (TypeResolutionService)
+- `db_handler.py` still has deprecated market data shims (Phase 13 cleanup) + `read_df`/`new_read_df` base functions
+- No pages import from `db_handler.py`, `utils.py`, or `type_info.py` anymore
+- `models.py` now imports `get_type_name` from `repositories.sde_repo` instead of `type_info`
+- All modern layers (services/, repositories/, domain/, ui/, state/) have zero imports from legacy modules
 - The full phase plan is at the bottom of this file (copied from the planning session)
 
 ---
@@ -195,19 +195,56 @@ Extends the Domain -> Repository -> Service -> Page pattern established in Phase
 - Refactored select_box logic to key on type_ids rather than module names.
 - Introduced centralized SettingsService class in settings_service.py
 
+---
+### Phase 12: Infrastructure Consolidation - COMPLETE
+
+**Date:** 2026-02-07
+
+**Files Created:**
+| File | Purpose |
+|------|---------|
+| `repositories/sde_repo.py` | SDERepository: type lookups, group/category queries, table exports. Absorbs functions from `type_info.py` and `db_handler.py`. SQL injection protection via table name allowlist. |
+| `services/type_resolution_service.py` | TypeResolutionService: type name/ID resolution with SDE + Fuzzworks/ESI API fallbacks. |
+| `tests/test_sde_repo.py` | 15 tests: type name/ID lookups, groups, types, SDE tables, tech2 IDs, edge cases |
+| `tests/test_type_resolution_service.py` | 9 tests: SDE resolution, Fuzzworks fallback, ESI batch, chunking, error handling |
+
+**Files Modified:**
+| File | Changes |
+|------|---------|
+| `repositories/market_repo.py` | Added `get_local_price()` method + `_get_local_price_impl`/`_get_local_price_cached`. Added to cache invalidation. |
+| `repositories/__init__.py` | Added `SDERepository`, `get_sde_repository` exports |
+| `services/__init__.py` | Added `TypeResolutionService`, `get_type_resolution_service` exports |
+| `models.py` | Changed `from type_info import get_type_name` -> `from repositories.sde_repo import get_type_name` |
+| `pages/market_stats.py` | Replaced `get_type_id_with_fallback` -> `TypeResolutionService.resolve_type_id()`, `get_jita_price` -> `services.get_jita_price` |
+| `pages/build_costs.py` | Replaced all `db_handler` imports with `SDERepository`/`MarketRepository`/`TypeResolutionService`. Replaced `utils.get_jita_price` with `services.get_jita_price`. |
+| `pages/downloads.py` | Replaced `extract_sde_info` -> `SDERepository.get_sde_table()`, `read_df` -> `BaseRepository.read_df()`, tech2 query -> `SDERepository.get_tech2_type_ids()` |
+| `tests/test_market_repo.py` | Added 2 tests for `get_local_price` (found, not found) |
+
+**Files Deleted:**
+| File | Reason |
+|------|--------|
+| `set_targets.py` (196 lines) | Zero active imports. DoctrineRepository already has equivalent methods. |
+| `type_info.py` (107 lines) | All functions migrated to `sde_repo` + `type_resolution_service` |
+| `utils.py` (158 lines) | Price functions duplicated in `PriceService`, session state re-exports deprecated |
+| `tests/test_safe_format.py` | Tested `db_handler.safe_format` which is now dead code |
+| `tests/test_clean_mkt_data.py` | Tested deprecated `db_handler.clean_mkt_data` shim |
+
+**Test Results:** 136 tests passing (111 - 3 deleted + 28 new)
+
+**Key Decisions:**
+- SDE data cached with `@st.cache_resource` (no TTL) since it's immutable at runtime
+- Module-level `get_type_name()` in sde_repo as layering accommodation for `models.py` ORM events
+- `request_type_names` (ESI batch) moved to TypeResolutionService rather than creating separate ESI service
+- `get_sde_table` validates table names against allowlist (12 tables) to prevent SQL injection
+- Downloads composite market+doctrine query uses `BaseRepository.read_df()` directly (one-off query)
+
 ## Upcoming Phases
 
-### Phase 11: COMPLETE
+### Phase 12: COMPLETE
 - See Phase Log above for details
 
-### Phase 12: Infrastructure Consolidation
-- Create `repositories/sde_repo.py`
-- Create `services/type_resolution_service.py`
-- Merge `set_targets.py` into doctrine_repo
-- Delete `type_info.py`, `set_targets.py`, `doctrines.py`, `utils.py`
-
 ### Phase 13: Final Cleanup & Optimization
-- Delete `db_handler.py` (remove all shims)
+- Delete `db_handler.py` (remove all deprecated shims and remaining functions)
 - Standardize session state on `ss_get`/`ss_has`/`ss_set`
 - Optimize cache TTLs
 - Update all documentation
@@ -217,7 +254,7 @@ Extends the Domain -> Repository -> Service -> Page pattern established in Phase
 Phase 8 (DONE)
   |-- Phase 9 (DONE) -> Phase 10 (DONE)
   |-- Phase 11 (DONE)
-       |-- Phase 12 (requires 9-11) -> Phase 13
+       |-- Phase 12 (DONE) -> Phase 13
 ```
 
 # USER INSTRUCTIONS
