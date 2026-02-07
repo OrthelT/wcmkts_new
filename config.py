@@ -33,7 +33,7 @@ _SYNC_LOCK = threading.Lock()
 
 
 def get_settings() -> dict:
-    from services.settings_service import SettingsService
+    from settings_service import SettingsService
 
     return SettingsService().settings_dict
 

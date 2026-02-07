@@ -81,4 +81,4 @@
     short_name = "4H"
 
 [module_strategy]
-  use_equivelent = false
+  use_equivalent = false

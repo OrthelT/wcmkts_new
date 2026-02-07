@@ -367,12 +367,11 @@ class FitDataBuilder:
             self._end_step("apply_module_equivalents")
             return self
 
-        from services.settings_service import SettingsService
+        from settings_service import SettingsService
 
         use_equivalents_setting = SettingsService().use_equivalents
-        print(f"\n use_equivalents_setting {use_equivalents_setting}\n")
         if not use_equivalents_setting:
-            self._logger.debug("use_equivalents disabled in settigs")
+            self._logger.debug("use_equivalents disabled in settings")
             self._end_step("apply_module_equivalents")
             return self
 

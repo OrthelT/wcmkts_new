@@ -31,7 +31,7 @@ def setup_logging(
     from logging_config import setup_logging
     setup_logging()
     """
-    from services.settings_service import SettingsService
+    from settings_service import SettingsService
 
     logger = logging.getLogger(name)
     # Clear existing handlers to avoid duplicate logs
@@ -65,9 +65,9 @@ def setup_logging(
     stream_handler.setFormatter(formatter)
     logger.addHandler(stream_handler)
 
-    settings_level = SettingsService().log_level
-    level = settings_level if settings_level in ["INFO", "DEBUG"] else level
-    print(f"log_level: {settings_level}")
+    settings_level = getattr(logging, SettingsService().log_level, None)
+    if settings_level is not None:
+        level = settings_level
 
     logger.setLevel(level)
     return logger

@@ -112,8 +112,6 @@ from services.build_cost_service import (
     PRICE_SOURCE_MAP,
 )
 
-from services.settings_service import SettingsService
-
 __all__ = [
     # Price Service
     "PriceService",
@@ -175,6 +173,4 @@ __all__ = [
     "get_build_cost_service",
     "BuildCostJob",
     "PRICE_SOURCE_MAP",
-    # SettingsService
-    "SettingsService",
 ]
