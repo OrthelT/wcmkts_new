@@ -15,19 +15,16 @@ from services.price_service import (
     # Main service
     PriceService,
     get_price_service,
-
     # Domain models
     PriceResult,
     BatchPriceResult,
     FitCostAnalysis,
     PriceSource,
-
     # Providers (for custom configuration)
     FuzzworkProvider,
     JaniceProvider,
     LocalMarketProvider,
     FallbackPriceProvider,
-
     # Backwards compatibility
     get_jita_price,
     get_multi_item_jita_price,
@@ -38,12 +35,10 @@ from services.doctrine_service import (
     # Main service
     DoctrineService,
     get_doctrine_service,
-
     # Builder
     FitDataBuilder,
     FitBuildResult,
     BuildMetadata,
-
     # Backwards compatibility
     create_fit_df,
 )
@@ -52,10 +47,8 @@ from services.categorization import (
     # Main service
     ConfigBasedCategorizer,
     get_ship_role_categorizer,
-
     # Configuration
     ShipRoleConfig,
-
     # Backwards compatibility
     categorize_ship_by_role,
 )
@@ -64,7 +57,6 @@ from services.pricer_service import (
     # Main service
     PricerService,
     get_pricer_service,
-
     # Supporting classes
     JitaPriceProvider,
     JitaPriceData,
@@ -75,7 +67,6 @@ from services.low_stock_service import (
     # Main service
     LowStockService,
     get_low_stock_service,
-
     # Domain models
     LowStockFilters,
     LowStockItem,
@@ -87,11 +78,9 @@ from services.selection_service import (
     # Main service
     SelectionService,
     get_selection_service,
-
     # Domain models
     SelectedItem,
     SelectionState,
-
     # Helpers
     get_status_filter_options,
     apply_status_filter,
@@ -102,7 +91,6 @@ from services.module_equivalents_service import (
     # Main service
     ModuleEquivalentsService,
     get_module_equivalents_service,
-
     # Domain models
     EquivalentModule,
     EquivalenceGroup,
@@ -118,81 +106,75 @@ from services.build_cost_service import (
     # Main service
     BuildCostService,
     get_build_cost_service,
-
     # Domain model
     BuildCostJob,
-
     # Constants
     PRICE_SOURCE_MAP,
 )
 
+from services.settings_service import SettingsService
+
 __all__ = [
     # Price Service
-    'PriceService',
-    'get_price_service',
-    'PriceResult',
-    'BatchPriceResult',
-    'FitCostAnalysis',
-    'PriceSource',
-    'FuzzworkProvider',
-    'JaniceProvider',
-    'LocalMarketProvider',
-    'FallbackPriceProvider',
-    'get_jita_price',
-    'get_multi_item_jita_price',
-    'calculate_jita_fit_cost_and_delta',
-
+    "PriceService",
+    "get_price_service",
+    "PriceResult",
+    "BatchPriceResult",
+    "FitCostAnalysis",
+    "PriceSource",
+    "FuzzworkProvider",
+    "JaniceProvider",
+    "LocalMarketProvider",
+    "FallbackPriceProvider",
+    "get_jita_price",
+    "get_multi_item_jita_price",
+    "calculate_jita_fit_cost_and_delta",
     # Doctrine Service
-    'DoctrineService',
-    'get_doctrine_service',
-    'FitDataBuilder',
-    'FitBuildResult',
-    'BuildMetadata',
-    'create_fit_df',
-
+    "DoctrineService",
+    "get_doctrine_service",
+    "FitDataBuilder",
+    "FitBuildResult",
+    "BuildMetadata",
+    "create_fit_df",
     # Categorization Service
-    'ConfigBasedCategorizer',
-    'get_ship_role_categorizer',
-    'ShipRoleConfig',
-    'categorize_ship_by_role',
-
+    "ConfigBasedCategorizer",
+    "get_ship_role_categorizer",
+    "ShipRoleConfig",
+    "categorize_ship_by_role",
     # Pricer Service
-    'PricerService',
-    'get_pricer_service',
-    'JitaPriceProvider',
-    'JitaPriceData',
-    'SDELookupService',
-
+    "PricerService",
+    "get_pricer_service",
+    "JitaPriceProvider",
+    "JitaPriceData",
+    "SDELookupService",
     # Low Stock Service
-    'LowStockService',
-    'get_low_stock_service',
-    'LowStockFilters',
-    'LowStockItem',
-    'DoctrineFilterInfo',
-    'FitFilterInfo',
-
+    "LowStockService",
+    "get_low_stock_service",
+    "LowStockFilters",
+    "LowStockItem",
+    "DoctrineFilterInfo",
+    "FitFilterInfo",
     # Selection Service
-    'SelectionService',
-    'get_selection_service',
-    'SelectedItem',
-    'SelectionState',
-    'get_status_filter_options',
-    'apply_status_filter',
-    'render_sidebar_selections',
-
+    "SelectionService",
+    "get_selection_service",
+    "SelectedItem",
+    "SelectionState",
+    "get_status_filter_options",
+    "apply_status_filter",
+    "render_sidebar_selections",
     # Module Equivalents Service
-    'ModuleEquivalentsService',
-    'get_module_equivalents_service',
-    'EquivalentModule',
-    'EquivalenceGroup',
-
+    "ModuleEquivalentsService",
+    "get_module_equivalents_service",
+    "EquivalentModule",
+    "EquivalenceGroup",
     # Market Service
-    'MarketService',
-    'get_market_service',
-
+    "MarketService",
+    "get_market_service",
     # Build Cost Service
-    'BuildCostService',
-    'get_build_cost_service',
-    'BuildCostJob',
-    'PRICE_SOURCE_MAP',
+    "BuildCostService",
+    "get_build_cost_service",
+    "BuildCostJob",
+    "PRICE_SOURCE_MAP",
+    # SettingsService
+    "SettingsService",
 ]

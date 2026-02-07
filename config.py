@@ -12,8 +12,6 @@ from sqlalchemy.orm import Session
 import threading
 from contextlib import suppress
 from time import perf_counter
-import tomllib
-from pathlib import Path
 
 logger = setup_logging(__name__)
 
@@ -34,16 +32,10 @@ DEFAULT_SHIP_TARGET = 20
 _SYNC_LOCK = threading.Lock()
 
 
-@st.cache_data(ttl=3600)
 def get_settings() -> dict:
-    """Get the settings from the settings.toml file."""
-    settings_path = Path("settings.toml")
-    try:
-        with open(settings_path, "rb") as f:
-            return tomllib.load(f)
-    except Exception as e:
-        logger.error(f"Failed to load settings from settings.toml: {e}")
-        raise e
+    from services.settings_service import SettingsService
+
+    return SettingsService().settings_dict
 
 
 class DatabaseConfig:

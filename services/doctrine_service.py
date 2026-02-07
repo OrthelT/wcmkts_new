@@ -35,6 +35,7 @@ logger = setup_logging(__name__, log_file="doctrine_service.log")
 # Build Metadata - Tracking Build Information
 # =============================================================================
 
+
 @dataclass
 class BuildMetadata:
     """
@@ -60,6 +61,7 @@ class BuildMetadata:
         prices_defaulted_to_zero: Count defaulted to 0
         has_price_service: Whether PriceService was available
     """
+
     build_started_at: Optional[datetime] = None
     build_completed_at: Optional[datetime] = None
     total_duration_ms: float = 0.0
@@ -79,21 +81,27 @@ class BuildMetadata:
     def to_dict(self) -> dict:
         """Convert metadata to a dictionary for logging or display."""
         return {
-            'build_started_at': self.build_started_at.isoformat() if self.build_started_at else None,
-            'build_completed_at': self.build_completed_at.isoformat() if self.build_completed_at else None,
-            'total_duration_ms': round(self.total_duration_ms, 2),
-            'steps_executed': self.steps_executed,
-            'step_durations_ms': {k: round(v, 2) for k, v in self.step_durations_ms.items()},
-            'raw_row_count': self.raw_row_count,
-            'summary_row_count': self.summary_row_count,
-            'unique_fit_count': self.unique_fit_count,
-            'unique_type_count': self.unique_type_count,
-            'null_prices_found': self.null_prices_found,
-            'null_prices_filled': self.null_prices_filled,
-            'prices_filled_from_avg': self.prices_filled_from_avg,
-            'prices_filled_from_jita': self.prices_filled_from_jita,
-            'prices_defaulted_to_zero': self.prices_defaulted_to_zero,
-            'has_price_service': self.has_price_service,
+            "build_started_at": self.build_started_at.isoformat()
+            if self.build_started_at
+            else None,
+            "build_completed_at": self.build_completed_at.isoformat()
+            if self.build_completed_at
+            else None,
+            "total_duration_ms": round(self.total_duration_ms, 2),
+            "steps_executed": self.steps_executed,
+            "step_durations_ms": {
+                k: round(v, 2) for k, v in self.step_durations_ms.items()
+            },
+            "raw_row_count": self.raw_row_count,
+            "summary_row_count": self.summary_row_count,
+            "unique_fit_count": self.unique_fit_count,
+            "unique_type_count": self.unique_type_count,
+            "null_prices_found": self.null_prices_found,
+            "null_prices_filled": self.null_prices_filled,
+            "prices_filled_from_avg": self.prices_filled_from_avg,
+            "prices_filled_from_jita": self.prices_filled_from_jita,
+            "prices_defaulted_to_zero": self.prices_defaulted_to_zero,
+            "has_price_service": self.has_price_service,
         }
 
     def summary_string(self) -> str:
@@ -118,6 +126,7 @@ class BuildMetadata:
 # Build Result - Output of the Builder
 # =============================================================================
 
+
 @dataclass
 class FitBuildResult:
     """
@@ -141,8 +150,9 @@ class FitBuildResult:
         result = builder.build()
         print(f"Built {result.fit_count} fits in {result.metadata.total_duration_ms}ms")
         print(result.metadata.summary_string())
-        
+
     """
+
     raw_df: pd.DataFrame
     summary_df: pd.DataFrame
     summaries: list[FitSummary] = field(default_factory=list)
@@ -193,9 +203,11 @@ class FitBuildResult:
         else:
             raise ValueError(f"Invalid result type: {result_type}")
 
+
 # =============================================================================
 # FitDataBuilder - Builder Pattern for Complex Aggregation
 # =============================================================================
+
 
 class FitDataBuilder:
     """
@@ -241,13 +253,13 @@ class FitDataBuilder:
         7. finalize_columns() - Select and order output columns
         8. build() - Generate FitBuildResult with domain models
     ```
-        """
+    """
 
     def __init__(
         self,
         repository: DoctrineRepository,
         price_service: Optional[PriceService] = None,
-        logger: Optional[logging.Logger] = None
+        logger: Optional[logging.Logger] = None,
     ):
         """
         Initialize the FitDataBuilder.
@@ -319,7 +331,7 @@ class FitDataBuilder:
             - Updates metadata.raw_row_count, unique_fit_count, unique_type_count
             - Logs warning if no data found
         """
-        self._start_step('load_raw_data')
+        self._start_step("load_raw_data")
         self._logger.info("Loading raw fit data from repository")
 
         self._raw_df = self._repo.get_all_fits()
@@ -328,10 +340,10 @@ class FitDataBuilder:
             self._logger.warning("No fit data found in repository")
         else:
             self._metadata.raw_row_count = len(self._raw_df)
-            self._metadata.unique_fit_count = self._raw_df['fit_id'].nunique()
-            self._metadata.unique_type_count = self._raw_df['type_id'].nunique()
+            self._metadata.unique_fit_count = self._raw_df["fit_id"].nunique()
+            self._metadata.unique_type_count = self._raw_df["type_id"].nunique()
 
-        self._end_step('load_raw_data')
+        self._end_step("load_raw_data")
         return self
 
     def apply_module_equivalents(self) -> "FitDataBuilder":
@@ -349,44 +361,59 @@ class FitDataBuilder:
             - Updates self._raw_df['fits_on_mkt'] for modules with equivalents
             - Updates self._raw_df['total_stock'] for modules with equivalents
         """
-        self._start_step('apply_module_equivalents')
+        self._start_step("apply_module_equivalents")
 
         if self._raw_df is None or self._raw_df.empty:
-            self._end_step('apply_module_equivalents')
+            self._end_step("apply_module_equivalents")
+            return self
+
+        from services.settings_service import SettingsService
+
+        use_equivalents_setting = SettingsService().use_equivalents
+        print(f"\n use_equivalents_setting {use_equivalents_setting}\n")
+        if not use_equivalents_setting:
+            self._logger.debug("use_equivalents disabled in settigs")
+            self._end_step("apply_module_equivalents")
             return self
 
         try:
-            from services.module_equivalents_service import get_module_equivalents_service
+            from services.module_equivalents_service import (
+                get_module_equivalents_service,
+            )
 
             equiv_service = get_module_equivalents_service()
             type_ids_with_equivalents = equiv_service.get_type_ids_with_equivalents()
 
             if not type_ids_with_equivalents:
                 self._logger.debug("No module equivalents configured")
-                self._end_step('apply_module_equivalents')
+                self._end_step("apply_module_equivalents")
                 return self
 
             # Find modules in raw data that have equivalents
             modules_to_update = self._raw_df[
-                self._raw_df['type_id'].isin(type_ids_with_equivalents)
-            ]['type_id'].unique()
+                self._raw_df["type_id"].isin(type_ids_with_equivalents)
+            ]["type_id"].unique()
 
             if len(modules_to_update) == 0:
                 self._logger.debug("No modules in fits have equivalents")
-                self._end_step('apply_module_equivalents')
+                self._end_step("apply_module_equivalents")
                 return self
 
-            self._logger.info(f"Applying equivalents for {len(modules_to_update)} modules")
+            self._logger.info(
+                f"Applying equivalents for {len(modules_to_update)} modules"
+            )
 
             # Get aggregated stock for each module with equivalents
-            aggregated_stocks = equiv_service.get_aggregated_stock(list(modules_to_update))
+            aggregated_stocks = equiv_service.get_aggregated_stock(
+                list(modules_to_update)
+            )
 
             # Update fits_on_mkt for each module with equivalents
             for type_id, total_stock in aggregated_stocks.items():
-                mask = self._raw_df['type_id'] == type_id
+                mask = self._raw_df["type_id"] == type_id
 
                 # Get fit_qty for this module
-                fit_qty = self._raw_df.loc[mask, 'fit_qty'].iloc[0] if mask.any() else 1
+                fit_qty = self._raw_df.loc[mask, "fit_qty"].iloc[0] if mask.any() else 1
 
                 # Calculate new fits_on_mkt based on combined stock
                 if fit_qty > 0:
@@ -395,8 +422,8 @@ class FitDataBuilder:
                     new_fits_on_mkt = total_stock
 
                 # Update the DataFrame
-                self._raw_df.loc[mask, 'total_stock'] = total_stock
-                self._raw_df.loc[mask, 'fits_on_mkt'] = new_fits_on_mkt
+                self._raw_df.loc[mask, "total_stock"] = total_stock
+                self._raw_df.loc[mask, "fits_on_mkt"] = new_fits_on_mkt
 
                 self._logger.debug(
                     f"Updated type_id {type_id}: total_stock={total_stock}, "
@@ -408,7 +435,7 @@ class FitDataBuilder:
         except Exception as e:
             self._logger.error(f"Error applying module equivalents: {e}")
 
-        self._end_step('apply_module_equivalents')
+        self._end_step("apply_module_equivalents")
         return self
 
     def fill_null_prices(self) -> "FitDataBuilder":
@@ -438,16 +465,16 @@ class FitDataBuilder:
               - prices_defaulted_to_zero
             - Logs warnings for items with null prices
         """
-        self._start_step('fill_null_prices')
+        self._start_step("fill_null_prices")
 
         if self._raw_df is None or self._raw_df.empty:
-            self._end_step('fill_null_prices')
+            self._end_step("fill_null_prices")
             return self
 
-        null_mask = self._raw_df['price'].isna()
+        null_mask = self._raw_df["price"].isna()
         if not null_mask.any():
             self._logger.info("No null prices to fill")
-            self._end_step('fill_null_prices')
+            self._end_step("fill_null_prices")
             return self
 
         initial_null_count = null_mask.sum()
@@ -455,10 +482,12 @@ class FitDataBuilder:
         self._logger.info(f"Filling {initial_null_count} null prices")
 
         # Get unique type_ids with null prices
-        null_type_ids = self._raw_df[null_mask]['type_id'].unique().tolist()
+        null_type_ids = self._raw_df[null_mask]["type_id"].unique().tolist()
 
         # Log warnings for null prices
-        null_items = self._raw_df[null_mask][['type_id', 'type_name', 'fit_id']].drop_duplicates()
+        null_items = self._raw_df[null_mask][
+            ["type_id", "type_name", "fit_id"]
+        ].drop_duplicates()
         for _, row in null_items.iterrows():
             self._logger.warning(
                 f"Null price: {row.get('type_name', 'unknown')} "
@@ -470,47 +499,59 @@ class FitDataBuilder:
         avg_filled = 0
         for type_id, avg_price in avg_prices.items():
             if pd.notna(avg_price) and avg_price > 0:
-                mask = (self._raw_df['type_id'] == type_id) & self._raw_df['price'].isna()
-                count_before = self._raw_df['price'].isna().sum()
-                self._raw_df.loc[mask, 'price'] = avg_price
-                count_after = self._raw_df['price'].isna().sum()
-                avg_filled += (count_before - count_after)
-                self._logger.debug(f"Filled type_id {type_id} with avg_price: {avg_price}")
+                mask = (self._raw_df["type_id"] == type_id) & self._raw_df[
+                    "price"
+                ].isna()
+                count_before = self._raw_df["price"].isna().sum()
+                self._raw_df.loc[mask, "price"] = avg_price
+                count_after = self._raw_df["price"].isna().sum()
+                avg_filled += count_before - count_after
+                self._logger.debug(
+                    f"Filled type_id {type_id} with avg_price: {avg_price}"
+                )
         self._metadata.prices_filled_from_avg = avg_filled
 
         # Step 2b: Try Jita prices for remaining nulls
         jita_filled = 0
         if self._price_service:
-            remaining_nulls = self._raw_df['price'].isna()
+            remaining_nulls = self._raw_df["price"].isna()
             if remaining_nulls.any():
-                remaining_ids = self._raw_df[remaining_nulls]['type_id'].unique().tolist()
-                self._logger.info(f"Fetching Jita prices for {len(remaining_ids)} items")
+                remaining_ids = (
+                    self._raw_df[remaining_nulls]["type_id"].unique().tolist()
+                )
+                self._logger.info(
+                    f"Fetching Jita prices for {len(remaining_ids)} items"
+                )
 
                 jita_result = self._price_service.get_jita_prices(remaining_ids)
                 for type_id, price_result in jita_result.prices.items():
                     if price_result.success and price_result.price > 0:
-                        mask = (self._raw_df['type_id'] == type_id) & self._raw_df['price'].isna()
-                        count_before = self._raw_df['price'].isna().sum()
-                        self._raw_df.loc[mask, 'price'] = price_result.price
-                        count_after = self._raw_df['price'].isna().sum()
-                        jita_filled += (count_before - count_after)
-                        self._logger.debug(f"Filled type_id {type_id} with Jita: {price_result.price}")
+                        mask = (self._raw_df["type_id"] == type_id) & self._raw_df[
+                            "price"
+                        ].isna()
+                        count_before = self._raw_df["price"].isna().sum()
+                        self._raw_df.loc[mask, "price"] = price_result.price
+                        count_after = self._raw_df["price"].isna().sum()
+                        jita_filled += count_before - count_after
+                        self._logger.debug(
+                            f"Filled type_id {type_id} with Jita: {price_result.price}"
+                        )
         self._metadata.prices_filled_from_jita = jita_filled
 
         # Step 2c: Final fallback to 0
-        final_nulls = self._raw_df['price'].isna()
+        final_nulls = self._raw_df["price"].isna()
         if final_nulls.any():
             null_count = int(final_nulls.sum())
             self._metadata.prices_defaulted_to_zero = null_count
             self._logger.warning(f"Filling {null_count} remaining prices with 0")
-            self._raw_df['price'] = self._raw_df['price'].fillna(0)
+            self._raw_df["price"] = self._raw_df["price"].fillna(0)
 
         self._metadata.null_prices_filled = (
-            self._metadata.prices_filled_from_avg +
-            self._metadata.prices_filled_from_jita
+            self._metadata.prices_filled_from_avg
+            + self._metadata.prices_filled_from_jita
         )
 
-        self._end_step('fill_null_prices')
+        self._end_step("fill_null_prices")
         return self
 
     def aggregate_summaries(self) -> "FitDataBuilder":
@@ -535,43 +576,55 @@ class FitDataBuilder:
             - Creates self._summary_df with one row per fit
             - Updates metadata.summary_row_count
         """
-        self._start_step('aggregate_summaries')
+        self._start_step("aggregate_summaries")
 
         if self._raw_df is None or self._raw_df.empty:
             self._summary_df = pd.DataFrame()
-            self._end_step('aggregate_summaries')
+            self._end_step("aggregate_summaries")
             return self
 
         self._logger.info("Aggregating fit summaries")
 
         # Basic aggregation: one row per fit_id
-        summary = self._raw_df.groupby('fit_id').agg({
-            'ship_name': 'first',
-            'ship_id': 'first',
-            'hulls': 'first',
-            'fits_on_mkt': 'min',  # Bottleneck: minimum across all items
-        }).reset_index()
+        summary = (
+            self._raw_df.groupby("fit_id")
+            .agg(
+                {
+                    "ship_name": "first",
+                    "ship_id": "first",
+                    "hulls": "first",
+                    "fits_on_mkt": "min",  # Bottleneck: minimum across all items
+                }
+            )
+            .reset_index()
+        )
 
         # Get ship-specific data (from hull rows where type_id == ship_id)
-        hull_rows = self._raw_df[self._raw_df['type_id'] == self._raw_df['ship_id']]
-        ship_data = hull_rows.groupby('fit_id').agg({
-            'group_name': 'first',
-            'price': 'first',
-            'avg_vol': 'first',
-        }).reset_index()
+        hull_rows = self._raw_df[self._raw_df["type_id"] == self._raw_df["ship_id"]]
+        ship_data = (
+            hull_rows.groupby("fit_id")
+            .agg(
+                {
+                    "group_name": "first",
+                    "price": "first",
+                    "avg_vol": "first",
+                }
+            )
+            .reset_index()
+        )
 
         # Merge ship data
-        summary = summary.merge(ship_data, on='fit_id', how='left')
-        summary['price'] = summary['price'].fillna(0)
-        summary['ship_group'] = summary['group_name']
+        summary = summary.merge(ship_data, on="fit_id", how="left")
+        summary["price"] = summary["price"].fillna(0)
+        summary["ship_group"] = summary["group_name"]
 
         # Rename for expected output
-        summary = summary.rename(columns={'fits_on_mkt': 'fits'})
+        summary = summary.rename(columns={"fits_on_mkt": "fits"})
 
         self._summary_df = summary
         self._metadata.summary_row_count = len(summary)
 
-        self._end_step('aggregate_summaries')
+        self._end_step("aggregate_summaries")
         return self
 
     def calculate_costs(self) -> "FitDataBuilder":
@@ -592,29 +645,29 @@ class FitDataBuilder:
             - Adds 'item_cost' column to self._raw_df
             - Adds 'total_cost' column to self._summary_df
         """
-        self._start_step('calculate_costs')
+        self._start_step("calculate_costs")
 
         if self._raw_df is None or self._raw_df.empty:
-            self._end_step('calculate_costs')
+            self._end_step("calculate_costs")
             return self
         if self._summary_df is None or self._summary_df.empty:
-            self._end_step('calculate_costs')
+            self._end_step("calculate_costs")
             return self
 
         self._logger.info("Calculating fit costs")
 
         # Calculate item costs in raw DataFrame
-        self._raw_df['item_cost'] = self._raw_df['fit_qty'] * self._raw_df['price']
+        self._raw_df["item_cost"] = self._raw_df["fit_qty"] * self._raw_df["price"]
 
         # Aggregate to fit level
-        fit_costs = self._raw_df.groupby('fit_id')['item_cost'].sum().reset_index()
-        fit_costs = fit_costs.rename(columns={'item_cost': 'total_cost'})
+        fit_costs = self._raw_df.groupby("fit_id")["item_cost"].sum().reset_index()
+        fit_costs = fit_costs.rename(columns={"item_cost": "total_cost"})
 
         # Merge into summary
-        self._summary_df = self._summary_df.merge(fit_costs, on='fit_id', how='left')
-        self._summary_df['total_cost'] = self._summary_df['total_cost'].fillna(0)
+        self._summary_df = self._summary_df.merge(fit_costs, on="fit_id", how="left")
+        self._summary_df["total_cost"] = self._summary_df["total_cost"].fillna(0)
 
-        self._end_step('calculate_costs')
+        self._end_step("calculate_costs")
         return self
 
     def merge_targets(self) -> "FitDataBuilder":
@@ -637,10 +690,10 @@ class FitDataBuilder:
             - Adds 'target_percentage' column to self._summary_df
             - Logs warning if no targets found
         """
-        self._start_step('merge_targets')
+        self._start_step("merge_targets")
 
         if self._summary_df is None or self._summary_df.empty:
-            self._end_step('merge_targets')
+            self._end_step("merge_targets")
             return self
 
         self._logger.info("Merging target data")
@@ -649,24 +702,28 @@ class FitDataBuilder:
         targets_df = self._repo.get_all_targets()
         if targets_df.empty:
             self._logger.warning("No targets found")
-            self._summary_df['ship_target'] = 0
-            self._summary_df['fit_name'] = ''
+            self._summary_df["ship_target"] = 0
+            self._summary_df["fit_name"] = ""
         else:
-            targets_df = targets_df.drop_duplicates(subset=['fit_id'], keep='first')
-            targets_df['fit_name'] = targets_df['fit_name'].fillna('').apply(
-                lambda x: x.strip() if isinstance(x, str) else ''
+            targets_df = targets_df.drop_duplicates(subset=["fit_id"], keep="first")
+            targets_df["fit_name"] = (
+                targets_df["fit_name"]
+                .fillna("")
+                .apply(lambda x: x.strip() if isinstance(x, str) else "")
             )
 
             # Include fit_name along with ship_target
-            targets_df = targets_df[['fit_id', 'ship_target', 'fit_name']]
-            self._summary_df = self._summary_df.merge(targets_df, on='fit_id', how='left')
-            self._summary_df['ship_target'] = self._summary_df['ship_target'].fillna(0)
-            self._summary_df['fit_name'] = self._summary_df['fit_name'].fillna('')
+            targets_df = targets_df[["fit_id", "ship_target", "fit_name"]]
+            self._summary_df = self._summary_df.merge(
+                targets_df, on="fit_id", how="left"
+            )
+            self._summary_df["ship_target"] = self._summary_df["ship_target"].fillna(0)
+            self._summary_df["fit_name"] = self._summary_df["fit_name"].fillna("")
 
             # Fill any remaining empty fit_names from doctrine_fits table
-            missing_mask = self._summary_df['fit_name'] == ''
+            missing_mask = self._summary_df["fit_name"] == ""
             if missing_mask.any():
-                missing_ids = self._summary_df.loc[missing_mask, 'fit_id'].tolist()
+                missing_ids = self._summary_df.loc[missing_mask, "fit_id"].tolist()
                 self._logger.info(
                     f"Filling {len(missing_ids)} missing fit_names from doctrine_fits"
                 )
@@ -674,21 +731,23 @@ class FitDataBuilder:
                     name = self._repo.get_fit_name(int(fit_id))
                     if name and name != "Unknown Fit":
                         self._summary_df.loc[
-                            self._summary_df['fit_id'] == fit_id, 'fit_name'
+                            self._summary_df["fit_id"] == fit_id, "fit_name"
                         ] = name
 
         # Calculate target percentage (vectorized)
-        self._summary_df['target_percentage'] = (
-            (self._summary_df['fits'] / self._summary_df['ship_target'] * 100)
+        self._summary_df["target_percentage"] = (
+            (self._summary_df["fits"] / self._summary_df["ship_target"] * 100)
             .clip(upper=100)
             .fillna(0)
             .astype(int)
         )
 
         # Handle division by zero
-        self._summary_df.loc[self._summary_df['ship_target'] == 0, 'target_percentage'] = 0
+        self._summary_df.loc[
+            self._summary_df["ship_target"] == 0, "target_percentage"
+        ] = 0
 
-        self._end_step('merge_targets')
+        self._end_step("merge_targets")
         return self
 
     def finalize_columns(self) -> "FitDataBuilder":
@@ -718,30 +777,41 @@ class FitDataBuilder:
             - Adds 'daily_avg' column from 'avg_vol'
             - Reorders columns to expected output format
         """
-        self._start_step('finalize_columns')
+        self._start_step("finalize_columns")
 
         if self._summary_df is None or self._summary_df.empty:
-            self._end_step('finalize_columns')
+            self._end_step("finalize_columns")
             return self
 
         # Set daily_avg column
-        if 'avg_vol' in self._summary_df.columns:
-            self._summary_df['daily_avg'] = self._summary_df['avg_vol'].fillna(0)
+        if "avg_vol" in self._summary_df.columns:
+            self._summary_df["daily_avg"] = self._summary_df["avg_vol"].fillna(0)
         else:
-            self._summary_df['daily_avg'] = 0
+            self._summary_df["daily_avg"] = 0
 
         # Select final columns in expected order
         expected_columns = [
-            'fit_id', 'ship_name', 'ship_id', 'hulls', 'fits',
-            'ship_group', 'price', 'total_cost', 'ship_target',
-            'target_percentage', 'daily_avg', 'fit_name'
+            "fit_id",
+            "ship_name",
+            "ship_id",
+            "hulls",
+            "fits",
+            "ship_group",
+            "price",
+            "total_cost",
+            "ship_target",
+            "target_percentage",
+            "daily_avg",
+            "fit_name",
         ]
 
         # Only include columns that exist
-        available_columns = [c for c in expected_columns if c in self._summary_df.columns]
+        available_columns = [
+            c for c in expected_columns if c in self._summary_df.columns
+        ]
         self._summary_df = self._summary_df[available_columns]
 
-        self._end_step('finalize_columns')
+        self._end_step("finalize_columns")
         return self
 
     def build(self) -> FitBuildResult:
@@ -769,16 +839,16 @@ class FitDataBuilder:
                 print(f"{fit.ship_name}: {fit.status.display_name}")
             print(result.metadata.summary_string())
         """
-        self._start_step('build')
+        self._start_step("build")
 
         if self._raw_df is None:
-            self._end_step('build')
+            self._end_step("build")
             self._finalize_metadata()
             return FitBuildResult(
                 raw_df=pd.DataFrame(),
                 summary_df=pd.DataFrame(),
                 summaries=[],
-                metadata=self._metadata
+                metadata=self._metadata,
             )
 
         # Build domain models from summary and collect lowest_modules for DataFrame
@@ -787,53 +857,71 @@ class FitDataBuilder:
 
         if self._summary_df is not None and not self._summary_df.empty:
             for _, row in self._summary_df.iterrows():
-                fit_id = int(row['fit_id'])
-                ship_target = int(row['ship_target']) if pd.notna(row.get('ship_target', 0)) else 0
+                fit_id = int(row["fit_id"])
+                ship_target = (
+                    int(row["ship_target"])
+                    if pd.notna(row.get("ship_target", 0))
+                    else 0
+                )
 
                 # Get lowest stock modules for this fit
-                fit_items = self._raw_df[self._raw_df['fit_id'] == fit_id]
-                ship_id = int(row['ship_id'])
+                fit_items = self._raw_df[self._raw_df["fit_id"] == fit_id]
+                ship_id = int(row["ship_id"])
 
                 # Exclude hull, sort by fits_on_mkt, get top 3
-                modules = fit_items[fit_items['type_id'] != ship_id]
-                lowest = modules.nsmallest(3, 'fits_on_mkt')
+                modules = fit_items[fit_items["type_id"] != ship_id]
+                lowest = modules.nsmallest(3, "fits_on_mkt")
                 lowest_modules = []
                 for idx, (_, r) in enumerate(lowest.iterrows()):
-                    if pd.notna(r['type_name']) and pd.notna(r['fits_on_mkt']):
-                        fits_on_mkt = int(r['fits_on_mkt'])
-                        fit_qty = int(r['fit_qty']) if pd.notna(r.get('fit_qty', 1)) else 1
-                        lowest_modules.append({
-                            'type_id': int(r['type_id']),
-                            'module_name': str(r['type_name']).strip(),
-                            'fits_on_market': fits_on_mkt,
-                            'position': idx + 1,
-                            'qty_needed': max(0, (ship_target - fits_on_mkt) * fit_qty),
-                        })
+                    if pd.notna(r["type_name"]) and pd.notna(r["fits_on_mkt"]):
+                        fits_on_mkt = int(r["fits_on_mkt"])
+                        fit_qty = (
+                            int(r["fit_qty"]) if pd.notna(r.get("fit_qty", 1)) else 1
+                        )
+                        lowest_modules.append(
+                            {
+                                "type_id": int(r["type_id"]),
+                                "module_name": str(r["type_name"]).strip(),
+                                "fits_on_market": fits_on_mkt,
+                                "position": idx + 1,
+                                "qty_needed": max(
+                                    0, (ship_target - fits_on_mkt) * fit_qty
+                                ),
+                            }
+                        )
 
                 # Store for DataFrame column
                 lowest_modules_map[fit_id] = lowest_modules
 
-                summary = FitSummary.from_dataframe_row(row, lowest_modules=lowest_modules)
+                summary = FitSummary.from_dataframe_row(
+                    row, lowest_modules=lowest_modules
+                )
                 summaries.append(summary)
 
             # Add lowest_modules column to summary_df
-            self._summary_df['lowest_modules'] = self._summary_df['fit_id'].map(lowest_modules_map)
+            self._summary_df["lowest_modules"] = self._summary_df["fit_id"].map(
+                lowest_modules_map
+            )
 
-        self._end_step('build')
+        self._end_step("build")
         self._finalize_metadata()
 
         return FitBuildResult(
             raw_df=self._raw_df.copy(),
-            summary_df=self._summary_df.copy() if self._summary_df is not None else pd.DataFrame(),
+            summary_df=self._summary_df.copy()
+            if self._summary_df is not None
+            else pd.DataFrame(),
             summaries=summaries,
-            metadata=self._metadata
+            metadata=self._metadata,
         )
 
     def _finalize_metadata(self) -> None:
         """Finalize metadata with completion time and total duration."""
         self._metadata.build_completed_at = datetime.now()
         if self._build_start_time:
-            self._metadata.total_duration_ms = (time.perf_counter() - self._build_start_time) * 1000
+            self._metadata.total_duration_ms = (
+                time.perf_counter() - self._build_start_time
+            ) * 1000
 
     def get_metadata(self) -> BuildMetadata:
         """
@@ -861,6 +949,7 @@ class FitDataBuilder:
 # DoctrineService - Main Service Class
 # =============================================================================
 
+
 class DoctrineService:
     """
     Service for doctrine-related business operations.
@@ -885,7 +974,7 @@ class DoctrineService:
         self,
         repository: DoctrineRepository,
         price_service: Optional[PriceService] = None,
-        logger: Optional[logging.Logger] = None
+        logger: Optional[logging.Logger] = None,
     ):
         self._repo = repository
         self._price_service = price_service
@@ -914,6 +1003,7 @@ class DoctrineService:
         # Price service is optional but recommended
         try:
             from services.price_service import PriceService
+
             price_service = PriceService.create_default(db_config=db)
         except Exception:
             price_service = None
@@ -1008,7 +1098,8 @@ class DoctrineService:
         Returns fits where target_percentage <= 90%.
         """
         return [
-            s for s in self.get_all_fit_summaries()
+            s
+            for s in self.get_all_fit_summaries()
             if s.status in (StockStatus.CRITICAL, StockStatus.NEEDS_ATTENTION)
         ]
 
@@ -1017,9 +1108,7 @@ class DoctrineService:
         return self.get_fits_by_status(StockStatus.GOOD)
 
     def filter_fits_by_status_name(
-        self,
-        status_name: str,
-        summaries: Optional[list[FitSummary]] = None
+        self, status_name: str, summaries: Optional[list[FitSummary]] = None
     ) -> list[FitSummary]:
         """
         Filter fits by status name string (for UI dropdown compatibility).
@@ -1049,9 +1138,7 @@ class DoctrineService:
             return summaries
 
     def filter_fits_by_group(
-        self,
-        ship_group: str,
-        summaries: Optional[list[FitSummary]] = None
+        self, ship_group: str, summaries: Optional[list[FitSummary]] = None
     ) -> list[FitSummary]:
         """
         Filter fits by ship group.
@@ -1072,9 +1159,7 @@ class DoctrineService:
         return [s for s in summaries if s.ship_group == ship_group]
 
     def apply_target_multiplier(
-        self,
-        multiplier: float,
-        summaries: Optional[list[FitSummary]] = None
+        self, multiplier: float, summaries: Optional[list[FitSummary]] = None
     ) -> list[FitSummary]:
         """
         Apply a target multiplier to all fits.
@@ -1137,14 +1222,13 @@ class DoctrineService:
             The name of the fit
         """
         return self._repo.get_fit_name(fit_id)
+
     # -------------------------------------------------------------------------
     # Cost Analysis
     # -------------------------------------------------------------------------
 
     def analyze_fit_cost(
-        self,
-        fit_id: int,
-        jita_price_map: Optional[dict[int, float]] = None
+        self, fit_id: int, jita_price_map: Optional[dict[int, float]] = None
     ) -> Optional["FitCostAnalysis"]:
         """
         Analyze fit cost compared to Jita prices.
@@ -1172,8 +1256,7 @@ class DoctrineService:
         return self._price_service.analyze_fit_cost(fit_df, local_cost, jita_price_map)
 
     def calculate_all_jita_deltas(
-        self,
-        jita_price_map: Optional[dict[int, float]] = None
+        self, jita_price_map: Optional[dict[int, float]] = None
     ) -> dict[int, Optional[float]]:
         """
         Calculate Jita price deltas for all fits.
@@ -1193,12 +1276,12 @@ class DoctrineService:
 
         # Fetch all Jita prices in one batch if not provided
         if jita_price_map is None:
-            all_type_ids = result.raw_df['type_id'].dropna().unique().tolist()
+            all_type_ids = result.raw_df["type_id"].dropna().unique().tolist()
             all_type_ids = [int(t) for t in all_type_ids]
             jita_price_map = self._price_service.get_jita_prices_as_dict(all_type_ids)
 
         for summary in result.summaries:
-            fit_df = result.raw_df[result.raw_df['fit_id'] == summary.fit_id]
+            fit_df = result.raw_df[result.raw_df["fit_id"] == summary.fit_id]
             analysis = self._price_service.analyze_fit_cost(
                 fit_df, summary.total_cost, jita_price_map
             )
@@ -1220,9 +1303,11 @@ class DoctrineService:
         self.clear_cache()
         return self.build_fit_data(use_cache=False)
 
+
 # =============================================================================
 # Streamlit Integration
 # =============================================================================
+
 
 def get_doctrine_service() -> DoctrineService:
     """
@@ -1239,7 +1324,8 @@ def get_doctrine_service() -> DoctrineService:
     """
     try:
         from state import get_service
-        return get_service('doctrine_service', DoctrineService.create_default)
+
+        return get_service("doctrine_service", DoctrineService.create_default)
     except ImportError:
         logger.debug("state module unavailable, creating new DoctrineService instance")
         return DoctrineService.create_default()
@@ -1248,6 +1334,7 @@ def get_doctrine_service() -> DoctrineService:
 # =============================================================================
 # Backwards Compatibility
 # =============================================================================
+
 
 def create_fit_df() -> tuple[pd.DataFrame, pd.DataFrame]:
     """
