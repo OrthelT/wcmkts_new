@@ -4,18 +4,16 @@ Extends the Domain -> Repository -> Service -> Page pattern established in Phase
 
 ## Quick Resume Guide
 
-**Current Status:** Phase 12 COMPLETE. Ready to begin Phase 13.
+**Current Status:** Phase 12a COMPLETE. Ready to begin Phase 13.
 
 **Branch:** `architecture-review`
 
 **Run tests:** `uv run pytest -q` (136 tests, all passing)
 
 **Key context for next session:**
-- Phase 12 eliminated 3 legacy files (`type_info.py`, `set_targets.py`, `utils.py`) and migrated all consumers
-- New: `repositories/sde_repo.py` (SDERepository), `services/type_resolution_service.py` (TypeResolutionService)
+- Phase 12a fixed the multi-fit selection bug in `doctrine_status.py` and cleaned up the sidebar export UI
 - `db_handler.py` still has deprecated market data shims (Phase 13 cleanup) + `read_df`/`new_read_df` base functions
 - No pages import from `db_handler.py`, `utils.py`, or `type_info.py` anymore
-- `models.py` now imports `get_type_name` from `repositories.sde_repo` instead of `type_info`
 - All modern layers (services/, repositories/, domain/, ui/, state/) have zero imports from legacy modules
 - The full phase plan is at the bottom of this file (copied from the planning session)
 
@@ -238,15 +236,33 @@ Extends the Domain -> Repository -> Service -> Page pattern established in Phase
 - `get_sde_table` validates table names against allowlist (12 tables) to prevent SQL injection
 - Downloads composite market+doctrine query uses `BaseRepository.read_df()` directly (one-off query)
 
+### Phase 12a: Fix doctrine_status.py Selection & Clipboard - COMPLETE
+
+**Date:** 2026-02-07
+
+**Bug:** When a module `type_id` appeared in the lowest-stock list of multiple fits, checking its checkbox in one fit correctly called `_add_selection()`, but unchecked instances of the same `type_id` in other fits called `_remove_selection()` on the same rerun — the last-processed checkbox won, so shared modules could never stay selected.
+
+**Root Cause:** Streamlit's execution model re-runs the entire script on every interaction. With N fits showing the same module, there are N checkboxes but only 1 selection set entry. The incremental add/remove approach is inherently order-dependent (last writer wins).
+
+**Files Modified:**
+| File | Changes |
+|------|---------|
+| `pages/doctrine_status.py` | (1) Added `_rebuild_selections()` — scans all `mod_*`/`ship_*` session state keys after rendering to rebuild `selected_type_ids` from checkbox ground truth. (2) Removed `else: _remove_selection()` branches from ship and module checkbox blocks. (3) Changed selected items display from `"  {name}"` to `"{name} {qty}"` (EVE multibuy-compatible format). (4) Removed "Copy to Clipboard" button and column split; replaced with single `st.sidebar.download_button()`. Removed `text_lines`/`export_text` variables. |
+
+**Verification:**
+- 136 tests pass (`uv run pytest -q`)
+- Ruff check passes on `pages/doctrine_status.py`
+
+**Design Decisions:**
+- **Rebuild-from-checkboxes pattern**: Instead of incremental add/remove during rendering, `_rebuild_selections()` runs once after all checkboxes have rendered. It scans session state keys to determine which type_ids are checked. This is idempotent — checkbox processing order doesn't matter.
+- **`_add_selection()` still runs during rendering**: Populates `type_id_info` with module names and `max(qty_needed)` across fits. The rebuild step only overwrites `selected_type_ids` (the set), not the info dict.
+- **Multibuy format**: `st.code()` has a built-in copy button, making the separate "Copy to Clipboard" button redundant. The `Name Qty` format is directly pasteable into EVE Online's multibuy window.
+
+**New features/functionality for documentation updates:**
+- Selected items sidebar now shows EVE multibuy-compatible format (`ModuleName QtyNeeded`)
+- "Copy to Clipboard" button removed; users copy via `st.code()` built-in copy button
+
 ## Upcoming Phases
-
-### Phase 12: COMPLETE
-- See Phase Log above for details
-
-### Phase 12a: Debug doctrine_status.py
-- certain modules still do not render to the clipboard. Please investigate further and implement a fix.
-- remove copy to clipboard button in sidebar. It's redundant. st.code() has built in clipboard. 
-- selected items display window should show module_name <space> qty_needed.
 
 ### Phase 13: Final Cleanup & Optimization
 - Delete `db_handler.py` (remove all deprecated shims and remaining functions)
@@ -259,7 +275,7 @@ Extends the Domain -> Repository -> Service -> Page pattern established in Phase
 Phase 8 (DONE)
   |-- Phase 9 (DONE) -> Phase 10 (DONE)
   |-- Phase 11 (DONE)
-       |-- Phase 12 (DONE) -> Phase 13
+       |-- Phase 12 (DONE) -> Phase 12a (DONE) -> Phase 13
 ```
 
 # USER INSTRUCTIONS

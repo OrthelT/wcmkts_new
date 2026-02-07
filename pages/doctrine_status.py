@@ -90,6 +90,43 @@ def _remove_selection(type_id: int):
     st.session_state.selected_type_ids.discard(type_id)
 
 
+def _rebuild_selections():
+    """Rebuild selected_type_ids from all checkbox states.
+
+    Fixes the multi-fit bug: when the same type_id appears in multiple fits,
+    incremental add/remove causes the last-processed unchecked checkbox to win.
+    Instead, we scan all checkbox keys after rendering to determine the true set.
+    """
+    checked_type_ids = set()
+    for key, value in st.session_state.items():
+        if not value:
+            continue
+        if key.startswith("mod_"):
+            # Format: mod_{fit_id}_{position}_{type_id}
+            parts = key.split("_")
+            if len(parts) >= 4:
+                try:
+                    checked_type_ids.add(int(parts[-1]))
+                except ValueError:
+                    pass
+        elif key.startswith("ship_"):
+            # Format: ship_{fit_id}_{ship_id}
+            parts = key.split("_")
+            if len(parts) >= 3:
+                try:
+                    checked_type_ids.add(int(parts[-1]))
+                except ValueError:
+                    pass
+
+    st.session_state.selected_type_ids = checked_type_ids
+    # Remove type_id_info entries for unchecked items
+    st.session_state.type_id_info = {
+        tid: info
+        for tid, info in st.session_state.type_id_info.items()
+        if tid in checked_type_ids
+    }
+
+
 # DISABLED: Jita prices - restore when backend caching implemented
 # def fetch_jita_prices_for_types(type_ids: tuple[int, ...]) -> dict[int, float]:
 # def calculate_all_jita_deltas(force_refresh: bool = False):
@@ -278,8 +315,6 @@ def main():
                         hull_qty_needed = max(0, target - hulls)
                         if ship_selected:
                             _add_selection(ship_id, row["ship_name"], hulls, hull_qty_needed)
-                        else:
-                            _remove_selection(ship_id)
 
                     with ship_cols[1]:
                         st.markdown(f"**{row['ship_name']}**")
@@ -356,8 +391,6 @@ def main():
                                 )
                                 if is_selected:
                                     _add_selection(mod_type_id, mod_name, mod_fits, mod_qty_needed)
-                                else:
-                                    _remove_selection(mod_type_id)
 
                             with col_b:
                                 if mod_stock_status == StockStatus.CRITICAL:
@@ -412,6 +445,9 @@ def main():
                             "<hr style='margin: 0.5em 0; border-width: 1px'>",
                             unsafe_allow_html=True,
                         )
+
+    # Rebuild selections from checkbox states after all checkboxes have rendered
+    _rebuild_selections()
 
     # =========================================================================
     # Sidebar Export Section — unified for ships and modules
@@ -471,7 +507,8 @@ def main():
         for tid in sorted(selected):
             info = st.session_state.type_id_info.get(tid, {})
             name = info.get("module_name", f"Unknown ({tid})")
-            selection_lines.append(f"  {name}")
+            qty = info.get("qty_needed", 0)
+            selection_lines.append(f"{name} {qty}")
         st.sidebar.code("\n".join(selection_lines), language=None)
 
         # Render market data button — triggers DB queries only when clicked
@@ -496,9 +533,8 @@ def main():
                 detail_lines.append(f"  {name} (Stock: {stock} | Fits: {fits_mkt} | Need: {qty})")
             st.sidebar.code("\n".join(detail_lines), language=None)
 
-            # Build CSV and text export
+            # Build CSV export
             csv_lines = ["Name,TypeID,TotalStock,FitsOnMkt,QtyNeeded\n"]
-            text_lines = []
             for tid in sorted(selected):
                 data = rendered.get(tid, {})
                 name = data.get("name", "")
@@ -506,22 +542,15 @@ def main():
                 fits_mkt = data.get("fits_on_mkt", 0)
                 qty = data.get("qty_needed", 0)
                 csv_lines.append(f"{name},{tid},{stock},{fits_mkt},{qty}\n")
-                text_lines.append(f"{name} (Stock: {stock} | Fits: {fits_mkt} | Need: {qty})")
 
             csv_export = "".join(csv_lines)
-            export_text = "\n".join(text_lines)
 
-            exp_col1, exp_col2 = st.sidebar.columns(2)
-            exp_col1.download_button(
-                label="📥 Download CSV",
+            st.sidebar.download_button(
+                label="Download CSV",
                 data=csv_export,
                 file_name="doctrine_export.csv",
                 mime="text/csv",
-                width="content",
             )
-            if exp_col2.button("📋 Copy to Clipboard", width="content"):
-                st.sidebar.code(export_text, language="")
-                st.sidebar.success("Use Ctrl+C to copy the text above.")
     else:
         st.sidebar.info(
             "Select ships and modules to export by checking the boxes next to them."
