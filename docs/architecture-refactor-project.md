@@ -191,6 +191,9 @@ Extends the Domain -> Repository -> Service -> Page pattern established in Phase
 - None (internal refactoring only)
 
 ---
+### 11A: SettingsService and Performance Enhancements to doctrine_status.py - COMPLETE
+- Refactored select_box logic to key on type_ids rather than module names.
+- Introduced centralized SettingsService class in settings_service.py
 
 ## Upcoming Phases
 
