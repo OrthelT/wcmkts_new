@@ -243,6 +243,11 @@ Extends the Domain -> Repository -> Service -> Page pattern established in Phase
 ### Phase 12: COMPLETE
 - See Phase Log above for details
 
+### Phase 12a: Debug doctrine_status.py
+- certain modules still do not render to the clipboard. Please investigate further and implement a fix.
+- remove copy to clipboard button in sidebar. It's redundant. st.code() has built in clipboard. 
+- selected items display window should show module_name <space> qty_needed.
+
 ### Phase 13: Final Cleanup & Optimization
 - Delete `db_handler.py` (remove all deprecated shims and remaining functions)
 - Standardize session state on `ss_get`/`ss_has`/`ss_set`
