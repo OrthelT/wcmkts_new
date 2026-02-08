@@ -177,7 +177,6 @@ All pages follow consistent patterns with Streamlit best practices:
 - **`settings.toml`**: Application settings including ship role definitions and special cases
 - **`.streamlit/secrets.toml`**: Turso credentials (local only, git-ignored)
 - **`pyproject.toml`**: Project metadata, dependencies, dev tools config
-- **`sync_log_dict.json`**: Detailed sync operation logs
 
 ### Other Directories
 
