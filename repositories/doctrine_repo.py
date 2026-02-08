@@ -632,6 +632,7 @@ def get_all_fits_with_cache() -> pd.DataFrame:
             return df
     except Exception as e:
         logger.error(f"Failed to get all fits: {e}")
+        return pd.DataFrame()
 
 @st.cache_data(ttl=600, show_spinner="Getting fit {fit_id}...")
 def get_fit_by_id_with_cache(fit_id: int) -> pd.DataFrame:

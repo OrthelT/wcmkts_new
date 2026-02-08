@@ -382,16 +382,6 @@ class Doctrine:
         Returns:
             A new Doctrine instance
         """
-        def safe_int(value, default: int = 0) -> int:
-            if pd.isna(value):
-                return default
-            return int(value)
-
-        def safe_str(value, default: str = "") -> str:
-            if pd.isna(value):
-                return default
-            return str(value)
-
         return cls(
             doctrine_id=safe_int(doctrine_row.get('doctrine_id')),
             doctrine_name=safe_str(doctrine_row.get('doctrine_name')),
