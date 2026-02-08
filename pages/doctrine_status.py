@@ -11,7 +11,7 @@ from logging_config import setup_logging
 from repositories import get_update_time
 from services import get_doctrine_service
 from domain import StockStatus
-from ui import get_fitting_column_config, render_progress_bar_html
+from ui import get_fitting_column_config, render_progress_bar_html, format_doctrine_name
 from services import get_status_filter_options
 from state import ss_init, ss_get
 
@@ -181,7 +181,7 @@ def main():
         if not doctrine_comps.empty
         else ["All"]
     )
-    selected_doctrine = st.sidebar.selectbox("Doctrine:", doctrine_names)
+    selected_doctrine = st.sidebar.selectbox("Doctrine:", doctrine_names, format_func=format_doctrine_name)
 
     # Stock Status filter (renamed from "Doctrine Status" for clarity - single unified filter)
     status_options = get_status_filter_options()

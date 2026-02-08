@@ -25,6 +25,7 @@ import pandas as pd
 from logging_config import setup_logging
 from config import DatabaseConfig, get_settings
 from services import get_doctrine_service
+from ui.formatters import format_doctrine_name
 from repositories import get_market_repository, get_sde_repository
 from repositories.base import BaseRepository
 
@@ -251,7 +252,8 @@ def doctrine_downloads_section():
             selected_doctrine = st.selectbox(
                 "Select Doctrine",
                 doctrine_names,
-                key="doctrine_select"
+                key="doctrine_select",
+                format_func=format_doctrine_name,
             )
         else:
             selected_doctrine = None
@@ -276,7 +278,7 @@ def doctrine_downloads_section():
                 safe_name = selected_doctrine.replace(' ', '_').lower()
 
                 st.download_button(
-                    f"Download {selected_doctrine}",
+                    f"Download {format_doctrine_name(selected_doctrine)}",
                     data=lambda fids=fit_ids: _get_filtered_doctrine_csv(fids),
                     file_name=f"doctrine_{safe_name}.csv",
                     mime="text/csv",

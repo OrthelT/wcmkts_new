@@ -13,7 +13,7 @@ from domain import StockStatus
 from logging_config import setup_logging
 from services import get_doctrine_service
 from services.categorization import categorize_ship_by_role
-from ui.formatters import get_doctrine_report_column_config, get_image_url, get_ship_role_format
+from ui.formatters import get_doctrine_report_column_config, get_image_url, get_ship_role_format, format_doctrine_name
 from ui.popovers import render_ship_with_popover, render_market_popover, has_equivalent_modules
 from state import ss_init, ss_get
 
@@ -313,7 +313,7 @@ def main():
 
     doctrine_names = df.doctrine_name.unique()
 
-    selected_doctrine = st.sidebar.selectbox("Select a doctrine", doctrine_names)
+    selected_doctrine = st.sidebar.selectbox("Select a doctrine", doctrine_names, format_func=format_doctrine_name)
     selected_doctrine_id = df[df.doctrine_name == selected_doctrine].doctrine_id.unique()[0]
 
     selected_data = fit_summary[fit_summary['fit_id'].isin(df[df.doctrine_name == selected_doctrine].fit_id.unique())]
@@ -353,7 +353,7 @@ def main():
 
     with header_col2:
         st.markdown("&nbsp;")  # Add some spacing
-        st.subheader(selected_doctrine, anchor=selected_doctrine, divider=True)
+        st.subheader(format_doctrine_name(selected_doctrine), anchor=selected_doctrine, divider=True)
         st.markdown("&nbsp;")  # Add some spacing
 
     st.write(f"Doctrine ID: {selected_doctrine_id}")

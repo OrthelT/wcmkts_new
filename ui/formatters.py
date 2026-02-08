@@ -14,6 +14,7 @@ Design Principles:
 import streamlit as st
 
 from domain.enums import ShipRole, StockStatus
+from domain.doctrine_names import get_doctrine_display_name
 
 def format_module_list(modules_list: list[str]) -> str:
     """
@@ -251,6 +252,11 @@ def get_doctrine_report_column_config() -> dict:
             )
             }
     return config
+
+def format_doctrine_name(raw_name: str) -> str:
+    """Format a doctrine name for display in UI widgets."""
+    return get_doctrine_display_name(raw_name)
+
 
 def get_image_url(type_id: int, size: int = 64, isship: bool = False) -> str:
     """

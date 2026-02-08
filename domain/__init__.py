@@ -11,6 +11,7 @@ Key Components:
 - Pricer: ParsedItem, PricedItem, PricerResult for pricing feature
 """
 
+from domain.doctrine_names import DOCTRINE_DISPLAY_NAMES, get_doctrine_display_name
 from domain.enums import StockStatus, ShipRole
 from domain.models import (
     FitItem,
@@ -30,6 +31,9 @@ from domain.pricer import (
 )
 
 __all__ = [
+    # Doctrine names
+    "DOCTRINE_DISPLAY_NAMES",
+    "get_doctrine_display_name",
     # Enums
     "StockStatus",
     "ShipRole",

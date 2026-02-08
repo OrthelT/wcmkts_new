@@ -14,7 +14,7 @@ import plotly.express as px
 from repositories import get_update_time
 from logging_config import setup_logging
 from services import get_low_stock_service, LowStockFilters
-from ui.formatters import get_image_url
+from ui.formatters import get_image_url, format_doctrine_name
 from state import ss_init, ss_get, ss_set
 
 logger = setup_logging(__name__, log_file="low_stock.log")
@@ -199,6 +199,7 @@ def main():
         options=doctrine_names,
         index=0,
         help="Filter to show only items from a specific doctrine",
+        format_func=format_doctrine_name,
     )
 
     selected_doctrine = None
@@ -218,7 +219,7 @@ def main():
                 st.sidebar.image(
                     selected_doctrine.lead_ship_image_url,
                     width=128,
-                    caption=selected_doctrine_name,
+                    caption=format_doctrine_name(selected_doctrine_name),
                 )
 
             # Get fit options for this doctrine
@@ -312,7 +313,7 @@ def main():
                     st.subheader(f"Low Stock: {selected_fit.ship_name}")
                     display_fit_data(selected_fit)
                 else:
-                    st.subheader(f"Low Stock: {selected_doctrine_name}")
+                    st.subheader(f"Low Stock: {format_doctrine_name(selected_doctrine_name)}")
         else:
             st.subheader("Low Stock Items")
 
