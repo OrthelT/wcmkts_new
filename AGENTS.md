@@ -531,7 +531,7 @@ from state.session_state import ss_get  # ✗ state!
 
 ## Version Information
 
-- **Current version**: 0.1.5
+- **Current version**: 0.2.0
 - **Python version**: 3.12+
 - **Package manager**: uv (preferred)
 - **Main branch**: main
