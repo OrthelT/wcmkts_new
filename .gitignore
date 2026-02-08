@@ -83,3 +83,10 @@ types.jsonl
 *.db*
 FRONTEND_UPDATE_PLAN.md
 settings.toml.bak
+refactorprompt.md
+HANDOFF_SUMMARY.md
+PHASE_6_PROMPT.md
+START_PHASE_6.md
+HANDOFF_PHASE6_DEBUGGING.md
+expander.txt
+parser/

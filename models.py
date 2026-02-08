@@ -1,6 +1,6 @@
 from sqlalchemy import Integer, String, Float, Boolean, DateTime, event
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from type_info import get_type_name
+from repositories.sde_repo import get_type_name
 
 class Base(DeclarativeBase):
     pass
@@ -268,6 +268,30 @@ class UpdateLog(Base):
 
     def __repr__(self) -> str:
         return f"updatelog(id={self.id!r}, table_name={self.table_name!r}, timestamp={self.timestamp!r})"
+
+
+class ModuleEquivalents(Base):
+    """
+    Maps equivalent faction modules that can be used interchangeably.
+
+    Modules with the same group_id are functionally identical and can
+    substitute for each other when calculating stock levels.
+
+    Example: Dark Blood Thermal Armor Hardener and Federation Navy
+    Thermal Armor Hardener have the same stats and can be used
+    interchangeably in doctrine fits.
+    """
+    __tablename__ = "module_equivalents"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    group_id: Mapped[int] = mapped_column(Integer, index=True)
+    type_id: Mapped[int] = mapped_column(Integer, index=True)
+    type_name: Mapped[str] = mapped_column(String)
+
+    def __repr__(self) -> str:
+        return (
+            f"ModuleEquivalents(id={self.id!r}, group_id={self.group_id!r}, "
+            f"type_id={self.type_id!r}, type_name={self.type_name!r})"
+        )
 
 
 

@@ -1,12 +1,5 @@
-from sqlalchemy import Column, Integer, String, Float, select, text
+from sqlalchemy import Column, Integer, String, Float
 from sqlalchemy.orm import declarative_base
-from config import DatabaseConfig
-
-# build_cost_db = "build_cost.db"
-# build_cost_url = f"sqlite:///{build_cost_db}"
-
-build_cost_db = DatabaseConfig("build_cost")
-build_cost_url = build_cost_db.url
 
 Base = declarative_base()
 
