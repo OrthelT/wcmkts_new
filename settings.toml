@@ -55,3 +55,30 @@
         "39" = "Links"
         "114" = "Links"
         "288" = "Support"
+
+# Preferred fits for ships with multiple variants
+# Maps ship_name -> fit_id for stock display purposes
+[preferred_fits]
+    "Ferox Navy Issue" = 473
+    "Hurricane Fleet Issue" = 494
+
+[db_paths]
+    "wcmktprod" = "wcmktprod.db" #production database
+    "sde" = "sdelite.db"
+    "build_cost" = "buildcost.db"
+    "wcmkttest" = "wcmkttest.db" #testing db
+
+[env_db_aliases]
+    "prod" = "wcmktprod"
+    "dev" = "wcmkttest"
+
+[env]
+    env = "dev"
+    log_level = "DEBUG" #INFO or DEBUG (case sensitive)
+
+[market]
+    name = "4-HWWF"
+    short_name = "4H"
+
+[module_strategy]
+  use_equivalent = false

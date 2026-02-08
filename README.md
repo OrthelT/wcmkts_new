@@ -1,4 +1,4 @@
-# Winter Coalition Market App (v.0.1.4)
+# Winter Coalition Market App (v.0.2.0)
 A Streamlit application for viewing EVE Online market statistics for Winter Coalition. This tool provides real-time market data analysis, historical price tracking, and fitting information for various items in EVE Online markets.
 
 SUPPORT: Join the Discord for support https://discord.gg/BxatJE572Y
@@ -7,7 +7,56 @@ CONTRIBUTING: Contributors welcome. This project is fully open source under MIT 
 
 
 # UPDATES:
+## version 0.2.0
+### New Features
+- **Pricer Page**: Item and fitting price calculator accepting EFT fittings or tab-separated item lists, with Jita and 4-HWWF market prices
+- **Downloads Page**: Centralized CSV export for market data, doctrine fits, low stock items, and SDE tables
+- **Low Stock Filters**: Doctrine/Fit filtering with ship images, Faction Items checkbox, and Tech2 item filtering
+- **Doctrine Display Names**: User-friendly doctrine names across all pages
+- **Market Column**: Doctrine ship modules now displayed with fits on market stats
+
+### Layered Architecture Refactoring (Phases 1-13)
+- Complete restructuring into layered architecture: domain, repositories, services, UI, state, pages
+- New BaseRepository with automatic malformed-DB recovery and remote fallback
+- Centralized settings service, session state management, and service registry
+- ~128 tests covering repositories, services, and infrastructure
+
+## version 0.1.6
+**NOTE: This feature is currently disabled.** 
+### Interchangeable Faction Module Support (Phase 6) NOTE: This feature currently disabled. 
+- Added support for equivalent faction modules (e.g., Dark Blood Thermal Armor Hardener and its 5 equivalents)
+- Stock levels now aggregate across all interchangeable modules for accurate fit calculations
+- 🔄 indicator shown next to modules with equivalents in Doctrine Status/Report pages
+- Popovers display "Equivalent Modules" section with individual and combined stock
+- New `module_equivalents` database table for configuring interchangeable module groups
+- New `ModuleEquivalentsService` for equivalence lookups and aggregated stock calculations
+
 ## version 0.1.5
+### Low Stock Page Enhancements
+- Added Doctrine/Fit filtering with ship images in sidebar
+- Added Faction Items checkbox filter (metaGroupID=4)
+- Refactored to use new `LowStockService` for cleaner data operations
+
+### Pricer Page Enhancements
+- Added Stock Metrics columns: Avg Daily Volume, Days of Stock
+- Added Doctrine Items highlighting with toggle
+- Ship image header for EFT fitting inputs
+
+### Doctrine Status/Report Enhancements
+- Interactive market data popovers for all items and ships
+- Popovers show: item image, 4-HWWF price/stock, Jita price comparison, doctrine usage
+- Improved sidebar selections with code block formatting
+
+### New Services
+- `LowStockService` - Low stock data operations with filtering
+- `SelectionService` - Selection state management for doctrine pages
+- `ModuleEquivalentsService` - Equivalence lookups for interchangeable faction modules
+- `ui/popovers.py` - Reusable market data popover components
+
+### Bug Fixes (Phase 5)
+- Fixed `render_market_popover` TypeError when comparing PriceResult to int
+- Fixed doctrine dropdown empty due to database connection scope error
+
 ### Ship Role Configuration
 - Moved ship role definitions to `settings.toml` for easier management without code changes
 - Added support for fit-specific role assignment (e.g. Vulture can be DPS or Links depending on fit)

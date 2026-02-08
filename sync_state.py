@@ -1,8 +1,8 @@
-import streamlit as st
 from logging_config import setup_logging
 from config import DatabaseConfig
 from datetime import timezone, datetime, timedelta
 from time import perf_counter
+from state.session_state import ss_set
 
 logger = setup_logging(__name__)
 
@@ -27,12 +27,12 @@ def update_wcmkt_state()-> None:
     remote_update_status['time_since'] = now - remote_update
     remote_update_status['needs_update'] = remote_update_status['time_since'] > timedelta(hours=2)
     logger.info("-"*60)
-    st.session_state.local_update_status = local_update_status
+    ss_set('local_update_status', local_update_status)
     logger.info("local_status saved to session state:")
     for k,v in local_update_status.items():
         logger.info(f"{k}: {v}🏠")
     logger.info("-"*60)
-    st.session_state.remote_update_status = remote_update_status
+    ss_set('remote_update_status', remote_update_status)
     logger.info("remote_status saved to session state:")
     for k,v in remote_update_status.items():
         logger.info(f"{k}: {v}🕧")

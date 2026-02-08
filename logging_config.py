@@ -1,8 +1,21 @@
 import logging
+import os
 from logging.handlers import RotatingFileHandler
 
-def setup_logging(name="app", log_file="wcmkts_app.log", level=logging.INFO, max_bytes=5*1024*1024, backup_count=3):
+LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+
+
+def setup_logging(
+    name="app",
+    log_file="wcmkts_app.log",
+    level=logging.INFO,
+    max_bytes=5 * 1024 * 1024,
+    backup_count=3,
+):
     """Set up logging configuration with a rotating file handler and a stream handler.
+
+    All log files are routed to the project's ./logs/ directory unless an
+    absolute path is provided (e.g. tests using tmpdir).
 
     Args:
         name: The name of the logger.
@@ -18,18 +31,32 @@ def setup_logging(name="app", log_file="wcmkts_app.log", level=logging.INFO, max
     from logging_config import setup_logging
     setup_logging()
     """
+    from settings_service import SettingsService
+
     logger = logging.getLogger(name)
     # Clear existing handlers to avoid duplicate logs
     if logger.hasHandlers():
         logger.handlers.clear()
 
     # Create formatter
-    formatter = logging.Formatter("%(asctime)s %(levelname)-8s "
-                                    "[%(filename)s:%(lineno)d %(funcName)s()] "
-                                    "%(message)s")
+    formatter = logging.Formatter(
+        "%(asctime)s %(levelname)-8s "
+        "[%(filename)s:%(lineno)d %(funcName)s()] "
+        "%(message)s"
+    )
+
+    # Route log files to ./logs/ unless an absolute path is given
+    os.makedirs(LOGS_DIR, exist_ok=True)
+    if os.path.isabs(log_file):
+        log_path = log_file
+    else:
+        log_file = os.path.basename(log_file)
+        log_path = os.path.join(LOGS_DIR, log_file)
 
     # Create and add rotating file handler
-    file_handler = RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count, encoding='utf-8')
+    file_handler = RotatingFileHandler(
+        log_path, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8"
+    )
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
 
@@ -37,6 +64,10 @@ def setup_logging(name="app", log_file="wcmkts_app.log", level=logging.INFO, max
     stream_handler = logging.StreamHandler()
     stream_handler.setFormatter(formatter)
     logger.addHandler(stream_handler)
+
+    settings_level = getattr(logging, SettingsService().log_level, None)
+    if settings_level is not None:
+        level = settings_level
 
     logger.setLevel(level)
     return logger

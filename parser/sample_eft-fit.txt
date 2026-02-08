@@ -1,0 +1,50 @@
+[Damnation,   WC - Armor Links Damnation v1.3]
+
+Centus X-Type EM Armor Hardener
+Thermal Armor Hardener II
+Thermal Armor Hardener II
+Kinetic Armor Hardener II
+1600mm Steel Plates II
+1600mm Steel Plates II
+
+Republic Fleet Target Painter
+Sensor Booster II
+50MN Quad LiF Restrained Microwarpdrive
+Small Capacitor Booster II
+
+Armor Command Burst II
+Armor Command Burst II
+Light Missile Launcher II
+Light Missile Launcher II
+Light Missile Launcher II
+Small EMP Smartbomb II
+Small EMP Smartbomb II
+
+Medium Trimark Armor Pump II
+Medium Trimark Armor Pump II
+
+
+
+
+
+Imperial Navy Praetor x4
+
+
+Armor Energizing Charge x300
+Armor Reinforcement Charge x300
+Rapid Repair Charge x300
+Navy Cap Booster 400 x40
+Electronic Hardening Charge x300
+Electronic Superiority Charge x300
+Sensor Optimization Charge x300
+Caldari Navy Inferno Light Missile x1590
+Caldari Navy Mjolnir Light Missile x1590
+Caldari Navy Nova Light Missile x1590
+Caldari Navy Scourge Light Missile x1590
+Scan Resolution Script x1
+Targeting Range Script x1
+Evasive Maneuvers Charge x300
+Interdiction Maneuvers Charge x300
+Rapid Deployment Charge x300
+EM Armor Hardener II x1
+10MN Afterburner II x1

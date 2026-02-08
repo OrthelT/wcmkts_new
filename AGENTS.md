@@ -5,8 +5,10 @@ This file provides comprehensive guidance for LLM assistants (like Claude Code) 
 ## Project Overview
 
 Winter Coalition Market Stats Viewer is a Streamlit web application for EVE Online market analysis. It provides real-time market data visualization, doctrine analysis, and inventory management tools for the Winter Coalition.
+The web app can be found here: https://wcmkts.streamlit.app/
+It also has a sister application, Winter Coalition Northern Supply, which supports a different market hub managed in a separate repository. 
 
-**Important:** ESI calls to update market data in wcmkt2.db are handled in a separate repository: https://github.com/OrthelT/mkts_backend
+**Important:** ESI calls to update market data in wcmktprod.db are handled in a separate repository: https://github.com/OrthelT/mkts_backend
 
 ## Quick Start Commands
 
@@ -66,7 +68,7 @@ uv run pytest --cov
 ## Project Structure & Module Organization
 
 ### Application Entry Point
-- **`app.py`**: Streamlit entry point with page routing to 5 main pages across 2 sections ("Market Stats" and "Analysis Tools")
+- **`app.py`**: Streamlit entry point with page routing to 7 main pages across 2 sections ("Market Stats" and "Analysis Tools")
 
 ### UI Pages (`pages/` directory)
 All pages follow consistent patterns with Streamlit best practices:
@@ -76,42 +78,64 @@ All pages follow consistent patterns with Streamlit best practices:
 3. **`doctrine_report.py`** (📝 Doctrine Report) - Detailed doctrine analysis and reporting
 4. **`low_stock.py`** (⚠️ Low Stock) - Low inventory alerting system with category filtering
 5. **`build_costs.py`** (🏗️ Build Costs) - Manufacturing cost analysis with structure/rig configuration and industry indices
+6. **`downloads.py`** (📥 Downloads) - Centralized CSV export for market data, doctrine fits, low stock items, and SDE tables. Uses Streamlit's callable pattern for lazy data loading.
+7. **`pricer.py`** (💰 Pricer) - Item and fitting price calculator similar to [Janice](https://janice.e-351.com/). Accepts EFT fittings or tab-separated item lists and displays both Jita and 4-HWWF market prices.
 
 ### Core Modules
 
 **Database Layer:**
 - **`config.py`**: DatabaseConfig class managing SQLite/LibSQL connections with Turso cloud sync
-  - Implements custom RWLock for concurrent read/write access (multiple readers, exclusive writer)
-  - Manages 3 databases: wcmktprod (market), sde_lite (static data), buildcost (manufacturing)
+  - Uses `_SYNC_LOCK` to serialize sync operations; SQLite handles reader concurrency
+  - Manages 3 databases: wcmktprod (market), sdelite (static data), buildcost (manufacturing)
+  - `sync()` returns bool -- callers handle UI feedback and targeted cache invalidation
   - Methods: `integrity_check()`, `sync()`, `validate_sync()`, `get_most_recent_update()`
-  - Automatic malformed database detection and recovery
-- **`db_handler.py`**: Database query layer with `read_df()` and `new_read_df()` functions
-  - Cached data fetchers: `get_all_mkt_stats()`, `get_all_mkt_orders()`, `get_all_market_history()`
-  - Built-in malformed DB recovery with automatic sync + remote fallback
 - **`models.py`**: SQLAlchemy ORM models using modern `mapped_column()` syntax
-  - MarketStats, MarketOrders, MarketHistory, Doctrines, ShipTargets, DoctrineFits, etc.
+  - MarketStats, MarketOrders, MarketHistory, Doctrines, ShipTargets, DoctrineFits, ModuleEquivalents, etc.
 - **`sdemodels.py`**: SDE (Static Data Export) ORM models for InvTypes, InvGroups, InvCategories
 - **`build_cost_models.py`**: Manufacturing models for Structures, IndustryIndex, Rigs
 
-**Business Logic:**
-- **`doctrines.py`**: Doctrine fitting management with target handling, fit data aggregation, cost calculations
-- **`utils.py`**: Utility functions including:
-  - Industry index fetching from ESI API
-  - Jita price lookups with Fuzzworks API fallback
-- **`market_metrics.py`**: Market analysis metrics and UI rendering for ISK volume charts, historical metrics
-- **`type_info.py`**: Type name/ID resolution with SDE database queries and Fuzzworks API fallback
+**Pricer Module (`parser/` directory):**
+- **`parser.py`**: Input parsing for EFT fittings and tab-separated item lists (contributed open source code)
+- **`model.py`**: Data models for the parser
+- **`sample_eft-fit.txt`**: Example EFT fitting for testing
+- **`items.txt`**: Sample tab-separated item list for testing
+
+**Service Layer (`services/` directory):**
+- **`services/doctrine_service.py`**: DoctrineService and FitDataBuilder for doctrine fit aggregation
+- **`services/market_service.py`**: MarketService for 30-day metrics, ISK volume calculations, outlier handling, and Plotly chart creation
+- **`services/build_cost_service.py`**: BuildCostService for async cost fetching (httpx), URL construction, and BuildCostJob dataclass
+- **`services/price_service.py`**: PriceService with provider chain (Fuzzwork → Janice) for Jita price lookups with caching
+- **`services/pricer_service.py`**: PricerService orchestrates parsing and price lookups from Jita (via Janice API or Fuzzworks) and 4-HWWF (local market database)
+- **`services/low_stock_service.py`**: LowStockService for low stock analysis with filtering (categories, doctrines, fits, tech2/faction items)
+- **`services/categorization.py`**: ConfigBasedCategorizer for ship role categorization via Strategy pattern
+- **`services/selection_service.py`**: SelectionService for managing item selections on doctrine pages with sidebar rendering
+- **`services/module_equivalents_service.py`**: ModuleEquivalentsService for looking up equivalent/interchangeable faction modules and calculating aggregated stock levels
+- **`services/type_resolution_service.py`**: TypeResolutionService for type name/ID resolution with SDE + Fuzzworks/ESI API fallbacks
+
+**Domain Models (`domain/` directory):**
+- **`domain/models.py`**: Core models: `FitItem`, `FitSummary`, `ModuleStock`, `Doctrine`
+- **`domain/enums.py`**: `StockStatus`, `ShipRole` enums with display formatting
+- **`domain/converters.py`**: Centralized `safe_int()`, `safe_float()`, `safe_str()` type conversion
+- **`domain/pricer.py`**: Domain models including `PricedItem`, `PricingResult`, and `InputFormat` enum for EFT vs multibuy detection
+- **`domain/doctrine_names.py`**: User-friendly doctrine display name mappings
+
+**UI Components (`ui/` directory):**
+- **`ui/popovers.py`**: Reusable market data popover components with item images, market stats, Jita prices, and doctrine usage. Pass pre-fetched `jita_prices` dict to avoid per-popover API calls (Jita fetching is disabled by default)
+- **`ui/formatters.py`**: Pure formatting functions for prices, percentages, image URLs
+- **`ui/column_definitions.py`**: Streamlit column_config definitions for data tables
 
 **Initialization & State:**
 - **`init_db.py`**: Database initialization with path verification and auto-sync for missing files
-- **`sync_state.py`**: Updates session state with local/remote database update times for sync tracking
-- **`set_targets.py`**: Ship target management from database with default fallback
-- **`logging_config.py`**: Centralized logging setup with rotating file handlers
+- **`init_equivalents.py`**: Module equivalents table initialization, loads interchangeable faction module mappings from CSV files. Uses raw sqlite3 and recreates on every startup because pull-only Turso sync overwrites local-only tables
+- **`sync_state.py`**: Updates session state with local/remote database update times for sync tracking (uses `ss_set()`)
+- **`settings_service.py`**: Module-level settings cache (stdlib only, no Streamlit dependency). Lives at root level, not in `services/`, to avoid circular imports
+- **`logging_config.py`**: Centralized logging setup with rotating file handlers to `./logs/`
 
 ### Local Databases
 
 **Primary Databases:**
 - **`wcmktprod.db`**: Market orders and statistics (synced from Turso via backend repo)
-- **`sdelite2.db`**: EVE Online Static Data Export (lightweight version)
+- **`sdelite.db`**: EVE Online Static Data Export (lightweight version)
 - **`buildcost.db`**: Manufacturing and structure data
 
 **Database Tables:**
@@ -130,8 +154,9 @@ All pages follow consistent patterns with Streamlit best practices:
 - `watchlist`: Market watchlist items
 - `nakah_watchlist`: Nakah-specific watchlist
 - `updatelog`: Database update tracking
+- `module_equivalents`: Interchangeable faction module mappings for aggregated stock calculations
 
-*sdelite2.db tables:*
+*sdelite.db tables:*
 - `invTypes`: EVE Online item definitions
 - `invGroups`: Item group classifications
 - `invCategories`: High-level item categories
@@ -147,7 +172,6 @@ All pages follow consistent patterns with Streamlit best practices:
 - **`settings.toml`**: Application settings including ship role definitions and special cases
 - **`.streamlit/secrets.toml`**: Turso credentials (local only, git-ignored)
 - **`pyproject.toml`**: Project metadata, dependencies, dev tools config
-- **`sync_log_dict.json`**: Detailed sync operation logs
 
 ### Other Directories
 
@@ -157,27 +181,19 @@ All pages follow consistent patterns with Streamlit best practices:
 - **`logs/`**: Application logs (git-ignored)
 - **`images/`**: UI assets and images
 - **`dev_files/`**: Development-specific files
-
 ## Database Architecture
 
 ### Turso Embedded Replica Pattern
 
 The application uses Turso's embedded-replica feature for optimal performance:
-- Local SQLite databases (`wcmkt2.db`, `sdelite2.db`) provide fast reads
+- Local SQLite databases (`wcmktprod.db`, `sdelite.db`) provide fast reads
 - Automatic synchronization with remote Turso database via libsql
-- Background sync managed by DatabaseConfig with RWLock concurrency control
-- Integrity checks with `PRAGMA integrity_check` before and after sync
-- Malformed database auto-recovery with remote fallback
+- Sync serialized via `_SYNC_LOCK` (simple `threading.Lock`). SQLite handles its own reader concurrency
+- Integrity checks with `PRAGMA integrity_check` after sync
+- Malformed database auto-recovery with remote fallback via `BaseRepository.read_df()`
+- `sync()` returns bool -- callers handle UI feedback (toasts) and targeted cache invalidation
 
 **Note:** Market data updates come from the separate backend repository (mkts_backend) which handles ESI API calls and populates the Turso remote database. This frontend application only reads and syncs from Turso.
-
-### Concurrency Model (RWLock)
-
-DatabaseConfig implements a custom RWLock (read-write lock) pattern:
-- **Multiple concurrent readers**: Read operations don't block each other
-- **Exclusive writer access**: Write/sync operations block all reads and writes
-- **Sync operations**: Full exclusive access during database synchronization
-- **Thread-safe**: Proper lock acquisition/release with context managers
 
 ### Database Configuration
 
@@ -188,7 +204,7 @@ from config import DatabaseConfig
 db = DatabaseConfig()
 # Access engines
 mkt_engine = db.mkt_engine  # wcmktprod.db
-sde_engine = db.sde_engine  # sdelite2.db
+sde_engine = db.sde_engine  # sdelite.db
 bc_engine = db.bc_engine    # buildcost.db
 
 # Sync from remote
@@ -209,10 +225,11 @@ TURSO_DATABASE_URL = "libsql://your-database.turso.io"
 TURSO_AUTH_TOKEN = "your_turso_auth_token"
 SDE_URL = "libsql://your-sde.turso.io"
 SDE_AUTH_TOKEN = "your_sde_auth_token"
+JANICE_API_KEY = "your_janice_api_key"  # For Pricer page Jita price lookups
 ```
 
 ### Local Development Notes
-- Ensure local database files exist: `wcmktprod.db`, `sdelite2.db`, `buildcost.db`
+- Ensure local database files exist: `wcmktprod.db`, `sdelite.db`, `buildcost.db`
 - The application will use local SQLite files if sync credentials are not available
 - Database files are git-ignored (*.db, *.db-shm, *.db-wal)
 - Logs are stored in `logs/` directory (git-ignored)
@@ -233,22 +250,22 @@ SDE_AUTH_TOKEN = "your_sde_auth_token"
 
 1. Create new page file in `pages/` directory with emoji prefix (e.g., `📊_new_page.py`)
 2. Add page registration in `app.py` pages dictionary
-3. Import required database engines from `config.py` via DatabaseConfig
+3. Use services and repositories via factory functions -- do not access `DatabaseConfig` directly
 4. Use centralized logging from `logging_config.py`
 5. Follow existing page patterns for consistency
 
 Example:
 ```python
 import streamlit as st
-from config import DatabaseConfig
-from logging_config import get_logger
+from services import get_market_service
+from logging_config import setup_logging
 
-logger = get_logger(__name__)
-db = DatabaseConfig()
+logger = setup_logging("new_page")
 
 def main():
     st.title("New Page")
-    # Your page logic here
+    service = get_market_service()
+    df = service.get_market_data(type_id)
 
 if __name__ == "__main__":
     main()
@@ -257,11 +274,10 @@ if __name__ == "__main__":
 ### Database Operations
 
 **Best Practices:**
-- Always use SQLAlchemy engines from `DatabaseConfig` (via `config.py`)
+- Access data through repository and service layers, not direct `DatabaseConfig`
 - Use context managers for database sessions
 - Implement proper error handling and logging
-- Clear Streamlit cache after database modifications
-- Use read locks for queries, write locks for modifications
+- Use targeted cache invalidation after sync (e.g., `invalidate_market_caches()`), not global `st.cache_data.clear()`
 
 **Example:**
 ```python
@@ -274,19 +290,21 @@ with Session(db.mkt_engine) as session:
     stmt = select(MarketStats).where(MarketStats.type_id == 34)
     results = session.execute(stmt).scalars().all()
 
-# Or use db_handler cached functions
-from db_handler import get_all_mkt_stats
-df = get_all_mkt_stats()  # Returns cached pandas DataFrame
+# Or use repository cached methods
+from repositories import get_market_repository
+repo = get_market_repository()
+df = repo.get_all_stats()  # Returns cached pandas DataFrame
 ```
 
 ### Performance Considerations
 
-- **Caching**: Use `@st.cache_data` for expensive computations (default TTL: 15 minutes)
+- **Caching**: Use `@st.cache_data` for volatile data with TTL tiers (600s/1800s/3600s). Use `@st.cache_resource` for immutable data (SDE lookups, no TTL)
 - **Database connections**: Use `@st.cache_resource` for database engines
-- **Cache clearing**: Clear caches during database sync operations
+- **Cache invalidation**: Use targeted invalidation (e.g., `invalidate_market_caches()`) after sync, not global clears
 - **Connection pooling**: DatabaseConfig manages connection pooling automatically
-- **Concurrent reads**: Multiple read operations can occur simultaneously thanks to RWLock
-- **Malformed DB recovery**: Built into `db_handler.py` read functions
+- **Malformed DB recovery**: Built into `BaseRepository.read_df()` and repository `_impl()` functions
+- **Lazy download generation**: Use `st.download_button(data=callable)` pattern for on-demand data generation. Pass a function reference (not the result) to defer data loading until user clicks download. See `pages/downloads.py` for examples.
+- **Batch API fetching for popovers**: Streamlit popover content executes on every page rerun even when closed. Avoid API calls inside popovers by batch-fetching data before render loops. See `prefetch_popover_data()` in `pages/doctrine_status.py` for the pattern.
 
 ### Data Synchronization
 
@@ -306,18 +324,15 @@ df = get_all_mkt_stats()  # Returns cached pandas DataFrame
 - **Running tests**: `uv run pytest -q` or `uv run pytest --cov`
 
 ### What to Test
+- Repository `_impl()` functions: mock the SQLAlchemy engine with `MagicMock()`
+- Services: mock the repository, use `patch()` for HTTP calls
 - Data shape/columns validation
 - Query correctness and error handling
-- Page-level helper functions (mock DB where possible)
-- Database concurrency (RWLock behavior)
 - Sync operations and integrity checks
 
 ### Current Test Coverage
-The test suite includes:
-- `test_rwlock.py`: RWLock implementation tests (12 tests)
-- `test_database_config_concurrency.py`: DatabaseConfig concurrency tests
-- Additional tests for database operations, logging, and data fetching
-- Current status: 36 tests passing
+The test suite covers repositories, services, database config, and infrastructure:
+- ~128 tests passing (`uv run pytest -q`)
 
 ## Commit & Pull Request Guidelines
 
@@ -347,14 +362,13 @@ Include in PR description:
 - **Local files missing**: Run `init_db.py` to initialize databases
 - **Sync failures**: Check Turso credentials in `.streamlit/secrets.toml`
 - **Integrity errors**: DatabaseConfig will auto-recover with `integrity_check()` and sync
-- **Malformed database**: db_handler functions auto-detect and fallback to remote queries
+- **Malformed database**: Repository functions auto-detect and fallback to remote queries
 - **Connection errors**: Review logs in `logs/` directory
 
 ### Performance Issues
-- **Slow queries**: Clear Streamlit cache with `st.cache_data.clear()`
+- **Slow queries**: Use targeted cache invalidation (e.g., `invalidate_market_caches()`)
 - **Outdated data**: Check database sync status and last update time
 - **Memory usage**: Monitor during large data operations, consider pagination
-- **Concurrent access**: RWLock handles this automatically, but check logs for contention
 
 ### Data Quality Issues
 - **Missing data**: Check if backend repository (mkts_backend) is running and updating remote DB
@@ -372,25 +386,26 @@ Include in PR description:
 ## Architecture Summary
 
 ```
+┌───────────────────────────────────────────────────────────────────────────────────────┐
+│                              Streamlit Frontend (app.py)                               │
+│  ┌──────────┬──────────┬──────────┬──────────┬──────────┬───────────┬───────────────┐ │
+│  │ Market   │ Doctrine │ Doctrine │ Low      │ Build    │ Downloads │ Pricer        │ │
+│  │ Stats    │ Status   │ Report   │ Stock    │ Costs    │           │               │ │
+│  └────┬─────┴────┬─────┴────┬─────┴────┬─────┴────┬─────┴─────┬─────┴───────┬───────┘ │
+│       └──────────┴──────────┴──────────┴──────────┴───────────┴─────────────┘         │
+│                                        │                                               │
+│                              services/ + repositories/                                 │
+└───────────────────────────────────────┬───────────────────────────────────────────────┘
+                                        │
+                                        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                     Streamlit Frontend                      │
-│                        (app.py)                             │
-│  ┌──────────┬──────────┬──────────┬──────────┬──────────┐  │
-│  │ Market   │ Doctrine │ Doctrine │ Low      │ Build    │  │
-│  │ Stats    │ Status   │ Report   │ Stock    │ Costs    │  │
-│  └──────────┴──────────┴──────────┴──────────┴──────────┘  │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│              DatabaseConfig (config.py)                     │
-   │              RWLock Concurrency Control                     │
-   │  ┌──────────┬──────────┬──────────┐                        │
-   │  │ wcmktprod│ sde_lite │buildcost │                        │
-   │  │ .db      │ .db      │.db       │                        │
-   │  └────┬─────┴──────────┴──────────┘                        │
-   │       │ Sync (libsql)                                       │
-   └───────┼─────────────────────────────────────────────────────┘
+│              DatabaseConfig (config.py)                      │
+│  ┌──────────┬──────────┬──────────┐                         │
+│  │ wcmktprod│ sdelite  │buildcost │                         │
+│  │ .db      │ .db      │.db       │                         │
+│  └────┬─────┴──────────┴──────────┘                         │
+│       │ Sync (libsql, _SYNC_LOCK)                           │
+└───────┼─────────────────────────────────────────────────────┘
         │
         ▼
 ┌─────────────────────────────────────────────────────────────┐
@@ -405,28 +420,156 @@ Include in PR description:
 1. Backend repo (mkts_backend) fetches market data from ESI API
 2. Backend updates Turso remote database
 3. Frontend (this repo) syncs from Turso to local SQLite files
-4. Streamlit pages query local databases for fast reads
-5. RWLock ensures safe concurrent access during sync operations
+4. Streamlit pages query local databases via services and repositories
+5. `_SYNC_LOCK` serializes sync operations; SQLite handles reader concurrency
 
 **Key Principles:**
 - Frontend is read-only for market data
 - Local SQLite replicas provide fast reads
 - Turso sync provides data freshness
-- RWLock enables high concurrency
+- Targeted cache invalidation after sync (market caches only)
 - Automatic recovery from database corruption
 - Separation of concerns: backend handles ESI, frontend handles UI/analysis
 
+### Layered Architecture & Module Dependencies
+
+The codebase follows a strict layered architecture. Dependencies must flow **downward only** - upper layers may import from lower layers, but never the reverse.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  PRESENTATION LAYER                                         │
+│  pages/              → Streamlit pages (UI entry points)    │
+│  app.py              → Application entry point              │
+└─────────────────────────────────────────────────────────────┘
+                              │ imports from ↓
+┌─────────────────────────────────────────────────────────────┐
+│  STATE LAYER (Presentation)                                 │
+│  state/              → Session state management             │
+│    session_state.py  → ss_get, ss_has, ss_init utilities    │
+│    service_registry.py → get_service singleton management   │
+└─────────────────────────────────────────────────────────────┘
+                              │ imports from ↓
+┌─────────────────────────────────────────────────────────────┐
+│  UI LAYER                                                   │
+│  ui/                 → Formatting, column configs, display  │
+│    formatters.py     → Pure formatting functions            │
+│    column_definitions.py → st.column_config definitions     │
+└─────────────────────────────────────────────────────────────┘
+                              │ imports from ↓
+┌─────────────────────────────────────────────────────────────┐
+│  SERVICE LAYER                                              │
+│  services/           → Business logic orchestration         │
+│    doctrine_service.py   → FitDataBuilder, DoctrineService  │
+│    market_service.py     → MarketService, chart creation    │
+│    build_cost_service.py → BuildCostService, async fetching │
+│    price_service.py      → Price fetching with fallbacks    │
+│    categorization.py     → Ship role categorization         │
+│    + pricer, low_stock, selection, equivalents, type_resolution │
+└─────────────────────────────────────────────────────────────┘
+                              │ imports from ↓
+┌─────────────────────────────────────────────────────────────┐
+│  REPOSITORY LAYER                                           │
+│  repositories/       → Database access abstraction          │
+│    base.py           → BaseRepository with read_df()        │
+│    doctrine_repo.py  → DoctrineRepository                   │
+│    market_repo.py    → MarketRepository                     │
+│    build_cost_repo.py → BuildCostRepository                 │
+│    sde_repo.py       → SDERepository                        │
+└─────────────────────────────────────────────────────────────┘
+                              │ imports from ↓
+┌─────────────────────────────────────────────────────────────┐
+│  DOMAIN LAYER                                               │
+│  domain/             → Core business models (no deps)       │
+│    models.py         → FitItem, FitSummary, ModuleStock     │
+│    enums.py          → StockStatus, ShipRole                │
+│    converters.py     → Type conversion utilities            │
+└─────────────────────────────────────────────────────────────┘
+                              │ imports from ↓
+┌─────────────────────────────────────────────────────────────┐
+│  INFRASTRUCTURE LAYER                                       │
+│  config.py           → DatabaseConfig, _SYNC_LOCK           │
+│  models.py           → SQLAlchemy ORM models                │
+│  settings_service.py → Centralized settings (stdlib only)   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Dependency Rules (CRITICAL):**
+
+| Layer | May Import From | Must NOT Import From |
+|-------|-----------------|----------------------|
+| `pages/` | `state/`, `ui/`, `services/`, `domain/`, `repositories/` | - |
+| `state/` | `streamlit`, `typing`, `domain/` (type hints only) | `services/`, `repositories/`, `ui/`, `pages/`, `config` |
+| `ui/` | `domain/` only | `services/`, `pages/`, `app.py`, `state/` |
+| `services/` | `repositories/`, `domain/`, `config` (NO streamlit†) | `ui/`, `pages/` |
+| `repositories/` | `domain/`, `config`, `models` (NO streamlit†) | `services/`, `ui/`, `pages/` |
+| `domain/` | Python stdlib only | Everything else |
+
+†Services and repositories use try/except imports from `state/` only in factory functions to maintain testability outside Streamlit.
+
+**Common Circular Import Causes:**
+1. **UI importing from services** - UI layer should only use domain enums/models
+2. **Importing from `app.py`** - Entry point should never be imported
+3. **State importing from services/repositories** - Since services and repositories import from `state/` in their factory functions, the `state/` module must NOT import from them (would cause circular dependency)
+
+**Example - Correct Pattern:**
+```python
+# ui/formatters.py - CORRECT
+from domain.enums import ShipRole, StockStatus  # ✓ domain only
+
+def get_ship_role_format(role: str) -> str:
+    ship_role = ShipRole.from_string(role)
+    return f"{ship_role.display_emoji} **{ship_role.display_name}**"
+```
+
+**Example - Anti-Pattern (causes circular imports):**
+```python
+# ui/formatters.py - WRONG
+from services.categorization import get_ship_role_object  # ✗ services!
+from app import logger  # ✗ entry point!
+from state.session_state import ss_get  # ✗ state!
+```
+
 ## Version Information
 
-- **Current version**: 0.1.5
+- **Current version**: 0.2.0
 - **Python version**: 3.12+
 - **Package manager**: uv (preferred)
 - **Main branch**: main
-- **Active development**: documentation branch (as of last update)
+- **Active development**: refactormain branch (as of last update)
 
-## Additional Resources
+## Additional Resources & Documentation Index
 
-- **Project documentation**: `docs/` directory
-- **Development files**: `dev_files/` directory
-- **Legacy code**: `depreciated-code/` directory
-- **Backend repository**: https://github.com/OrthelT/mkts_backend (ESI API integration)
+### Documentation (`docs/` directory)
+
+**User Documentation:**
+- `docs.md` - End-user guide for the application
+- `docs_cn.md` - Chinese translation of user guide
+
+**Technical Reference:**
+- `architecture_reference.md` - Definitive technical reference for the current architecture
+- `refactoring_log.md` - Historical record of the Phases 1-13 refactoring project
+- `database_config.md` - Database configuration and Turso sync details
+- `testing.md` - Testing guidelines and pytest patterns
+
+**Guides:**
+- `admin_guide.md` - Administrative guide for managing the application
+- `quick_reference.md` - Quick reference for common tasks
+- `walkthrough.md` - Step-by-step walkthroughs
+
+### Project Directories
+- **`domain/`**: Core business models (FitItem, FitSummary, StockStatus, ShipRole, PricedItem, converters)
+- **`repositories/`**: Database access layer (BaseRepository, DoctrineRepository, MarketRepository, BuildCostRepository, SDERepository)
+- **`services/`**: Business logic (DoctrineService, MarketService, BuildCostService, PriceService, PricerService, LowStockService, SelectionService, ModuleEquivalentsService, TypeResolutionService, categorization)
+- **`state/`**: Session state management (ss_get, ss_has, ss_set, ss_init, get_service)
+- **`ui/`**: UI formatting utilities, column configurations, and reusable popover components
+- **`pages/`**: Streamlit application pages
+- **`pages/components/`**: Extracted Streamlit rendering components (market_components)
+- **`parser/`**: EFT fitting and item list parser (open source contribution)
+- **`tests/`**: pytest unit tests (~128 tests)
+- **`docs/`**: Documentation
+- **`logs/`**: Application logs (git-ignored)
+- **`images/`**: UI assets
+- **`depreciated-code/`**: Legacy code archive
+
+### External Resources
+- **Backend repository**: https://github.com/OrthelT/mkts_backend (ESI API integration, market data updates)
