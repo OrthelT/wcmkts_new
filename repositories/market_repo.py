@@ -2,7 +2,7 @@
 Market Repository
 
 Encapsulates all market data access: stats, orders, and history.
-Extracts cached query functions from db_handler.py into the repository pattern.
+Cached query functions follow the repository pattern established in Phase 10.
 
 Design Principles:
 1. Single Responsibility - Only market data access, no business logic or UI

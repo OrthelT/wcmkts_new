@@ -159,21 +159,21 @@ def main():
         value=ss_get("ls_doctrine_only", False),
         help="Show only items that are used in a doctrine fit",
     )
-    st.session_state.ls_doctrine_only = doctrine_only
+    ss_set("ls_doctrine_only", doctrine_only)
 
     tech2_only = st.sidebar.checkbox(
         "Tech II Items Only",
         value=ss_get("ls_tech2_only", False),
         help="Show only Tech II items (metaGroupID=2)",
     )
-    st.session_state.ls_tech2_only = tech2_only
+    ss_set("ls_tech2_only", tech2_only)
 
     faction_only = st.sidebar.checkbox(
         "Faction Items Only",
         value=ss_get("ls_faction_only", False),
         help="Show only Faction items (metaGroupID=4)",
     )
-    st.session_state.ls_faction_only = faction_only
+    ss_set("ls_faction_only", faction_only)
 
     # Category filter
     st.sidebar.subheader("Category Filter")
@@ -185,7 +185,7 @@ def main():
         default=ss_get("ls_selected_categories", []),
         help="Select one or more categories to filter the data",
     )
-    st.session_state.ls_selected_categories = selected_categories
+    ss_set("ls_selected_categories", selected_categories)
 
     # Doctrine/Fit filter section
     st.sidebar.subheader("Doctrine/Fit Filter")
@@ -260,7 +260,7 @@ def main():
         step=0.5,
         help="Show only items with days remaining less than or equal to this value",
     )
-    st.session_state.ls_max_days = max_days_remaining
+    ss_set("ls_max_days", max_days_remaining)
 
     # Build filters
     filters = LowStockFilters(

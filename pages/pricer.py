@@ -23,7 +23,7 @@ from millify import millify
 from logging_config import setup_logging
 from services import get_pricer_service
 from domain import InputFormat
-from state import ss_get, ss_has, ss_init
+from state import ss_get, ss_has, ss_init, ss_set
 from ui.formatters import get_image_url
 
 logger = setup_logging(__name__, log_file="pricer.log")
@@ -260,7 +260,7 @@ Tab-separated (qty first):
                 result = service.price_input(input_text)
 
                 # Store result in session state for persistence
-                st.session_state.pricer_result = result
+                ss_set('pricer_result', result)
                 logger.info(f"Priced {len(result.items)} items")
 
             except Exception as e:
@@ -269,8 +269,8 @@ Tab-separated (qty first):
                 return
 
     # Display results from session state
-    if 'pricer_result' in st.session_state:
-        result = st.session_state.pricer_result
+    if ss_has('pricer_result'):
+        result = ss_get('pricer_result')
 
         st.divider()
 
@@ -347,7 +347,7 @@ Tab-separated (qty first):
                     value=ss_get('pricer_show_jita', True),
                     key="show_jita_prices"
                 )
-                st.session_state.pricer_show_jita = show_jita
+                ss_set('pricer_show_jita', show_jita)
             with col3:
                 show_stock = st.checkbox(
                     "Show Stock Metrics",
@@ -355,7 +355,7 @@ Tab-separated (qty first):
                     key="show_stock_metrics",
                     help="Show average daily volume and days of stock"
                 )
-                st.session_state.pricer_show_stock_metrics = show_stock
+                ss_set('pricer_show_stock_metrics', show_stock)
             with col4:
                 highlight_doctrine = st.checkbox(
                     "Highlight Doctrine Items",
@@ -363,7 +363,7 @@ Tab-separated (qty first):
                     key="highlight_doctrine",
                     help="Highlight items used in doctrine fits"
                 )
-                st.session_state.pricer_highlight_doctrine = highlight_doctrine
+                ss_set('pricer_highlight_doctrine', highlight_doctrine)
 
             # Build column list based on selections
             price_columns = price_columns_all if show_jita else price_columns_4hwwf

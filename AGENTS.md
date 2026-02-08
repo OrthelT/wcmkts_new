@@ -85,13 +85,10 @@ All pages follow consistent patterns with Streamlit best practices:
 
 **Database Layer:**
 - **`config.py`**: DatabaseConfig class managing SQLite/LibSQL connections with Turso cloud sync
-  - Implements custom RWLock for concurrent read/write access (multiple readers, exclusive writer)
+  - Uses sync lock for exclusive write access during database synchronization
   - Manages 3 databases: wcmktprod (market), sde_lite (static data), buildcost (manufacturing)
   - Methods: `integrity_check()`, `sync()`, `validate_sync()`, `get_most_recent_update()`
   - Automatic malformed database detection and recovery
-- **`db_handler.py`**: Database query layer with `read_df()` and `new_read_df()` functions
-  - Cached data fetchers: `get_all_mkt_stats()`, `get_all_mkt_orders()`, `get_all_market_history()`
-  - Built-in malformed DB recovery with automatic sync + remote fallback
 - **`models.py`**: SQLAlchemy ORM models using modern `mapped_column()` syntax
   - MarketStats, MarketOrders, MarketHistory, Doctrines, ShipTargets, DoctrineFits, ModuleEquivalents, etc.
 - **`sdemodels.py`**: SDE (Static Data Export) ORM models for InvTypes, InvGroups, InvCategories
@@ -99,11 +96,6 @@ All pages follow consistent patterns with Streamlit best practices:
 
 **Business Logic:**
 - **`doctrines.py`**: Doctrine fitting management with target handling, fit data aggregation, cost calculations
-- **`utils.py`**: Utility functions including:
-  - Industry index fetching from ESI API
-  - Jita price lookups with Fuzzworks API fallback
-- **`market_metrics.py`**: Market analysis metrics and UI rendering for ISK volume charts, historical metrics
-- **`type_info.py`**: Type name/ID resolution with SDE database queries and Fuzzworks API fallback
 
 **Pricer Module (`parser/` directory):**
 - **`parser.py`**: Input parsing for EFT fittings and tab-separated item lists (contributed open source code)
@@ -303,9 +295,10 @@ with Session(db.mkt_engine) as session:
     stmt = select(MarketStats).where(MarketStats.type_id == 34)
     results = session.execute(stmt).scalars().all()
 
-# Or use db_handler cached functions
-from db_handler import get_all_mkt_stats
-df = get_all_mkt_stats()  # Returns cached pandas DataFrame
+# Or use repository cached methods
+from repositories import get_market_repository
+repo = get_market_repository()
+df = repo.get_all_stats()  # Returns cached pandas DataFrame
 ```
 
 ### Performance Considerations
@@ -315,7 +308,7 @@ df = get_all_mkt_stats()  # Returns cached pandas DataFrame
 - **Cache clearing**: Clear caches during database sync operations
 - **Connection pooling**: DatabaseConfig manages connection pooling automatically
 - **Concurrent reads**: Multiple read operations can occur simultaneously thanks to RWLock
-- **Malformed DB recovery**: Built into `db_handler.py` read functions
+- **Malformed DB recovery**: Built into `BaseRepository.read_df()` and repository `_impl()` functions
 - **Lazy download generation**: Use `st.download_button(data=callable)` pattern for on-demand data generation. Pass a function reference (not the result) to defer data loading until user clicks download. See `pages/downloads.py` for examples.
 - **Batch API fetching for popovers**: Streamlit popover content executes on every page rerun even when closed. Avoid API calls inside popovers by batch-fetching data before render loops. See `prefetch_popover_data()` in `pages/doctrine_status.py` for the pattern.
 
@@ -378,7 +371,7 @@ Include in PR description:
 - **Local files missing**: Run `init_db.py` to initialize databases
 - **Sync failures**: Check Turso credentials in `.streamlit/secrets.toml`
 - **Integrity errors**: DatabaseConfig will auto-recover with `integrity_check()` and sync
-- **Malformed database**: db_handler functions auto-detect and fallback to remote queries
+- **Malformed database**: Repository functions auto-detect and fallback to remote queries
 - **Connection errors**: Review logs in `logs/` directory
 
 ### Performance Issues
@@ -496,9 +489,8 @@ The codebase follows a strict layered architecture. Dependencies must flow **dow
                               │ imports from ↓
 ┌─────────────────────────────────────────────────────────────┐
 │  INFRASTRUCTURE LAYER                                       │
-│  config.py           → DatabaseConfig, RWLock               │
+│  config.py           → DatabaseConfig, sync lock            │
 │  models.py           → SQLAlchemy ORM models                │
-│  db_handler.py       → Low-level DB queries                 │
 └─────────────────────────────────────────────────────────────┘
 ```
 

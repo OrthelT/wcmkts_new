@@ -1,9 +1,9 @@
 """
 Base Repository
 
-Provides the foundation for all repository classes. Extracts the common
-read_df() pattern from db_handler.py with malformed-DB recovery and
-remote fallback.
+Provides the foundation for all repository classes. Implements the common
+read_df() pattern with malformed-DB recovery and remote fallback.
+(Originally extracted from the now-deleted db_handler.py in Phase 10.)
 
 Design Principles:
 1. Dependency Injection - Receives DatabaseConfig, doesn't create it
