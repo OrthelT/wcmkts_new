@@ -73,7 +73,7 @@
     "dev" = "wcmkttest"
 
 [env]
-    env = "dev"
+    env = "prod"
     log_level = "DEBUG" #INFO or DEBUG (case sensitive)
 
 [market]
