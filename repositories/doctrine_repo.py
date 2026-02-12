@@ -93,25 +93,25 @@ class DoctrineRepository:
     # Moved to outer scope to facilitate caching
 
     def get_all_fits(self) -> pd.DataFrame:
-        return get_all_fits_with_cache(self.db.alias)
+        return get_all_fits_with_cache(self._db.alias)
 
     def get_fit_by_id(self, fit_id: int) -> pd.DataFrame:
-        return get_fit_by_id_with_cache(fit_id, self.db.alias)
+        return get_fit_by_id_with_cache(fit_id, self._db.alias)
 
     def get_all_targets(self) -> pd.DataFrame:
-        return get_all_targets_with_cache(self.db.alias)
+        return get_all_targets_with_cache(self._db.alias)
 
     def get_target_by_fit_id(self, fit_id: int, default: int = DEFAULT_SHIP_TARGET) -> int:
-        return get_target_by_fit_id_with_cache(fit_id, default, self.db.alias)
+        return get_target_by_fit_id_with_cache(fit_id, default, self._db.alias)
 
     def get_target_by_ship_id(self, ship_id: int, default: int = DEFAULT_SHIP_TARGET) -> int:
-        return get_target_by_ship_id_with_cache(ship_id, default, self.db.alias)
+        return get_target_by_ship_id_with_cache(ship_id, default, self._db.alias)
     # =========================================================================
     # Fit Names
     # =========================================================================
 
     def get_fit_name(self, fit_id: int, default: str = "Unknown Fit") -> str:
-        return get_fit_name_with_cache(fit_id, default, self.db.alias)
+        return get_fit_name_with_cache(fit_id, default, self._db.alias)
 
     # =========================================================================
     # Doctrine Compositions
