@@ -25,6 +25,7 @@ from services import get_pricer_service
 from domain import InputFormat
 from state import ss_get, ss_has, ss_init, ss_set
 from ui.formatters import get_image_url
+from ui.market_selector import render_market_selector
 
 logger = setup_logging(__name__, log_file="pricer.log")
 
@@ -45,7 +46,7 @@ def round_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     return df2
 
 
-def get_pricer_column_config() -> dict:
+def get_pricer_column_config(short_name: str = "4H") -> dict:
     """Get column configuration for the pricer results table."""
     return {
         "image_url": st.column_config.ImageColumn(
@@ -73,14 +74,14 @@ def get_pricer_column_config() -> dict:
             help="Slot type",
             width="small",
         ),
-        "4-HWWF Sell": st.column_config.NumberColumn(
-            "4H Sell",
-            help="4-HWWF minimum sell price per unit",
+        "Local Sell": st.column_config.NumberColumn(
+            f"{short_name} Sell",
+            help=f"{short_name} minimum sell price per unit",
             format="localized",
         ),
-        "4-HWWF Sell Vol": st.column_config.NumberColumn(
-            "4H Vol",
-            help="4-HWWF sell volume",
+        "Local Sell Vol": st.column_config.NumberColumn(
+            f"{short_name} Vol",
+            help=f"{short_name} sell volume",
             format="localized",
         ),
         "Jita Sell": st.column_config.NumberColumn(
@@ -103,19 +104,19 @@ def get_pricer_column_config() -> dict:
             help="Total Jita buy value",
             format="localized",
         ),
-        "4-HWWF Buy": st.column_config.NumberColumn(
-            "4H Buy",
-            help="4-HWWF maximum buy price per unit",
+        "Local Buy": st.column_config.NumberColumn(
+            f"{short_name} Buy",
+            help=f"{short_name} maximum buy price per unit",
             format="localized",
         ),
-        "4-HWWF Sell Total": st.column_config.NumberColumn(
-            "4H Sell Total",
-            help="Total 4-HWWF sell value",
+        "Local Sell Total": st.column_config.NumberColumn(
+            f"{short_name} Sell Total",
+            help=f"Total {short_name} sell value",
             format="localized",
         ),
-        "4-HWWF Buy Total": st.column_config.NumberColumn(
-            "4H Buy Total",
-            help="Total 4-HWWF buy value",
+        "Local Buy Total": st.column_config.NumberColumn(
+            f"{short_name} Buy Total",
+            help=f"Total {short_name} buy value",
             format="localized",
         ),
         "Volume": st.column_config.NumberColumn(
@@ -210,6 +211,8 @@ def render_fit_header(result):
 
 
 def main():
+    market = render_market_selector()
+
     # Initialize session state
     ss_init({
         'pricer_show_jita': True,
@@ -219,7 +222,7 @@ def main():
     })
 
     render_header()
-    st.markdown("Price items and fittings using Jita and 4-HWWF market data.")
+    st.markdown(f"Price items and fittings using Jita and {market.name} market data.")
 
     # Input section
     st.subheader("Input")
@@ -288,15 +291,15 @@ Tab-separated (qty first):
 
             with col1:
                 st.metric(
-                    "4-HWWF Sell",
+                    f"{market.short_name} Sell",
                     format_isk(result.local_sell_grand_total),
-                    help="Total value at 4-HWWF sell prices"
+                    help=f"Total value at {market.short_name} sell prices"
                 )
             with col2:
                 st.metric(
-                    "4-HWWF Buy",
+                    f"{market.short_name} Buy",
                     format_isk(result.local_buy_grand_total),
-                    help="Total value at 4-HWWF buy prices"
+                    help=f"Total value at {market.short_name} buy prices"
                 )
             col3, col4 = st.columns(2)
             with col3:
@@ -325,8 +328,8 @@ Tab-separated (qty first):
 
             # Define column groups
             static_columns = ["image_url", "type_id", "Item", "Qty"]
-            price_columns_all = ["4-HWWF Sell", "4-HWWF Buy", "4-HWWF Sell Vol", "Jita Sell", "Jita Buy"]
-            price_columns_4hwwf = ["4-HWWF Sell", "4-HWWF Buy", "4-HWWF Sell Vol"]
+            price_columns_all = ["Local Sell", "Local Buy", "Local Sell Vol", "Jita Sell", "Jita Buy"]
+            price_columns_local = ["Local Sell", "Local Buy", "Local Sell Vol"]
             stock_columns = ["Avg Daily Vol", "Days of Stock"]
             doctrine_columns = ["Is Doctrine", "Doctrine Ships"]
             always_show_columns = ["Volume", "Category"]
@@ -366,7 +369,7 @@ Tab-separated (qty first):
                 ss_set('pricer_highlight_doctrine', highlight_doctrine)
 
             # Build column list based on selections
-            price_columns = price_columns_all if show_jita else price_columns_4hwwf
+            price_columns = price_columns_all if show_jita else price_columns_local
 
             if not df.empty:
                 # Build column order
@@ -398,7 +401,7 @@ Tab-separated (qty first):
                 st.data_editor(
                     styled_df,
                     hide_index=True,
-                    column_config=get_pricer_column_config(),
+                    column_config=get_pricer_column_config(market.short_name),
                     width="content",
                     column_order=column_order,
                 )

@@ -43,26 +43,19 @@ class DatabaseConfig:
     # master config variable for the database to use
     wcdbmap = settings["env_db_aliases"][settings["env"]["env"]]
 
-    _db_paths = {
-        "wcmktprod": settings["db_paths"]["wcmktprod"],  # production database
-        "sde": settings["db_paths"]["sde"],
-        "build_cost": settings["db_paths"]["build_cost"],
-        "wcmkttest": settings["db_paths"]["wcmkttest"],  # testing db
-    }
+    # Build database paths dynamically from settings.toml [db_paths]
+    _db_paths = {alias: path for alias, path in settings["db_paths"].items()}
 
-    _db_turso_urls = {
-        "wcmktprod_turso": st.secrets.wcmktprod_turso.url,
-        "sde_turso": st.secrets.sdelite_turso.url,
-        "build_cost_turso": st.secrets.buildcost_turso.url,
-        "wcmkttest_turso": st.secrets.wcmkttest_turso.url,
-    }
-
-    _db_turso_auth_tokens = {
-        "wcmktprod_turso": st.secrets.wcmktprod_turso.token,
-        "sde_turso": st.secrets.sdelite_turso.token,
-        "build_cost_turso": st.secrets.buildcost_turso.token,
-        "wcmkttest_turso": st.secrets.wcmkttest_turso.token,
-    }
+    # Build Turso credentials dynamically — not all aliases need Turso
+    _db_turso_urls: dict[str, str] = {}
+    _db_turso_auth_tokens: dict[str, str] = {}
+    for _alias in _db_paths:
+        _turso_key = f"{_alias}_turso"
+        try:
+            _db_turso_urls[_turso_key] = st.secrets[_turso_key].url
+            _db_turso_auth_tokens[_turso_key] = st.secrets[_turso_key].token
+        except (KeyError, AttributeError):
+            pass  # Not all aliases need Turso (graceful degradation)
 
     # Shared handles per-alias to avoid multiple simultaneous connections to the same file
     _engines: dict[str, object] = {}
@@ -87,8 +80,9 @@ class DatabaseConfig:
         self.alias = alias
         self.path = self._db_paths[alias]
         self.url = f"{dialect}:///{self.path}"
-        self.turso_url = self._db_turso_urls[f"{self.alias}_turso"]
-        self.token = self._db_turso_auth_tokens[f"{self.alias}_turso"]
+        turso_key = f"{self.alias}_turso"
+        self.turso_url = self._db_turso_urls.get(turso_key)
+        self.token = self._db_turso_auth_tokens.get(turso_key)
         self._engine = None
         self._remote_engine = None
         self._libsql_connect = None
@@ -108,11 +102,14 @@ class DatabaseConfig:
     def remote_engine(self):
         eng = DatabaseConfig._remote_engines.get(self.alias)
         if eng is None:
-            turso_url = self._db_turso_urls[f"{self.alias}_turso"]
-            auth_token = self._db_turso_auth_tokens[f"{self.alias}_turso"]
+            if not self.turso_url or not self.token:
+                raise ValueError(
+                    f"No Turso credentials for alias '{self.alias}'. "
+                    "Add [{self.alias}_turso] to .streamlit/secrets.toml"
+                )
             eng = create_engine(
-                f"sqlite+{turso_url}?secure=true",
-                connect_args={"auth_token": auth_token},
+                f"sqlite+{self.turso_url}?secure=true",
+                connect_args={"auth_token": self.token},
             )
             DatabaseConfig._remote_engines[self.alias] = eng
         return eng

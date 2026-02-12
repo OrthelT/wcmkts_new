@@ -27,6 +27,31 @@ def _load_settings(settings_path: Path = Path("settings.toml")) -> dict:
         raise
 
 
+def get_all_market_configs() -> dict:
+    """Return a dict of MarketConfig keyed by market key (e.g. 'primary').
+
+    Module-level convenience function so callers don't need SettingsService.
+    """
+    from domain.market_config import MarketConfig
+
+    settings = _load_settings()
+    markets_raw = settings.get("markets", {})
+    configs: dict = {}
+    for key, vals in markets_raw.items():
+        configs[key] = MarketConfig(
+            key=key,
+            name=vals["name"],
+            short_name=vals["short_name"],
+            region_id=vals["region_id"],
+            system_id=vals["system_id"],
+            structure_id=vals["structure_id"],
+            database_alias=vals["database_alias"],
+            database_file=vals["database_file"],
+            turso_secret_key=vals["turso_secret_key"],
+        )
+    return configs
+
+
 class SettingsService:
     """Read-only accessor for application settings.
 

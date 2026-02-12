@@ -4,6 +4,7 @@ from logging_config import setup_logging
 from sync_state import update_wcmkt_state
 from time import perf_counter
 from init_equivalents import init_module_equivalents, get_equivalents_count
+from settings_service import get_all_market_configs
 
 logger = setup_logging(__name__)
 def verify_db_path(path):
@@ -20,14 +21,23 @@ def init_db():
     logger.info("initializing databases")
     logger.info("-"*100)
 
-    mkt_db = DatabaseConfig("wcmkt")
+    # Initialize ALL market databases plus shared databases
+    market_configs = get_all_market_configs()
+    db_paths = {}
+
+    for key, cfg in market_configs.items():
+        try:
+            mkt_db = DatabaseConfig(cfg.database_alias)
+            db_paths[mkt_db.alias] = mkt_db.path
+        except ValueError:
+            logger.warning(f"Skipping unknown market alias: {cfg.database_alias}")
+
+    # Add shared databases
     sde_db = DatabaseConfig("sde")
     build_cost_db = DatabaseConfig("build_cost")
-    db_paths = {
-        mkt_db.alias: mkt_db.path,
-        sde_db.alias: sde_db.path,
-        build_cost_db.alias: build_cost_db.path,
-    }
+    db_paths[sde_db.alias] = sde_db.path
+    db_paths[build_cost_db.alias] = build_cost_db.path
+
     status = {}
 
     for key, value in db_paths.items():
@@ -55,17 +65,22 @@ def init_db():
 
     logger.info("wcmkt state updated✅")
 
-    # Initialize module equivalents table
+    # Initialize module equivalents table for all market databases
     logger.info("-"*100)
     logger.info("initializing module equivalents")
     logger.info("-"*100)
 
-    equiv_count = get_equivalents_count(mkt_db)
-    if equiv_count == 0:
-        init_module_equivalents(mkt_db)
-        equiv_count = get_equivalents_count(mkt_db)
+    for key, cfg in market_configs.items():
+        try:
+            mkt_db = DatabaseConfig(cfg.database_alias)
+            equiv_count = get_equivalents_count(mkt_db)
+            if equiv_count == 0:
+                init_module_equivalents(mkt_db)
+                equiv_count = get_equivalents_count(mkt_db)
+            logger.info(f"module equivalents count ({cfg.database_alias}): {equiv_count}")
+        except Exception as e:
+            logger.warning(f"Could not init equivalents for {cfg.database_alias}: {e}")
 
-    logger.info(f"module equivalents count: {equiv_count}")
     logger.info("-"*100)
 
     end_time = perf_counter()

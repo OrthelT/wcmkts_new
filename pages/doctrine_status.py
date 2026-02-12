@@ -14,6 +14,7 @@ from domain import StockStatus
 from ui import get_fitting_column_config, render_progress_bar_html, format_doctrine_name
 from services import get_status_filter_options
 from state import ss_init, ss_get
+from ui.market_selector import render_market_selector
 
 # DISABLED: Jita prices - restore when backend caching implemented
 # from services import get_price_service
@@ -138,6 +139,8 @@ def _rebuild_selections():
 
 
 def main():
+    market = render_market_selector()
+
     # App title and logo
     col1, col2, col3 = st.columns([0.2, 0.5, 0.3])
     with col1:
@@ -149,7 +152,7 @@ def main():
 
     with col2:
         st.markdown("&nbsp;")
-        st.title("4-HWWF Doctrine Status")
+        st.title(f"{market.name} Doctrine Status")
     with col3:
         # Use summary_df directly from FitBuildResult (no redundant get_fit_summary call)
         if summary_df.empty:

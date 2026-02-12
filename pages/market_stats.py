@@ -26,11 +26,10 @@ from pages.components.market_components import (
 from services import get_jita_price
 from state import ss_has, ss_get
 from repositories import invalidate_market_caches
+from ui.market_selector import render_market_selector
 
 settings = get_settings()
 env = settings['env']['env']
-market_name = settings['market']['name']
-market_short_name = settings['market']['short_name']
 header_env = f"[{env.upper()}]" if env != "prod" else ""
 
 logger = setup_logging(__name__)
@@ -173,8 +172,8 @@ def initialize_main_function():
 
 
 @st.cache_data(ttl=1800)
-def check_for_db_updates() -> tuple[bool, float]:
-    db = DatabaseConfig("wcmkt")
+def check_for_db_updates(db_alias: str = "wcmkt") -> tuple[bool, float]:
+    db = DatabaseConfig(db_alias)
     check = db.validate_sync()
     local_time = datetime.now()
     return check, local_time
@@ -193,10 +192,13 @@ def check_db(manual_override: bool = False):
     logger.info(f"check_db() check: {check}, time: {local_time}")
     logger.info(f"last_check: {round(now - st.session_state.get('last_check', 0), 2)} seconds ago")
 
+    from state.market_state import get_active_market
+    active_alias = get_active_market().database_alias
+
     if not check:
         st.toast("More recent remote database data available, syncing local database", icon="🕧")
         logger.info("check_db() check is False, syncing local database")
-        db = DatabaseConfig("wcmkt")
+        db = DatabaseConfig(active_alias)
         invalidate_market_caches()
         db.sync()
 
@@ -213,7 +215,7 @@ def check_db(manual_override: bool = False):
             local_update_since = int(local_update_since.total_seconds() // 60)
             local_update_since = f"{local_update_since} mins"
         else:
-            local_update_since = DatabaseConfig("wcmkt").get_time_since_update("marketstats", remote=False)
+            local_update_since = DatabaseConfig(active_alias).get_time_since_update("marketstats", remote=False)
         st.toast(f"DB updated: {local_update_since} ago", icon="✅")
 
 
@@ -235,6 +237,9 @@ def maybe_run_check():
 
 def new_display_sync_status():
     """Display sync status in the sidebar."""
+    from state.market_state import get_active_market
+    active_alias = get_active_market().database_alias
+
     update_time: datetime | None = None
     time_since: timedelta | None = None
     display_time = "Unavailable"
@@ -252,7 +257,7 @@ def new_display_sync_status():
         time_since = status.get("time_since")
         if update_time is None:
             try:
-                update_time = DatabaseConfig("wcmkt").get_most_recent_update("marketstats", remote=False)
+                update_time = DatabaseConfig(active_alias).get_most_recent_update("marketstats", remote=False)
                 status["updated"] = update_time
             except Exception as exc:
                 logger.error(f"Error fetching cached update time: {exc}")
@@ -261,7 +266,7 @@ def new_display_sync_status():
             status["time_since"] = time_since
     else:
         try:
-            update_time = DatabaseConfig("wcmkt").get_most_recent_update("marketstats", remote=False)
+            update_time = DatabaseConfig(active_alias).get_most_recent_update("marketstats", remote=False)
         except Exception as exc:
             logger.error(f"Error fetching update time: {exc}")
         if update_time is not None:
@@ -298,7 +303,7 @@ def new_display_sync_status():
 # Title
 # =============================================================================
 
-def render_title_headers():
+def render_title_headers(market_name: str):
     col1, col2 = st.columns([0.2, 0.8], vertical_alignment="bottom")
     with col1:
         st.image("images/wclogo.png", width=125)
@@ -312,6 +317,8 @@ def render_title_headers():
 
 def main():
     """Main function for the market stats page."""
+    market = render_market_selector()
+
     # Initialize databases if needed
     if 'db_init_time' not in st.session_state:
         init_result = initialize_main_function()
@@ -323,7 +330,7 @@ def main():
         update_wcmkt_state()
 
     maybe_run_check()
-    render_title_headers()
+    render_title_headers(market.name)
 
     # Get service
     market_service = get_market_service()

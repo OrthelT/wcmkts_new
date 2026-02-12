@@ -16,6 +16,7 @@ from services.categorization import categorize_ship_by_role
 from ui.formatters import get_doctrine_report_column_config, get_image_url, get_ship_role_format, format_doctrine_name
 from ui.popovers import render_ship_with_popover, render_market_popover, has_equivalent_modules
 from state import ss_init, ss_get
+from ui.market_selector import render_market_selector
 
 logger = setup_logging(__name__, log_file="doctrine_report.log")
 
@@ -282,6 +283,8 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
                 st.markdown("<br>", unsafe_allow_html=True)
 
 def main():
+    market = render_market_selector()
+
     # Initialize session state for target multiplier and selected modules
     ss_init({
         'target_multiplier': 1.0,
@@ -298,7 +301,7 @@ def main():
         st.image(image_path, 150)
     with col2:
         st.title("Doctrine Report")
-        st.text("4-HWWF Market Status By Fleet Doctrine")
+        st.text(f"{market.name} Market Status By Fleet Doctrine")
 
     # Fetch the data using service
     result = service.build_fit_data()

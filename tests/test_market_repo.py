@@ -232,7 +232,7 @@ class TestMarketRepositoryClass:
         result = repo.get_history_by_type(34)
 
         assert result is expected
-        mock_cached.assert_called_once_with(34)
+        mock_cached.assert_called_once_with(34, mock_db.alias)
 
 
 class TestGetUpdateTime:

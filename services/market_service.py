@@ -607,7 +607,7 @@ def _get_default_outlier_method() -> str:
 # =============================================================================
 
 def get_market_service() -> MarketService:
-    """Get or create a MarketService instance.
+    """Get or create a MarketService instance for the active market.
 
     Uses state.get_service for session persistence. Falls back to
     direct instantiation if state module is unavailable.
@@ -619,7 +619,8 @@ def get_market_service() -> MarketService:
 
     try:
         from state import get_service
-        return get_service("market_service", _create)
+        from state.market_state import get_active_market_key
+        return get_service(f"market_service_{get_active_market_key()}", _create)
     except ImportError:
         logger.debug("state module unavailable, creating new MarketService instance")
         return _create()

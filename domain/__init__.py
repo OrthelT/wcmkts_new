@@ -21,6 +21,7 @@ from domain.models import (
     Doctrine,
     ShipStock,
 )
+from domain.market_config import MarketConfig, DEFAULT_MARKET_KEY
 from domain.pricer import (
     InputFormat,
     SlotType,
@@ -31,6 +32,9 @@ from domain.pricer import (
 )
 
 __all__ = [
+    # Market config
+    "MarketConfig",
+    "DEFAULT_MARKET_KEY",
     # Doctrine names
     "DOCTRINE_DISPLAY_NAMES",
     "get_doctrine_display_name",

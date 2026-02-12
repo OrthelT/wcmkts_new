@@ -6,12 +6,22 @@ from state.session_state import ss_set
 
 logger = setup_logging(__name__)
 
-def update_wcmkt_state()-> None:
+def update_wcmkt_state(db_alias: str = None)-> None:
     """
-    updates the sessions state with the remote and local state of the wcmkt database using the marketstats table last_update column.
+    updates the sessions state with the remote and local state of the market database using the marketstats table last_update column.
+
+    Args:
+        db_alias: Database alias to check. If None, uses the active market.
     """
+    if db_alias is None:
+        try:
+            from state.market_state import get_active_market
+            db_alias = get_active_market().database_alias
+        except (ImportError, Exception):
+            db_alias = "wcmkt"
+
     start_time = perf_counter()
-    db = DatabaseConfig("wcmkt")
+    db = DatabaseConfig(db_alias)
 
     local_update_status = {'updated': None, 'needs_update': False, 'time_since': None}
     remote_update_status = {'updated': None, 'needs_update': False, 'time_since': None}
@@ -30,12 +40,12 @@ def update_wcmkt_state()-> None:
     ss_set('local_update_status', local_update_status)
     logger.info("local_status saved to session state:")
     for k,v in local_update_status.items():
-        logger.info(f"{k}: {v}🏠")
+        logger.info(f"{k}: {v}")
     logger.info("-"*60)
     ss_set('remote_update_status', remote_update_status)
     logger.info("remote_status saved to session state:")
     for k,v in remote_update_status.items():
-        logger.info(f"{k}: {v}🕧")
+        logger.info(f"{k}: {v}")
     logger.info("-"*60)
     end_time = perf_counter()
     elapsed_time = round((end_time-start_time)*1000, 2)

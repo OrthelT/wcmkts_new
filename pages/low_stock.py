@@ -16,6 +16,7 @@ from logging_config import setup_logging
 from services import get_low_stock_service, LowStockFilters
 from ui.formatters import get_image_url, format_doctrine_name
 from state import ss_init, ss_get, ss_set
+from ui.market_selector import render_market_selector
 
 logger = setup_logging(__name__, log_file="low_stock.log")
 
@@ -118,6 +119,8 @@ def display_fit_data(selected_fit):
 
 
 def main():
+    market = render_market_selector()
+
     # Initialize session state
     ss_init(
         {
@@ -136,7 +139,7 @@ def main():
     with col1:
         st.image("images/wclogo.png", width=125)
     with col2:
-        st.title("4-HWWF Low Stock Tool")
+        st.title(f"{market.name} Low Stock Tool")
 
     st.markdown("""
     This page shows items that are running low on the market. The **Days Remaining** column shows how many days of sales

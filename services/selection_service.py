@@ -376,7 +376,8 @@ def get_selection_service() -> SelectionService:
     """
     try:
         from state import get_service
-        return get_service('selection_service', SelectionService.create_default)
+        from state.market_state import get_active_market_key
+        return get_service(f'selection_service_{get_active_market_key()}', SelectionService.create_default)
     except ImportError:
         logger.debug("state module unavailable, creating new SelectionService instance")
         return SelectionService.create_default()
