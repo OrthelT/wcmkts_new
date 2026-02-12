@@ -99,9 +99,9 @@ def _rebuild_selections():
     """
     checked_type_ids = set()
     for key, value in st.session_state.items():
-        if not value:
-            continue
         if key.startswith("mod_"):
+            if value is not True:
+                continue
             # Format: mod_{fit_id}_{position}_{type_id}
             parts = key.split("_")
             if len(parts) >= 4:
@@ -110,6 +110,8 @@ def _rebuild_selections():
                 except ValueError:
                     pass
         elif key.startswith("ship_"):
+            if value is not True:
+                continue
             # Format: ship_{fit_id}_{ship_id}
             parts = key.split("_")
             if len(parts) >= 3:
