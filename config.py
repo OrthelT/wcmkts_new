@@ -217,7 +217,17 @@ class DatabaseConfig:
         Returns:
             True if sync and integrity check succeeded, False otherwise.
             Callers are responsible for cache invalidation and UI feedback.
+
+        Raises:
+            ValueError: If Turso credentials are missing for this alias.
         """
+        # Fail fast before libsql.connect() can create an empty db file
+        if not self.turso_url or not self.token:
+            raise ValueError(
+                f"Missing Turso credentials for alias '{self.alias}'. "
+                f"Add [{self.alias}_turso] section to .streamlit/secrets.toml"
+            )
+
         sync_start = perf_counter()
         logger.info("-" * 40)
         logger.info(
@@ -225,6 +235,8 @@ class DatabaseConfig:
                 datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
             }"
         )
+
+        file_existed_before = os.path.exists(self.path)
 
         with _SYNC_LOCK:
             self._dispose_local_connections()
@@ -245,6 +257,9 @@ class DatabaseConfig:
                 logger.info("-" * 40)
             except Exception as e:
                 logger.error(f"Database sync failed: {e}")
+                # Clean up empty db file that libsql.connect() may have created
+                if not file_existed_before:
+                    self._cleanup_empty_db_file()
                 raise
             finally:
                 if conn is not None:
@@ -261,6 +276,15 @@ class DatabaseConfig:
                 logger.error("Post-sync integrity check failed.")
 
             return ok
+
+    def _cleanup_empty_db_file(self):
+        """Remove empty db file and libsql/WAL artifacts left by a failed sync."""
+        for suffix in ("", "-shm", "-wal", "-info"):
+            file_path = self.path + suffix
+            if os.path.exists(file_path):
+                with suppress(OSError):
+                    os.remove(file_path)
+                    logger.info(f"Removed {file_path} created during failed sync")
 
     def validate_sync(self) -> bool:
         alias = self.alias
