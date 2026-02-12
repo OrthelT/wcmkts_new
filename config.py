@@ -47,13 +47,16 @@ class DatabaseConfig:
     _db_paths = {alias: path for alias, path in settings["db_paths"].items()}
 
     # Build Turso credentials dynamically — not all aliases need Turso
+    # Use [db_turso_keys] overrides where secret name ≠ {alias}_turso
+    _turso_key_overrides = settings.get("db_turso_keys", {})
     _db_turso_urls: dict[str, str] = {}
     _db_turso_auth_tokens: dict[str, str] = {}
     for _alias in _db_paths:
         _turso_key = f"{_alias}_turso"
+        _secret_key = _turso_key_overrides.get(_alias, _turso_key)
         try:
-            _db_turso_urls[_turso_key] = st.secrets[_turso_key].url
-            _db_turso_auth_tokens[_turso_key] = st.secrets[_turso_key].token
+            _db_turso_urls[_turso_key] = st.secrets[_secret_key].url
+            _db_turso_auth_tokens[_turso_key] = st.secrets[_secret_key].token
         except (KeyError, AttributeError):
             pass  # Not all aliases need Turso (graceful degradation)
 

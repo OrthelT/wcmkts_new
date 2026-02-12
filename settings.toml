@@ -89,6 +89,12 @@
     "build_cost" = "buildcost.db"
     "wcmkttest" = "wcmkttest.db" #testing db
 
+# Maps db alias → secrets.toml section name for Turso credentials.
+# Only needed when the secret key doesn't follow the {alias}_turso pattern.
+[db_turso_keys]
+    "sde" = "sdelite_turso"
+    "build_cost" = "buildcost_turso"
+
 [env_db_aliases]
     "prod" = "wcmktprod"
     "dev" = "wcmkttest"
