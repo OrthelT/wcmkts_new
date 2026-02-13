@@ -231,21 +231,20 @@ class MarketOrdersRepository:
 
 def get_market_orders_repository() -> MarketOrdersRepository:
     """
-    Get or create a MarketOrdersRepository instance.
+    Get or create a MarketOrdersRepository instance for the active market.
 
     Uses state.get_service for session state persistence across reruns.
     Falls back to direct instantiation if state module unavailable.
-
-    Returns:
-        MarketOrdersRepository instance
     """
     def _create_market_orders_repository() -> MarketOrdersRepository:
-        db = DatabaseConfig("wcmkt")
+        from state.market_state import get_active_market
+        db = DatabaseConfig(get_active_market().database_alias)
         return MarketOrdersRepository(db)
 
     try:
         from state import get_service
-        return get_service('market_orders_repository', _create_market_orders_repository)
+        from state.market_state import get_active_market_key
+        return get_service(f'market_orders_repository_{get_active_market_key()}', _create_market_orders_repository)
     except ImportError:
         logger.debug("state module unavailable, creating new MarketOrdersRepository instance")
         return _create_market_orders_repository()

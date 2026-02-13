@@ -169,7 +169,7 @@ All pages follow consistent patterns with Streamlit best practices:
 ### Configuration Files
 
 - **`config.toml`**: Streamlit theme and UI configuration
-- **`settings.toml`**: Application settings including ship role definitions and special cases
+- **`settings.toml`**: Application settings including ship role definitions, special cases, `[db_paths]` alias-to-file mappings, and `[db_turso_keys]` alias-to-secret overrides
 - **`.streamlit/secrets.toml`**: Turso credentials (local only, git-ignored)
 - **`pyproject.toml`**: Project metadata, dependencies, dev tools config
 
@@ -313,8 +313,11 @@ df = repo.get_all_stats()  # Returns cached pandas DataFrame
 - **Programmatic sync**: Use `DatabaseConfig.sync()` method
 - **Integrity validation**: Automatic PRAGMA integrity_check before/after sync
 - **Remote fallback**: Auto-fallback to remote queries if local DB is malformed
+- **Cold-start safety**: `init_db.py` validates database *content* (not just file existence) via `verify_db_content()`. Empty or corrupt files are removed and re-synced. `sync()` validates credentials before `libsql.connect()` and cleans up artifacts (`.db`, `-shm`, `-wal`, `-info`) on failure.
 
 **Important:** This application does NOT write market data. Market data updates are handled by the separate backend repository (mkts_backend) which calls ESI APIs and updates the Turso remote database.
+
+**Critical:** Databases must only be created through `DatabaseConfig.sync()`. `libsql.connect()` creates the local `.db` file as a side effect before syncing — if sync fails, the empty file will pass naive existence checks and cause "no such table" errors. Never use `os.path.exists()` alone to determine if a database is initialized; always check for actual table content.
 
 ## Testing Guidelines
 
@@ -364,6 +367,8 @@ Include in PR description:
 - **Integrity errors**: DatabaseConfig will auto-recover with `integrity_check()` and sync
 - **Malformed database**: Repository functions auto-detect and fallback to remote queries
 - **Connection errors**: Review logs in `logs/` directory
+- **Empty db file on cold start**: `libsql.connect()` creates the `.db` file before syncing. If credentials are missing or sync fails, the empty file persists and causes "no such table" errors on subsequent runs. `init_db.py` detects this via `verify_db_content()` and removes empty files before re-syncing. If `.db-info` exists alongside an empty `.db`, it indicates a prior interrupted sync.
+- **Credential naming mismatch**: Database aliases in `[db_paths]` (e.g., `sde`, `build_cost`) may not match Turso secret section names (e.g., `sdelite_turso`, `buildcost_turso`). Use `[db_turso_keys]` in `settings.toml` to map aliases to their correct secret section names. When adding a new database, ensure its turso key is either `{alias}_turso` or has an override in `[db_turso_keys]`.
 
 ### Performance Issues
 - **Slow queries**: Use targeted cache invalidation (e.g., `invalidate_market_caches()`)

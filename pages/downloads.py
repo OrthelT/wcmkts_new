@@ -28,11 +28,9 @@ from services import get_doctrine_service
 from ui.formatters import format_doctrine_name
 from repositories import get_market_repository, get_sde_repository
 from repositories.base import BaseRepository
+from ui.market_selector import render_market_selector
 
 logger = setup_logging(__name__, log_file="downloads.log")
-
-settings = get_settings()
-market_short_name = settings['market']['short_name']
 
 # =============================================================================
 # Lazy Data Loading Functions
@@ -192,6 +190,9 @@ def _get_sde_tables() -> list[str]:
 
 def market_downloads_section():
     """Section for market data downloads."""
+    from state.market_state import get_active_market
+    short_name = get_active_market().short_name
+
     st.subheader("Market Data Downloads", divider="blue")
     st.markdown("Download market orders, statistics, and history data.")
 
@@ -201,7 +202,7 @@ def market_downloads_section():
         st.download_button(
             "Download Market Orders",
             data=_get_market_orders_csv,
-            file_name=f"{market_short_name}_market_orders.csv",
+            file_name=f"{short_name}_market_orders.csv",
             mime="text/csv",
             use_container_width=True,
             icon=":material/download:"
@@ -211,7 +212,7 @@ def market_downloads_section():
         st.download_button(
             "Download Market Stats",
             data=_get_market_stats_csv,
-            file_name=f"{market_short_name}_market_stats.csv",
+            file_name=f"{short_name}_market_stats.csv",
             mime="text/csv",
             use_container_width=True,
             icon=":material/download:"
@@ -221,7 +222,7 @@ def market_downloads_section():
         st.download_button(
             "Download Market History",
             data=_get_market_history_csv,
-            file_name=f"{market_short_name}_market_history.csv",
+            file_name=f"{short_name}_market_history.csv",
             mime="text/csv",
             use_container_width=True,
             icon=":material/download:"
@@ -387,6 +388,8 @@ def sde_downloads_section():
 # =============================================================================
 
 def main():
+    market = render_market_selector()
+
     # Header
     col1, col2 = st.columns([0.15, 0.85], vertical_alignment="bottom")
 

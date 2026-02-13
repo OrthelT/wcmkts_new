@@ -771,7 +771,13 @@ def get_price_service() -> PriceService:
         except Exception:
             pass
 
-        db_config = DatabaseConfig("wcmkt")
+        try:
+            from state.market_state import get_active_market
+            db_alias = get_active_market().database_alias
+        except (ImportError, Exception):
+            db_alias = "wcmkt"
+
+        db_config = DatabaseConfig(db_alias)
         return PriceService.create_default(
             db_config=db_config,
             janice_api_key=janice_key
@@ -779,7 +785,8 @@ def get_price_service() -> PriceService:
 
     try:
         from state import get_service
-        return get_service('price_service', _create_price_service)
+        from state.market_state import get_active_market_key
+        return get_service(f'price_service_{get_active_market_key()}', _create_price_service)
     except ImportError:
         logger.debug("state module unavailable, creating new PriceService instance")
         return _create_price_service()

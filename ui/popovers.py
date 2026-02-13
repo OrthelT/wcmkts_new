@@ -238,7 +238,12 @@ def render_market_popover(
 
         # Market data
         if market_data:
-            st.markdown("**4-HWWF Market**")
+            try:
+                from state.market_state import get_active_market
+                _mkt_name = get_active_market().name
+            except Exception:
+                _mkt_name = "Local Market"
+            st.markdown(f"**{_mkt_name}**")
 
             # If has equivalents, show combined stock
             if equiv_modules:

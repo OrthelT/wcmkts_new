@@ -113,11 +113,18 @@ class ModuleEquivalentsService:
         self._logger = logger_instance or logger
 
     @classmethod
-    def create_default(cls) -> "ModuleEquivalentsService":
+    def create_default(cls, db_alias: str = None) -> "ModuleEquivalentsService":
         """
         Factory method to create service with default configuration.
         """
-        mkt_db = DatabaseConfig("wcmkt")
+        if db_alias is None:
+            try:
+                from state.market_state import get_active_market
+                db_alias = get_active_market().database_alias
+            except (ImportError, Exception):
+                db_alias = "wcmkt"
+
+        mkt_db = DatabaseConfig(db_alias)
         return cls(mkt_db)
 
     # -------------------------------------------------------------------------
@@ -385,7 +392,8 @@ def get_module_equivalents_service() -> ModuleEquivalentsService:
     """
     try:
         from state import get_service
-        return get_service('module_equivalents_service', ModuleEquivalentsService.create_default)
+        from state.market_state import get_active_market_key
+        return get_service(f'module_equivalents_service_{get_active_market_key()}', ModuleEquivalentsService.create_default)
     except ImportError:
         logger.debug("state module unavailable, creating new ModuleEquivalentsService instance")
         return ModuleEquivalentsService.create_default()

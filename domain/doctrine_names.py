@@ -33,9 +33,13 @@ DOCTRINE_DISPLAY_NAMES: dict[str, str] = {
     "WC-EN Shield DPS Maelstrom v1.0": "Maelstrom",
     "special fits": "Special Fits",
     "SUBS - WCEN Entosis": "Entosis",
+    "SUBS - WC Raven Navy Issues": "Raven Navy Issue",
+    "SUBS - WC-EN Ferox": "Ferox",
+
 }
 
 
 def get_doctrine_display_name(raw_name: str) -> str:
     """Return user-friendly display name for a doctrine, or the raw name if unknown."""
-    return DOCTRINE_DISPLAY_NAMES.get(raw_name, raw_name)
+    display_name = DOCTRINE_DISPLAY_NAMES.get(raw_name, raw_name)
+    return display_name

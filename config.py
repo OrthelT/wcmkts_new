@@ -43,26 +43,22 @@ class DatabaseConfig:
     # master config variable for the database to use
     wcdbmap = settings["env_db_aliases"][settings["env"]["env"]]
 
-    _db_paths = {
-        "wcmktprod": settings["db_paths"]["wcmktprod"],  # production database
-        "sde": settings["db_paths"]["sde"],
-        "build_cost": settings["db_paths"]["build_cost"],
-        "wcmkttest": settings["db_paths"]["wcmkttest"],  # testing db
-    }
+    # Build database paths dynamically from settings.toml [db_paths]
+    _db_paths = {alias: path for alias, path in settings["db_paths"].items()}
 
-    _db_turso_urls = {
-        "wcmktprod_turso": st.secrets.wcmktprod_turso.url,
-        "sde_turso": st.secrets.sdelite_turso.url,
-        "build_cost_turso": st.secrets.buildcost_turso.url,
-        "wcmkttest_turso": st.secrets.wcmkttest_turso.url,
-    }
-
-    _db_turso_auth_tokens = {
-        "wcmktprod_turso": st.secrets.wcmktprod_turso.token,
-        "sde_turso": st.secrets.sdelite_turso.token,
-        "build_cost_turso": st.secrets.buildcost_turso.token,
-        "wcmkttest_turso": st.secrets.wcmkttest_turso.token,
-    }
+    # Build Turso credentials dynamically — not all aliases need Turso
+    # Use [db_turso_keys] overrides where secret name ≠ {alias}_turso
+    _turso_key_overrides = settings.get("db_turso_keys", {})
+    _db_turso_urls: dict[str, str] = {}
+    _db_turso_auth_tokens: dict[str, str] = {}
+    for _alias in _db_paths:
+        _turso_key = f"{_alias}_turso"
+        _secret_key = _turso_key_overrides.get(_alias, _turso_key)
+        try:
+            _db_turso_urls[_turso_key] = st.secrets[_secret_key].url
+            _db_turso_auth_tokens[_turso_key] = st.secrets[_secret_key].token
+        except (KeyError, AttributeError):
+            pass  # Not all aliases need Turso (graceful degradation)
 
     # Shared handles per-alias to avoid multiple simultaneous connections to the same file
     _engines: dict[str, object] = {}
@@ -87,8 +83,9 @@ class DatabaseConfig:
         self.alias = alias
         self.path = self._db_paths[alias]
         self.url = f"{dialect}:///{self.path}"
-        self.turso_url = self._db_turso_urls[f"{self.alias}_turso"]
-        self.token = self._db_turso_auth_tokens[f"{self.alias}_turso"]
+        turso_key = f"{self.alias}_turso"
+        self.turso_url = self._db_turso_urls.get(turso_key)
+        self.token = self._db_turso_auth_tokens.get(turso_key)
         self._engine = None
         self._remote_engine = None
         self._libsql_connect = None
@@ -108,11 +105,14 @@ class DatabaseConfig:
     def remote_engine(self):
         eng = DatabaseConfig._remote_engines.get(self.alias)
         if eng is None:
-            turso_url = self._db_turso_urls[f"{self.alias}_turso"]
-            auth_token = self._db_turso_auth_tokens[f"{self.alias}_turso"]
+            if not self.turso_url or not self.token:
+                raise ValueError(
+                    f"No Turso credentials for alias '{self.alias}'. "
+                    "Add [{self.alias}_turso] to .streamlit/secrets.toml"
+                )
             eng = create_engine(
-                f"sqlite+{turso_url}?secure=true",
-                connect_args={"auth_token": auth_token},
+                f"sqlite+{self.turso_url}?secure=true",
+                connect_args={"auth_token": self.token},
             )
             DatabaseConfig._remote_engines[self.alias] = eng
         return eng
@@ -220,7 +220,17 @@ class DatabaseConfig:
         Returns:
             True if sync and integrity check succeeded, False otherwise.
             Callers are responsible for cache invalidation and UI feedback.
+
+        Raises:
+            ValueError: If Turso credentials are missing for this alias.
         """
+        # Fail fast before libsql.connect() can create an empty db file
+        if not self.turso_url or not self.token:
+            raise ValueError(
+                f"Missing Turso credentials for alias '{self.alias}'. "
+                f"Add [{self.alias}_turso] section to .streamlit/secrets.toml"
+            )
+
         sync_start = perf_counter()
         logger.info("-" * 40)
         logger.info(
@@ -228,6 +238,8 @@ class DatabaseConfig:
                 datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
             }"
         )
+
+        file_existed_before = os.path.exists(self.path)
 
         with _SYNC_LOCK:
             self._dispose_local_connections()
@@ -248,6 +260,9 @@ class DatabaseConfig:
                 logger.info("-" * 40)
             except Exception as e:
                 logger.error(f"Database sync failed: {e}")
+                # Clean up empty db file that libsql.connect() may have created
+                if not file_existed_before:
+                    self._cleanup_empty_db_file()
                 raise
             finally:
                 if conn is not None:
@@ -264,6 +279,15 @@ class DatabaseConfig:
                 logger.error("Post-sync integrity check failed.")
 
             return ok
+
+    def _cleanup_empty_db_file(self):
+        """Remove empty db file and libsql/WAL artifacts left by a failed sync."""
+        for suffix in ("", "-shm", "-wal", "-info"):
+            file_path = self.path + suffix
+            if os.path.exists(file_path):
+                with suppress(OSError):
+                    os.remove(file_path)
+                    logger.info(f"Removed {file_path} created during failed sync")
 
     def validate_sync(self) -> bool:
         alias = self.alias

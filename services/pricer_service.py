@@ -351,12 +351,19 @@ class PricerService:
         self._logger = logger_instance or logger
 
     @classmethod
-    def create_default(cls) -> "PricerService":
+    def create_default(cls, db_alias: str = None) -> "PricerService":
         """
         Factory method to create service with default configuration.
         """
+        if db_alias is None:
+            try:
+                from state.market_state import get_active_market
+                db_alias = get_active_market().database_alias
+            except (ImportError, Exception):
+                db_alias = "wcmkt"
+
         sde_db = DatabaseConfig("sde")
-        mkt_db = DatabaseConfig("wcmkt")
+        mkt_db = DatabaseConfig(db_alias)
         market_repo = get_market_orders_repository()
 
         # Get Janice API key from secrets
@@ -610,7 +617,8 @@ def get_pricer_service() -> PricerService:
     """
     try:
         from state import get_service
-        return get_service('pricer_service', PricerService.create_default)
+        from state.market_state import get_active_market_key
+        return get_service(f'pricer_service_{get_active_market_key()}', PricerService.create_default)
     except ImportError:
         logger.debug("state module unavailable, creating new PricerService instance")
         return PricerService.create_default()

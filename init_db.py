@@ -1,33 +1,95 @@
 from config import DatabaseConfig
 import os
+import sqlite3 as sql
 from logging_config import setup_logging
 from sync_state import update_wcmkt_state
 from time import perf_counter
 from init_equivalents import init_module_equivalents, get_equivalents_count
+from settings_service import get_all_market_configs
 
 logger = setup_logging(__name__)
+
+
 def verify_db_path(path):
+    """Check if database file exists on disk."""
     if not os.path.exists(path):
         logger.warning(f"DB path does not exist: {path}")
         return False
     return True
 
+
+def verify_db_content(path):
+    """Check if a database file has actual user tables (not empty/corrupt).
+
+    Returns False if the file doesn't exist, is 0 bytes, or has no tables.
+    Also detects .db / .db-info mismatches from prior interrupted syncs.
+    Uses read-only mode to avoid accidentally creating a new file.
+    """
+    if not os.path.exists(path):
+        return False
+    if os.path.getsize(path) == 0:
+        if os.path.exists(path + "-info"):
+            logger.warning(
+                f"Detected .db-info without valid .db for {path} "
+                f"— likely a prior interrupted sync"
+            )
+        return False
+    try:
+        conn = sql.connect(f"file:{path}?mode=ro", uri=True)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT count(*) FROM sqlite_master "
+            "WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        )
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count > 0
+    except Exception as e:
+        logger.warning(f"DB content verification failed for {path}: {e}")
+        return False
+
+
+def _remove_empty_db(path):
+    """Remove an empty/invalid database file and its libsql/WAL artifacts."""
+    for suffix in ("", "-shm", "-wal", "-info"):
+        file_path = path + suffix
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+                logger.info(f"Removed invalid db file: {file_path}")
+            except OSError as e:
+                logger.warning(f"Failed to remove {file_path}: {e}")
+
+
 def init_db():
-    """ This function checks to see if the databases are available locally. If not, it will sync the databases from the remote server using the configuration in given in the config.py file, using credentials stored in the .streamlit/secrets.toml (for local development) or st.secrets (for production). This code was designed to be used with sqlite embedded-replica databases hosted on Turso Cloud.
+    """Initialize local databases, syncing from Turso when needed.
+
+    Checks each database for both file existence AND valid content (tables).
+    If a file exists but is empty (e.g., left behind by a failed sync),
+    it is removed and sync is re-attempted.
     """
     start_time = perf_counter()
     logger.info("-"*100)
     logger.info("initializing databases")
     logger.info("-"*100)
 
-    mkt_db = DatabaseConfig("wcmkt")
+    # Initialize ALL market databases plus shared databases
+    market_configs = get_all_market_configs()
+    db_paths = {}
+
+    for key, cfg in market_configs.items():
+        try:
+            mkt_db = DatabaseConfig(cfg.database_alias)
+            db_paths[mkt_db.alias] = mkt_db.path
+        except ValueError:
+            logger.warning(f"Skipping unknown market alias: {cfg.database_alias}")
+
+    # Add shared databases
     sde_db = DatabaseConfig("sde")
     build_cost_db = DatabaseConfig("build_cost")
-    db_paths = {
-        mkt_db.alias: mkt_db.path,
-        sde_db.alias: sde_db.path,
-        build_cost_db.alias: build_cost_db.path,
-    }
+    db_paths[sde_db.alias] = sde_db.path
+    db_paths[build_cost_db.alias] = build_cost_db.path
+
     status = {}
 
     for key, value in db_paths.items():
@@ -36,18 +98,26 @@ def init_db():
         db = DatabaseConfig(alias)
 
         try:
-            if verify_db_path(db_path):
-                logger.info(f"DB path exists: {db_path}✔️")
-                status = {key: "success initialized🟢" if verify_db_path(db_path) else "failed🔴"}
+            if verify_db_content(db_path):
+                logger.info(f"DB exists and has content: {db_path}✔️")
+                status[key] = "success initialized🟢"
             else:
-                logger.warning(f"DB path does not exist: {db_path}⚠️")
+                # File is missing, empty, or has no tables — need to sync
+                if verify_db_path(db_path):
+                    logger.warning(f"DB file exists but is empty/invalid: {db_path}, removing")
+                    _remove_empty_db(db_path)
+                else:
+                    logger.warning(f"DB path does not exist: {db_path}⚠️")
                 logger.info("syncing db")
                 logger.info(f"syncing db: {db_path}🛜")
                 db.sync()
-                status = {key: "initialized and synced🟢" if verify_db_path(db_path) else "failed🔴"}
+                if verify_db_content(db_path):
+                    status[key] = "initialized and synced🟢"
+                else:
+                    status[key] = "synced but empty🔴"
         except Exception as e:
-                logger.error(f"Error syncing db: {e}")
-                status = {key: "failed🔴"}
+            logger.error(f"Error syncing db: {e}")
+            status[key] = "failed🔴"
         logger.info(f"db initialization status: {key}: {status[key]}")
     logger.info("-"*100)
     logger.info("updating wcmkt state")
@@ -55,17 +125,22 @@ def init_db():
 
     logger.info("wcmkt state updated✅")
 
-    # Initialize module equivalents table
+    # Initialize module equivalents table for all market databases
     logger.info("-"*100)
     logger.info("initializing module equivalents")
     logger.info("-"*100)
 
-    equiv_count = get_equivalents_count(mkt_db)
-    if equiv_count == 0:
-        init_module_equivalents(mkt_db)
-        equiv_count = get_equivalents_count(mkt_db)
+    for key, cfg in market_configs.items():
+        try:
+            mkt_db = DatabaseConfig(cfg.database_alias)
+            equiv_count = get_equivalents_count(mkt_db)
+            if equiv_count == 0:
+                init_module_equivalents(mkt_db)
+                equiv_count = get_equivalents_count(mkt_db)
+            logger.info(f"module equivalents count ({cfg.database_alias}): {equiv_count}")
+        except Exception as e:
+            logger.warning(f"Could not init equivalents for {cfg.database_alias}: {e}")
 
-    logger.info(f"module equivalents count: {equiv_count}")
     logger.info("-"*100)
 
     end_time = perf_counter()

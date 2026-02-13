@@ -988,7 +988,7 @@ class DoctrineService:
         return self._repo
 
     @classmethod
-    def create_default(cls) -> "DoctrineService":
+    def create_default(cls, db_alias: str = None) -> "DoctrineService":
         """
         Factory method to create service with default configuration.
 
@@ -996,7 +996,14 @@ class DoctrineService:
         """
         from config import DatabaseConfig
 
-        db = DatabaseConfig("wcmkt")
+        if db_alias is None:
+            try:
+                from state.market_state import get_active_market
+                db_alias = get_active_market().database_alias
+            except (ImportError, Exception):
+                db_alias = "wcmkt"
+
+        db = DatabaseConfig(db_alias)
         repository = DoctrineRepository(db)
 
         # Price service is optional but recommended
@@ -1323,8 +1330,9 @@ def get_doctrine_service() -> DoctrineService:
     """
     try:
         from state import get_service
+        from state.market_state import get_active_market_key
 
-        return get_service("doctrine_service", DoctrineService.create_default)
+        return get_service(f"doctrine_service_{get_active_market_key()}", DoctrineService.create_default)
     except ImportError:
         logger.debug("state module unavailable, creating new DoctrineService instance")
         return DoctrineService.create_default()

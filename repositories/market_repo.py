@@ -30,9 +30,9 @@ logger = setup_logging(__name__, log_file="market_repo.log")
 # Implementation Functions (non-cached, for testability)
 # =============================================================================
 
-def _get_all_stats_impl() -> pd.DataFrame:
+def _get_all_stats_impl(db_alias: str = "wcmkt") -> pd.DataFrame:
     """Fetch all rows from marketstats with malformed-DB recovery."""
-    db = DatabaseConfig("wcmkt")
+    db = DatabaseConfig(db_alias)
     start = time.perf_counter()
     query = "SELECT * FROM marketstats"
 
@@ -61,9 +61,9 @@ def _get_all_stats_impl() -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
-def _get_all_orders_impl() -> pd.DataFrame:
+def _get_all_orders_impl(db_alias: str = "wcmkt") -> pd.DataFrame:
     """Fetch all rows from marketorders with malformed-DB recovery."""
-    db = DatabaseConfig("wcmkt")
+    db = DatabaseConfig(db_alias)
     start = time.perf_counter()
     query = "SELECT * FROM marketorders"
 
@@ -92,9 +92,9 @@ def _get_all_orders_impl() -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
-def _get_all_history_impl() -> pd.DataFrame:
+def _get_all_history_impl(db_alias: str = "wcmkt") -> pd.DataFrame:
     """Fetch all rows from market_history with malformed-DB recovery."""
-    db = DatabaseConfig("wcmkt")
+    db = DatabaseConfig(db_alias)
     query = "SELECT * FROM market_history"
 
     def _read_local():
@@ -116,9 +116,9 @@ def _get_all_history_impl() -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
-def _get_history_by_type_impl(type_id: int) -> pd.DataFrame:
+def _get_history_by_type_impl(type_id: int, db_alias: str = "wcmkt") -> pd.DataFrame:
     """Fetch market history for a specific type_id."""
-    db = DatabaseConfig("wcmkt")
+    db = DatabaseConfig(db_alias)
     query = text("""
         SELECT date, average, volume
         FROM market_history
@@ -129,11 +129,11 @@ def _get_history_by_type_impl(type_id: int) -> pd.DataFrame:
         return pd.read_sql_query(query, conn, params={"type_id": type_id})
 
 
-def _get_history_by_type_ids_impl(type_ids: list) -> pd.DataFrame:
+def _get_history_by_type_ids_impl(type_ids: list, db_alias: str = "wcmkt") -> pd.DataFrame:
     """Fetch market history for multiple type_ids."""
     if not type_ids:
         return pd.DataFrame()
-    db = DatabaseConfig("wcmkt")
+    db = DatabaseConfig(db_alias)
     type_ids_str = [str(tid) for tid in type_ids]
     if len(type_ids_str) == 1:
         query = text("SELECT * FROM market_history WHERE type_id = :type_id")
@@ -161,29 +161,29 @@ def _get_category_type_ids_impl(category_name: str) -> list:
     return df["type_id"].tolist()
 
 
-def _get_watchlist_type_ids_impl() -> list:
+def _get_watchlist_type_ids_impl(db_alias: str = "wcmkt") -> list:
     """Fetch distinct type_ids from the watchlist table."""
-    db = DatabaseConfig("wcmkt")
+    db = DatabaseConfig(db_alias)
     query = "SELECT DISTINCT type_id FROM watchlist"
     with db.engine.connect() as conn:
         df = pd.read_sql_query(query, conn)
     return df["type_id"].tolist()
 
 
-def _get_market_type_ids_impl() -> list:
+def _get_market_type_ids_impl(db_alias: str = "wcmkt") -> list:
     """Fetch distinct type_ids from marketorders, merged with watchlist."""
-    db = DatabaseConfig("wcmkt")
+    db = DatabaseConfig(db_alias)
     query = "SELECT DISTINCT type_id FROM marketorders"
     with db.engine.connect() as conn:
         df = pd.read_sql_query(query, conn)
     order_ids = df["type_id"].tolist()
-    watchlist_ids = _get_watchlist_type_ids_impl()
+    watchlist_ids = _get_watchlist_type_ids_impl(db_alias)
     return list(set(order_ids + watchlist_ids))
 
 
-def _get_local_price_impl(type_id: int) -> Optional[float]:
+def _get_local_price_impl(type_id: int, db_alias: str = "wcmkt") -> Optional[float]:
     """Fetch the local market price for a type_id from marketstats."""
-    db = DatabaseConfig("wcmkt")
+    db = DatabaseConfig(db_alias)
     query = text("SELECT price FROM marketstats WHERE type_id = :type_id")
     with db.engine.connect() as conn:
         df = pd.read_sql_query(query, conn, params={"type_id": type_id})
@@ -216,28 +216,28 @@ def _get_sde_info_impl(type_ids: list) -> pd.DataFrame:
 # =============================================================================
 
 @st.cache_data(ttl=600, show_spinner="Loading market stats...")
-def _get_all_stats_cached() -> pd.DataFrame:
-    return _get_all_stats_impl()
+def _get_all_stats_cached(db_alias: str = "wcmkt") -> pd.DataFrame:
+    return _get_all_stats_impl(db_alias)
 
 
 @st.cache_data(ttl=1800, show_spinner="Loading market orders...")
-def _get_all_orders_cached() -> pd.DataFrame:
-    return _get_all_orders_impl()
+def _get_all_orders_cached(db_alias: str = "wcmkt") -> pd.DataFrame:
+    return _get_all_orders_impl(db_alias)
 
 
 @st.cache_data(ttl=3600, show_spinner="Loading market history...")
-def _get_all_history_cached() -> pd.DataFrame:
-    return _get_all_history_impl()
+def _get_all_history_cached(db_alias: str = "wcmkt") -> pd.DataFrame:
+    return _get_all_history_impl(db_alias)
 
 
 @st.cache_data(ttl=3600)
-def _get_history_by_type_cached(type_id: int) -> pd.DataFrame:
-    return _get_history_by_type_impl(type_id)
+def _get_history_by_type_cached(type_id: int, db_alias: str = "wcmkt") -> pd.DataFrame:
+    return _get_history_by_type_impl(type_id, db_alias)
 
 
 @st.cache_data(ttl=1800)
-def _get_history_by_type_ids_cached(type_ids: tuple) -> pd.DataFrame:
-    return _get_history_by_type_ids_impl(list(type_ids))
+def _get_history_by_type_ids_cached(type_ids: tuple, db_alias: str = "wcmkt") -> pd.DataFrame:
+    return _get_history_by_type_ids_impl(list(type_ids), db_alias)
 
 
 @st.cache_data(ttl=3600)
@@ -245,19 +245,19 @@ def _get_category_type_ids_cached(category_name: str) -> list:
     return _get_category_type_ids_impl(category_name)
 
 
-@st.cache_resource
-def _get_watchlist_type_ids_cached() -> list:
-    return _get_watchlist_type_ids_impl()
+@st.cache_data(ttl=600)
+def _get_watchlist_type_ids_cached(db_alias: str = "wcmkt") -> list:
+    return _get_watchlist_type_ids_impl(db_alias)
 
 
 @st.cache_data(ttl=1800)
-def _get_market_type_ids_cached() -> list:
-    return _get_market_type_ids_impl()
+def _get_market_type_ids_cached(db_alias: str = "wcmkt") -> list:
+    return _get_market_type_ids_impl(db_alias)
 
 
 @st.cache_data(ttl=600)
-def _get_local_price_cached(type_id: int) -> Optional[float]:
-    return _get_local_price_impl(type_id)
+def _get_local_price_cached(type_id: int, db_alias: str = "wcmkt") -> Optional[float]:
+    return _get_local_price_impl(type_id, db_alias)
 
 
 @st.cache_resource
@@ -335,19 +335,19 @@ class MarketRepository(BaseRepository):
 
     def get_all_stats(self) -> pd.DataFrame:
         """Get all market statistics (cached, TTL=600s)."""
-        return _get_all_stats_cached()
+        return _get_all_stats_cached(self.db.alias)
 
     def get_all_orders(self) -> pd.DataFrame:
         """Get all market orders (cached, TTL=1800s)."""
-        return _get_all_orders_cached()
+        return _get_all_orders_cached(self.db.alias)
 
     def get_all_history(self) -> pd.DataFrame:
         """Get all market history (cached, TTL=3600s)."""
-        return _get_all_history_cached()
+        return _get_all_history_cached(self.db.alias)
 
     def get_history_by_type(self, type_id: int) -> pd.DataFrame:
         """Get market history for a specific type (cached, TTL=3600s)."""
-        return _get_history_by_type_cached(type_id)
+        return _get_history_by_type_cached(type_id, self.db.alias)
 
     def get_price(self, type_id: int) -> Optional[float]:
         """Get the current sell price for a type from marketstats."""
@@ -366,23 +366,23 @@ class MarketRepository(BaseRepository):
         Direct query against marketstats for a single type_id.
         More efficient than get_price() when you don't need the full stats DataFrame.
         """
-        return _get_local_price_cached(type_id)
+        return _get_local_price_cached(type_id, self.db.alias)
 
     def get_history_by_type_ids(self, type_ids: list) -> pd.DataFrame:
         """Get market history for multiple type_ids (cached, TTL=1800s)."""
-        return _get_history_by_type_ids_cached(tuple(type_ids))
+        return _get_history_by_type_ids_cached(tuple(type_ids), self.db.alias)
 
     def get_category_type_ids(self, category_name: str) -> list:
         """Get type_ids for an SDE category name (cached, TTL=3600s)."""
         return _get_category_type_ids_cached(category_name)
 
     def get_watchlist_type_ids(self) -> list:
-        """Get distinct type_ids from watchlist (cached, cache_resource)."""
-        return _get_watchlist_type_ids_cached()
+        """Get distinct type_ids from watchlist (cached, TTL=600s)."""
+        return _get_watchlist_type_ids_cached(self.db.alias)
 
     def get_market_type_ids(self) -> list:
         """Get all type_ids on market + watchlist (cached, TTL=1800s)."""
-        return _get_market_type_ids_cached()
+        return _get_market_type_ids_cached(self.db.alias)
 
     def get_sde_info(self, type_ids: list = None) -> pd.DataFrame:
         """Get SDE info for type_ids. If None, uses market type_ids."""
@@ -401,18 +401,20 @@ class MarketRepository(BaseRepository):
 
 def get_market_repository() -> MarketRepository:
     """
-    Get or create a MarketRepository instance.
+    Get or create a MarketRepository instance for the active market.
 
     Uses state.get_service for session state persistence across reruns.
     Falls back to direct instantiation if state module unavailable.
     """
     def _create() -> MarketRepository:
-        db = DatabaseConfig("wcmkt")
+        from state.market_state import get_active_market
+        db = DatabaseConfig(get_active_market().database_alias)
         return MarketRepository(db)
 
     try:
         from state import get_service
-        return get_service("market_repository", _create)
+        from state.market_state import get_active_market_key
+        return get_service(f"market_repository_{get_active_market_key()}", _create)
     except ImportError:
         logger.debug("state module unavailable, creating new MarketRepository instance")
         return _create()

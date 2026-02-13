@@ -62,11 +62,38 @@
     "Ferox Navy Issue" = 473
     "Hurricane Fleet Issue" = 494
 
+[markets.primary]
+    name = "4-HWWF Keepstar"
+    short_name = "4H"
+    region_id = 10000003
+    system_id = 30000240
+    structure_id = 1035466617946
+    database_alias = "wcmktprod"
+    database_file = "wcmktprod.db"
+    turso_secret_key = "wcmktprod_turso"
+
+[markets.deployment]
+    name = "B-9C24 Keepstar"
+    short_name = "B9"
+    region_id = 10000023
+    system_id = 30002029
+    structure_id = 1046831245129
+    database_alias = "wcmktnorth"
+    database_file = "wcmktnorth2.db"
+    turso_secret_key = "wcmktnorth_turso"
+
 [db_paths]
     "wcmktprod" = "wcmktprod.db" #production database
+    "wcmktnorth" = "wcmktnorth2.db" #deployment market database
     "sde" = "sdelite.db"
     "build_cost" = "buildcost.db"
     "wcmkttest" = "wcmkttest.db" #testing db
+
+# Maps db alias → secrets.toml section name for Turso credentials.
+# Only needed when the secret key doesn't follow the {alias}_turso pattern.
+[db_turso_keys]
+    "sde" = "sdelite_turso"
+    "build_cost" = "buildcost_turso"
 
 [env_db_aliases]
     "prod" = "wcmktprod"
@@ -74,7 +101,7 @@
 
 [env]
     env = "prod"
-    log_level = "DEBUG" #INFO or DEBUG (case sensitive)
+    log_level = "INFO" #INFO or DEBUG (case sensitive)
 
 [market]
     name = "4-HWWF"

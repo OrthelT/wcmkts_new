@@ -186,11 +186,18 @@ class LowStockService:
         self._logger = logger_instance or logger
 
     @classmethod
-    def create_default(cls) -> "LowStockService":
+    def create_default(cls, db_alias: str = None) -> "LowStockService":
         """
         Factory method to create service with default configuration.
         """
-        mkt_db = DatabaseConfig("wcmkt")
+        if db_alias is None:
+            try:
+                from state.market_state import get_active_market
+                db_alias = get_active_market().database_alias
+            except (ImportError, Exception):
+                db_alias = "wcmkt"
+
+        mkt_db = DatabaseConfig(db_alias)
         sde_db = DatabaseConfig("sde")
         return cls(mkt_db, sde_db)
 
@@ -670,8 +677,9 @@ def get_low_stock_service() -> LowStockService:
     """
     try:
         from state import get_service
+        from state.market_state import get_active_market_key
 
-        return get_service("low_stock_service", LowStockService.create_default)
+        return get_service(f"low_stock_service_{get_active_market_key()}", LowStockService.create_default)
     except ImportError:
         logger.debug("state module unavailable, creating new LowStockService instance")
         return LowStockService.create_default()

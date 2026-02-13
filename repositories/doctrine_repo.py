@@ -93,25 +93,25 @@ class DoctrineRepository:
     # Moved to outer scope to facilitate caching
 
     def get_all_fits(self) -> pd.DataFrame:
-        return get_all_fits_with_cache()
+        return get_all_fits_with_cache(self._db.alias)
 
     def get_fit_by_id(self, fit_id: int) -> pd.DataFrame:
-        return get_fit_by_id_with_cache(fit_id)
+        return get_fit_by_id_with_cache(fit_id, self._db.alias)
 
     def get_all_targets(self) -> pd.DataFrame:
-        return get_all_targets_with_cache()
+        return get_all_targets_with_cache(self._db.alias)
 
     def get_target_by_fit_id(self, fit_id: int, default: int = DEFAULT_SHIP_TARGET) -> int:
-        return get_target_by_fit_id_with_cache(fit_id, default)
+        return get_target_by_fit_id_with_cache(fit_id, default, self._db.alias)
 
     def get_target_by_ship_id(self, ship_id: int, default: int = DEFAULT_SHIP_TARGET) -> int:
-        return get_target_by_ship_id_with_cache(ship_id, default)
+        return get_target_by_ship_id_with_cache(ship_id, default, self._db.alias)
     # =========================================================================
     # Fit Names
     # =========================================================================
 
     def get_fit_name(self, fit_id: int, default: str = "Unknown Fit") -> str:
-        return get_fit_name_with_cache(fit_id, default)
+        return get_fit_name_with_cache(fit_id, default, self._db.alias)
 
     # =========================================================================
     # Doctrine Compositions
@@ -119,18 +119,31 @@ class DoctrineRepository:
 
     def get_all_doctrine_compositions(self) -> pd.DataFrame:
         """
-        Get all doctrine compositions (fleet compositions).
+        Get doctrine compositions filtered by the active market's key.
 
-        Replaces: doctrine_report.py SELECT * FROM doctrine_fits
+        Only returns fits whose market_flag matches the active market
+        (e.g. 'primary') or 'both'.
 
         Returns:
-            DataFrame with columns: doctrine_id, doctrine_name, fit_id
+            DataFrame with columns: doctrine_id, doctrine_name, fit_id, market_flag, ...
         """
         query = "SELECT * FROM doctrine_fits"
 
         try:
             with self._db.engine.connect() as conn:
-                return pd.read_sql_query(query, conn)
+                df = pd.read_sql_query(query, conn)
+
+            # Filter by active market key
+            try:
+                from state.market_state import get_active_market_key
+                market_key = get_active_market_key()
+            except (ImportError, Exception):
+                market_key = "primary"
+
+            if "market_flag" in df.columns:
+                df = df[df["market_flag"].isin([market_key, "both"])]
+
+            return df
         except Exception as e:
             self._logger.error(f"Failed to get doctrine compositions: {e}")
             return pd.DataFrame()
@@ -581,27 +594,23 @@ def _load_preferred_fits() -> dict[str, int]:
 
 def get_doctrine_repository() -> DoctrineRepository:
     """
-    Get or create a DoctrineRepository instance.
+    Get or create a DoctrineRepository instance for the active market.
 
     Uses state.get_service for session state persistence across reruns.
     Falls back to direct instantiation if state module unavailable.
-
-    Example:
-        from repositories import get_doctrine_repository
-
-        repo = get_doctrine_repository()
-        fits = repo.get_all_fits()
     """
     logger.debug("Getting DoctrineRepository")
 
     def _create_doctrine_repository() -> DoctrineRepository:
         logger.debug("Creating DoctrineRepository instance")
-        db = DatabaseConfig("wcmkt")
+        from state.market_state import get_active_market
+        db = DatabaseConfig(get_active_market().database_alias)
         return DoctrineRepository(db)
 
     try:
         from state import get_service
-        return get_service('doctrine_repository', _create_doctrine_repository)
+        from state.market_state import get_active_market_key
+        return get_service(f'doctrine_repository_{get_active_market_key()}', _create_doctrine_repository)
     except ImportError:
         logger.debug("state module unavailable, creating new DoctrineRepository instance")
         return _create_doctrine_repository()
@@ -611,43 +620,26 @@ def get_doctrine_repository() -> DoctrineRepository:
 # Caching Functions
 # =============================================================================
 @st.cache_data(ttl=600, show_spinner="Getting all fits...")
-def get_all_fits_with_cache() -> pd.DataFrame:
+def get_all_fits_with_cache(db_alias: str = "wcmkt") -> pd.DataFrame:
+    """Get all fit data from the doctrines table."""
     logger.info("Getting all fits...with cache")
-    """
-    Get all fit data from the doctrines table.
-
-    Replaces: doctrines.py:get_all_fit_data()
-
-    Returns:
-        DataFrame with columns: fit_id, ship_id, ship_name, type_id,
-        type_name, fit_qty, total_stock, fits_on_mkt, price, avg_vol,
-        group_name, category_id, hulls, etc.
-    """
     query = "SELECT * FROM doctrines"
-    db = DatabaseConfig("wcmkt")
+    db = DatabaseConfig(db_alias)
     engine = db.engine
     try:
         with engine.connect() as conn:
-            df = pd.read_sql_query(query, conn,index_col='id')
+            df = pd.read_sql_query(query, conn, index_col='id')
             return df
     except Exception as e:
         logger.error(f"Failed to get all fits: {e}")
         return pd.DataFrame()
 
 @st.cache_data(ttl=600, show_spinner="Getting fit {fit_id}...")
-def get_fit_by_id_with_cache(fit_id: int) -> pd.DataFrame:
+def get_fit_by_id_with_cache(fit_id: int, db_alias: str = "wcmkt") -> pd.DataFrame:
+    """Get all items for a specific fit."""
     logger.debug(f"Getting fit {fit_id}...with cache")
-    """
-    Get all items for a specific fit.
-
-    Args:
-        fit_id: The fit ID to retrieve
-
-    Returns:
-        DataFrame with all items belonging to the fit
-    """
     query = text("SELECT * FROM doctrines WHERE fit_id = :fit_id")
-    engine = DatabaseConfig("wcmkt").engine
+    engine = DatabaseConfig(db_alias).engine
     try:
         with engine.connect() as conn:
             df = pd.read_sql_query(query, conn, params={"fit_id": fit_id})
@@ -657,16 +649,11 @@ def get_fit_by_id_with_cache(fit_id: int) -> pd.DataFrame:
         return pd.DataFrame()
 
 @st.cache_data(ttl=600, show_spinner="Getting all ship targets...")
-def get_all_targets_with_cache() -> pd.DataFrame:
+def get_all_targets_with_cache(db_alias: str = "wcmkt") -> pd.DataFrame:
+    """Get all ship targets."""
     logger.debug("Getting all ship targets...")
-    """
-    Get all ship targets.
-
-    Returns:
-        DataFrame with columns: fit_id, ship_id, ship_name, ship_target
-    """
     query = text("SELECT * FROM ship_targets")
-    engine = DatabaseConfig("wcmkt").engine
+    engine = DatabaseConfig(db_alias).engine
     try:
         with engine.connect() as conn:
             df = pd.read_sql_query(query, conn)
@@ -676,16 +663,11 @@ def get_all_targets_with_cache() -> pd.DataFrame:
         return pd.DataFrame()
 
 @st.cache_data(ttl=600, show_spinner="Getting target for fit {fit_id}...")
-def get_target_by_fit_id_with_cache(fit_id: int, default: int = DEFAULT_SHIP_TARGET) -> int:
+def get_target_by_fit_id_with_cache(fit_id: int, default: int = DEFAULT_SHIP_TARGET, db_alias: str = "wcmkt") -> int:
+    """Get target stock level for a specific fit."""
     logger.debug(f"Getting target for fit {fit_id}...")
-    """
-    Get target stock level for a specific fit.
-
-    Returns:
-        Target stock level, or default if not found
-    """
     query = text("SELECT ship_target FROM ship_targets WHERE fit_id = :fit_id")
-    engine = DatabaseConfig("wcmkt").engine
+    engine = DatabaseConfig(db_alias).engine
     try:
         with engine.connect() as conn:
             df = pd.read_sql_query(query, conn, params={"fit_id": fit_id})
@@ -697,16 +679,11 @@ def get_target_by_fit_id_with_cache(fit_id: int, default: int = DEFAULT_SHIP_TAR
         return default
 
 @st.cache_data(ttl=600, show_spinner="Getting target for ship {ship_id}...")
-def get_target_by_ship_id_with_cache(ship_id: int, default: int = DEFAULT_SHIP_TARGET) -> int:
+def get_target_by_ship_id_with_cache(ship_id: int, default: int = DEFAULT_SHIP_TARGET, db_alias: str = "wcmkt") -> int:
+    """Get target stock level for a specific ship type."""
     logger.debug(f"Getting target for ship {ship_id}...")
-    """
-    Get target stock level for a specific ship type.
-
-    Returns:
-        Target stock level, or default if not found
-    """
     query = text("SELECT ship_target FROM ship_targets WHERE ship_id = :ship_id")
-    engine = DatabaseConfig("wcmkt").engine
+    engine = DatabaseConfig(db_alias).engine
     try:
         with engine.connect() as conn:
             df = pd.read_sql_query(query, conn, params={"ship_id": ship_id})
@@ -718,17 +695,13 @@ def get_target_by_ship_id_with_cache(ship_id: int, default: int = DEFAULT_SHIP_T
         return default
 
 @st.cache_data(ttl=600, show_spinner="Getting fit name for {fit_id}...")
-def get_fit_name_with_cache(fit_id: int, default: str = "Unknown Fit") -> str:
-    """
-    Get the display name for a fit.
+def get_fit_name_with_cache(fit_id: int, default: str = "Unknown Fit", db_alias: str = "wcmkt") -> str:
+    """Get the display name for a fit.
 
     Checks ship_targets first, then falls back to doctrine_fits.
-
-    Returns:
-        Fit name string
     """
     logger.debug(f"Getting fit name for {fit_id}...")
-    engine = DatabaseConfig("wcmkt").engine
+    engine = DatabaseConfig(db_alias).engine
     try:
         with engine.connect() as conn:
             # Try ship_targets first

@@ -1,5 +1,6 @@
 import requests
 from state import ss_init
+from ui.market_selector import render_market_selector
 from ui.formatters import display_build_cost_tool_description
 from services import get_jita_price, get_type_resolution_service
 from repositories import get_sde_repository, get_market_repository
@@ -357,6 +358,8 @@ def display_material_costs(
 
 
 def main():
+    market = render_market_selector()
+
     logger.info("=" * 80)
     logger.info("Starting build cost tool")
     logger.info("=" * 80)
@@ -671,7 +674,7 @@ def main():
             percent_profit_vale = ((vale_price - low_cost) / vale_price) * 100
 
             st.markdown(
-                f"**4-HWWF price:** <span style='color: orange;'>{
+                f"**{market.short_name} price:** <span style='color: orange;'>{
                     millify(vale_price, precision=2)
                 } ISK</span> ( profit: {
                     millify(profit_per_unit_vale, precision=2)
