@@ -130,7 +130,11 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
         if selected_doctrine_id in exceptions:
             lead_fit_id = exceptions[selected_doctrine_id]
         else:
-            lead_fit_id = selected_data[selected_data['ship_id'] == lead_ship_id].fit_id.iloc[0]
+            lead_matches = selected_data[selected_data['ship_id'] == lead_ship_id]
+            if not lead_matches.empty:
+                lead_fit_id = lead_matches.fit_id.iloc[0]
+            else:
+                lead_fit_id = selected_data.fit_id.iloc[0] if not selected_data.empty else selected_fit_ids[0]
  
         # Create two columns for display
         col1, col2 = st.columns(2)
@@ -314,7 +318,10 @@ def main():
 
     df = service.repository.get_all_doctrine_compositions()
 
-    doctrine_names = df.doctrine_name.unique()
+    doctrine_names = sorted(
+        df.doctrine_name.unique().tolist(),
+        key=format_doctrine_name,
+    )
 
     selected_doctrine = st.sidebar.selectbox("Select a doctrine", doctrine_names, format_func=format_doctrine_name)
     selected_doctrine_id = df[df.doctrine_name == selected_doctrine].doctrine_id.unique()[0]

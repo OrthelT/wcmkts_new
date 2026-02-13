@@ -101,7 +101,7 @@
 
 [env]
     env = "prod"
-    log_level = "DEBUG" #INFO or DEBUG (case sensitive)
+    log_level = "INFO" #INFO or DEBUG (case sensitive)
 
 [market]
     name = "4-HWWF"
