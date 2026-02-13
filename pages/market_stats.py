@@ -318,6 +318,7 @@ def render_title_headers(market_name: str):
 def main():
     """Main function for the market stats page."""
     market = render_market_selector()
+    st.sidebar.divider()
 
     # Initialize databases if needed
     if 'db_init_time' not in st.session_state:
