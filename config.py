@@ -57,7 +57,7 @@ class DatabaseConfig:
         try:
             _db_turso_urls[_turso_key] = st.secrets[_secret_key].url
             _db_turso_auth_tokens[_turso_key] = st.secrets[_secret_key].token
-        except (KeyError, AttributeError):
+        except (KeyError, AttributeError, FileNotFoundError):
             pass  # Not all aliases need Turso (graceful degradation)
 
     # Shared handles per-alias to avoid multiple simultaneous connections to the same file
