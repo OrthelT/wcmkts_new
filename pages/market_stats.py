@@ -189,12 +189,12 @@ def check_for_db_updates(db_alias: str = "wcmkt") -> tuple[bool, float]:
 def check_db(manual_override: bool = False):
     """Check for database updates and sync if needed.
 
-    Uses the active market's database alias so all markets (primary,
-    deployment, etc.) are checked and synced correctly.
+    DatabaseConfig("wcmkt") resolves dynamically to whichever market is
+    active, so this function works for any market without hardcoding.
+    The resolved alias is passed to the cached check so each market has
+    its own cache entry.
     """
-    from state.market_state import get_active_market
-
-    active_alias = get_active_market().database_alias
+    db = DatabaseConfig("wcmkt")
 
     if manual_override:
         check_for_db_updates.clear()
@@ -202,12 +202,12 @@ def check_db(manual_override: bool = False):
         logger.info("check_for_db_updates() cache cleared for manual override")
         logger.info("*" * 60)
 
-    check, local_time = check_for_db_updates(db_alias=active_alias)
+    # Pass resolved alias so the cache keys per-market
+    check, local_time = check_for_db_updates(db_alias=db.alias)
     now = time.time()
-    logger.info(f"check_db() alias={active_alias}, check: {check}, time: {local_time}")
-    last_check_key = f"last_check_{active_alias}"
+    logger.info(f"check_db() alias={db.alias}, check: {check}, time: {local_time}")
     logger.info(
-        f"last_check: {round(now - st.session_state.get(last_check_key, 0), 2)} seconds ago"
+        f"last_check: {round(now - st.session_state.get('last_check', 0), 2)} seconds ago"
     )
 
     if not check:
@@ -216,7 +216,6 @@ def check_db(manual_override: bool = False):
             icon="🕧",
         )
         logger.info("check_db() check is False, syncing local database")
-        db = DatabaseConfig(active_alias)
         invalidate_market_caches()
         db.sync()
 
@@ -233,17 +232,13 @@ def check_db(manual_override: bool = False):
             local_update_since = int(local_update_since.total_seconds() // 60)
             local_update_since = f"{local_update_since} mins"
         else:
-            local_update_since = DatabaseConfig(active_alias).get_time_since_update(
-                "marketstats", remote=False
-            )
+            local_update_since = db.get_time_since_update("marketstats", remote=False)
         st.toast(f"DB updated: {local_update_since} ago", icon="✅")
 
 
 def maybe_run_check():
-    from state.market_state import get_active_market
-
-    active_alias = get_active_market().database_alias
-    last_check_key = f"last_check_{active_alias}"
+    resolved_alias = DatabaseConfig("wcmkt").alias
+    last_check_key = f"last_check_{resolved_alias}"
 
     now = time.time()
     if last_check_key not in st.session_state:

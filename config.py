@@ -68,12 +68,22 @@ class DatabaseConfig:
     _sqlite_local_connects: dict[str, object] = {}
     _ro_engines: dict[str, object] = {}
 
+    @staticmethod
+    def _resolve_active_market_alias() -> str | None:
+        """Return the database_alias for the active market, or None outside Streamlit."""
+        try:
+            from state.market_state import get_active_market
+
+            return get_active_market().database_alias
+        except Exception:
+            return None
+
     def __init__(self, alias: str, dialect: str = "sqlite+libsql"):
-        if alias == "wcmkt":
-            alias = self.wcdbmap
-        elif alias == "wcmkt2" or alias == "wcmkt3":
-            logger.warning(f"Alias {alias} is deprecated, using {self.wcdbmap} instead")
-            alias = self.wcdbmap
+        if alias in ("wcmkt", "wcmkt2", "wcmkt3"):
+            if alias != "wcmkt":
+                logger.warning(f"Alias {alias} is deprecated, use 'wcmkt' instead")
+            resolved = self._resolve_active_market_alias()
+            alias = resolved if resolved else self.wcdbmap
 
         if alias not in self._db_paths:
             raise ValueError(
