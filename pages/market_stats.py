@@ -179,7 +179,12 @@ def initialize_main_function():
 
 
 @st.cache_data(ttl=1800)
-def check_for_db_updates(db_alias: str = "wcmkt") -> tuple[bool, float]:
+def check_for_db_updates(db_alias: str) -> tuple[bool, float]:
+    """Check whether local and remote databases are in sync.
+
+    The db_alias must be an explicit alias (e.g. "wcmktprod", "wcmktnorth")
+    so the cache key correctly distinguishes between markets.
+    """
     db = DatabaseConfig(db_alias)
     check = db.validate_sync()
     local_time = datetime.now()
@@ -187,20 +192,20 @@ def check_for_db_updates(db_alias: str = "wcmkt") -> tuple[bool, float]:
 
 
 def check_db(manual_override: bool = False):
-    """Check for database updates and sync if needed."""
+    """Check for database updates on the *active* market and sync if needed."""
+    from state.market_state import get_active_market
+    active_alias = get_active_market().database_alias
+
     if manual_override:
         check_for_db_updates.clear()
         logger.info("*" * 60)
         logger.info("check_for_db_updates() cache cleared for manual override")
         logger.info("*" * 60)
 
-    check, local_time = check_for_db_updates()
+    check, local_time = check_for_db_updates(active_alias)
     now = time.time()
-    logger.info(f"check_db() check: {check}, time: {local_time}")
+    logger.info(f"check_db() check: {check}, time: {local_time}, alias: {active_alias}")
     logger.info(f"last_check: {round(now - st.session_state.get('last_check', 0), 2)} seconds ago")
-
-    from state.market_state import get_active_market
-    active_alias = get_active_market().database_alias
 
     if not check:
         st.toast("More recent remote database data available, syncing local database", icon="🕧")
