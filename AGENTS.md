@@ -144,15 +144,11 @@ All pages follow consistent patterns with Streamlit best practices:
 - `marketorders`: Individual buy/sell orders
 - `marketstats`: Aggregated market statistics
 - `market_history`: Historical price/volume data
-- `region_orders`: Regional market orders
-- `region_history`: Regional historical data
 - `doctrines`: Fleet doctrine configurations
 - `doctrine_fits`: Doctrine fitting details
-- `doctrine_info`: Additional doctrine metadata
 - `ship_targets`: Target inventory levels
 - `lead_ships`: Leadership ship configurations
 - `watchlist`: Market watchlist items
-- `nakah_watchlist`: Nakah-specific watchlist
 - `updatelog`: Database update tracking
 - `module_equivalents`: Interchangeable faction module mappings for aggregated stock calculations
 
