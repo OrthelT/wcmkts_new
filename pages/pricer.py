@@ -26,6 +26,7 @@ from domain import InputFormat
 from state import ss_get, ss_has, ss_init, ss_set
 from ui.formatters import get_image_url
 from ui.market_selector import render_market_selector
+from init_db import ensure_market_db_ready
 
 logger = setup_logging(__name__, log_file="pricer.log")
 
@@ -212,6 +213,13 @@ def render_fit_header(result):
 
 def main():
     market = render_market_selector()
+
+    if not ensure_market_db_ready(market.database_alias):
+        st.error(
+            f"Database for **{market.name}** is not available. "
+            "Check Turso credentials and network connectivity."
+        )
+        st.stop()
 
     # Initialize session state
     ss_init({

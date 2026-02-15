@@ -9,7 +9,9 @@ when the market is switched (clearing market-specific services and caches).
 import streamlit as st
 
 from domain.market_config import MarketConfig, DEFAULT_MARKET_KEY
+from logging_config import setup_logging
 
+logger = setup_logging(__name__)
 
 def get_active_market_key() -> str:
     """Return the key of the currently active market (e.g. 'primary')."""
@@ -23,7 +25,11 @@ def get_active_market() -> MarketConfig:
     key = get_active_market_key()
     configs = get_all_market_configs()
     if key not in configs:
+        logger.error(f"Unknown market key '{key}'. Available: {list(configs.keys())}")
+        logger.info("--------------------------------")
         key = DEFAULT_MARKET_KEY
+        logger.info(f"Using default market key '{key}'")
+        logger.info("--------------------------------")
     return configs[key]
 
 

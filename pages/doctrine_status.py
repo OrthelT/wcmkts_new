@@ -15,6 +15,7 @@ from ui import get_fitting_column_config, render_progress_bar_html, format_doctr
 from services import get_status_filter_options
 from state import ss_init, ss_get
 from ui.market_selector import render_market_selector
+from init_db import ensure_market_db_ready
 
 # DISABLED: Jita prices - restore when backend caching implemented
 # from services import get_price_service
@@ -140,6 +141,13 @@ def _rebuild_selections():
 
 def main():
     market = render_market_selector()
+
+    if not ensure_market_db_ready(market.database_alias):
+        st.error(
+            f"Database for **{market.name}** is not available. "
+            "Check Turso credentials and network connectivity."
+        )
+        st.stop()
 
     # App title and logo
     col1, col2, col3 = st.columns([0.2, 0.5, 0.3])

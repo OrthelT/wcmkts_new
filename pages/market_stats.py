@@ -10,7 +10,7 @@ import millify
 from config import DatabaseConfig, get_settings
 from services import get_doctrine_service
 from services.market_service import get_market_service
-from init_db import init_db
+from init_db import init_db, ensure_market_db_ready
 from sync_state import update_wcmkt_state
 from services import get_type_resolution_service
 from pages.components.market_components import (
@@ -150,29 +150,41 @@ def check_selected_category(selected_category: str, show_all: bool) -> list | No
 # =============================================================================
 
 def initialize_main_function():
+    """Initialize all databases (primary + deployment + shared).
+
+    Only sets ``db_initialized`` to True once *every* database has been
+    verified to contain tables.  If a previous attempt partially failed,
+    init_db() is re-run on the next rerun so the missing databases get
+    another chance to sync.
+    """
     logger.info("*" * 60)
     logger.info("Starting main function")
     logger.info("*" * 60)
 
     if not st.session_state.get('db_initialized'):
         logger.info("-" * 30)
-        logger.info("Initializing database")
+        logger.info("Initializing databases (all markets + shared)")
         result = init_db()
         if result:
-            st.toast("Database initialized successfully", icon="✅")
+            st.toast("All databases initialized successfully", icon="✅")
             st.session_state.db_initialized = True
         else:
-            st.toast("Database initialization failed", icon="❌")
-            st.session_state.db_initialized = False
+            st.toast("One or more databases failed to initialize", icon="❌")
+            # Leave db_initialized unset so the next rerun retries
     else:
         logger.info("Databases already initialized in session state")
     logger.info("*" * 60)
     st.session_state.db_init_time = datetime.now()
-    return True
+    return st.session_state.get('db_initialized', False)
 
 
 @st.cache_data(ttl=1800)
-def check_for_db_updates(db_alias: str = "wcmkt") -> tuple[bool, float]:
+def check_for_db_updates(db_alias: str) -> tuple[bool, float]:
+    """Check whether local and remote databases are in sync.
+
+    The db_alias must be an explicit alias (e.g. "wcmktprod", "wcmktnorth")
+    so the cache key correctly distinguishes between markets.
+    """
     db = DatabaseConfig(db_alias)
     check = db.validate_sync()
     local_time = datetime.now()
@@ -180,20 +192,20 @@ def check_for_db_updates(db_alias: str = "wcmkt") -> tuple[bool, float]:
 
 
 def check_db(manual_override: bool = False):
-    """Check for database updates and sync if needed."""
+    """Check for database updates on the *active* market and sync if needed."""
+    from state.market_state import get_active_market
+    active_alias = get_active_market().database_alias
+
     if manual_override:
         check_for_db_updates.clear()
         logger.info("*" * 60)
         logger.info("check_for_db_updates() cache cleared for manual override")
         logger.info("*" * 60)
 
-    check, local_time = check_for_db_updates()
+    check, local_time = check_for_db_updates(active_alias)
     now = time.time()
-    logger.info(f"check_db() check: {check}, time: {local_time}")
+    logger.info(f"check_db() check: {check}, time: {local_time}, alias: {active_alias}")
     logger.info(f"last_check: {round(now - st.session_state.get('last_check', 0), 2)} seconds ago")
-
-    from state.market_state import get_active_market
-    active_alias = get_active_market().database_alias
 
     if not check:
         st.toast("More recent remote database data available, syncing local database", icon="🕧")
@@ -326,6 +338,15 @@ def main():
         init_result = initialize_main_function()
     else:
         init_result = True
+    # Ensure the active market's database is synced before any queries.
+    # On cold start or after a market switch, the target db may not exist yet.
+    if not ensure_market_db_ready(market.database_alias):
+        st.error(
+            f"Database for **{market.name}** is not available. "
+            "Check Turso credentials and network connectivity."
+        )
+        st.stop()
+
     if init_result:
         update_wcmkt_state()
 

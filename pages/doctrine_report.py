@@ -17,6 +17,7 @@ from ui.formatters import get_doctrine_report_column_config, get_image_url, get_
 from ui.popovers import render_ship_with_popover, render_market_popover, has_equivalent_modules
 from state import ss_init, ss_get
 from ui.market_selector import render_market_selector
+from init_db import ensure_market_db_ready
 
 logger = setup_logging(__name__, log_file="doctrine_report.log")
 
@@ -288,6 +289,13 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
 
 def main():
     market = render_market_selector()
+
+    if not ensure_market_db_ready(market.database_alias):
+        st.error(
+            f"Database for **{market.name}** is not available. "
+            "Check Turso credentials and network connectivity."
+        )
+        st.stop()
 
     # Initialize session state for target multiplier and selected modules
     ss_init({

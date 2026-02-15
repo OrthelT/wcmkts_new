@@ -29,6 +29,7 @@ from ui.formatters import format_doctrine_name
 from repositories import get_market_repository, get_sde_repository
 from repositories.base import BaseRepository
 from ui.market_selector import render_market_selector
+from init_db import ensure_market_db_ready
 
 logger = setup_logging(__name__, log_file="downloads.log")
 
@@ -389,6 +390,13 @@ def sde_downloads_section():
 
 def main():
     market = render_market_selector()
+
+    if not ensure_market_db_ready(market.database_alias):
+        st.error(
+            f"Database for **{market.name}** is not available. "
+            "Check Turso credentials and network connectivity."
+        )
+        st.stop()
 
     # Header
     col1, col2 = st.columns([0.15, 0.85], vertical_alignment="bottom")
