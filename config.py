@@ -68,12 +68,26 @@ class DatabaseConfig:
     _sqlite_local_connects: dict[str, object] = {}
     _ro_engines: dict[str, object] = {}
 
+    @staticmethod
+    def _resolve_active_alias() -> str:
+        """Return the database alias for the currently active market.
+
+        Reads ``active_market_key`` from Streamlit session state and maps
+        it to the corresponding ``database_alias``.  Falls back to the
+        static ``wcdbmap`` (from settings.toml) when session state is not
+        available (e.g. during tests or CLI scripts).
+        """
+        try:
+            from state.market_state import get_active_market
+            return get_active_market().database_alias
+        except Exception:
+            return DatabaseConfig.wcdbmap
+
     def __init__(self, alias: str, dialect: str = "sqlite+libsql"):
-        if alias == "wcmkt":
-            alias = self.wcdbmap
-        elif alias == "wcmkt2" or alias == "wcmkt3":
-            logger.warning(f"Alias {alias} is deprecated, using {self.wcdbmap} instead")
-            alias = self.wcdbmap
+        if alias in ("wcmkt", "wcmkt2", "wcmkt3"):
+            if alias != "wcmkt":
+                logger.warning(f"Alias {alias} is deprecated, resolving to active market")
+            alias = self._resolve_active_alias()
 
         if alias not in self._db_paths:
             raise ValueError(
@@ -211,11 +225,66 @@ class DatabaseConfig:
             logger.error(f"Integrity check error ({self.alias}): {e}")
             return False
 
+    def _sync_once(self) -> bool:
+        """Execute a single sync attempt against the remote Turso replica.
+
+        Creates a libsql embedded-replica connection, syncs, verifies the
+        data is current via the *same* connection, then closes.
+
+        Returns True if sync succeeded and the local data matches remote.
+        """
+        sync_start = perf_counter()
+        file_existed_before = os.path.exists(self.path)
+        conn = None
+        try:
+            conn = libsql.connect(
+                self.path, sync_url=self.turso_url, auth_token=self.token
+            )
+            conn.sync()
+            sync_time = round((perf_counter() - sync_start) * 1000, 2)
+            logger.info(
+                f"sync() completed for {self.alias} in {sync_time} ms at "
+                f"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+
+            # Log the post-sync timestamp for market databases only.
+            # Non-market databases (sde, build_cost) lack the marketstats
+            # table, so this diagnostic check is skipped for them.
+            try:
+                row = conn.execute(
+                    "SELECT count(*) FROM sqlite_master "
+                    "WHERE type='table' AND name='marketstats'"
+                ).fetchone()
+                if row and row[0] > 0:
+                    ts_row = conn.execute(
+                        "SELECT MAX(last_update) FROM marketstats"
+                    ).fetchone()
+                    local_ts = ts_row[0] if ts_row else None
+                    logger.info(f"Post-sync local MAX(last_update) via sync conn: {local_ts}")
+            except Exception:
+                pass
+
+            return True
+        except Exception as e:
+            logger.error(f"Database sync failed for {self.alias}: {e}")
+            if not file_existed_before:
+                self._cleanup_empty_db_file()
+            raise
+        finally:
+            if conn is not None:
+                with suppress(Exception):
+                    conn.close()
+                    logger.info("Sync connection closed")
+
     def sync(self) -> bool:
         """Synchronize the local database with the remote Turso replica safely.
 
         Uses _SYNC_LOCK to serialize sync operations and disposes local
         connections to prevent corruption.
+
+        If the first sync attempt leaves stale data (e.g. because the local
+        file had embedded-replica metadata from a different Turso database),
+        the local file is deleted and a fresh sync is attempted.
 
         Returns:
             True if sync and integrity check succeeded, False otherwise.
@@ -231,47 +300,40 @@ class DatabaseConfig:
                 f"Add [{self.alias}_turso] section to .streamlit/secrets.toml"
             )
 
-        sync_start = perf_counter()
         logger.info("-" * 40)
         logger.info(
-            f"sync() starting for {self.alias} at {
-                datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
-            }"
+            f"sync() starting for {self.alias} "
+            f"(url={self.turso_url}) at "
+            f"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}"
         )
-
-        file_existed_before = os.path.exists(self.path)
 
         with _SYNC_LOCK:
             self._dispose_local_connections()
-            logger.debug("Disposing local connections and syncing database...")
-            conn = None
-            try:
-                conn = libsql.connect(
-                    self.path, sync_url=self.turso_url, auth_token=self.token
+            logger.debug("Disposed local connections, starting sync...")
+
+            self._sync_once()
+
+            # Verify local data matches remote.  If it doesn't, the local
+            # file likely has replica metadata from a different Turso DB
+            # (e.g. the old static wcdbmap).  Delete and retry from scratch.
+            if not self._local_matches_remote():
+                logger.warning(
+                    f"Post-sync data mismatch for {self.alias} — "
+                    "local file may have stale replica metadata. "
+                    "Deleting local file and retrying fresh sync."
                 )
-                conn.sync()
-                sync_end = perf_counter()
-                sync_time = round((sync_end - sync_start) * 1000, 2)
-                logger.info(
-                    f"sync() completed for {self.alias} in {sync_time} ms at {
-                        datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
-                    }"
-                )
-                logger.info("-" * 40)
-            except Exception as e:
-                logger.error(f"Database sync failed: {e}")
-                # Clean up empty db file that libsql.connect() may have created
-                if not file_existed_before:
-                    self._cleanup_empty_db_file()
-                raise
-            finally:
-                if conn is not None:
-                    with suppress(Exception):
-                        conn.close()
-                        logger.info("Connection closed")
+                self._dispose_local_connections()
+                self._cleanup_empty_db_file()
+                self._sync_once()
+
+                if not self._local_matches_remote():
+                    logger.error(
+                        f"Fresh sync for {self.alias} still has data mismatch"
+                    )
 
             update_time = datetime.now(timezone.utc)
             logger.info(f"Database synced at {update_time} UTC")
+            logger.info("-" * 40)
 
             # Post-sync integrity validation
             ok = self.integrity_check()
@@ -279,6 +341,65 @@ class DatabaseConfig:
                 logger.error("Post-sync integrity check failed.")
 
             return ok
+
+    def _has_marketstats_table(self) -> bool:
+        """Return True if the local database contains a ``marketstats`` table."""
+        try:
+            local_conn = sql.connect(f"file:{self.path}?mode=ro", uri=True)
+            try:
+                row = local_conn.execute(
+                    "SELECT count(*) FROM sqlite_master "
+                    "WHERE type='table' AND name='marketstats'"
+                ).fetchone()
+                return row[0] > 0
+            finally:
+                local_conn.close()
+        except Exception:
+            return False
+
+    def _local_matches_remote(self) -> bool:
+        """Check if local MAX(last_update) matches remote after sync.
+
+        Uses a plain sqlite3 read-only connection for the local read to
+        avoid any libsql driver caching or replica-state issues.
+
+        Only meaningful for databases that contain a ``marketstats`` table.
+        Returns True unconditionally for databases without one (e.g. sde,
+        build_cost) since there is no market timestamp to compare.
+        """
+        if not self._has_marketstats_table():
+            logger.debug(
+                f"_local_matches_remote({self.alias}): skipped — "
+                "no marketstats table"
+            )
+            return True
+
+        try:
+            # Read remote via Turso
+            with self.remote_engine.connect() as conn:
+                row = conn.execute(
+                    text("SELECT MAX(last_update) FROM marketstats")
+                ).fetchone()
+                remote_ts = row[0] if row else None
+
+            # Read local via plain sqlite3 (bypasses libsql driver entirely)
+            local_conn = sql.connect(f"file:{self.path}?mode=ro", uri=True)
+            try:
+                row = local_conn.execute(
+                    "SELECT MAX(last_update) FROM marketstats"
+                ).fetchone()
+                local_ts = row[0] if row else None
+            finally:
+                local_conn.close()
+
+            logger.info(
+                f"_local_matches_remote({self.alias}): "
+                f"remote={remote_ts}, local={local_ts}"
+            )
+            return remote_ts is not None and remote_ts == local_ts
+        except Exception as e:
+            logger.warning(f"_local_matches_remote check failed: {e}")
+            return False
 
     def _cleanup_empty_db_file(self):
         """Remove empty db file and libsql/WAL artifacts left by a failed sync."""

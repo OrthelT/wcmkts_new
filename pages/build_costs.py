@@ -1,6 +1,7 @@
 import requests
 from state import ss_init
 from ui.market_selector import render_market_selector
+from init_db import ensure_market_db_ready
 from ui.formatters import display_build_cost_tool_description
 from services import get_jita_price, get_type_resolution_service
 from repositories import get_sde_repository, get_market_repository
@@ -359,6 +360,13 @@ def display_material_costs(
 
 def main():
     market = render_market_selector()
+
+    if not ensure_market_db_ready(market.database_alias):
+        st.error(
+            f"Database for **{market.name}** is not available. "
+            "Check Turso credentials and network connectivity."
+        )
+        st.stop()
 
     logger.info("=" * 80)
     logger.info("Starting build cost tool")

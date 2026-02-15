@@ -50,10 +50,10 @@ print('Integrity check:', db.integrity_check())
 ### Linting and Formatting
 ```bash
 # Check code style with Ruff
-uv run ruff check .
+uvx ruff check .
 
 # Auto-format code with Ruff
-uv run ruff format .
+uvx ruff format .
 ```
 
 ### Testing

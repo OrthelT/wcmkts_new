@@ -62,18 +62,22 @@ def _remove_empty_db(path):
 
 
 def init_db():
-    """Initialize local databases, syncing from Turso when needed.
+    """Initialize ALL local databases, syncing from Turso when needed.
 
     Checks each database for both file existence AND valid content (tables).
     If a file exists but is empty (e.g., left behind by a failed sync),
     it is removed and sync is re-attempted.
+
+    Returns True only when every market and shared database has been
+    verified to contain tables.  Returns False if any database could
+    not be made ready (missing credentials, network failure, etc.).
     """
     start_time = perf_counter()
     logger.info("-"*100)
     logger.info("initializing databases")
     logger.info("-"*100)
 
-    # Initialize ALL market databases plus shared databases
+    # Collect ALL market databases plus shared databases
     market_configs = get_all_market_configs()
     db_paths = {}
 
@@ -148,8 +152,51 @@ def init_db():
     logger.info(f"TIME init_db() = {elapsed_time} ms")
     logger.info("-"*100)
 
+    # Only report success if every database has content
+    all_ok = all("🟢" in v for v in status.values())
+    if not all_ok:
+        failed = [k for k, v in status.items() if "🟢" not in v]
+        logger.error(f"init_db() completed with failures: {failed}")
+    return all_ok
 
-    return True
+def ensure_market_db_ready(db_alias: str) -> bool:
+    """Verify a market database has content, syncing if necessary.
+
+    Called after market switches to ensure the target database exists
+    and has tables before any queries run. Without this check, accessing
+    an unsynced database causes SQLite to create an empty file, leading
+    to 'no such table' errors.
+
+    Returns True if the database is ready, False if it could not be made ready.
+    """
+    try:
+        db = DatabaseConfig(db_alias)
+    except ValueError:
+        logger.error(f"Unknown database alias: {db_alias}")
+        return False
+
+    if verify_db_content(db.path):
+        return True
+
+    # Database is missing or empty — attempt sync
+    logger.warning(f"Market database '{db_alias}' ({db.path}) not ready, attempting sync")
+
+    if verify_db_path(db.path):
+        _remove_empty_db(db.path)
+
+    try:
+        db.sync()
+    except Exception as e:
+        logger.error(f"Failed to sync market database '{db_alias}': {e}")
+        return False
+
+    if verify_db_content(db.path):
+        logger.info(f"Market database '{db_alias}' synced and ready")
+        return True
+
+    logger.error(f"Market database '{db_alias}' still empty after sync")
+    return False
+
 
 if __name__ == "__main__":
     pass
