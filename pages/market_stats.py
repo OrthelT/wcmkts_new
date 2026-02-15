@@ -10,7 +10,7 @@ import millify
 from config import DatabaseConfig, get_settings
 from services import get_doctrine_service
 from services.market_service import get_market_service
-from init_db import init_db
+from init_db import init_db, ensure_market_db_ready
 from sync_state import update_wcmkt_state
 from services import get_type_resolution_service
 from pages.components.market_components import (
@@ -326,6 +326,15 @@ def main():
         init_result = initialize_main_function()
     else:
         init_result = True
+    # Ensure the active market's database is synced before any queries.
+    # On cold start or after a market switch, the target db may not exist yet.
+    if not ensure_market_db_ready(market.database_alias):
+        st.error(
+            f"Database for **{market.name}** is not available. "
+            "Check Turso credentials and network connectivity."
+        )
+        st.stop()
+
     if init_result:
         update_wcmkt_state()
 
