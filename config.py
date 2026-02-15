@@ -247,18 +247,22 @@ class DatabaseConfig:
                 f"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}"
             )
 
-            # Verify the sync actually pulled data by reading from the
-            # SAME connection (before close).  If the local file had stale
-            # embedded-replica metadata from a different Turso database,
-            # the sync silently does nothing and this check catches it.
+            # Log the post-sync timestamp for market databases only.
+            # Non-market databases (sde, build_cost) lack the marketstats
+            # table, so this diagnostic check is skipped for them.
             try:
                 row = conn.execute(
-                    "SELECT MAX(last_update) FROM marketstats"
+                    "SELECT count(*) FROM sqlite_master "
+                    "WHERE type='table' AND name='marketstats'"
                 ).fetchone()
-                local_ts = row[0] if row else None
-                logger.info(f"Post-sync local MAX(last_update) via sync conn: {local_ts}")
+                if row and row[0] > 0:
+                    ts_row = conn.execute(
+                        "SELECT MAX(last_update) FROM marketstats"
+                    ).fetchone()
+                    local_ts = ts_row[0] if ts_row else None
+                    logger.info(f"Post-sync local MAX(last_update) via sync conn: {local_ts}")
             except Exception:
-                local_ts = None
+                pass
 
             return True
         except Exception as e:
@@ -338,12 +342,38 @@ class DatabaseConfig:
 
             return ok
 
+    def _has_marketstats_table(self) -> bool:
+        """Return True if the local database contains a ``marketstats`` table."""
+        try:
+            local_conn = sql.connect(f"file:{self.path}?mode=ro", uri=True)
+            try:
+                row = local_conn.execute(
+                    "SELECT count(*) FROM sqlite_master "
+                    "WHERE type='table' AND name='marketstats'"
+                ).fetchone()
+                return row[0] > 0
+            finally:
+                local_conn.close()
+        except Exception:
+            return False
+
     def _local_matches_remote(self) -> bool:
         """Check if local MAX(last_update) matches remote after sync.
 
         Uses a plain sqlite3 read-only connection for the local read to
         avoid any libsql driver caching or replica-state issues.
+
+        Only meaningful for databases that contain a ``marketstats`` table.
+        Returns True unconditionally for databases without one (e.g. sde,
+        build_cost) since there is no market timestamp to compare.
         """
+        if not self._has_marketstats_table():
+            logger.debug(
+                f"_local_matches_remote({self.alias}): skipped — "
+                "no marketstats table"
+            )
+            return True
+
         try:
             # Read remote via Turso
             with self.remote_engine.connect() as conn:
