@@ -3,7 +3,7 @@ from config import DatabaseConfig
 from datetime import timezone, datetime, timedelta
 from time import perf_counter
 from state.session_state import ss_set
-
+from state.market_state import get_active_market
 logger = setup_logging(__name__)
 
 def update_wcmkt_state(db_alias: str = None)-> None:
@@ -15,7 +15,6 @@ def update_wcmkt_state(db_alias: str = None)-> None:
     """
     if db_alias is None:
         try:
-            from state.market_state import get_active_market
             db_alias = get_active_market().database_alias
         except (ImportError, Exception):
             db_alias = "wcmkt"
@@ -38,7 +37,10 @@ def update_wcmkt_state(db_alias: str = None)-> None:
     remote_update_status['needs_update'] = remote_update_status['time_since'] > timedelta(hours=2)
     logger.info("-"*60)
     ss_set('local_update_status', local_update_status)
-    logger.info("local_status saved to session state:")
+    logger.info(f"local_status saved to session state: {db.alias, db.path}")
+    active_market = get_active_market()
+    logger.info(f"Active market: {active_market.database_alias}")
+    logger.info("--------------------------------")
     for k,v in local_update_status.items():
         logger.info(f"{k}: {v}")
     logger.info("-"*60)

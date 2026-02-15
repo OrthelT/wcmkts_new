@@ -131,19 +131,19 @@ def init_db():
 
     # Initialize module equivalents table for all market databases
     logger.info("-"*100)
-    logger.info("initializing module equivalents")
+    logger.info("module equivalents disabled")
     logger.info("-"*100)
 
-    for key, cfg in market_configs.items():
-        try:
-            mkt_db = DatabaseConfig(cfg.database_alias)
-            equiv_count = get_equivalents_count(mkt_db)
-            if equiv_count == 0:
-                init_module_equivalents(mkt_db)
-                equiv_count = get_equivalents_count(mkt_db)
-            logger.info(f"module equivalents count ({cfg.database_alias}): {equiv_count}")
-        except Exception as e:
-            logger.warning(f"Could not init equivalents for {cfg.database_alias}: {e}")
+#    for key, cfg in market_configs.items():
+#        try:
+#            mkt_db = DatabaseConfig(cfg.database_alias)
+#            equiv_count = get_equivalents_count(mkt_db)
+#            if equiv_count == 0:
+#                init_module_equivalents(mkt_db)
+#                equiv_count = get_equivalents_count(mkt_db)
+#            logger.info(f"module equivalents count ({cfg.database_alias}): {equiv_count}")
+#        except Exception as e:
+#            logger.warning(f"Could not init equivalents for {cfg.database_alias}: {e}")
 
     logger.info("-"*100)
 
