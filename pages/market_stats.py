@@ -150,25 +150,32 @@ def check_selected_category(selected_category: str, show_all: bool) -> list | No
 # =============================================================================
 
 def initialize_main_function():
+    """Initialize all databases (primary + deployment + shared).
+
+    Only sets ``db_initialized`` to True once *every* database has been
+    verified to contain tables.  If a previous attempt partially failed,
+    init_db() is re-run on the next rerun so the missing databases get
+    another chance to sync.
+    """
     logger.info("*" * 60)
     logger.info("Starting main function")
     logger.info("*" * 60)
 
     if not st.session_state.get('db_initialized'):
         logger.info("-" * 30)
-        logger.info("Initializing database")
+        logger.info("Initializing databases (all markets + shared)")
         result = init_db()
         if result:
-            st.toast("Database initialized successfully", icon="✅")
+            st.toast("All databases initialized successfully", icon="✅")
             st.session_state.db_initialized = True
         else:
-            st.toast("Database initialization failed", icon="❌")
-            st.session_state.db_initialized = False
+            st.toast("One or more databases failed to initialize", icon="❌")
+            # Leave db_initialized unset so the next rerun retries
     else:
         logger.info("Databases already initialized in session state")
     logger.info("*" * 60)
     st.session_state.db_init_time = datetime.now()
-    return True
+    return st.session_state.get('db_initialized', False)
 
 
 @st.cache_data(ttl=1800)
