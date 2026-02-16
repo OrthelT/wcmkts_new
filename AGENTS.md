@@ -126,7 +126,7 @@ All pages follow consistent patterns with Streamlit best practices:
 
 **Initialization & State:**
 - **`init_db.py`**: Database initialization with path verification and auto-sync for missing files
-- **`init_equivalents.py`**: Module equivalents table initialization, loads interchangeable faction module mappings from CSV files. Uses raw sqlite3 and recreates on every startup because pull-only Turso sync overwrites local-only tables
+- **`init_equivalents.py`**: DELETED - Module equivalents table is now owned and managed by the backend repository (mkts_backend). See `docs/module_equivalents.md` for details.
 - **`sync_state.py`**: Updates session state with local/remote database update times for sync tracking (uses `ss_set()`)
 - **`settings_service.py`**: Module-level settings cache (stdlib only, no Streamlit dependency). Lives at root level, not in `services/`, to avoid circular imports
 - **`logging_config.py`**: Centralized logging setup with rotating file handlers to `./logs/`
@@ -550,6 +550,7 @@ from state.session_state import ss_get  # ✗ state!
 - `architecture_reference.md` - Definitive technical reference for the current architecture
 - `refactoring_log.md` - Historical record of the Phases 1-13 refactoring project
 - `database_config.md` - Database configuration and Turso sync details
+- `module_equivalents.md` - Module equivalents feature architecture, CLI usage, and aggregation pipeline
 - `testing.md` - Testing guidelines and pytest patterns
 
 **Guides:**
