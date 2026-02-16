@@ -22,6 +22,8 @@ from init_db import ensure_market_db_ready
 # DISABLED: Popovers - removed for performance (execute on every rerun even when closed)
 # from ui.popovers import render_ship_with_popover, render_market_popover, has_equivalent_modules
 
+from services.module_equivalents_service import get_module_equivalents_service
+
 # Insert centralized logging configuration
 logger = setup_logging(__name__, log_file="doctrine_status.log")
 
@@ -261,6 +263,21 @@ def main():
         st.info("No fits found with the selected filters.")
         return
 
+    # Pre-fetch set of type_ids with equivalents (O(1) lookup per module)
+    try:
+        from settings_service import SettingsService
+        _use_equiv = SettingsService().use_equivalents
+    except Exception:
+        _use_equiv = False
+
+    type_ids_with_equivs: set[int] = set()
+    if _use_equiv:
+        try:
+            equiv_service = get_module_equivalents_service()
+            type_ids_with_equivs = equiv_service.get_type_ids_with_equivalents()
+        except Exception:
+            pass
+
     # Group the data by ship_group
     grouped_fits = filtered_df.groupby("ship_group")
 
@@ -383,7 +400,11 @@ def main():
                             mod_position = mod["position"]
 
                             # Display string for the module
-                            display_text = f"{mod_name} ({mod_fits})"
+                            has_equiv = mod_type_id in type_ids_with_equivs
+                            if has_equiv:
+                                display_text = f"{mod_name} ({mod_fits} combined)"
+                            else:
+                                display_text = f"{mod_name} ({mod_fits})"
 
                             # Unique checkbox key using fit_id + position
                             module_cb_key = f"mod_{fit_id}_{mod_position}_{mod_type_id}"
@@ -406,18 +427,20 @@ def main():
                                     _add_selection(mod_type_id, mod_name, mod_fits, mod_qty_needed)
 
                             with col_b:
+                                equiv_prefix = "🔄 " if has_equiv else ""
+                                equiv_help = " (includes equivalent modules)" if has_equiv else ""
                                 if mod_stock_status == StockStatus.CRITICAL:
                                     st.markdown(
-                                        f":red-badge[:material/error:] {display_text}",
-                                        help="Critical stock level",
+                                        f":red-badge[:material/error:] {equiv_prefix}{display_text}",
+                                        help=f"Critical stock level{equiv_help}",
                                     )
                                 elif mod_stock_status == StockStatus.NEEDS_ATTENTION:
                                     st.markdown(
-                                        f":orange-badge[:material/error:] {display_text}",
-                                        help="Low stock",
+                                        f":orange-badge[:material/error:] {equiv_prefix}{display_text}",
+                                        help=f"Low stock{equiv_help}",
                                     )
                                 else:
-                                    st.text(display_text)
+                                    st.text(f"{equiv_prefix}{display_text}")
 
                     with tab2:
                         ship_name = row["ship_name"]

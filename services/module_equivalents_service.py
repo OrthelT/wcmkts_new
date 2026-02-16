@@ -50,11 +50,11 @@ class EquivalenceGroup:
     Represents a group of equivalent modules.
 
     Attributes:
-        group_id: Unique identifier for this equivalence group
+        equiv_group_id: Unique identifier for this equivalence group
         modules: List of equivalent modules
         total_stock: Combined stock across all modules
     """
-    group_id: int
+    equiv_group_id: int
     modules: list[EquivalentModule]
 
     @property
@@ -100,7 +100,8 @@ class ModuleEquivalentsService:
     def __init__(
         self,
         mkt_db: DatabaseConfig,
-        logger_instance: Optional[logging.Logger] = None
+        logger_instance: Optional[logging.Logger] = None,
+        faction_type_ids: Optional[set[int]] = None,
     ):
         """
         Initialize the Module Equivalents Service.
@@ -108,14 +109,19 @@ class ModuleEquivalentsService:
         Args:
             mkt_db: DatabaseConfig for market database (wcmkt)
             logger_instance: Optional logger instance
+            faction_type_ids: Pre-loaded set of faction type IDs (metaGroupID=4)
+                for early-exit optimization. If None, faction filtering is skipped.
         """
         self._mkt_db = mkt_db
         self._logger = logger_instance or logger
+        self._faction_type_ids = faction_type_ids
 
     @classmethod
     def create_default(cls, db_alias: str = None) -> "ModuleEquivalentsService":
         """
         Factory method to create service with default configuration.
+
+        Loads faction type IDs from SDE for early-exit optimization.
         """
         if db_alias is None:
             try:
@@ -125,11 +131,27 @@ class ModuleEquivalentsService:
                 db_alias = "wcmkt"
 
         mkt_db = DatabaseConfig(db_alias)
-        return cls(mkt_db)
+
+        # Load faction type IDs for early-exit optimization
+        faction_type_ids = None
+        try:
+            from repositories.sde_repo import get_sde_repository
+            sde_repo = get_sde_repository()
+            faction_type_ids = sde_repo.get_faction_type_ids()
+        except Exception as e:
+            logger.debug(f"Could not load faction type IDs: {e}")
+
+        return cls(mkt_db, faction_type_ids=faction_type_ids)
 
     # -------------------------------------------------------------------------
     # Core Lookup Methods
     # -------------------------------------------------------------------------
+
+    def _is_faction(self, type_id: int) -> bool:
+        """Check if a type_id is a faction module. Returns True if unknown."""
+        if self._faction_type_ids is None:
+            return True  # No filter loaded, assume it could be faction
+        return type_id in self._faction_type_ids
 
     def get_equivalent_type_ids(self, type_id: int) -> list[int]:
         """
@@ -141,6 +163,8 @@ class ModuleEquivalentsService:
         Returns:
             List of all equivalent type_ids, or [type_id] if no equivalents
         """
+        if not self._is_faction(type_id):
+            return [type_id]
         return _get_equivalent_type_ids_cached(type_id, self._mkt_db.engine)
 
     def get_equivalence_group(self, type_id: int) -> Optional[EquivalenceGroup]:
@@ -153,6 +177,8 @@ class ModuleEquivalentsService:
         Returns:
             EquivalenceGroup with all modules and stock, or None if not found
         """
+        if not self._is_faction(type_id):
+            return None
         return _get_equivalence_group_cached(type_id, self._mkt_db.engine)
 
     def has_equivalents(self, type_id: int) -> bool:
@@ -165,6 +191,8 @@ class ModuleEquivalentsService:
         Returns:
             True if the module has equivalents (is in an equivalence group)
         """
+        if not self._is_faction(type_id):
+            return False
         equiv_ids = self.get_equivalent_type_ids(type_id)
         return len(equiv_ids) > 1
 
@@ -237,6 +265,9 @@ class ModuleEquivalentsService:
         type_ids = set()
         for group in groups:
             type_ids.update(group.type_ids)
+        # Intersect with faction set if available
+        if self._faction_type_ids is not None:
+            type_ids &= self._faction_type_ids
         return type_ids
 
 
@@ -259,7 +290,7 @@ def _get_equivalent_type_ids_cached(type_id: int, _engine) -> list[int]:
     query = text("""
         SELECT me2.type_id
         FROM module_equivalents me1
-        JOIN module_equivalents me2 ON me1.group_id = me2.group_id
+        JOIN module_equivalents me2 ON me1.equiv_group_id = me2.equiv_group_id
         WHERE me1.type_id = :type_id
     """)
 
@@ -289,15 +320,15 @@ def _get_equivalence_group_cached(type_id: int, _engine) -> Optional[Equivalence
     Returns:
         EquivalenceGroup or None if not found
     """
-    # First get the group_id and all members
+    # First get the equiv_group_id and all members
     query = text("""
-        SELECT me.group_id, me.type_id, me.type_name,
+        SELECT me.equiv_group_id, me.type_id, me.type_name,
                COALESCE(ms.total_volume_remain, 0) as stock,
                COALESCE(ms.price, 0) as price
         FROM module_equivalents me
         LEFT JOIN marketstats ms ON me.type_id = ms.type_id
-        WHERE me.group_id = (
-            SELECT group_id FROM module_equivalents WHERE type_id = :type_id
+        WHERE me.equiv_group_id = (
+            SELECT equiv_group_id FROM module_equivalents WHERE type_id = :type_id
         )
     """)
 
@@ -308,7 +339,7 @@ def _get_equivalence_group_cached(type_id: int, _engine) -> Optional[Equivalence
         if df.empty:
             return None
 
-        group_id = int(df.iloc[0]['group_id'])
+        group_id = int(df.iloc[0]['equiv_group_id'])
         modules = [
             EquivalentModule(
                 type_id=int(row['type_id']),
@@ -319,7 +350,7 @@ def _get_equivalence_group_cached(type_id: int, _engine) -> Optional[Equivalence
             for _, row in df.iterrows()
         ]
 
-        return EquivalenceGroup(group_id=group_id, modules=modules)
+        return EquivalenceGroup(equiv_group_id=group_id, modules=modules)
 
     except Exception as e:
         logger.error(f"Failed to get equivalence group for {type_id}: {e}")
@@ -338,12 +369,12 @@ def _get_all_equivalence_groups_cached(_engine) -> list[EquivalenceGroup]:
         List of all EquivalenceGroup objects
     """
     query = text("""
-        SELECT me.group_id, me.type_id, me.type_name,
+        SELECT me.equiv_group_id, me.type_id, me.type_name,
                COALESCE(ms.total_volume_remain, 0) as stock,
                COALESCE(ms.price, 0) as price
         FROM module_equivalents me
         LEFT JOIN marketstats ms ON me.type_id = ms.type_id
-        ORDER BY me.group_id, me.type_name
+        ORDER BY me.equiv_group_id, me.type_name
     """)
 
     try:
@@ -355,7 +386,7 @@ def _get_all_equivalence_groups_cached(_engine) -> list[EquivalenceGroup]:
 
         groups = {}
         for _, row in df.iterrows():
-            group_id = int(row['group_id'])
+            group_id = int(row['equiv_group_id'])
             if group_id not in groups:
                 groups[group_id] = []
 
@@ -367,7 +398,7 @@ def _get_all_equivalence_groups_cached(_engine) -> list[EquivalenceGroup]:
             ))
 
         return [
-            EquivalenceGroup(group_id=gid, modules=mods)
+            EquivalenceGroup(equiv_group_id=gid, modules=mods)
             for gid, mods in groups.items()
         ]
 
