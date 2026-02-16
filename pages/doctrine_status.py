@@ -271,12 +271,25 @@ def main():
         _use_equiv = False
 
     type_ids_with_equivs: set[int] = set()
+    equiv_groups: dict = {}  # type_id -> EquivalenceGroup
     if _use_equiv:
         try:
             equiv_service = get_module_equivalents_service()
             type_ids_with_equivs = equiv_service.get_type_ids_with_equivalents()
         except Exception:
             pass
+
+    # Pre-fetch equivalence group breakdowns for modules in lowest_modules
+    if _use_equiv and type_ids_with_equivs:
+        equiv_type_ids_in_fits: set[int] = set()
+        for _, row in filtered_df.iterrows():
+            for mod in row.get("lowest_modules", []):
+                if mod["type_id"] in type_ids_with_equivs:
+                    equiv_type_ids_in_fits.add(mod["type_id"])
+        for tid in equiv_type_ids_in_fits:
+            group = equiv_service.get_equivalence_group(tid)
+            if group:
+                equiv_groups[tid] = group
 
     # Group the data by ship_group
     grouped_fits = filtered_df.groupby("ship_group")
@@ -441,6 +454,18 @@ def main():
                                     )
                                 else:
                                     st.text(f"{equiv_prefix}{display_text}")
+
+                                # Equiv breakdown popover
+                                equiv_group = equiv_groups.get(mod_type_id)
+                                if equiv_group:
+                                    with st.popover("📋 View stock breakdown", use_container_width=True):
+                                        st.markdown(f"**{mod_name}**")
+                                        st.caption("Combined stock from equivalent modules:")
+                                        for em in equiv_group.modules:
+                                            indicator = "► " if em.type_id == mod_type_id else "   "
+                                            st.text(f"{indicator}{em.type_name}: {em.stock:,}")
+                                        st.divider()
+                                        st.markdown(f"**Combined Total: {equiv_group.total_stock:,}**")
 
                     with tab2:
                         ship_name = row["ship_name"]
