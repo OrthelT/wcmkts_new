@@ -122,6 +122,7 @@ def get_equivalent_modules(type_id: int) -> list[dict]:
                 "price": m.price,
             }
             for m in group.modules
+            if m.stock > 0
         ]
 
     except Exception:
