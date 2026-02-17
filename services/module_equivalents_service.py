@@ -63,6 +63,12 @@ class EquivalenceGroup:
         return sum(m.stock for m in self.modules)
 
     @property
+    def lowest_price(self) -> float:
+        """Return the lowest price among in-stock equivalents, or 0.0."""
+        in_stock = [m.price for m in self.modules if m.stock > 0 and m.price > 0]
+        return min(in_stock) if in_stock else 0.0
+
+    @property
     def type_ids(self) -> list[int]:
         """Get all type IDs in this equivalence group."""
         return [m.type_id for m in self.modules]
@@ -221,6 +227,20 @@ class ModuleEquivalentsService:
                 stock = self._get_single_module_stock(type_id)
                 result[type_id] = stock
 
+        return result
+
+    def get_lowest_equivalent_prices(self, type_ids: list[int]) -> dict[int, float]:
+        """Get the lowest in-stock equivalent price for each type_id.
+
+        Returns:
+            Dict mapping type_id to lowest price among in-stock equivalents.
+            Only includes entries where a lower-priced equivalent exists.
+        """
+        result = {}
+        for type_id in type_ids:
+            group = self.get_equivalence_group(type_id)
+            if group and group.lowest_price > 0:
+                result[type_id] = group.lowest_price
         return result
 
     def _get_single_module_stock(self, type_id: int) -> int:

@@ -402,12 +402,12 @@ class FitDataBuilder:
                 f"Applying equivalents for {len(modules_to_update)} modules"
             )
 
-            # Get aggregated stock for each module with equivalents
-            aggregated_stocks = equiv_service.get_aggregated_stock(
-                list(modules_to_update)
-            )
+            # Get aggregated stock and lowest prices for modules with equivalents
+            modules_list = list(modules_to_update)
+            aggregated_stocks = equiv_service.get_aggregated_stock(modules_list)
+            lowest_prices = equiv_service.get_lowest_equivalent_prices(modules_list)
 
-            # Update fits_on_mkt for each module with equivalents
+            # Update fits_on_mkt and price for each module with equivalents
             for type_id, total_stock in aggregated_stocks.items():
                 mask = self._raw_df["type_id"] == type_id
 
@@ -420,13 +420,18 @@ class FitDataBuilder:
                 else:
                     new_fits_on_mkt = total_stock
 
-                # Update the DataFrame
+                # Update stock
                 self._raw_df.loc[mask, "total_stock"] = total_stock
                 self._raw_df.loc[mask, "fits_on_mkt"] = new_fits_on_mkt
 
+                # Use lowest equivalent price for cost calculation
+                if type_id in lowest_prices:
+                    self._raw_df.loc[mask, "price"] = lowest_prices[type_id]
+
                 self._logger.debug(
                     f"Updated type_id {type_id}: total_stock={total_stock}, "
-                    f"fits_on_mkt={new_fits_on_mkt}"
+                    f"fits_on_mkt={new_fits_on_mkt}, "
+                    f"price={lowest_prices.get(type_id, 'unchanged')}"
                 )
 
         except ImportError:
