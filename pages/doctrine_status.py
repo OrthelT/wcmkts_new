@@ -259,7 +259,8 @@ def main():
         except Exception:
             pass
 
-    # Pre-fetch equivalence group breakdowns for modules in lowest_modules
+    # Pre-fetch equivalence group breakdowns for modules in lowest_modules.
+    # Only include groups where at least one *other* equivalent has stock.
     if _use_equiv and type_ids_with_equivs:
         equiv_type_ids_in_fits: set[int] = set()
         for _, row in filtered_df.iterrows():
@@ -269,7 +270,9 @@ def main():
         for tid in equiv_type_ids_in_fits:
             group = equiv_service.get_equivalence_group(tid)
             if group:
-                equiv_groups[tid] = group
+                in_stock = [m for m in group.modules if m.stock > 0]
+                if len(in_stock) > 1:
+                    equiv_groups[tid] = group
 
     # Group the data by ship_group
     grouped_fits = filtered_df.groupby("ship_group")
@@ -393,7 +396,7 @@ def main():
                             mod_position = mod["position"]
 
                             # Display string for the module
-                            has_equiv = mod_type_id in type_ids_with_equivs
+                            has_equiv = mod_type_id in equiv_groups
                             if has_equiv:
                                 display_text = f"{mod_name} ({mod_fits} combined)"
                             else:
@@ -435,17 +438,19 @@ def main():
                                 else:
                                     st.text(f"{equiv_prefix}{display_text}")
 
-                                # Equiv breakdown popover
+                                # Equiv breakdown popover (only shown when has_equiv)
                                 equiv_group = equiv_groups.get(mod_type_id)
                                 if equiv_group:
+                                    in_stock_modules = [m for m in equiv_group.modules if m.stock > 0]
+                                    combined_total = sum(m.stock for m in in_stock_modules)
                                     with st.popover("📋 View stock breakdown", use_container_width=True):
                                         st.markdown(f"**{mod_name}**")
                                         st.caption("Combined stock from equivalent modules:")
-                                        for em in equiv_group.modules:
+                                        for em in in_stock_modules:
                                             indicator = "► " if em.type_id == mod_type_id else "   "
                                             st.text(f"{indicator}{em.type_name}: {em.stock:,}")
                                         st.divider()
-                                        st.markdown(f"**Combined Total: {equiv_group.total_stock:,}**")
+                                        st.markdown(f"**Combined Total: {combined_total:,}**")
 
                     with tab2:
                         ship_name = row["ship_name"]

@@ -402,6 +402,10 @@ class FitDataBuilder:
                 f"Applying equivalents for {len(modules_to_update)} modules"
             )
 
+            # Preserve original fits_on_mkt for low-stock ranking
+            if "own_fits_on_mkt" not in self._raw_df.columns:
+                self._raw_df["own_fits_on_mkt"] = self._raw_df["fits_on_mkt"]
+
             # Get aggregated stock and lowest prices for modules with equivalents
             modules_list = list(modules_to_update)
             aggregated_stocks = equiv_service.get_aggregated_stock(modules_list)
@@ -872,9 +876,10 @@ class FitDataBuilder:
                 fit_items = self._raw_df[self._raw_df["fit_id"] == fit_id]
                 ship_id = int(row["ship_id"])
 
-                # Exclude hull, sort by fits_on_mkt, get top 3
+                # Exclude hull, sort by own stock (not combined equiv stock), get top 3
                 modules = fit_items[fit_items["type_id"] != ship_id]
-                lowest = modules.nsmallest(3, "fits_on_mkt")
+                sort_col = "own_fits_on_mkt" if "own_fits_on_mkt" in modules.columns else "fits_on_mkt"
+                lowest = modules.nsmallest(3, sort_col)
                 lowest_modules = []
                 for idx, (_, r) in enumerate(lowest.iterrows()):
                     if pd.notna(r["type_name"]) and pd.notna(r["fits_on_mkt"]):
