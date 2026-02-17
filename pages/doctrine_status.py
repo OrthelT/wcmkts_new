@@ -16,6 +16,7 @@ from services import get_status_filter_options
 from state import ss_init, ss_get
 from ui.market_selector import render_market_selector
 from init_db import ensure_market_db_ready
+from pages.market_stats import new_display_sync_status
 
 # DISABLED: Jita prices - restore when backend caching implemented
 # from services import get_price_service
@@ -619,7 +620,7 @@ def main():
 
     # Display last update timestamp
     st.sidebar.markdown("---")
-    st.sidebar.write(f"Last ESI update: {get_update_time()}")
+    new_display_sync_status()
 
 
 if __name__ == "__main__":

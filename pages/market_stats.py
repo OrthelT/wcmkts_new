@@ -178,7 +178,7 @@ def initialize_main_function():
     return st.session_state.get('db_initialized', False)
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=600)
 def check_for_db_updates(db_alias: str) -> tuple[bool, float]:
     """Check whether local and remote databases are in sync.
 
@@ -226,9 +226,11 @@ def check_db(manual_override: bool = False):
             local_update_since = st.session_state.local_update_status["time_since"]
             local_update_since = int(local_update_since.total_seconds() // 60)
             local_update_since = f"{local_update_since} mins"
+            st.toast(f"DB updated: {local_update_since} ago", icon="✅")
         else:
             local_update_since = DatabaseConfig(active_alias).get_time_since_update("marketstats", remote=False)
-        st.toast(f"DB updated: {local_update_since} ago", icon="✅")
+            local_update_since = f"{local_update_since} mins"
+            st.toast(f"DB updated: {local_update_since} ago", icon="✅")
 
 
 def maybe_run_check():

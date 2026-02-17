@@ -8,7 +8,6 @@ import streamlit as st
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from repositories import get_update_time
 from domain import StockStatus
 from logging_config import setup_logging
 from services import get_doctrine_service
@@ -19,7 +18,7 @@ from services.module_equivalents_service import get_module_equivalents_service
 from state import ss_init, ss_get
 from ui.market_selector import render_market_selector
 from init_db import ensure_market_db_ready
-
+from pages.market_stats import new_display_sync_status
 logger = setup_logging(__name__, log_file="doctrine_report.log")
 
 # Initialize service (cached in session state)
@@ -444,8 +443,7 @@ def main():
         st.session_state.csv_module_list_state = {}
         st.rerun()
 
-    last_esi_update = get_update_time()
+    new_display_sync_status()
     st.sidebar.markdown("---")
-    st.sidebar.write(f"Last ESI Update: {last_esi_update}")
 if __name__ == "__main__":
     main()

@@ -11,14 +11,13 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-from repositories import get_update_time
 from logging_config import setup_logging
 from services import get_low_stock_service, LowStockFilters
 from ui.formatters import get_image_url, format_doctrine_name
 from state import ss_init, ss_get, ss_set
 from ui.market_selector import render_market_selector
 from init_db import ensure_market_db_ready
-
+from pages.market_stats import new_display_sync_status
 logger = setup_logging(__name__, log_file="low_stock.log")
 
 # Initialize service (cached in session state)
@@ -464,7 +463,7 @@ def main():
 
     # Display last update timestamp
     st.sidebar.markdown("---")
-    st.sidebar.write(f"Last ESI update: {get_update_time()}")
+    new_display_sync_status()
 
 
 if __name__ == "__main__":
