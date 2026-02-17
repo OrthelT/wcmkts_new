@@ -308,7 +308,7 @@ def _get_equivalent_type_ids_cached(type_id: int, _engine) -> list[int]:
         return [type_id]
 
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_resource(ttl=600)
 def _get_equivalence_group_cached(type_id: int, _engine) -> Optional[EquivalenceGroup]:
     """
     Cached lookup of equivalence group with stock information.
@@ -357,7 +357,7 @@ def _get_equivalence_group_cached(type_id: int, _engine) -> Optional[Equivalence
         return None
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_resource(ttl=3600)
 def _get_all_equivalence_groups_cached(_engine) -> list[EquivalenceGroup]:
     """
     Cached lookup of all equivalence groups.
