@@ -8,7 +8,6 @@ import streamlit as st
 import pandas as pd
 from millify import millify
 from logging_config import setup_logging
-from repositories import get_update_time
 from services import get_doctrine_service
 from domain import StockStatus
 from ui import get_fitting_column_config, render_progress_bar_html, format_doctrine_name
@@ -17,12 +16,6 @@ from state import ss_init, ss_get
 from ui.market_selector import render_market_selector
 from init_db import ensure_market_db_ready
 from pages.market_stats import new_display_sync_status
-
-# DISABLED: Jita prices - restore when backend caching implemented
-# from services import get_price_service
-# DISABLED: Popovers - removed for performance (execute on every rerun even when closed)
-# from ui.popovers import render_ship_with_popover, render_market_popover, has_equivalent_modules
-
 from services.module_equivalents_service import get_module_equivalents_service
 
 # Insert centralized logging configuration
@@ -33,11 +26,6 @@ service = get_doctrine_service()
 fit_build_result = service.build_fit_data()
 all_fits_df = fit_build_result.raw_df
 summary_df = fit_build_result.summary_df
-
-# get_fit_summary() REMOVED - now using summary_df directly from FitBuildResult
-# summary_df already contains: fit_id, ship_name, ship_id, hulls, fits, ship_group,
-# price, total_cost, ship_target, target_percentage, daily_avg, fit_name, lowest_modules
-
 
 def render_export_data():
     """Query market stock data for all selected type_ids. Stores results in session state."""
@@ -132,15 +120,6 @@ def _rebuild_selections():
         for tid, info in st.session_state.type_id_info.items()
         if tid in checked_type_ids
     }
-
-
-# DISABLED: Jita prices - restore when backend caching implemented
-# def fetch_jita_prices_for_types(type_ids: tuple[int, ...]) -> dict[int, float]:
-# def calculate_all_jita_deltas(force_refresh: bool = False):
-
-# DISABLED: Popovers - removed for performance (execute on every rerun even when closed)
-# def prefetch_popover_data(filtered_df: pd.DataFrame) -> tuple[dict[str, int], dict[int, float]]:
-
 
 def main():
     market = render_market_selector()

@@ -15,7 +15,7 @@ from services.categorization import categorize_ship_by_role
 from ui.formatters import get_doctrine_report_column_config, get_image_url, get_ship_role_format, format_doctrine_name
 from ui.popovers import render_ship_with_popover, render_market_popover
 from services.module_equivalents_service import get_module_equivalents_service
-from state import ss_init, ss_get
+from state import ss_init
 from ui.market_selector import render_market_selector
 from init_db import ensure_market_db_ready
 from pages.market_stats import new_display_sync_status

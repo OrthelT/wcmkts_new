@@ -166,7 +166,6 @@ def initialize_main_function():
         logger.info("Initializing databases (all markets + shared)")
         result = init_db()
         if result:
-            st.toast("All databases initialized successfully", icon="✅")
             st.session_state.db_initialized = True
         else:
             st.toast("One or more databases failed to initialize", icon="❌")
