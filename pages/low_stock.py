@@ -202,7 +202,9 @@ def main():
 
     # Get doctrine options
     doctrine_options = service.get_doctrine_options()
-    doctrine_names = ["All"] + [d.doctrine_name for d in doctrine_options]
+    doctrine_names = ["All"] + sorted(
+        [d.doctrine_name for d in doctrine_options], key=format_doctrine_name
+    )
 
     selected_doctrine_name = st.sidebar.selectbox(
         "Select Doctrine",

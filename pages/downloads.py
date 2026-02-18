@@ -250,7 +250,9 @@ def doctrine_downloads_section():
     with col2:
         if filter_type == "By Doctrine":
             doctrines = _get_doctrine_options()
-            doctrine_names = ["Select a doctrine..."] + [d['doctrine_name'] for d in doctrines]
+            doctrine_names = ["Select a doctrine..."] + sorted(
+                [d['doctrine_name'] for d in doctrines], key=format_doctrine_name
+            )
             selected_doctrine = st.selectbox(
                 "Select Doctrine",
                 doctrine_names,

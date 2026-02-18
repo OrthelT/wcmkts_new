@@ -172,7 +172,7 @@ def main():
     # Doctrine filter - filter by fleet doctrine composition
     doctrine_comps = service.repository.get_all_doctrine_compositions()
     doctrine_names = (
-        ["All"] + sorted(doctrine_comps["doctrine_name"].unique().tolist())
+        ["All"] + sorted(doctrine_comps["doctrine_name"].unique().tolist(), key=format_doctrine_name)
         if not doctrine_comps.empty
         else ["All"]
     )
