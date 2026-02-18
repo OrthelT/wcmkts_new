@@ -8,7 +8,6 @@ import streamlit as st
 import pandas as pd
 from millify import millify
 from logging_config import setup_logging
-from repositories import get_update_time
 from services import get_doctrine_service
 from domain import StockStatus
 from ui import get_fitting_column_config, render_progress_bar_html, format_doctrine_name
@@ -16,11 +15,8 @@ from services import get_status_filter_options
 from state import ss_init, ss_get
 from ui.market_selector import render_market_selector
 from init_db import ensure_market_db_ready
-
-# DISABLED: Jita prices - restore when backend caching implemented
-# from services import get_price_service
-# DISABLED: Popovers - removed for performance (execute on every rerun even when closed)
-# from ui.popovers import render_ship_with_popover, render_market_popover, has_equivalent_modules
+from pages.market_stats import new_display_sync_status
+from services.module_equivalents_service import get_module_equivalents_service
 
 # Insert centralized logging configuration
 logger = setup_logging(__name__, log_file="doctrine_status.log")
@@ -30,11 +26,6 @@ service = get_doctrine_service()
 fit_build_result = service.build_fit_data()
 all_fits_df = fit_build_result.raw_df
 summary_df = fit_build_result.summary_df
-
-# get_fit_summary() REMOVED - now using summary_df directly from FitBuildResult
-# summary_df already contains: fit_id, ship_name, ship_id, hulls, fits, ship_group,
-# price, total_cost, ship_target, target_percentage, daily_avg, fit_name, lowest_modules
-
 
 def render_export_data():
     """Query market stock data for all selected type_ids. Stores results in session state."""
@@ -130,15 +121,6 @@ def _rebuild_selections():
         if tid in checked_type_ids
     }
 
-
-# DISABLED: Jita prices - restore when backend caching implemented
-# def fetch_jita_prices_for_types(type_ids: tuple[int, ...]) -> dict[int, float]:
-# def calculate_all_jita_deltas(force_refresh: bool = False):
-
-# DISABLED: Popovers - removed for performance (execute on every rerun even when closed)
-# def prefetch_popover_data(filtered_df: pd.DataFrame) -> tuple[dict[str, int], dict[int, float]]:
-
-
 def main():
     market = render_market_selector()
 
@@ -190,7 +172,7 @@ def main():
     # Doctrine filter - filter by fleet doctrine composition
     doctrine_comps = service.repository.get_all_doctrine_compositions()
     doctrine_names = (
-        ["All"] + sorted(doctrine_comps["doctrine_name"].unique().tolist())
+        ["All"] + sorted(doctrine_comps["doctrine_name"].unique().tolist(), key=format_doctrine_name)
         if not doctrine_comps.empty
         else ["All"]
     )
@@ -260,6 +242,37 @@ def main():
     if filtered_df.empty:
         st.info("No fits found with the selected filters.")
         return
+
+    # Pre-fetch set of type_ids with equivalents (O(1) lookup per module)
+    try:
+        from settings_service import SettingsService
+        _use_equiv = SettingsService().use_equivalents
+    except Exception:
+        _use_equiv = False
+
+    type_ids_with_equivs: set[int] = set()
+    equiv_groups: dict = {}  # type_id -> EquivalenceGroup
+    if _use_equiv:
+        try:
+            equiv_service = get_module_equivalents_service()
+            type_ids_with_equivs = equiv_service.get_type_ids_with_equivalents()
+        except Exception:
+            pass
+
+    # Pre-fetch equivalence group breakdowns for modules in lowest_modules.
+    # Only include groups where at least one *other* equivalent has stock.
+    if _use_equiv and type_ids_with_equivs:
+        equiv_type_ids_in_fits: set[int] = set()
+        for _, row in filtered_df.iterrows():
+            for mod in row.get("lowest_modules", []):
+                if mod["type_id"] in type_ids_with_equivs:
+                    equiv_type_ids_in_fits.add(mod["type_id"])
+        for tid in equiv_type_ids_in_fits:
+            group = equiv_service.get_equivalence_group(tid)
+            if group:
+                others_in_stock = [m for m in group.modules if m.stock > 0 and m.type_id != tid]
+                if others_in_stock:
+                    equiv_groups[tid] = group
 
     # Group the data by ship_group
     grouped_fits = filtered_df.groupby("ship_group")
@@ -383,7 +396,11 @@ def main():
                             mod_position = mod["position"]
 
                             # Display string for the module
-                            display_text = f"{mod_name} ({mod_fits})"
+                            has_equiv = mod_type_id in equiv_groups
+                            if has_equiv:
+                                display_text = f"{mod_name} ({mod_fits} combined)"
+                            else:
+                                display_text = f"{mod_name} ({mod_fits})"
 
                             # Unique checkbox key using fit_id + position
                             module_cb_key = f"mod_{fit_id}_{mod_position}_{mod_type_id}"
@@ -406,18 +423,34 @@ def main():
                                     _add_selection(mod_type_id, mod_name, mod_fits, mod_qty_needed)
 
                             with col_b:
+                                equiv_prefix = "🔄 " if has_equiv else ""
+                                equiv_help = " (includes equivalent modules)" if has_equiv else ""
                                 if mod_stock_status == StockStatus.CRITICAL:
                                     st.markdown(
-                                        f":red-badge[:material/error:] {display_text}",
-                                        help="Critical stock level",
+                                        f":red-badge[:material/error:] {equiv_prefix}{display_text}",
+                                        help=f"Critical stock level{equiv_help}",
                                     )
                                 elif mod_stock_status == StockStatus.NEEDS_ATTENTION:
                                     st.markdown(
-                                        f":orange-badge[:material/error:] {display_text}",
-                                        help="Low stock",
+                                        f":orange-badge[:material/error:] {equiv_prefix}{display_text}",
+                                        help=f"Low stock{equiv_help}",
                                     )
                                 else:
-                                    st.text(display_text)
+                                    st.text(f"{equiv_prefix}{display_text}")
+
+                                # Equiv breakdown popover (only shown when has_equiv)
+                                equiv_group = equiv_groups.get(mod_type_id)
+                                if equiv_group:
+                                    in_stock_modules = [m for m in equiv_group.modules if m.stock > 0]
+                                    combined_total = sum(m.stock for m in in_stock_modules)
+                                    with st.popover("📋 View stock breakdown", use_container_width=True):
+                                        st.markdown(f"**{mod_name}**")
+                                        st.caption("Combined stock from equivalent modules:")
+                                        for em in in_stock_modules:
+                                            indicator = "► " if em.type_id == mod_type_id else "   "
+                                            st.text(f"{indicator}{em.type_name}: {em.stock:,}")
+                                        st.divider()
+                                        st.markdown(f"**Combined Total: {combined_total:,}**")
 
                     with tab2:
                         ship_name = row["ship_name"]
@@ -571,7 +604,7 @@ def main():
 
     # Display last update timestamp
     st.sidebar.markdown("---")
-    st.sidebar.write(f"Last ESI update: {get_update_time()}")
+    new_display_sync_status()
 
 
 if __name__ == "__main__":

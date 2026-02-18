@@ -122,6 +122,7 @@ def get_equivalent_modules(type_id: int) -> list[dict]:
                 "price": m.price,
             }
             for m in group.modules
+            if m.stock > 0
         ]
 
     except Exception:
@@ -299,17 +300,23 @@ def render_market_popover(
         # Equivalent modules section
         if equiv_modules:
             st.divider()
-            st.markdown("**Equivalent Modules**")
+            st.markdown("**Equivalent Modules (combined)**")
             combined_stock = sum(m["stock"] for m in equiv_modules)
 
             for mod in equiv_modules:
                 mod_name = mod["type_name"]
                 mod_stock = mod["stock"]
-                # Highlight current module
-                if mod["type_id"] == type_id:
-                    st.text(f"  {mod_name}: {mod_stock:,}")
+                mod_type_id = mod["type_id"]
+
+                # Show which fits use this specific equivalent
+                mod_usage = get_doctrine_usage(mod_type_id) if show_doctrine_usage else []
+                fit_names = [u.get("ship_name", "") for u in mod_usage[:3]]
+                usage_suffix = f" (used in: {', '.join(fit_names)})" if fit_names else ""
+
+                if mod_type_id == type_id:
+                    st.text(f"  ► {mod_name}: {mod_stock:,}{usage_suffix}")
                 else:
-                    st.text(f"  {mod_name}: {mod_stock:,}")
+                    st.text(f"  {mod_name}: {mod_stock:,}{usage_suffix}")
 
             st.caption(f"  **Total: {combined_stock:,}**")
 

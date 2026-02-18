@@ -8,17 +8,17 @@ import streamlit as st
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from repositories import get_update_time
 from domain import StockStatus
 from logging_config import setup_logging
 from services import get_doctrine_service
 from services.categorization import categorize_ship_by_role
 from ui.formatters import get_doctrine_report_column_config, get_image_url, get_ship_role_format, format_doctrine_name
-from ui.popovers import render_ship_with_popover, render_market_popover, has_equivalent_modules
-from state import ss_init, ss_get
+from ui.popovers import render_ship_with_popover, render_market_popover
+from services.module_equivalents_service import get_module_equivalents_service
+from state import ss_init
 from ui.market_selector import render_market_selector
 from init_db import ensure_market_db_ready
-
+from pages.market_stats import new_display_sync_status
 logger = setup_logging(__name__, log_file="doctrine_report.log")
 
 # Initialize service (cached in session state)
@@ -121,6 +121,16 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
     """Display low stock modules for the selected doctrine"""
         # Get module data from master_df for the selected doctrine
     if not doctrine_modules.empty:
+
+        # Pre-fetch set of type_ids with equivalents
+        type_ids_with_equivs: set[int] = set()
+        try:
+            from settings_service import SettingsService
+            if SettingsService().use_equivalents:
+                equiv_svc = get_module_equivalents_service()
+                type_ids_with_equivs = equiv_svc.get_type_ids_with_equivalents()
+        except Exception:
+            pass
 
         st.subheader("Stock Status",divider="blue")
         st.markdown("*Summary of the stock status of the three lowest stock modules for each ship in the selected doctrine. Numbers in parentheses represent the number of fits that can be supported with the current stock of the item. Use the checkboxes to select items for export to a CSV file.*")
@@ -265,10 +275,10 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
                             )
                         else:
                             # It's a module - check for equivalents
-                            module_has_equiv = has_equivalent_modules(type_id) if type_id else False
+                            module_has_equiv = type_id in type_ids_with_equivs if type_id else False
                             if module_has_equiv:
                                 fit_has_equivalents = True
-                                display_text = f"🔄 {module_name} ({stock})"
+                                display_text = f"🔄 {module_name} ({stock} combined)"
                             else:
                                 display_text = f"{module_name} ({stock})"
 
@@ -433,8 +443,7 @@ def main():
         st.session_state.csv_module_list_state = {}
         st.rerun()
 
-    last_esi_update = get_update_time()
+    new_display_sync_status()
     st.sidebar.markdown("---")
-    st.sidebar.write(f"Last ESI Update: {last_esi_update}")
 if __name__ == "__main__":
     main()

@@ -402,12 +402,16 @@ class FitDataBuilder:
                 f"Applying equivalents for {len(modules_to_update)} modules"
             )
 
-            # Get aggregated stock for each module with equivalents
-            aggregated_stocks = equiv_service.get_aggregated_stock(
-                list(modules_to_update)
-            )
+            # Preserve original fits_on_mkt for low-stock ranking
+            if "own_fits_on_mkt" not in self._raw_df.columns:
+                self._raw_df["own_fits_on_mkt"] = self._raw_df["fits_on_mkt"]
 
-            # Update fits_on_mkt for each module with equivalents
+            # Get aggregated stock and lowest prices for modules with equivalents
+            modules_list = list(modules_to_update)
+            aggregated_stocks = equiv_service.get_aggregated_stock(modules_list)
+            lowest_prices = equiv_service.get_lowest_equivalent_prices(modules_list)
+
+            # Update fits_on_mkt and price for each module with equivalents
             for type_id, total_stock in aggregated_stocks.items():
                 mask = self._raw_df["type_id"] == type_id
 
@@ -420,13 +424,18 @@ class FitDataBuilder:
                 else:
                     new_fits_on_mkt = total_stock
 
-                # Update the DataFrame
+                # Update stock
                 self._raw_df.loc[mask, "total_stock"] = total_stock
                 self._raw_df.loc[mask, "fits_on_mkt"] = new_fits_on_mkt
 
+                # Use lowest equivalent price for cost calculation
+                if type_id in lowest_prices:
+                    self._raw_df.loc[mask, "price"] = lowest_prices[type_id]
+
                 self._logger.debug(
                     f"Updated type_id {type_id}: total_stock={total_stock}, "
-                    f"fits_on_mkt={new_fits_on_mkt}"
+                    f"fits_on_mkt={new_fits_on_mkt}, "
+                    f"price={lowest_prices.get(type_id, 'unchanged')}"
                 )
 
         except ImportError:
@@ -867,9 +876,10 @@ class FitDataBuilder:
                 fit_items = self._raw_df[self._raw_df["fit_id"] == fit_id]
                 ship_id = int(row["ship_id"])
 
-                # Exclude hull, sort by fits_on_mkt, get top 3
+                # Exclude hull, sort by own stock (not combined equiv stock), get top 3
                 modules = fit_items[fit_items["type_id"] != ship_id]
-                lowest = modules.nsmallest(3, "fits_on_mkt")
+                sort_col = "own_fits_on_mkt" if "own_fits_on_mkt" in modules.columns else "fits_on_mkt"
+                lowest = modules.nsmallest(3, sort_col)
                 lowest_modules = []
                 for idx, (_, r) in enumerate(lowest.iterrows()):
                     if pd.notna(r["type_name"]) and pd.notna(r["fits_on_mkt"]):

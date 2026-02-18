@@ -166,7 +166,6 @@ def initialize_main_function():
         logger.info("Initializing databases (all markets + shared)")
         result = init_db()
         if result:
-            st.toast("All databases initialized successfully", icon="✅")
             st.session_state.db_initialized = True
         else:
             st.toast("One or more databases failed to initialize", icon="❌")
@@ -178,7 +177,7 @@ def initialize_main_function():
     return st.session_state.get('db_initialized', False)
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=600)
 def check_for_db_updates(db_alias: str) -> tuple[bool, float]:
     """Check whether local and remote databases are in sync.
 
@@ -192,9 +191,16 @@ def check_for_db_updates(db_alias: str) -> tuple[bool, float]:
 
 
 def check_db(manual_override: bool = False):
-    """Check for database updates on the *active* market and sync if needed."""
+    """Check for database updates on *all* markets and sync any that are stale.
+
+    Both market databases receive ESI updates at the same time, so we check
+    all of them regardless of which market is currently active.
+    """
     from state.market_state import get_active_market
+    from settings_service import get_all_market_configs
+
     active_alias = get_active_market().database_alias
+    all_aliases = [cfg.database_alias for cfg in get_all_market_configs().values()]
 
     if manual_override:
         check_for_db_updates.clear()
@@ -202,33 +208,41 @@ def check_db(manual_override: bool = False):
         logger.info("check_for_db_updates() cache cleared for manual override")
         logger.info("*" * 60)
 
-    check, local_time = check_for_db_updates(active_alias)
-    now = time.time()
-    logger.info(f"check_db() check: {check}, time: {local_time}, alias: {active_alias}")
-    logger.info(f"last_check: {round(now - st.session_state.get('last_check', 0), 2)} seconds ago")
+    synced_any = False
+    any_stale = False
+    for alias in all_aliases:
+        check, local_time = check_for_db_updates(alias)
+        now = time.time()
+        logger.info(f"check_db() check: {check}, time: {local_time}, alias: {alias}")
+        logger.info(f"last_check: {round(now - st.session_state.get('last_check', 0), 2)} seconds ago")
 
-    if not check:
-        st.toast("More recent remote database data available, syncing local database", icon="🕧")
-        logger.info("check_db() check is False, syncing local database")
-        db = DatabaseConfig(active_alias)
+        if not check:
+            any_stale = True
+            logger.info(f"check_db() {alias} is stale, syncing")
+            db = DatabaseConfig(alias)
+            db.sync()
+
+            if db.validate_sync():
+                logger.info(f"{alias} synced and validated")
+                synced_any = True
+            else:
+                logger.info(f"{alias} sync failed validation")
+                st.toast(f"Sync failed for {alias}", icon="❌")
+
+    if synced_any:
         invalidate_market_caches()
-        db.sync()
-
-        if db.validate_sync():
-            logger.info("Local database synced and validated")
-            st.toast("Database synced successfully", icon="✅")
-            update_wcmkt_state()
-        else:
-            logger.info("Local database synced but validation failed")
-            st.toast("Database sync failed", icon="❌")
-    else:
+        update_wcmkt_state()
+        st.toast("Database synced successfully", icon="✅")
+    elif not any_stale:
         if 'local_update_status' in st.session_state:
             local_update_since = st.session_state.local_update_status["time_since"]
             local_update_since = int(local_update_since.total_seconds() // 60)
             local_update_since = f"{local_update_since} mins"
+            st.toast(f"DB updated: {local_update_since} ago", icon="✅")
         else:
             local_update_since = DatabaseConfig(active_alias).get_time_since_update("marketstats", remote=False)
-        st.toast(f"DB updated: {local_update_since} ago", icon="✅")
+            local_update_since = f"{local_update_since} mins"
+            st.toast(f"DB updated: {local_update_since} ago", icon="✅")
 
 
 def maybe_run_check():

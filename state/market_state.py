@@ -53,7 +53,10 @@ def set_active_market(key: str) -> None:
 
     # Clear market-specific service singletons so they get re-created
     # with the new market's DatabaseConfig on next access.
+    # Clear both old and new market services: old ones are stale, and
+    # incoming ones may have cached results built with wrong equiv data.
     _clear_market_services(old_key)
+    _clear_market_services(key)
 
     # Clear market data caches
     _invalidate_market_caches()
@@ -111,5 +114,16 @@ def _invalidate_market_caches() -> None:
         get_target_by_fit_id_with_cache.clear()
         get_target_by_ship_id_with_cache.clear()
         get_fit_name_with_cache.clear()
+    except ImportError:
+        pass
+
+    # Clear module equivalents cached functions (stock data is market-specific)
+    try:
+        from services.module_equivalents_service import (
+            _get_equivalence_group_cached,
+            _get_all_equivalence_groups_cached,
+        )
+        _get_equivalence_group_cached.clear()
+        _get_all_equivalence_groups_cached.clear()
     except ImportError:
         pass

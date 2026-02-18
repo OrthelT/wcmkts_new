@@ -166,6 +166,15 @@ def _get_tech2_type_ids_impl(engine) -> list[int]:
     return df["typeID"].tolist()
 
 
+def _get_faction_type_ids_impl(engine) -> set[int]:
+    """Fetch type IDs for Faction items (metaGroupID = 4)."""
+    with engine.connect() as conn:
+        df = pd.read_sql_query(
+            "SELECT typeID FROM sdeTypes WHERE metaGroupID = 4", conn
+        )
+    return set(df["typeID"].tolist())
+
+
 # =============================================================================
 # Cached Wrappers (SDE data is immutable at runtime - no TTL needed)
 # =============================================================================
@@ -204,6 +213,12 @@ def _get_sde_table_cached(_url: str, table_name: str) -> pd.DataFrame:
 def _get_tech2_type_ids_cached(_url: str) -> list[int]:
     db = DatabaseConfig("sde")
     return _get_tech2_type_ids_impl(db.engine)
+
+
+@st.cache_resource
+def _get_faction_type_ids_cached(_url: str) -> set[int]:
+    db = DatabaseConfig("sde")
+    return _get_faction_type_ids_impl(db.engine)
 
 
 # =============================================================================
@@ -276,6 +291,10 @@ class SDERepository(BaseRepository):
     def get_tech2_type_ids(self) -> list[int]:
         """Get all Tech 2 type IDs (cached)."""
         return _get_tech2_type_ids_cached(self._url)
+
+    def get_faction_type_ids(self) -> set[int]:
+        """Get all Faction type IDs (metaGroupID=4, cached)."""
+        return _get_faction_type_ids_cached(self._url)
 
 
 # =============================================================================

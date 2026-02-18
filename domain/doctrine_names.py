@@ -2,44 +2,58 @@
 Doctrine Display Names
 
 Maps raw database doctrine names to user-friendly display names.
-The mapping is explicit because many names are not algorithmically
-derivable (e.g., "WC Armor DPS NAPOC v1.0" -> "Apocalypse Navy").
+Source: friendly_name column in doctrine_fits table.
 
 Usage:
     get_doctrine_display_name("SUBS - WC AHACs")  # -> "AHACs"
-    get_doctrine_display_name("Unknown")           # -> "Unknown" (fallback)
+    get_doctrine_display_name("Unknown")           # -> "Unknown" (passthrough)
 """
 
-DOCTRINE_DISPLAY_NAMES: dict[str, str] = {
-    "SUBS - WC Hurricane / WC飓风": "Hurricane",
-    "SUBS - WC Tackle": "Tackle",
-    "SUBS - WC AHACs": "AHACs",
-    "SUBS - WC Nightmare": "Nightmare",
-    "SUBS - WC-EN Retributions 2404": "Retributions",
-    "SUBS - WCEN Uprising Harpy Fleet": "Harpy",
-    "SUBS - WC-EN AB Kikimora Fleet": "Kikimora (AB)",
-    "SUBS - WCEN Uprising Torpedo Bombers": "Bombers (Torpedo)",
-    "SUBS - WCEN Uprising Tempest Fleet Issue": "Tempest Fleet Issue",
-    "WC Armor DPS NAPOC v1.0": "Apocalypse Navy",
-    "SUBS - WC-EN Cyclone Fleet Issues": "Cyclone Fleet Issue",
-    "SUBS - WC Rokhs": "Rokhs",
-    "SUBS - WC-EN Tornados": "Tornados",
-    "SUBS - WC-EN Bombing Bombers": "Bombers (Bombing)",
-    "SUBS - Newbro Friendly Ships": "Newbro Friendly",
-    "SUBS - WC-EN Vulture/Ferox Navy Issue Fleet": "Vulture/Ferox Navy",
-    "SUBS - WC-EN Exequror Navy": "Exequror Navy",
-    "SUBS - WC-EN Moas": "Moas",
-    "SUBS - WC-EN Hurricane Fleet Issue": "Hurricane Fleet Issue",
-    "WC-EN Shield DPS Maelstrom v1.0": "Maelstrom",
-    "special fits": "Special Fits",
-    "SUBS - WCEN Entosis": "Entosis",
-    "SUBS - WC Raven Navy Issues": "Raven Navy Issue",
-    "SUBS - WC-EN Ferox": "Ferox",
+import logging
 
-}
+logger = logging.getLogger(__name__)
+
+
+def _load_friendly_names_from_db() -> dict[str, str]:
+    """Load doctrine_name -> friendly_name mapping from doctrine_fits table.
+
+    Returns a dict of {doctrine_name: friendly_name} for all rows
+    where friendly_name is not NULL. Uses Streamlit caching internally.
+    """
+    try:
+        import streamlit as st
+        from config import DatabaseConfig
+
+        @st.cache_data(ttl=600)
+        def _cached_load(db_alias: str) -> dict[str, str]:
+            db = DatabaseConfig(db_alias)
+            query = (
+                "SELECT DISTINCT doctrine_name, friendly_name "
+                "FROM doctrine_fits "
+                "WHERE friendly_name IS NOT NULL"
+            )
+            try:
+                with db.engine.connect() as conn:
+                    from sqlalchemy import text
+                    rows = conn.execute(text(query)).fetchall()
+                return {row[0]: row[1] for row in rows}
+            except Exception as e:
+                logger.warning(f"Failed to load friendly names from DB: {e}")
+                return {}
+
+        return _cached_load("wcmkt")
+
+    except Exception as e:
+        logger.debug(f"DB friendly names unavailable: {e}")
+        return {}
 
 
 def get_doctrine_display_name(raw_name: str) -> str:
     """Return user-friendly display name for a doctrine, or the raw name if unknown."""
-    display_name = DOCTRINE_DISPLAY_NAMES.get(raw_name, raw_name)
-    return display_name
+    return _load_friendly_names_from_db().get(raw_name, raw_name)
+
+
+# Backward compatibility for consumers importing the dict directly.
+# At import time (before Streamlit is ready) this is empty;
+# callers should prefer get_doctrine_display_name().
+DOCTRINE_DISPLAY_NAMES: dict[str, str] = {}
