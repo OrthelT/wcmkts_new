@@ -171,7 +171,7 @@ class ModuleEquivalentsService:
         """
         if not self._is_faction(type_id):
             return [type_id]
-        return _get_equivalent_type_ids_cached(type_id, self._mkt_db.engine)
+        return _get_equivalent_type_ids_cached(type_id, self._mkt_db.alias, self._mkt_db.engine)
 
     def get_equivalence_group(self, type_id: int) -> Optional[EquivalenceGroup]:
         """
@@ -185,7 +185,7 @@ class ModuleEquivalentsService:
         """
         if not self._is_faction(type_id):
             return None
-        return _get_equivalence_group_cached(type_id, self._mkt_db.engine)
+        return _get_equivalence_group_cached(type_id, self._mkt_db.alias, self._mkt_db.engine)
 
     def has_equivalents(self, type_id: int) -> bool:
         """
@@ -272,7 +272,7 @@ class ModuleEquivalentsService:
         Returns:
             List of all EquivalenceGroup objects
         """
-        return _get_all_equivalence_groups_cached(self._mkt_db.engine)
+        return _get_all_equivalence_groups_cached(self._mkt_db.alias, self._mkt_db.engine)
 
     def get_type_ids_with_equivalents(self) -> set[int]:
         """
@@ -296,12 +296,13 @@ class ModuleEquivalentsService:
 # =============================================================================
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def _get_equivalent_type_ids_cached(type_id: int, _engine) -> list[int]:
+def _get_equivalent_type_ids_cached(type_id: int, db_alias: str, _engine) -> list[int]:
     """
     Cached lookup of equivalent type_ids.
 
     Args:
         type_id: The EVE type ID to look up
+        db_alias: Database alias (included in cache key for market isolation)
         _engine: SQLAlchemy engine (prefixed with _ to exclude from cache key)
 
     Returns:
@@ -329,12 +330,13 @@ def _get_equivalent_type_ids_cached(type_id: int, _engine) -> list[int]:
 
 
 @st.cache_resource(ttl=600)
-def _get_equivalence_group_cached(type_id: int, _engine) -> Optional[EquivalenceGroup]:
+def _get_equivalence_group_cached(type_id: int, db_alias: str, _engine) -> Optional[EquivalenceGroup]:
     """
     Cached lookup of equivalence group with stock information.
 
     Args:
         type_id: The EVE type ID to look up
+        db_alias: Database alias (included in cache key for market isolation)
         _engine: SQLAlchemy engine
 
     Returns:
@@ -378,11 +380,12 @@ def _get_equivalence_group_cached(type_id: int, _engine) -> Optional[Equivalence
 
 
 @st.cache_resource(ttl=3600)
-def _get_all_equivalence_groups_cached(_engine) -> list[EquivalenceGroup]:
+def _get_all_equivalence_groups_cached(db_alias: str, _engine) -> list[EquivalenceGroup]:
     """
     Cached lookup of all equivalence groups.
 
     Args:
+        db_alias: Database alias (included in cache key for market isolation)
         _engine: SQLAlchemy engine
 
     Returns:
