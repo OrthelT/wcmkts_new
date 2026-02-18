@@ -209,6 +209,7 @@ def check_db(manual_override: bool = False):
         logger.info("*" * 60)
 
     synced_any = False
+    any_stale = False
     for alias in all_aliases:
         check, local_time = check_for_db_updates(alias)
         now = time.time()
@@ -216,6 +217,7 @@ def check_db(manual_override: bool = False):
         logger.info(f"last_check: {round(now - st.session_state.get('last_check', 0), 2)} seconds ago")
 
         if not check:
+            any_stale = True
             logger.info(f"check_db() {alias} is stale, syncing")
             db = DatabaseConfig(alias)
             db.sync()
@@ -231,7 +233,7 @@ def check_db(manual_override: bool = False):
         invalidate_market_caches()
         update_wcmkt_state()
         st.toast("Database synced successfully", icon="✅")
-    else:
+    elif not any_stale:
         if 'local_update_status' in st.session_state:
             local_update_since = st.session_state.local_update_status["time_since"]
             local_update_since = int(local_update_since.total_seconds() // 60)
