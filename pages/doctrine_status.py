@@ -270,8 +270,8 @@ def main():
         for tid in equiv_type_ids_in_fits:
             group = equiv_service.get_equivalence_group(tid)
             if group:
-                in_stock = [m for m in group.modules if m.stock > 0]
-                if len(in_stock) > 1:
+                others_in_stock = [m for m in group.modules if m.stock > 0 and m.type_id != tid]
+                if others_in_stock:
                     equiv_groups[tid] = group
 
     # Group the data by ship_group
