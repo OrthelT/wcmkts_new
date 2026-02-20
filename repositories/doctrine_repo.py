@@ -694,6 +694,33 @@ def get_target_by_ship_id_with_cache(ship_id: int, default: int = DEFAULT_SHIP_T
         logger.error(f"Failed to get target for ship {ship_id}: {e}")
         return default
 
+@st.cache_data(ttl=600)
+def get_friendly_names_with_cache(db_alias: str = "wcmkt") -> dict[str, str]:
+    """Load doctrine_name -> friendly_name mapping from the doctrine_fits table.
+
+    Returns a dict of {doctrine_name: friendly_name} for all rows where
+    friendly_name is not NULL. Cached for 10 minutes.
+    """
+    query = (
+        "SELECT DISTINCT doctrine_name, friendly_name "
+        "FROM doctrine_fits "
+        "WHERE friendly_name IS NOT NULL"
+    )
+    db = DatabaseConfig(db_alias)
+    try:
+        with db.engine.connect() as conn:
+            rows = conn.execute(text(query)).fetchall()
+        return {row[0]: row[1] for row in rows}
+    except Exception as e:
+        logger.warning(f"Failed to load friendly names from DB: {e}")
+        return {}
+
+
+def get_doctrine_display_name(raw_name: str, db_alias: str = "wcmkt") -> str:
+    """Return the user-friendly display name for a doctrine, or raw_name if unknown."""
+    return get_friendly_names_with_cache(db_alias).get(raw_name, raw_name)
+
+
 @st.cache_data(ttl=600, show_spinner="Getting fit name for {fit_id}...")
 def get_fit_name_with_cache(fit_id: int, default: str = "Unknown Fit", db_alias: str = "wcmkt") -> str:
     """Get the display name for a fit.

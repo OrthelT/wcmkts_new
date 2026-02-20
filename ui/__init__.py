@@ -15,7 +15,6 @@ from ui.column_definitions import (
 from ui.formatters import (
     format_module_list,
     format_price,
-    format_doctrine_name,
     get_status_badge_color,
     get_progress_bar_color,
     render_progress_bar_html,
@@ -36,7 +35,6 @@ __all__ = [
     # Formatters
     "format_module_list",
     "format_price",
-    "format_doctrine_name",
     "get_status_badge_color",
     "get_progress_bar_color",
     "render_progress_bar_html",

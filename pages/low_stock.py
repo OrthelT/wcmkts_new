@@ -13,7 +13,8 @@ import plotly.express as px
 
 from logging_config import setup_logging
 from services import get_low_stock_service, LowStockFilters
-from ui.formatters import get_image_url, format_doctrine_name
+from ui.formatters import get_image_url
+from services.doctrine_service import format_doctrine_name
 from state import ss_init, ss_get, ss_set
 from ui.market_selector import render_market_selector
 from init_db import ensure_market_db_ready

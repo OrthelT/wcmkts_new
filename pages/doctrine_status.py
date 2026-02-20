@@ -10,7 +10,8 @@ from millify import millify
 from logging_config import setup_logging
 from services import get_doctrine_service
 from domain import StockStatus
-from ui import get_fitting_column_config, render_progress_bar_html, format_doctrine_name
+from ui import get_fitting_column_config, render_progress_bar_html
+from services.doctrine_service import format_doctrine_name
 from services import get_status_filter_options
 from state import ss_init, ss_get
 from ui.market_selector import render_market_selector

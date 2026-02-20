@@ -12,7 +12,8 @@ from domain import StockStatus
 from logging_config import setup_logging
 from services import get_doctrine_service
 from services.categorization import categorize_ship_by_role
-from ui.formatters import get_doctrine_report_column_config, get_image_url, get_ship_role_format, format_doctrine_name
+from ui.formatters import get_doctrine_report_column_config, get_image_url, get_ship_role_format
+from services.doctrine_service import format_doctrine_name
 from ui.popovers import render_ship_with_popover, render_market_popover
 from services.module_equivalents_service import get_module_equivalents_service
 from state import ss_init
