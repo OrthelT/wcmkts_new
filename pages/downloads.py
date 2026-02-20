@@ -25,7 +25,7 @@ import pandas as pd
 from logging_config import setup_logging
 from config import DatabaseConfig, get_settings
 from services import get_doctrine_service
-from ui.formatters import format_doctrine_name
+from services.doctrine_service import format_doctrine_name
 from repositories import get_market_repository, get_sde_repository
 from repositories.base import BaseRepository
 from ui.market_selector import render_market_selector

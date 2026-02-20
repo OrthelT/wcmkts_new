@@ -25,6 +25,7 @@ import pandas as pd
 
 from domain import FitItem, FitSummary, StockStatus
 from repositories import DoctrineRepository
+from repositories.doctrine_repo import get_doctrine_display_name as _repo_get_doctrine_display_name
 from services.price_service import PriceService, FitCostAnalysis
 from logging_config import setup_logging
 
@@ -1363,3 +1364,12 @@ def create_fit_df() -> tuple[pd.DataFrame, pd.DataFrame]:
     service = get_doctrine_service()
     result = service.build_fit_data()
     return result.raw_df, result.summary_df
+
+
+def format_doctrine_name(raw_name: str) -> str:
+    """Return the user-friendly display name for a doctrine, or raw_name if unknown.
+
+    Suitable for use as a Streamlit format_func or key callback.
+    Delegates to the repository-layer DB-backed lookup with caching.
+    """
+    return _repo_get_doctrine_display_name(raw_name)
