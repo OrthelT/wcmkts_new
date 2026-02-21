@@ -16,21 +16,16 @@ from services import get_status_filter_options
 from state import ss_init, ss_get
 from ui.market_selector import render_market_selector
 from init_db import ensure_market_db_ready
-from pages.market_stats import new_display_sync_status
+from ui.sync_display import display_sync_status
 from services.module_equivalents_service import get_module_equivalents_service
 
 # Insert centralized logging configuration
 logger = setup_logging(__name__, log_file="doctrine_status.log")
 
-# Initialize service (cached in session state)
-service = get_doctrine_service()
-fit_build_result = service.build_fit_data()
-all_fits_df = fit_build_result.raw_df
-summary_df = fit_build_result.summary_df
-
 def render_export_data():
     """Query market stock data for all selected type_ids. Stores results in session state."""
     ss_init({"rendered_export_data": {}})
+    svc = get_doctrine_service()
 
     for type_id in st.session_state.selected_type_ids:
         if type_id in st.session_state.rendered_export_data:
@@ -40,7 +35,7 @@ def render_export_data():
         name = info.get("module_name", f"Unknown ({type_id})")
 
         try:
-            module_stock = service.repository.get_module_stock(name)
+            module_stock = svc.repository.get_module_stock(name)
             if module_stock:
                 st.session_state.rendered_export_data[type_id] = {
                     "name": name,
@@ -131,6 +126,11 @@ def main():
             "Check Turso credentials and network connectivity."
         )
         st.stop()
+
+    # Initialize service (cached in session state via get_service)
+    service = get_doctrine_service()
+    fit_build_result = service.build_fit_data()
+    summary_df = fit_build_result.summary_df
 
     # App title and logo
     col1, col2, col3 = st.columns([0.2, 0.5, 0.3])
@@ -605,7 +605,7 @@ def main():
 
     # Display last update timestamp
     st.sidebar.markdown("---")
-    new_display_sync_status()
+    display_sync_status()
 
 
 if __name__ == "__main__":

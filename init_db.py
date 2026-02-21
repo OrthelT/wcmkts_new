@@ -2,7 +2,6 @@ from config import DatabaseConfig
 import os
 import sqlite3 as sql
 from logging_config import setup_logging
-from sync_state import update_wcmkt_state
 from time import perf_counter
 from settings_service import get_all_market_configs
 

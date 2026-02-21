@@ -27,8 +27,6 @@ from services.price_service import (
     FallbackPriceProvider,
     # Backwards compatibility
     get_jita_price,
-    get_multi_item_jita_price,
-    calculate_jita_fit_cost_and_delta,
 )
 
 from services.doctrine_service import (
@@ -84,7 +82,6 @@ from services.selection_service import (
     # Helpers
     get_status_filter_options,
     apply_status_filter,
-    render_sidebar_selections,
 )
 
 from services.module_equivalents_service import (
@@ -131,8 +128,6 @@ __all__ = [
     "LocalMarketProvider",
     "FallbackPriceProvider",
     "get_jita_price",
-    "get_multi_item_jita_price",
-    "calculate_jita_fit_cost_and_delta",
     # Doctrine Service
     "DoctrineService",
     "get_doctrine_service",
@@ -165,7 +160,6 @@ __all__ = [
     "SelectionState",
     "get_status_filter_options",
     "apply_status_filter",
-    "render_sidebar_selections",
     # Module Equivalents Service
     "ModuleEquivalentsService",
     "get_module_equivalents_service",

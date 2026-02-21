@@ -19,11 +19,8 @@ from services.module_equivalents_service import get_module_equivalents_service
 from state import ss_init
 from ui.market_selector import render_market_selector
 from init_db import ensure_market_db_ready
-from pages.market_stats import new_display_sync_status
+from ui.sync_display import display_sync_status
 logger = setup_logging(__name__, log_file="doctrine_report.log")
-
-# Initialize service (cached in session state)
-service = get_doctrine_service()
 
 icon_id = 0
 icon_url = f"https://images.evetech.net/types/{icon_id}/render?size=64"
@@ -42,7 +39,8 @@ def get_module_stock_list(module_names: list):
             logger.info(f"Querying database for {module_name} via service")
 
             # Use service repository to get module stock info
-            module_stock = service.repository.get_module_stock(module_name)
+            svc = get_doctrine_service()
+            module_stock = svc.repository.get_module_stock(module_name)
 
             if module_stock:
                 module_info = f"{module_name} (Total: {module_stock.total_stock} | Fits: {module_stock.fits_on_mkt})"
@@ -196,7 +194,7 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
 
                 with ship_col2:
                     # Get fit name from service
-                    fit_name = service.get_fit_name(fit_id)
+                    fit_name = get_doctrine_service().get_fit_name(fit_id)
 
                     ship_target = fit_summary[fit_summary['fit_id'] == fit_id]['ship_target'].iloc[0]
                     if pd.notna(ship_target):
@@ -307,6 +305,9 @@ def main():
             "Check Turso credentials and network connectivity."
         )
         st.stop()
+
+    # Initialize service (cached in session state via get_service)
+    service = get_doctrine_service()
 
     # Initialize session state for target multiplier and selected modules
     ss_init({
@@ -444,7 +445,7 @@ def main():
         st.session_state.csv_module_list_state = {}
         st.rerun()
 
-    new_display_sync_status()
+    display_sync_status()
     st.sidebar.markdown("---")
 if __name__ == "__main__":
     main()

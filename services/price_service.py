@@ -796,33 +796,8 @@ def get_price_service() -> PriceService:
 # Backwards Compatibility
 # =============================================================================
 
-# These functions maintain API compatibility with existing code
-# They delegate to the PriceService under the hood
-
 def get_jita_price(type_id: int) -> float:
     """Backwards-compatible wrapper for get_jita_price."""
     service = get_price_service()
     result = service.get_jita_price(type_id)
     return result.price if result.success else 0.0
-
-
-def get_multi_item_jita_price(type_ids: list[int]) -> dict[int, float]:
-    """Backwards-compatible wrapper for batch Jita prices."""
-    service = get_price_service()
-    return service.get_jita_prices_as_dict(type_ids)
-
-
-def calculate_jita_fit_cost_and_delta(
-    fit_data: pd.DataFrame,
-    current_fit_cost: float,
-    jita_price_map: dict[int, float] | None = None
-) -> tuple[float, float | None]:
-    """
-    Backwards-compatible wrapper for fit cost analysis.
-
-    Returns (jita_fit_cost, percentage_delta) tuple for compatibility
-    with existing code.
-    """
-    service = get_price_service()
-    analysis = service.analyze_fit_cost(fit_data, current_fit_cost, jita_price_map)
-    return analysis.jita_cost, analysis.delta_percentage

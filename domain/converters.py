@@ -111,3 +111,20 @@ def safe_str(value, default: str = "") -> str:
     if pd.isna(value):
         return default
     return str(value)
+
+
+def get_image_url(type_id: int, size: int = 64, isship: bool = False) -> str:
+    """
+    Get the EVE image URL for a type.
+
+    Args:
+        type_id: EVE type ID
+        size: Image size in pixels
+        isship: If True, use render endpoint (3D ship image) instead of icon
+
+    Returns:
+        Image URL string
+    """
+    if isship:
+        return f"https://images.evetech.net/types/{type_id}/render?size={size}"
+    return f"https://images.evetech.net/types/{type_id}/icon"

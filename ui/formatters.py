@@ -257,19 +257,5 @@ def format_doctrine_name(raw_name: str) -> str:
     return raw_name
 
 
-def get_image_url(type_id: int, size: int = 64, isship: bool = False) -> str:
-    """
-    Get the image URL for a type.
-
-    Args:
-        type_id: Type ID
-        size: Size of the image
-
-    Returns:
-        Image URL for the type
-    """
-    if isship:
-        image_url = f"https://images.evetech.net/types/{type_id}/render?size={size}"
-    else:
-        image_url = f"https://images.evetech.net/types/{type_id}/icon"
-    return image_url
+# Re-exported from domain layer for backwards compatibility
+from domain.converters import get_image_url  # noqa: F401

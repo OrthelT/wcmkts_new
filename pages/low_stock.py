@@ -18,11 +18,9 @@ from services.doctrine_service import format_doctrine_name
 from state import ss_init, ss_get, ss_set
 from ui.market_selector import render_market_selector
 from init_db import ensure_market_db_ready
-from pages.market_stats import new_display_sync_status
+from ui.sync_display import display_sync_status
 logger = setup_logging(__name__, log_file="low_stock.log")
 
-# Initialize service (cached in session state)
-service = get_low_stock_service()
 
 
 def create_days_remaining_chart(df: pd.DataFrame):
@@ -128,6 +126,9 @@ def main():
             "Check Turso credentials and network connectivity."
         )
         st.stop()
+
+    # Initialize service (cached in session state via get_service)
+    service = get_low_stock_service()
 
     # Initialize session state
     ss_init(
@@ -466,7 +467,7 @@ def main():
 
     # Display last update timestamp
     st.sidebar.markdown("---")
-    new_display_sync_status()
+    display_sync_status()
 
 
 if __name__ == "__main__":
