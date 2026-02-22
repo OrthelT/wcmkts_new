@@ -1,7 +1,7 @@
 import os
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 import pandas as pd
@@ -11,7 +11,7 @@ from config import DatabaseConfig, get_settings
 from services import get_doctrine_service
 from services.market_service import get_market_service
 from init_db import init_db, ensure_market_db_ready
-from sync_state import update_wcmkt_state
+from state.sync_state import update_wcmkt_state
 from services import get_type_resolution_service
 from pages.components.market_components import (
     render_isk_volume_chart_ui,
@@ -27,6 +27,9 @@ from services import get_jita_price
 from state import ss_has, ss_get
 from repositories import invalidate_market_caches
 from ui.market_selector import render_market_selector
+from ui.sync_display import display_sync_status  # noqa: F401
+# Backwards-compatible alias for pages that may import from here
+new_display_sync_status = display_sync_status
 
 settings = get_settings()
 env = settings['env']['env']
@@ -257,72 +260,6 @@ def maybe_run_check():
         st.session_state["last_check"] = now
 
 
-# =============================================================================
-# Sync Status Display
-# =============================================================================
-
-def new_display_sync_status():
-    """Display sync status in the sidebar."""
-    from state.market_state import get_active_market
-    active_alias = get_active_market().database_alias
-
-    update_time: datetime | None = None
-    time_since: timedelta | None = None
-    display_time = "Unavailable"
-    display_time_since = "Unavailable"
-
-    if "local_update_status" not in st.session_state:
-        try:
-            update_wcmkt_state()
-        except Exception as exc:
-            logger.error(f"Error initializing local_update_status: {exc}")
-
-    status = st.session_state.get("local_update_status")
-    if status is not None:
-        update_time = status.get("updated")
-        time_since = status.get("time_since")
-        if update_time is None:
-            try:
-                update_time = DatabaseConfig(active_alias).get_most_recent_update("marketstats", remote=False)
-                status["updated"] = update_time
-            except Exception as exc:
-                logger.error(f"Error fetching cached update time: {exc}")
-        if time_since is None and update_time is not None:
-            time_since = datetime.now(tz=timezone.utc) - update_time
-            status["time_since"] = time_since
-    else:
-        try:
-            update_time = DatabaseConfig(active_alias).get_most_recent_update("marketstats", remote=False)
-        except Exception as exc:
-            logger.error(f"Error fetching update time: {exc}")
-        if update_time is not None:
-            time_since = datetime.now(tz=timezone.utc) - update_time
-
-    if update_time is not None:
-        try:
-            display_time = update_time.strftime("%m-%d | %H:%M UTC")
-        except Exception as exc:
-            logger.error(f"Error formatting update time: {exc}")
-
-    if time_since is not None:
-        try:
-            total_minutes = int(time_since.total_seconds() // 60)
-            suffix = "minute" if total_minutes == 1 else "minutes"
-            display_time_since = f"{total_minutes} {suffix}"
-        except Exception as exc:
-            logger.error(f"Error formatting time since update: {exc}")
-
-    st.sidebar.markdown(
-        (
-            "<span style='font-size: 14px; color: lightgrey;'>"
-            f"*Last ESI update: {display_time}*</span> "
-            "<p style='margin: 0;'>"
-            "<span style='font-size: 14px; color: lightgrey;'>"
-            f"*Time since update: {display_time_since}*</span>"
-            "</p>"
-        ),
-        unsafe_allow_html=True,
-    )
 
 
 # =============================================================================
@@ -660,7 +597,7 @@ def main():
 
     # Sidebar bottom
     with st.sidebar:
-        new_display_sync_status()
+        display_sync_status()
         st.sidebar.divider()
         db_check = st.sidebar.button("Check DB State", width='content')
         if db_check:

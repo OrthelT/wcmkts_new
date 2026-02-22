@@ -383,39 +383,3 @@ def get_selection_service() -> SelectionService:
         return SelectionService.create_default()
 
 
-def render_sidebar_selections(service: SelectionService) -> None:
-    """
-    Render current selections in the sidebar.
-
-    Args:
-        service: SelectionService instance
-    """
-    import streamlit as st
-
-    summary = service.format_selection_summary()
-
-    if summary["total_count"] > 0:
-        st.sidebar.subheader("Selected Items")
-
-        # Summary metrics
-        col1, col2 = st.sidebar.columns(2)
-        with col1:
-            st.metric("Ships", summary["ship_count"])
-        with col2:
-            st.metric("Modules", summary["module_count"])
-
-        # Status breakdown
-        if summary["critical"] > 0:
-            st.sidebar.markdown(f":red[Critical: {summary['critical']}]")
-        if summary["needs_attention"] > 0:
-            st.sidebar.markdown(f":orange[Low: {summary['needs_attention']}]")
-
-        # Formatted selection list
-        st.sidebar.code(service.format_sidebar_text(), language=None)
-
-        # Clear button
-        if st.sidebar.button("Clear Selections", use_container_width=True):
-            service.clear_selections()
-            st.rerun()
-    else:
-        st.sidebar.info("No items selected")

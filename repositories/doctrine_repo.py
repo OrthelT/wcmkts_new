@@ -20,7 +20,7 @@ import pandas as pd
 from sqlalchemy import text
 
 from config import DatabaseConfig, DEFAULT_SHIP_TARGET
-from domain import FitItem, FitSummary, ModuleStock, ModuleUsage, Doctrine, ShipStock
+from domain import FitItem, ModuleStock, Doctrine, ShipStock
 import streamlit as st
 from logging_config import setup_logging
 logger = setup_logging(__name__, log_file="doctrine_repo.log")
@@ -36,9 +36,6 @@ class DoctrineRepository:
     ## Attributes:
     - `db`: DatabaseConfig instance for the market database
     - `logger`: Optional logger instance
-
-    ## Helper Methods:
-    - `get_methods(print_methods: bool = False)`: Get all methods of the DoctrineRepository class
 
     ## All Methods:
     - `get_all_fits()`: Get all fit data from the doctrines table
@@ -194,76 +191,6 @@ class DoctrineRepository:
     # =========================================================================
     # Module Stock
     # =========================================================================
-
-    def get_module_stock_with_equivalents(self, module_name: str) -> pd.DataFrame:
-        """
-        Get stock information for a module, including equivalent modules.
-
-        For modules with equivalents (e.g., faction hardeners), returns
-        the combined stock across all equivalent modules.
-
-        Args:
-            module_name: Name of the module
-
-        Returns:
-            DataFrame with type_name, type_id, total_stock (aggregated),
-            fits_on_mkt (recalculated based on combined stock)
-        """
-        from services.module_equivalents_service import get_module_equivalents_service
-
-        # Get basic stock info
-        stock_df = self.get_module_stock_info(module_name)
-        if stock_df.empty:
-            return stock_df
-
-        type_id = int(stock_df.iloc[0]['type_id'])
-
-        # Check for equivalents
-        equiv_service = get_module_equivalents_service()
-        if not equiv_service.has_equivalents(type_id):
-            return stock_df
-
-        # Get equivalence group with all stock info
-        group = equiv_service.get_equivalence_group(type_id)
-        if not group:
-            return stock_df
-
-        # Update the stock with combined value
-        result = stock_df.copy()
-        result['total_stock'] = group.total_stock
-        result['has_equivalents'] = True
-        result['equivalent_count'] = len(group.modules)
-
-        return result
-
-    def get_equivalent_modules_stock(self, type_id: int) -> list[dict]:
-        """
-        Get stock information for all equivalent modules.
-
-        Args:
-            type_id: EVE type ID of any module in the equivalence group
-
-        Returns:
-            List of dicts with type_id, type_name, stock, price for each
-            equivalent module, or empty list if no equivalents
-        """
-        from services.module_equivalents_service import get_module_equivalents_service
-
-        equiv_service = get_module_equivalents_service()
-        group = equiv_service.get_equivalence_group(type_id)
-
-        if not group:
-            return []
-
-        return [
-            {
-                'type_id': m.type_id,
-                'type_name': m.type_name,
-                'stock': m.stock,
-                'price': m.price,
-            }
-            for m in group.modules
-        ]
 
     def get_module_stock_info(self, module_name: str) -> pd.DataFrame:
         """
@@ -519,40 +446,6 @@ class DoctrineRepository:
             fit_ids=fit_ids,
             lead_ship_id=lead_ship_id
         )
-    def get_methods(self) -> list[str]:
-        """
-        Get list of all public method names in the DoctrineRepository.
-
-        Returns:
-            List of method names (excluding private methods starting with '_')
-
-        Example:
-            >>> repo = DoctrineRepository(db)
-            >>> methods = repo.get_methods()
-            >>> print(methods)
-            ['get_all_fits', 'get_fit_by_id', 'get_all_targets', ...]
-        """
-        return [attr for attr in dir(DoctrineRepository) if not attr.startswith("_")]
-
-    def print_methods(self) -> None:
-        """
-        Print all public methods with their documentation.
-
-        Useful for exploring the repository API.
-
-        Example:
-            >>> repo = DoctrineRepository(db)
-            >>> repo.print_methods()
-            get_all_fits: Get all fit data from the doctrines table...
-            ----------------------------------------
-            get_fit_by_id: Get all items for a specific fit...
-            ----------------------------------------
-        """
-        for method_name in self.get_methods():
-            method = getattr(DoctrineRepository, method_name)
-            doc = method.__doc__ if method.__doc__ else 'No documentation'
-            print(f"{method_name}: {doc}")
-            print("----------------------------------------")
 
 # =============================================================================
 # Configuration Loaders

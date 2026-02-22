@@ -1220,6 +1220,72 @@ class DoctrineService:
         """
         return StockStatus.from_stock_and_target(module_fits, target)
 
+    def get_module_stock_with_equivalents(self, module_name: str) -> pd.DataFrame:
+        """
+        Get stock information for a module, including equivalent modules.
+
+        For modules with equivalents (e.g., faction hardeners), returns
+        the combined stock across all equivalent modules.
+
+        Args:
+            module_name: Name of the module
+
+        Returns:
+            DataFrame with type_name, type_id, total_stock (aggregated),
+            fits_on_mkt (recalculated based on combined stock)
+        """
+        from services.module_equivalents_service import get_module_equivalents_service
+
+        stock_df = self._repo.get_module_stock_info(module_name)
+        if stock_df.empty:
+            return stock_df
+
+        type_id = int(stock_df.iloc[0]['type_id'])
+
+        equiv_service = get_module_equivalents_service()
+        if not equiv_service.has_equivalents(type_id):
+            return stock_df
+
+        group = equiv_service.get_equivalence_group(type_id)
+        if not group:
+            return stock_df
+
+        result = stock_df.copy()
+        result['total_stock'] = group.total_stock
+        result['has_equivalents'] = True
+        result['equivalent_count'] = len(group.modules)
+
+        return result
+
+    def get_equivalent_modules_stock(self, type_id: int) -> list[dict]:
+        """
+        Get stock information for all equivalent modules.
+
+        Args:
+            type_id: EVE type ID of any module in the equivalence group
+
+        Returns:
+            List of dicts with type_id, type_name, stock, price for each
+            equivalent module, or empty list if no equivalents
+        """
+        from services.module_equivalents_service import get_module_equivalents_service
+
+        equiv_service = get_module_equivalents_service()
+        group = equiv_service.get_equivalence_group(type_id)
+
+        if not group:
+            return []
+
+        return [
+            {
+                'type_id': m.type_id,
+                'type_name': m.type_name,
+                'stock': m.stock,
+                'price': m.price,
+            }
+            for m in group.modules
+        ]
+
     def get_fit_items(self, fit_id: int) -> list[FitItem]:
         """
         Get all items for a specific fit.

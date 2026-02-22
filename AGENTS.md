@@ -507,6 +507,10 @@ The codebase follows a strict layered architecture. Dependencies must flow **dow
 
 †Services and repositories use try/except imports from `state/` only in factory functions to maintain testability outside Streamlit.
 
+‡**`ui/sync_display.py` exception:** This module imports from `state/` and `config` because it is a shared presentation component that cannot live in `pages/` (Streamlit auto-discovers `pages/` subdirectories as navigation entries). The layer violation is accepted to avoid Streamlit side effects.
+
+§**`state/sync_state.py` exception:** This module imports `DatabaseConfig` from `config` to query database update timestamps and populate session state. The bidirectional dependency (`state/ → config` here, `config → state/` via deferred import in `DatabaseConfig`) is safe because both sides use deferred or function-scoped imports that prevent circular import at runtime.
+
 **Common Circular Import Causes:**
 1. **UI importing from services** - UI layer should only use domain enums/models
 2. **Importing from `app.py`** - Entry point should never be imported

@@ -35,7 +35,7 @@ from services.parser_utils import (
 from repositories.market_orders_repo import MarketOrdersRepository, get_market_orders_repository
 from logging_config import setup_logging
 import streamlit as st
-from ui.formatters import get_image_url
+from domain.converters import get_image_url
 
 logger = setup_logging(__name__, log_file="pricer_service.log")
 
@@ -304,18 +304,6 @@ class SDELookupService:
 
         return None
 
-    def resolve_items(self, type_names: list[str]) -> dict[str, Optional[dict]]:
-        """
-        Resolve multiple item names.
-
-        Args:
-            type_names: List of item names
-
-        Returns:
-            Dict mapping original name to SDE data (or None)
-        """
-        return {name: self.resolve_item(name) for name in type_names}
-
 
 # =============================================================================
 # Main Pricer Service
@@ -351,9 +339,14 @@ class PricerService:
         self._logger = logger_instance or logger
 
     @classmethod
-    def create_default(cls, db_alias: str = None) -> "PricerService":
+    def create_default(cls, db_alias: str = None, janice_api_key: str = None) -> "PricerService":
         """
         Factory method to create service with default configuration.
+
+        Args:
+            db_alias: Database alias. If None, uses the active market.
+            janice_api_key: Janice API key for Jita price fallback.
+                If None, attempts to read from st.secrets.
         """
         if db_alias is None:
             try:
@@ -366,12 +359,13 @@ class PricerService:
         mkt_db = DatabaseConfig(db_alias)
         market_repo = get_market_orders_repository()
 
-        # Get Janice API key from secrets
-        janice_key = None
-        try:
-            janice_key = st.secrets.janice.api_key
-        except Exception:
-            logger.warning("Janice API key not found in secrets")
+        # Fall back to st.secrets if key not provided
+        janice_key = janice_api_key
+        if janice_key is None:
+            try:
+                janice_key = st.secrets.janice.api_key
+            except Exception:
+                logger.warning("Janice API key not found in secrets")
 
         jita_provider = JitaPriceProvider(janice_key)
 
@@ -615,10 +609,18 @@ def get_pricer_service() -> PricerService:
     Returns:
         PricerService instance
     """
+    def _create_pricer_service() -> PricerService:
+        janice_key = None
+        try:
+            janice_key = st.secrets.janice.api_key
+        except Exception:
+            pass
+        return PricerService.create_default(janice_api_key=janice_key)
+
     try:
         from state import get_service
         from state.market_state import get_active_market_key
-        return get_service(f'pricer_service_{get_active_market_key()}', PricerService.create_default)
+        return get_service(f'pricer_service_{get_active_market_key()}', _create_pricer_service)
     except ImportError:
         logger.debug("state module unavailable, creating new PricerService instance")
-        return PricerService.create_default()
+        return _create_pricer_service()
