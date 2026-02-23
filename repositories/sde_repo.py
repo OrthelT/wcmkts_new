@@ -29,18 +29,24 @@ logger = setup_logging(__name__, log_file="sde_repo.log")
 
 # Allowlist of valid SDE table names for get_sde_table (prevents SQL injection)
 VALID_SDE_TABLES = frozenset({
-    "inv_info",
-    "invTypes",
-    "invGroups",
-    "invCategories",
-    "invMetaTypes",
-    "invMetaGroups",
-    "sdetypes",
-    "industryActivity",
-    "industryActivityMaterials",
-    "industryActivityProducts",
-    "industryActivitySkills",
+    "_sde",
+    "agtAgentTypes",
+    "agtAgents",
+    "agtAgentsInSpace",
+    "agtResearchAgents",
+    "certCerts",
+    "certMasteries",
+    "dgmTypeAttributes",
     "industryBlueprints",
+    "invCategories",
+    "invGroups",
+    "invMetaGroups",
+    "invMetaTypes",
+    "invTypeMaterials",
+    "invTypeReactions",
+    "invTypes",
+    "inv_info",
+    "sdetypes",
 })
 
 
