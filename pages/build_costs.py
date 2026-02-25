@@ -424,30 +424,21 @@ def main():
         types_df = types_df.sort_values(by="typeName")
 
         if len(types_df) == 0:
-            st.warning(f"No items found for group: {selected_group}")
-            selected_group = None
-            selected_category = "Ship"
-            index = categories.index("Ship")
-            selected_category = st.sidebar.selectbox(
-                "Select a category", categories, index=index
+            st.warning(
+                f"No buildable items found for group: {selected_group}. "
+                "This may indicate a missing SDE table (e.g. industryActivityProducts). "
+                "Try syncing the database or selecting a different group."
             )
-            category_id = df[df["category"] == selected_category]["id"].values[0]
-            group_id = 1012
-            st.rerun()
+            logger.warning(f"No types returned for group {group_id} — possible missing SDE table")
+            st.stop()
         else:
             type_names = types_df["typeName"].unique()
             selected_item = st.sidebar.selectbox("Select an item", type_names)
             type_names_list = type_names.tolist()
     except Exception as e:
-        st.warning(f"invalid group: {e}")
-        selected_group = None
-        selected_category = "Ship"
-        index = categories.index("Ship")
-        selected_category = st.sidebar.selectbox(
-            "Select a category", categories, index=index
-        )
-        category_id = df[df["category"] == selected_category]["id"].values[0]
-        group_id = 1012
+        st.error(f"Failed to load items for group: {e}")
+        logger.error(f"Exception loading types for group {group_id}: {e}")
+        st.stop()
 
     # Only proceed if we have valid data
     if (
@@ -470,8 +461,8 @@ def main():
                     type_id = filtered_df["typeID"].values[0]
         except Exception as e:
             st.warning(f"invalid item: {e}")
+            logger.error(f"Exception selecting item: {e}")
             selected_item = None
-            st.rerun()
     else:
         selected_item = None
         type_id = None
@@ -480,10 +471,9 @@ def main():
         st.warning(
             f"Selected item: {
                 selected_item if 'selected_item' in locals() else 'None'
-            } not a buildable item"
+            } not a buildable item. Please select a valid item from the sidebar."
         )
-        selected_item = None
-        st.rerun()
+        st.stop()
 
     runs = st.sidebar.number_input("Runs", min_value=1, max_value=100000, value=1)
     me = st.sidebar.number_input("ME", min_value=0, max_value=10, value=0)
