@@ -45,7 +45,8 @@ class ImportHelperFilters:
     search_text: str = ""
     profitable_only: bool = True
     min_capital_utilis: Optional[float] = None
-    min_volume_30d: Optional[float] = None
+    min_turnover_30d: Optional[float] = None
+    markup_margin: float = 0.2
 
 
 class ImportHelperService:
@@ -183,7 +184,9 @@ class ImportHelperService:
         df["shipping_cost"] = df["volume_m3"] * SHIPPING_COST_PER_M3
         df["profit_jita_sell"] = df["price"] - df["jita_sell_price"]
         df["profit_jita_sell_30d"] = df["profit_jita_sell"] * 30 * df["avg_volume"]
-        df["volume_30d"] = df["avg_volume"] * 30 * df["jita_sell_price"]
+        df["turnover_30d"] = df["avg_volume"] * 30 * df["jita_sell_price"]
+        df["volume_30d"] = df["avg_volume"] * 30
+        df["rrp"] = df["jita_sell_price"] * (1 + filters.markup_margin)
 
         df["capital_utilis"] = 0.0
         nonzero_jita = df["jita_sell_price"] > 0
@@ -204,14 +207,14 @@ class ImportHelperService:
         if filters.min_capital_utilis is not None:
             df = df[df["capital_utilis"] >= filters.min_capital_utilis]
 
-        if filters.min_volume_30d is not None:
-            df = df[df["volume_30d"] >= filters.min_volume_30d]
+        if filters.min_turnover_30d is not None:
+            df = df[df["turnover_30d"] >= filters.min_turnover_30d]
 
         if df.empty:
             return df
 
         return df.sort_values(
-            by=["capital_utilis", "profit_jita_sell", "volume_30d"],
+            by=["capital_utilis", "profit_jita_sell", "turnover_30d"],
             ascending=[False, False, False],
         ).reset_index(drop=True)
 

@@ -37,9 +37,10 @@ def main():
     st.markdown(
         """
         Discover items where the local market price sits well above Jita sell.
-        Shipping Cost is `m3 * 500`, 30D Profit uses `(Local Price - Jita Sell) * 30`,
-        and Capital Utilis = `((Local Price - Jita Sell) - Shipping Cost) / Jita Sell`. 
-        The Capital Utilis stands for Capital Utilisation Efficiency, which indicates the invest-reward ratio.
+        Shipping Cost is `m3 * 500`, 30D Profit uses `(Local Price - Jita Sell) * Avg Daily Volume * 30`,
+        RRP (Recommended Retail Price) uses `Jita Sell * (1 + Markup Margin)`,
+        and Cap Utilis = `((Local Price - Jita Sell) - Shipping Cost) / Jita Sell`. 
+        The Cap Utilis stands for Capital Utilisation Efficiency, which indicates the invest-reward ratio.
         """
     )
 
@@ -71,12 +72,20 @@ def main():
         format="%.2f",
         help="0.10 means at least 10% capital utilisation after shipping.",
     )
-    min_volume_30d = st.sidebar.number_input(
-        "Minimum 30D Volume",
+    min_turnover_30d = st.sidebar.number_input(
+        "Minimum 30D Turnover",
         min_value=0,
         value=0,
         step=200_000_000,
-        help="Hide items whose 30D Volume is below this value.",
+        help="Hide items whose 30D Turnover is below this value.",
+    )
+    markup_margin = st.sidebar.number_input(
+        "Markup Margin",
+        min_value=0.0,
+        value=0.2,
+        step=0.05,
+        format="%.2f",
+        help="Used for RRP. 0.20 means 20% above Jita sell.",
     )
 
     filters = ImportHelperFilters(
@@ -84,7 +93,8 @@ def main():
         search_text=search_text,
         profitable_only=profitable_only,
         min_capital_utilis=min_capital_utilis,
-        min_volume_30d=float(min_volume_30d),
+        min_turnover_30d=float(min_turnover_30d),
+        markup_margin=float(markup_margin),
     )
 
     df = service.get_import_items(filters)
@@ -108,21 +118,27 @@ def main():
             "type_id",
             "type_name",
             "price",
+            "rrp",
             "jita_sell_price",
             "jita_buy_price",
             "shipping_cost",
             "profit_jita_sell_30d",
+            "turnover_30d",
             "volume_30d",
             "capital_utilis",
         ]
     ].copy()
     money_columns = [
         "price",
+        "rrp",
         "jita_sell_price",
         "jita_buy_price",
-        "shipping_cost"
+        "shipping_cost",
+        "profit_jita_sell_30d",
+        "turnover_30d",
     ]
     display_df[money_columns] = display_df[money_columns].round().astype("Int64")
+    display_df["volume_30d"] = display_df["volume_30d"].round().astype("Int64")
 
     st.dataframe(
         display_df,

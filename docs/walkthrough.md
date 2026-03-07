@@ -90,4 +90,4 @@ This guide provides step-by-step instructions for common tasks in the Winter Coa
 2. Use the category or search filters to narrow down the items you want to inspect
 3. Compare local price against Jita sell and Jita buy prices
 4. Review Shipping Cost, 30D Profit(Jita Sell), and Capital Utilis together
-5. Use the 30 days volume column to focus on items with meaningful turnover
+5. Use the 30D Turnover and 30D Volume columns to focus on items with meaningful turnover

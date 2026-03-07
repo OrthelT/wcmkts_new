@@ -47,7 +47,7 @@
 - Local price, Jita sell price, and Jita buy price
 - Shipping cost estimate based on volume
 - 30D Profit vs Jita sell
-- Estimated 30 days volume
+- 30D turnover and 30D volume
 - Capital utilisation
 
 ## Doctrine Status Page ⚔️

@@ -189,6 +189,11 @@ def get_import_helper_column_config() -> dict:
             help="Current local market price.",
             format="localized",
         ),
+        "rrp": st.column_config.NumberColumn(
+            "RRP",
+            help="Recommended Retail Price calculated as Jita Sell * (1 + Markup Margin).",
+            format="localized",
+        ),
         "jita_sell_price": st.column_config.NumberColumn(
             "Jita Sell",
             help="Jita sell percentile price.",
@@ -200,22 +205,27 @@ def get_import_helper_column_config() -> dict:
             format="localized",
         ),
         "shipping_cost": st.column_config.NumberColumn(
-            "Shipping Cost",
+            "Shipping",
             help="Calculated as item size in m3 * 500.",
             format="localized",
         ),
         "profit_jita_sell_30d": st.column_config.NumberColumn(
-            "30D Profit(Jita Sell)",
-            help="Calculated as (local price - Jita sell price) * 30.",
+            "30D Profit",
+            help="Calculated as (local price - Jita sell price) * average daily volume * 30.",
+            format="compact",
+        ),
+        "turnover_30d": st.column_config.NumberColumn(
+            "30D Turnover",
+            help="30-day units sold multiplied by Jita Sell Price.",
             format="compact",
         ),
         "volume_30d": st.column_config.NumberColumn(
             "30D Volume",
-            help="30-day units sold multiplied by Jita Sell Price.",
-            format="compact",
+            help="Calculated as average daily volume * 30.",
+            format="localized",
         ),
         "capital_utilis": st.column_config.NumberColumn(
-            "Capital Utilis",
+            "Cap Utilis",
             help="Calculated as ((local price - Jita sell price) - shipping cost) / Jita sell.",
             format="percent",
         ),

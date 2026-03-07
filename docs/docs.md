@@ -61,15 +61,16 @@ The central dataframe displays all currently selected items. Currently, only sel
 **Key Features:**
 - **Jita Comparison Columns:** Compare local price to Jita sell and Jita buy prices
 - **Shipping Cost Estimate:** Calculated as item volume in m3 multiplied by 500
-- **30D Profit vs Jita Sell:** Calculated as `(local market price - Jita Sell Price) * 30`
-- **30 Days Volume:** Calculated from local average daily volume over 30 days, multiplied by Jita sell price
+- **30D Profit vs Jita Sell:** Calculated as `(local market price - Jita Sell Price) * average daily volume * 30`
+- **30D Turnover:** Calculated from local average daily volume over 30 days, multiplied by Jita sell price
+- **30D Volume:** Calculated as local average daily volume multiplied by 30
 - **Capital Utilis:** Calculated as `((local market price - Jita Sell Price) - Shipping Cost) / Jita Sell Price`
 
 **How to Use:**
 1. Use the sidebar filters to limit results by category or item name
 2. Compare the local price against Jita sell and buy prices to spot local undercut oppotunities
 3. Review shipping cost, 30-day profit, and capital utilisation together
-4. Use the 30 days volume column to identify items with meaningful turnover
+4. Use the 30D Turnover and 30D Volume columns to identify items with meaningful turnover
 
 ### 4. Doctrine Status Page
 **Purpose:** Monitors the availability of doctrine ship fits and their components.
