@@ -252,7 +252,7 @@ class PricedItem:
 
     @property
     def jita_vs_local_sell_delta(self) -> Price:
-        """Difference between Jita sell and local sell (negative = local cheaper)."""
+        """Difference between Jita sell and local sell (negative = local more expensive)."""
         return self.jita_sell - self.local_sell
 
     @property

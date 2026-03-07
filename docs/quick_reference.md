@@ -35,18 +35,18 @@
 - "Used In Fits" column showing which ships use the item
 
 ## Import Helper Page 📦
-**Purpose:** Identify items where the local market price compares favorably against Jita sell
+**Purpose:** Identify items where the local market price is above Jita sell
 
 **Key Controls:**
 - **Categories:** Limit results by item category
 - **Search Items:** Filter by item name
-- **Positive Profit Only:** Show only items with positive Jita sell spread
+- **Positive Profit Only:** Show only items with positive local-over-Jita spread
 - **Minimum Capital Utilis:** Filter by minimum capital utilisation
 
 **What You'll See:**
 - Local price, Jita sell price, and Jita buy price
 - Shipping cost estimate based on volume
-- Profit at Jita sell
+- 30D Profit vs Jita sell
 - Estimated 30 days volume
 - Capital utilisation
 

@@ -45,6 +45,7 @@ class ImportHelperFilters:
     search_text: str = ""
     profitable_only: bool = True
     min_capital_utilis: Optional[float] = None
+    min_volume_30d: Optional[float] = None
 
 
 class ImportHelperService:
@@ -180,7 +181,8 @@ class ImportHelperService:
         )
 
         df["shipping_cost"] = df["volume_m3"] * SHIPPING_COST_PER_M3
-        df["profit_jita_sell"] = df["jita_sell_price"] - df["price"]
+        df["profit_jita_sell"] = df["price"] - df["jita_sell_price"]
+        df["profit_jita_sell_30d"] = df["profit_jita_sell"] * 30 * df["avg_volume"]
         df["volume_30d"] = df["avg_volume"] * 30 * df["jita_sell_price"]
 
         df["capital_utilis"] = 0.0
@@ -201,6 +203,9 @@ class ImportHelperService:
 
         if filters.min_capital_utilis is not None:
             df = df[df["capital_utilis"] >= filters.min_capital_utilis]
+
+        if filters.min_volume_30d is not None:
+            df = df[df["volume_30d"] >= filters.min_volume_30d]
 
         if df.empty:
             return df

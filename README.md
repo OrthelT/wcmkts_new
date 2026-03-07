@@ -184,7 +184,7 @@ Adds interactive market ISK volume charting to Market Stats, including moving av
 
 - **Import Analysis**
   - Compare local market prices to Jita sell and buy prices
-  - Review shipping cost, profit at Jita sell, and capital utilisation
+  - Review shipping cost, profit versus Jita sell, and capital utilisation
   - Estimate 30-day market value using local volume and Jita sell price
 
 - **Build Cost Analysis**

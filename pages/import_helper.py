@@ -36,9 +36,10 @@ def main():
 
     st.markdown(
         """
-        Discover items where the local market price sits well below Jita sell.
-        Shipping Cost is `m3 * 500`, Profit uses `Jita Sell - Local Price`,
-        and Capital Utilis uses `(Profit - Shipping Cost) / Jita Sell`.
+        Discover items where the local market price sits well above Jita sell.
+        Shipping Cost is `m3 * 500`, 30D Profit uses `(Local Price - Jita Sell) * 30`,
+        and Capital Utilis = `((Local Price - Jita Sell) - Shipping Cost) / Jita Sell`. 
+        The Capital Utilis stands for Capital Utilisation Efficiency, which indicates the invest-reward ratio.
         """
     )
 
@@ -59,16 +60,23 @@ def main():
     profitable_only = st.sidebar.checkbox(
         "Positive Profit Only",
         value=True,
-        help="Hide items where Jita sell is not above the local market price.",
+        help="Hide items where the local market price is not above Jita sell.",
     )
     min_capital_utilis = st.sidebar.number_input(
         "Minimum Capital Utilis",
-        min_value=-5.0,
+        min_value=0.0,
         max_value=5.0,
         value=0.0,
         step=0.05,
         format="%.2f",
         help="0.10 means at least 10% capital utilisation after shipping.",
+    )
+    min_volume_30d = st.sidebar.number_input(
+        "Minimum 30D Volume",
+        min_value=0,
+        value=0,
+        step=200_000_000,
+        help="Hide items whose 30D Volume is below this value.",
     )
 
     filters = ImportHelperFilters(
@@ -76,6 +84,7 @@ def main():
         search_text=search_text,
         profitable_only=profitable_only,
         min_capital_utilis=min_capital_utilis,
+        min_volume_30d=float(min_volume_30d),
     )
 
     df = service.get_import_items(filters)
@@ -102,11 +111,18 @@ def main():
             "jita_sell_price",
             "jita_buy_price",
             "shipping_cost",
-            "profit_jita_sell",
+            "profit_jita_sell_30d",
             "volume_30d",
             "capital_utilis",
         ]
     ].copy()
+    money_columns = [
+        "price",
+        "jita_sell_price",
+        "jita_buy_price",
+        "shipping_cost"
+    ]
+    display_df[money_columns] = display_df[money_columns].round().astype("Int64")
 
     st.dataframe(
         display_df,

@@ -56,19 +56,19 @@ The central dataframe displays all currently selected items. Currently, only sel
 6. Check the "Used In Fits" column to see which doctrine ships use a particular item
 
 ### 3. Import Helper Page
-**Purpose:** Highlights items where the local market price is well below Jita sell, helping importers spot attractive opportunities quickly.
+**Purpose:** Highlights items where the local market price is well above Jita sell, helping importers spot attractive opportunities quickly.
 
 **Key Features:**
 - **Jita Comparison Columns:** Compare local price to Jita sell and Jita buy prices
 - **Shipping Cost Estimate:** Calculated as item volume in m3 multiplied by 500
-- **Profit (Jita Sell):** Calculated as Jita Sell Price minus local market price
+- **30D Profit vs Jita Sell:** Calculated as `(local market price - Jita Sell Price) * 30`
 - **30 Days Volume:** Calculated from local average daily volume over 30 days, multiplied by Jita sell price
-- **Capital Utilis:** Calculated as `(Profit - Shipping Cost) / Jita Sell Price`
+- **Capital Utilis:** Calculated as `((local market price - Jita Sell Price) - Shipping Cost) / Jita Sell Price`
 
 **How to Use:**
 1. Use the sidebar filters to limit results by category or item name
-2. Compare the local price against Jita sell and buy prices
-3. Review shipping cost, profit, and capital utilisation together
+2. Compare the local price against Jita sell and buy prices to spot local undercut oppotunities
+3. Review shipping cost, 30-day profit, and capital utilisation together
 4. Use the 30 days volume column to identify items with meaningful turnover
 
 ### 4. Doctrine Status Page

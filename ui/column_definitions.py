@@ -190,12 +190,12 @@ def get_import_helper_column_config() -> dict:
             format="localized",
         ),
         "jita_sell_price": st.column_config.NumberColumn(
-            "Jita Sell Price",
+            "Jita Sell",
             help="Jita sell percentile price.",
             format="localized",
         ),
         "jita_buy_price": st.column_config.NumberColumn(
-            "Jita Buy Price",
+            "Jita Buy",
             help="Jita buy percentile price.",
             format="localized",
         ),
@@ -204,19 +204,19 @@ def get_import_helper_column_config() -> dict:
             help="Calculated as item size in m3 * 500.",
             format="localized",
         ),
-        "profit_jita_sell": st.column_config.NumberColumn(
-            "Profit (Jita Sell)",
-            help="Calculated as Jita Sell Price - local Price.",
-            format="localized",
+        "profit_jita_sell_30d": st.column_config.NumberColumn(
+            "30D Profit(Jita Sell)",
+            help="Calculated as (local price - Jita sell price) * 30.",
+            format="compact",
         ),
         "volume_30d": st.column_config.NumberColumn(
-            "30 Days Volume",
+            "30D Volume",
             help="30-day units sold multiplied by Jita Sell Price.",
             format="compact",
         ),
         "capital_utilis": st.column_config.NumberColumn(
             "Capital Utilis",
-            help="Calculated as (Profit - Shipping Cost) / Jita Sell Price.",
+            help="Calculated as ((local price - Jita sell price) - shipping cost) / Jita sell.",
             format="percent",
         ),
     }

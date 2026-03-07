@@ -34,7 +34,7 @@ class TestImportHelperService:
                 {
                     "type_id": [34],
                     "type_name": ["Tritanium"],
-                    "price": [10.0],
+                    "price": [30.0],
                     "avg_volume": [5.0],
                     "volume_m3": [0.01],
                     "category_name": ["Mineral"],
@@ -47,6 +47,7 @@ class TestImportHelperService:
         row = result.iloc[0]
         assert row["shipping_cost"] == 5.0
         assert row["profit_jita_sell"] == 10.0
+        assert row["profit_jita_sell_30d"] == 300.0
         assert row["volume_30d"] == 3000.0
         assert row["capital_utilis"] == 0.25
 
@@ -76,7 +77,7 @@ class TestImportHelperService:
                 {
                     "type_id": [34, 35],
                     "type_name": ["Tritanium", "Pyerite"],
-                    "price": [10.0, 25.0],
+                    "price": [30.0, 15.0],
                     "avg_volume": [4.0, 2.0],
                     "volume_m3": [0.01, 0.02],
                     "category_name": ["Mineral", "Mineral"],
@@ -90,6 +91,45 @@ class TestImportHelperService:
         row = result.iloc[0]
         assert row["type_id"] == 34
         assert row["volume_30d"] == 2400.0
+
+    def test_get_import_items_filters_by_minimum_30d_volume(self):
+        from services.import_helper_service import ImportHelperFilters, ImportHelperService
+
+        service = ImportHelperService(Mock(), Mock(), DummyJitaProvider({}))
+        provider = DummyJitaProvider(
+            {
+                34: JitaPriceData(type_id=34, sell_price=20.0, buy_price=18.0),
+                35: JitaPriceData(type_id=35, sell_price=20.0, buy_price=19.0),
+            }
+        )
+        service._jita_provider = provider
+
+        filters = ImportHelperFilters(
+            profitable_only=False,
+            min_volume_30d=2500.0,
+        )
+
+        with patch.object(
+            service,
+            "_get_import_candidates",
+            return_value=pd.DataFrame(
+                {
+                    "type_id": [34, 35],
+                    "type_name": ["Tritanium", "Pyerite"],
+                    "price": [30.0, 25.0],
+                    "avg_volume": [5.0, 2.0],
+                    "volume_m3": [0.01, 0.02],
+                    "category_name": ["Mineral", "Mineral"],
+                    "group_name": ["Mineral", "Mineral"],
+                }
+            ),
+        ):
+            result = service.get_import_items(filters)
+
+        assert len(result) == 1
+        row = result.iloc[0]
+        assert row["type_id"] == 34
+        assert row["volume_30d"] == 3000.0
 
     def test_get_summary_stats_returns_counts_and_average(self):
         from services.import_helper_service import ImportHelperService
