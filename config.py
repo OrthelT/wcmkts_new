@@ -108,6 +108,11 @@ class DatabaseConfig:
         self._ro_engine = None
 
     @property
+    def has_remote_credentials(self) -> bool:
+        """Return True when Turso URL/token are available for this alias."""
+        return bool(self.turso_url and self.token)
+
+    @property
     def engine(self):
         eng = DatabaseConfig._engines.get(self.alias)
         if eng is None:

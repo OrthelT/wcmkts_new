@@ -5,6 +5,7 @@ Usage:
     mkts sync --primary    # sync primary market only (4-HWWF)
     mkts sync --deployment # sync deployment market only (B-9C24)
     mkts sync --north      # alias for --deployment
+    mkts seed-demo-data    # create local demo databases for browser testing
     mkts log-level DEBUG   # set log level in settings.toml
 """
 
@@ -98,6 +99,26 @@ def cmd_log_level(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_seed_demo_data(args: argparse.Namespace) -> int:
+    """Create local demo databases for testing without Turso."""
+    from demo_data import seed_demo_data
+
+    try:
+        created_paths = seed_demo_data(force=args.force)
+    except FileExistsError as e:
+        print(e)
+        return 1
+    except Exception as e:
+        print(f"failed to seed demo data: {e}")
+        return 1
+
+    print("created demo databases:")
+    for path in created_paths:
+        print(f"  - {path}")
+    print("\nstart the app with: .venv/bin/streamlit run app.py")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="mkts", description="wcmkts CLI tools")
     sub = parser.add_subparsers(dest="command")
@@ -108,6 +129,16 @@ def main() -> int:
     sync_parser.add_argument("--north", action="store_true", help="Alias for --deployment")
     sync_parser.add_argument("-v", "--verbose", action="store_true", help="Show detailed sync logs")
 
+    seed_parser = sub.add_parser(
+        "seed-demo-data",
+        help="Create local demo databases for testing without Turso",
+    )
+    seed_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing local database files",
+    )
+
     ll_parser = sub.add_parser("log-level", help="Get or set the log level in settings.toml")
     ll_parser.add_argument("level", nargs="?", default=None, help="Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)")
 
@@ -115,6 +146,8 @@ def main() -> int:
 
     if args.command == "sync":
         return cmd_sync(args)
+    if args.command == "seed-demo-data":
+        return cmd_seed_demo_data(args)
     if args.command == "log-level":
         return cmd_log_level(args)
 

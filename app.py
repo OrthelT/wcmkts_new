@@ -9,6 +9,7 @@ pages = {
     ],
     "Analysis Tools": [
         st.Page("pages/low_stock.py", title="⚠️Low Stock"),
+        st.Page("pages/import_helper.py", title="📦Import Helper"),
         st.Page("pages/doctrine_status.py", title="⚔️Doctrine Status"),
         st.Page("pages/doctrine_report.py", title="📝Doctrine Report"),
         st.Page("pages/build_costs.py", title="🏗️Build Costs"),

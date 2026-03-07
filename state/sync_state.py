@@ -29,12 +29,25 @@ def update_wcmkt_state(db_alias: str = None)-> None:
 
     local_update = db.get_most_recent_update("marketstats",remote=False)
     local_update_status['updated'] = local_update
-    local_update_status['time_since'] = now - local_update
-    local_update_status['needs_update'] = local_update_status['time_since'] > timedelta(hours=2)
-    remote_update = db.get_most_recent_update("marketstats",remote=True)
-    remote_update_status['updated'] = remote_update
-    remote_update_status['time_since'] = now - remote_update
-    remote_update_status['needs_update'] = remote_update_status['time_since'] > timedelta(hours=2)
+    if local_update is not None:
+        local_update_status['time_since'] = now - local_update
+        local_update_status['needs_update'] = (
+            local_update_status['time_since'] > timedelta(hours=2)
+        )
+
+    if db.has_remote_credentials:
+        try:
+            remote_update = db.get_most_recent_update("marketstats",remote=True)
+            remote_update_status['updated'] = remote_update
+            if remote_update is not None:
+                remote_update_status['time_since'] = now - remote_update
+                remote_update_status['needs_update'] = (
+                    remote_update_status['time_since'] > timedelta(hours=2)
+                )
+        except Exception as e:
+            logger.warning(f"Skipping remote sync state for {db.alias}: {e}")
+    else:
+        logger.info(f"No remote credentials for {db.alias}; using local-only sync state")
     logger.info("-"*60)
     ss_set('local_update_status', local_update_status)
     logger.info(f"local_status saved to session state: {db.alias, db.path}")

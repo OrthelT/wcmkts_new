@@ -169,3 +169,54 @@ def get_export_column_config() -> dict:
         'fits_on_mkt': st.column_config.NumberColumn("Fits"),
         'ship_target': st.column_config.NumberColumn("Target"),
     }
+
+
+def get_import_helper_column_config() -> dict:
+    """Get column configuration for Import Helper table display."""
+    return {
+        "type_id": st.column_config.NumberColumn(
+            "Type ID",
+            help="EVE type ID.",
+            width="small",
+        ),
+        "type_name": st.column_config.TextColumn(
+            "Item",
+            help="Item name.",
+            width="medium",
+        ),
+        "price": st.column_config.NumberColumn(
+            "Price",
+            help="Current local market price.",
+            format="localized",
+        ),
+        "jita_sell_price": st.column_config.NumberColumn(
+            "Jita Sell Price",
+            help="Jita sell percentile price.",
+            format="localized",
+        ),
+        "jita_buy_price": st.column_config.NumberColumn(
+            "Jita Buy Price",
+            help="Jita buy percentile price.",
+            format="localized",
+        ),
+        "shipping_cost": st.column_config.NumberColumn(
+            "Shipping Cost",
+            help="Calculated as item size in m3 * 500.",
+            format="localized",
+        ),
+        "profit_jita_sell": st.column_config.NumberColumn(
+            "Profit (Jita Sell)",
+            help="Calculated as Jita Sell Price - local Price.",
+            format="localized",
+        ),
+        "volume_30d": st.column_config.NumberColumn(
+            "30 Days Volume",
+            help="30-day units sold multiplied by Jita Sell Price.",
+            format="compact",
+        ),
+        "capital_utilis": st.column_config.NumberColumn(
+            "Capital Utilis",
+            help="Calculated as (Profit - Shipping Cost) / Jita Sell Price.",
+            format="percent",
+        ),
+    }

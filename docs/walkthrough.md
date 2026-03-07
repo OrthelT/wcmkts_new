@@ -83,3 +83,11 @@ This guide provides step-by-step instructions for common tasks in the Winter Coa
 5. You can further refine by selecting a specific item
 6. The table below will show all sell orders for items in your selected category
 7. To reset filters, select "All Categories" from the dropdown
+
+## Task 8: Finding Import Opportunities
+
+1. Navigate to the **Import Helper** page (📦Import Helper)
+2. Use the category or search filters to narrow down the items you want to inspect
+3. Compare local price against Jita sell and Jita buy prices
+4. Review Shipping Cost, Profit (Jita Sell), and Capital Utilis together
+5. Use the 30 days volume column to focus on items with meaningful turnover

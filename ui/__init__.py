@@ -10,6 +10,7 @@ keeping page files focused on layout and user interaction.
 
 from ui.column_definitions import (
     get_fitting_column_config,
+    get_import_helper_column_config,
     get_summary_column_config,
 )
 from ui.formatters import (
@@ -31,6 +32,7 @@ from ui.popovers import (
 __all__ = [
     # Column configs
     "get_fitting_column_config",
+    "get_import_helper_column_config",
     "get_summary_column_config",
     # Formatters
     "format_module_list",

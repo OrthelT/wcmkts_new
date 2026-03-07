@@ -76,6 +76,7 @@ _MARKET_SERVICE_NAMES = (
     "market_service",
     "pricer_service",
     "low_stock_service",
+    "import_helper_service",
     "price_service",
     "module_equivalents_service",
     "selection_service",

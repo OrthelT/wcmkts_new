@@ -188,6 +188,10 @@ def check_for_db_updates(db_alias: str) -> tuple[bool, float]:
     so the cache key correctly distinguishes between markets.
     """
     db = DatabaseConfig(db_alias)
+    if not db.has_remote_credentials:
+        logger.info(f"check_for_db_updates(): skipping remote validation for {db_alias}")
+        local_time = datetime.now()
+        return True, local_time
     check = db.validate_sync()
     local_time = datetime.now()
     return check, local_time
@@ -213,7 +217,13 @@ def check_db(manual_override: bool = False):
 
     synced_any = False
     any_stale = False
+    local_only_mode = False
     for alias in all_aliases:
+        db = DatabaseConfig(alias)
+        if not db.has_remote_credentials:
+            logger.info(f"check_db(): skipping {alias}; no remote credentials configured")
+            local_only_mode = True
+            continue
         check, local_time = check_for_db_updates(alias)
         now = time.time()
         logger.info(f"check_db() check: {check}, time: {local_time}, alias: {alias}")
@@ -222,7 +232,6 @@ def check_db(manual_override: bool = False):
         if not check:
             any_stale = True
             logger.info(f"check_db() {alias} is stale, syncing")
-            db = DatabaseConfig(alias)
             db.sync()
 
             if db.validate_sync():
@@ -236,6 +245,8 @@ def check_db(manual_override: bool = False):
         invalidate_market_caches()
         update_wcmkt_state()
         st.toast("Database synced successfully", icon="✅")
+    elif local_only_mode and not any_stale and manual_override:
+        st.toast("Local-only mode: remote sync checks skipped", icon="ℹ️")
     elif not any_stale:
         if 'local_update_status' in st.session_state:
             local_update_since = st.session_state.local_update_status["time_since"]
