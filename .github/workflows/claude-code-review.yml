@@ -10,16 +10,10 @@ on:
 
 jobs:
   claude-review:
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
-
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
       issues: read
       id-token: write
 
@@ -27,22 +21,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
 
       - name: Run Claude Code Review
         id: claude-review
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          pr_number: ${{ github.event.inputs.pr_number }}
           prompt: |
-            Please review this pull request. Check for:
+            Review pull request #${{ github.event.inputs.pr_number }} in this repository.
+
+            Use `gh pr view ${{ github.event.inputs.pr_number }}` and `gh pr diff ${{ github.event.inputs.pr_number }}` to get the PR details and changes.
+
+            Check for:
             - Bugs and logic errors
             - Code style and adherence to project conventions (see CLAUDE.md)
             - Security issues
             - Performance concerns
             - Missing tests
-            Provide constructive feedback with specific line references where possible.
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
 
+            Post your review as a PR comment using `gh pr review ${{ github.event.inputs.pr_number }} --comment --body "<your review>"`.
