@@ -570,7 +570,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "alias",
         nargs="?",
-        default="build_cost",
+        default="wcmktprod",
         help="Database alias from settings.toml [db_paths] (default: build_cost)",
     )
     args = parser.parse_args()
