@@ -16,7 +16,10 @@ def update_wcmkt_state(db_alias: str = None)-> None:
     if db_alias is None:
         try:
             db_alias = get_active_market().database_alias
-        except (ImportError, Exception):
+        except ImportError:
+            db_alias = "wcmkt"
+        except Exception as e:
+            logger.error(f"Failed to get active market, falling back to 'wcmkt': {e}")
             db_alias = "wcmkt"
 
     start_time = perf_counter()

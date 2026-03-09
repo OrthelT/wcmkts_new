@@ -216,7 +216,7 @@ def get_import_helper_column_config() -> dict:
         ),
         "turnover_30d": st.column_config.NumberColumn(
             "30D Turnover",
-            help="30-day units sold multiplied by Jita Sell Price.",
+            help="Estimated 30-day turnover: average daily volume x 30 x Jita sell price.",
             format="compact",
         ),
         "volume_30d": st.column_config.NumberColumn(

@@ -8,7 +8,8 @@ import streamlit as st
 
 from init_db import ensure_market_db_ready
 from logging_config import setup_logging
-from services import ImportHelperFilters, get_import_helper_service
+from services import ImportHelperFilters
+from services.import_helper_service import _fetch_import_data, get_import_helper_service
 from ui.column_definitions import get_import_helper_column_config
 from ui.market_selector import render_market_selector
 from ui.sync_display import display_sync_status
@@ -39,7 +40,7 @@ def main():
         Discover items where the local market price sits well above Jita sell.
         Shipping Cost is `m3 * 500`, 30D Profit uses `(Local Price - Jita Sell) * Avg Daily Volume * 30`,
         RRP (Recommended Retail Price) uses `Jita Sell * (1 + Markup Margin)`,
-        and Cap Utilis = `((Local Price - Jita Sell) - Shipping Cost) / Jita Sell`. 
+        and Cap Utilis = `((Local Price - Jita Sell) - Shipping Cost) / Jita Sell`.
         The Cap Utilis stands for Capital Utilisation Efficiency, which indicates the invest-reward ratio.
         """
     )
@@ -97,7 +98,14 @@ def main():
         markup_margin=float(markup_margin),
     )
 
-    df = service.get_import_items(filters)
+    try:
+        base_df = _fetch_import_data(market.database_alias)
+    except Exception as e:
+        logger.error(f"Import helper data load failed: {e}")
+        st.error("Failed to load market data. Check database connectivity and try refreshing.")
+        st.stop()
+
+    df = service.get_import_items(base_df, filters)
     if df.empty:
         st.warning("No items found with the selected filters.")
         st.sidebar.markdown("---")

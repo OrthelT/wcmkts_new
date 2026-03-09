@@ -80,7 +80,7 @@ All pages follow consistent patterns with Streamlit best practices:
 5. **`build_costs.py`** (🏗️ Build Costs) - Manufacturing cost analysis with structure/rig configuration and industry indices
 6. **`downloads.py`** (📥 Downloads) - Centralized CSV export for market data, doctrine fits, low stock items, and SDE tables. Uses Streamlit's callable pattern for lazy data loading.
 7. **`pricer.py`** (💰 Pricer) - Item and fitting price calculator similar to [Janice](https://janice.e-351.com/). Accepts EFT fittings or tab-separated item lists and displays both Jita and 4-HWWF market prices.
-8. **`import-helper.py`** (Import Helper) - A visualisation tool helps discovering items with significantly large price margin compared with Jita sell. This feature helps importers to quickly spot price hikes to under cut.
+8. **`import_helper.py`** (Import Helper) - A visualisation tool helps discovering items with significantly large price margin compared with Jita sell. This feature helps importers to quickly spot price hikes to under cut.
 
 ### Core Modules
 

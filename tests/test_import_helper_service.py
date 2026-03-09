@@ -42,7 +42,8 @@ class TestImportHelperService:
                 }
             ),
         ):
-            result = service.get_import_items()
+            base_df = service.fetch_base_data()
+            result = service.get_import_items(base_df)
 
         row = result.iloc[0]
         assert row["shipping_cost"] == 5.0
@@ -79,7 +80,8 @@ class TestImportHelperService:
                 }
             ),
         ):
-            result = service.get_import_items(filters)
+            base_df = service.fetch_base_data()
+            result = service.get_import_items(base_df, filters)
 
         row = result.iloc[0]
         assert row["rrp"] == 30.0
@@ -118,7 +120,8 @@ class TestImportHelperService:
                 }
             ),
         ):
-            result = service.get_import_items(filters)
+            base_df = service.fetch_base_data()
+            result = service.get_import_items(base_df, filters)
 
         assert len(result) == 1
         row = result.iloc[0]
@@ -158,7 +161,8 @@ class TestImportHelperService:
                 }
             ),
         ):
-            result = service.get_import_items(filters)
+            base_df = service.fetch_base_data()
+            result = service.get_import_items(base_df, filters)
 
         assert len(result) == 1
         row = result.iloc[0]
