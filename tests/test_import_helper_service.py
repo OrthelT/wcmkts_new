@@ -192,6 +192,14 @@ class TestImportHelperService:
         assert result["profitable_items"] == 2
         assert result["avg_capital_utilis"] == 0.13333333333333333
 
+    def test_fetch_base_data_returns_empty_when_no_candidates(self):
+        from services.import_helper_service import ImportHelperService
+
+        service = ImportHelperService(Mock(), Mock(), DummyJitaProvider({}))
+        with patch.object(service, "_get_import_candidates", return_value=pd.DataFrame()):
+            result = service.fetch_base_data()
+            assert result.empty
+
     @patch("pandas.read_sql_query")
     def test_get_category_options_reads_marketstats(self, mock_read_sql):
         from services.import_helper_service import ImportHelperService

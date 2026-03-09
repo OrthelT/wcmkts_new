@@ -266,7 +266,7 @@ class ImportHelperService:
 
 
 @st.cache_data(ttl=600)
-def _fetch_import_data(db_alias: str) -> pd.DataFrame:
+def fetch_import_data(db_alias: str) -> pd.DataFrame:
     """Cached fetch: DB queries + Jita API call. Expensive, runs every 10 min."""
     service = ImportHelperService.create_default(db_alias=db_alias)
     return service.fetch_base_data()
@@ -274,4 +274,12 @@ def _fetch_import_data(db_alias: str) -> pd.DataFrame:
 
 def get_import_helper_service() -> ImportHelperService:
     """Get or create the ImportHelperService for the active market."""
-    return ImportHelperService.create_default()
+    try:
+        from state import get_service
+        from state.market_state import get_active_market_key
+        return get_service(
+            f"import_helper_service_{get_active_market_key()}",
+            ImportHelperService.create_default,
+        )
+    except ImportError:
+        return ImportHelperService.create_default()
