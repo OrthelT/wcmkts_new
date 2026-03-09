@@ -537,7 +537,7 @@ from state.session_state import ss_get  # ✗ state!
 
 ## Version Information
 
-- **Current version**: 0.2.0
+- **Current version**: 0.3.1
 - **Python version**: 3.12+
 - **Package manager**: uv (preferred)
 - **Main branch**: main
@@ -553,7 +553,7 @@ from state.session_state import ss_get  # ✗ state!
 
 **Technical Reference:**
 - `architecture_reference.md` - Definitive technical reference for the current architecture
-- `refactoring_log.md` - Historical record of the Phases 1-13 refactoring project
+- `change_log.md` - Change log covering v0.2.0 refactoring (Phases 1-13) through v0.3.x releases
 - `database_config.md` - Database configuration and Turso sync details
 - `module_equivalents.md` - Module equivalents feature architecture, CLI usage, and aggregation pipeline
 - `testing.md` - Testing guidelines and pytest patterns
