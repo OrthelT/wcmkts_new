@@ -96,7 +96,8 @@ class TestImportHelperService:
         assert abs(row["profit_jita_sell_30d"] - expected_profit * 30 * 5.0) < 1e-9
         assert row["turnover_30d"] == 3000.0
         assert row["volume_30d"] == 150.0
-        assert row["rrp"] == 24.0
+        expected_rrp = 20.0 * 1.2 + expected_shipping  # jita * (1 + margin) + shipping
+        assert abs(row["rrp"] - expected_rrp) < 1e-9
         expected_cap_utilis = expected_profit / 20.0
         assert abs(row["capital_utilis"] - expected_cap_utilis) < 1e-9
 
@@ -136,8 +137,12 @@ class TestImportHelperService:
             base_df = service.fetch_base_data()
             result = service.get_import_items(base_df, filters)
 
+        from services.import_helper_service import SHIPPING_COST_PER_M3
+
+        expected_shipping = 0.01 * SHIPPING_COST_PER_M3
+        expected_rrp = 20.0 * 1.5 + expected_shipping  # jita * (1 + 0.5) + shipping
         row = result.iloc[0]
-        assert row["rrp"] == 30.0
+        assert abs(row["rrp"] - expected_rrp) < 1e-9
 
     def test_get_import_items_applies_filters_using_avg_volume(self):
         from services.import_helper_service import ImportHelperFilters, ImportHelperService

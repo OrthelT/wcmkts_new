@@ -191,7 +191,7 @@ def get_import_helper_column_config() -> dict:
         ),
         "rrp": st.column_config.NumberColumn(
             "RRP",
-            help="Recommended Retail Price calculated as Jita Sell * (1 + Markup Margin).",
+            help="Recommended Retail Price calculated as Jita Sell * (1 + Markup Margin) + Shipping.",
             format="localized",
         ),
         "jita_sell_price": st.column_config.NumberColumn(

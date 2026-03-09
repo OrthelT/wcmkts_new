@@ -225,7 +225,7 @@ class ImportHelperService:
         if df.empty:
             return df
 
-        df["rrp"] = df["jita_sell_price"] * (1 + filters.markup_margin)
+        df["rrp"] = df["jita_sell_price"] * (1 + filters.markup_margin) + df["shipping_cost"]
 
         if filters.categories:
             df = df[df["category_name"].isin(filters.categories)]

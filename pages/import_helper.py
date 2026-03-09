@@ -42,7 +42,7 @@ def main():
         Discover items where the local market price sits well above Jita sell.
         Shipping Cost is `m3 * {SHIPPING_COST_PER_M3:g}`, Profit uses `Local Price - (Jita Sell + Shipping)`,
         30D Profit uses `Profit * Avg Daily Volume * 30`,
-        RRP (Recommended Retail Price) uses `Jita Sell * (1 + Markup Margin)`,
+        RRP (Recommended Retail Price) uses `Jita Sell * (1 + Markup Margin) + Shipping`,
         and Cap Utilis (Capital Utilisation Efficiency) = `Profit / Jita Sell`, indicating the invest-reward ratio.
         """
     )
