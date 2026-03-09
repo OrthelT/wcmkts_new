@@ -116,28 +116,14 @@ class BatchPriceResult:
     def success_count(self) -> int:
         return sum(1 for p in self.prices.values() if p.success)
 
-    @property
-    def failure_count(self) -> int:
-        return len(self.failed_ids)
-
     def get_price(self, type_id: TypeID, default: Price = 0.0) -> Price:
         """Get price for a type_id, with default fallback."""
         result = self.prices.get(type_id)
         return result.sell_price if result and result.success else default
 
-    def get_buy_price(self, type_id: TypeID, default: Price = 0.0) -> Price:
-        """Get buy price for a type_id, with default fallback."""
-        result = self.prices.get(type_id)
-        return result.buy_price if result and result.has_buy_price else default
-
     def to_dict(self) -> dict[TypeID, Price]:
         """Convert to simple type_id -> price mapping."""
         return {tid: r.sell_price for tid, r in self.prices.items() if r.has_sell_price}
-
-    def to_buy_dict(self) -> dict[TypeID, Price]:
-        """Convert to simple type_id -> buy price mapping."""
-        return {tid: r.buy_price for tid, r in self.prices.items() if r.has_buy_price}
-
 
 @dataclass
 class FitCostAnalysis:
@@ -152,26 +138,11 @@ class FitCostAnalysis:
     missing_prices: list[TypeID] = field(default_factory=list)
 
     @property
-    def delta_absolute(self) -> Price:
-        """Absolute difference: local - jita."""
-        return self.local_cost - self.jita_cost
-
-    @property
     def delta_percentage(self) -> Optional[float]:
         """Percentage difference from Jita. None if Jita cost is 0."""
         if self.jita_cost <= 0:
             return None
         return ((self.local_cost - self.jita_cost) / self.jita_cost) * 100
-
-    @property
-    def is_cheaper_than_jita(self) -> bool:
-        """True if local price is cheaper than Jita."""
-        return self.delta_absolute < 0
-
-    @property
-    def has_missing_data(self) -> bool:
-        """True if some items couldn't be priced."""
-        return len(self.missing_prices) > 0
 
 
 @dataclass(frozen=True)
@@ -692,10 +663,6 @@ class PriceService:
         """
         return self.get_jita_prices(type_ids).to_dict()
 
-    def get_jita_buy_prices_as_dict(self, type_ids: list[TypeID]) -> dict[TypeID, Price]:
-        """Convenience method returning simple type_id -> buy price dict."""
-        return self.get_jita_prices(type_ids).to_buy_dict()
-
     def get_jita_price_data_map(self, type_ids: list[TypeID]) -> dict[TypeID, PriceResult]:
         """Return full price records including sell and buy values."""
         return dict(self.get_jita_prices(type_ids).prices)
@@ -808,23 +775,6 @@ class PriceService:
             df[price_column] = df[price_column].fillna(0)
 
         return df
-
-    def clear_cache(self):
-        """Clear the price cache."""
-        with _PRICE_CACHE_LOCK:
-            self._price_cache.clear()
-        self._logger.info("Price cache cleared")
-
-    def get_cache_stats(self) -> dict:
-        """Get cache statistics for debugging."""
-        with _PRICE_CACHE_LOCK:
-            self._prune_expired_cache_entries()
-            return {
-                'cached_items': len(self._price_cache),
-                'successful': sum(1 for entry in self._price_cache.values() if entry.result.success),
-                'failed': sum(1 for entry in self._price_cache.values() if not entry.result.success),
-                'cache_ttl_seconds': self._cache_ttl,
-            }
 
     def _cache_result(self, type_id: TypeID, result: PriceResult) -> None:
         """Store a price result with its cache timestamp."""
