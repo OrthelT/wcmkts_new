@@ -181,7 +181,7 @@ def initialize_main_function():
 
 
 @st.cache_data(ttl=600)
-def check_for_db_updates(db_alias: str) -> tuple[bool, float]:
+def check_for_db_updates(db_alias: str) -> tuple[bool, datetime]:
     """Check whether local and remote databases are in sync.
 
     The db_alias must be an explicit alias (e.g. "wcmktprod", "wcmktnorth")
@@ -249,9 +249,11 @@ def check_db(manual_override: bool = False):
         st.toast("Local-only mode: remote sync checks skipped", icon="ℹ️")
     elif not any_stale:
         if 'local_update_status' in st.session_state:
-            local_update_since = st.session_state.local_update_status["time_since"]
-            local_update_since = int(local_update_since.total_seconds() // 60)
-            local_update_since = f"{local_update_since} mins"
+            time_since = st.session_state.local_update_status["time_since"]
+            if time_since is not None:
+                local_update_since = f"{int(time_since.total_seconds() // 60)} mins"
+            else:
+                local_update_since = "unknown"
             st.toast(f"DB updated: {local_update_since} ago", icon="✅")
         else:
             local_update_since = DatabaseConfig(active_alias).get_time_since_update("marketstats", remote=False)

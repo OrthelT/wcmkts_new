@@ -217,8 +217,8 @@ def get_import_helper_column_config(language_code: str = "en") -> dict:
             format="compact",
         ),
         "turnover_30d": st.column_config.NumberColumn(
-            translate_text(language_code, "import_helper.column_turnover_30d"),
-            help=translate_text(language_code, "import_helper.column_turnover_30d_help"),
+            "30D Turnover",
+            help="Estimated 30-day turnover: average daily volume x 30 x Jita sell price.",
             format="compact",
         ),
         "volume_30d": st.column_config.NumberColumn(

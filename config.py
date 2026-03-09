@@ -569,4 +569,18 @@ class DatabaseConfig:
 
 
 if __name__ == "__main__":
-    pass
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Sync a local database from Turso")
+    parser.add_argument(
+        "alias",
+        nargs="?",
+        default="wcmktprod",
+        help="Database alias from settings.toml [db_paths] (default: build_cost)",
+    )
+    args = parser.parse_args()
+
+    db = DatabaseConfig(args.alias)
+    print(f"Syncing '{args.alias}' from {db.turso_url} ...")
+    ok = db.sync()
+    print(f"Sync {'succeeded' if ok else 'FAILED'} (integrity check: {'ok' if ok else 'FAIL'})")

@@ -1,10 +1,68 @@
-# Refactoring Log
+# Change Log
 
-Historical record of the architectural refactoring project (Phases 1-13) and feature refinements (Tasks 1-7). Useful for understanding why the codebase looks the way it does, and as reference for future refactoring efforts.
+Historical record of releases, the architectural refactoring project (Phases 1-13), and feature refinements. Useful for understanding why the codebase looks the way it does, and as reference for future work.
 
 ---
 
-## Executive Summary
+## v0.3.1 (2026-03-08)
+
+Patch release incorporating the Import Helper feature (PR #32), CLI database sync, and accumulated bug fixes since v0.3.0.
+
+### New Features
+- **Import Helper Page** (PR #32, contributed by MrDiao): Compare local market prices against Jita sell/buy to spot import opportunities. Displays shipping cost, profit margin, recommended retail price, and capital utilisation.
+- **CLI Database Sync**: Run `uv run python config.py <alias>` to sync any database from the command line.
+- **Module Equivalents Overhaul**: Renamed schema, added faction filter, explicit UI indicators (`~` badge), lowest-cost equivalent used in fit cost calculations, equivalent module popovers.
+- **Doctrine Display Names from DB**: Display names loaded from `doctrine_display_names` table instead of a hardcoded dictionary.
+
+### Improvements
+- Alphabetized ship selections in doctrine pages.
+- Per-market cache keying (`market_alias` in cache hash) to prevent incorrect module counts when switching hubs.
+- Standardized update time displays across all pages.
+- 7-phase code simplification refactor (PR #31).
+- Documented layer dependency exceptions for `sync_display` and `sync_state`.
+- Shipping cost moved to `settings.toml` (`[import_helper].default_shipping_cost`).
+
+### Bug Fixes
+- Fixed infinite loop from `st.rerun()` in `build_costs.py` (replaced with `st.stop()`).
+- Synced `VALID_SDE_TABLES` allowlist with actual `sdelite.db` tables.
+- Fixed edge case where proper module count is zero but exactly one equivalent exists.
+- Ranked low-stock modules by own stock, not combined equivalent stock.
+- Moved doctrine name DB query out of domain layer (layer violation fix).
+- Fixed incorrect report of successful sync on failed validation.
+- Used epsilon comparison in import helper test to prevent floating-point rounding failures.
+
+---
+
+## v0.3.0 (2026-02-20)
+
+Major release introducing multi-market hub support.
+
+### New Features
+- **Selectable Multi-Market Support**: Toggle between 4-HWWF (primary) and B-9C24 (deployment) market hubs via a pills toggle in the UI.
+- **Market Configuration in settings.toml**: `[markets.primary]` and `[markets.deployment]` sections define market hub metadata, database aliases, and Turso secret keys.
+- **Dynamic Alias Resolution**: `_resolve_active_alias()` reads session state to resolve `wcmkt`/`wcmkt2`/`wcmkt3` to the currently active market.
+- **Cold-Start Database Guards**: All pages guard against unsynced market databases on cold start.
+- **Stale Replica Detection**: `sync()` detects stale embedded-replica metadata and retries with a fresh database file.
+
+### Improvements
+- `init_db()` must succeed for all databases before setting `db_initialized`.
+- `verify_db_content()` prevents empty db files from bypassing cold-start sync.
+- `[db_turso_keys]` override in `settings.toml` maps aliases to non-standard Turso secret names.
+- Doctrine name display tidied up.
+- Market selector changed from dropdown to pills toggle.
+
+### Bug Fixes
+- Fixed Turso credential mismatch for `sde` and `build_cost` aliases.
+- Prevented empty db files from bypassing cold-start sync.
+- Fixed `_db` attribute usage in `DoctrineRepository` cached wrappers.
+- Fixed `DataFrame` truth value error in `_rebuild_selections`.
+- Prevented improper `marketstats` table check in sde and build_cost databases.
+
+---
+
+## v0.2.0 — Architectural Refactoring (Phases 1-13)
+
+### Executive Summary
 
 Over January-February 2026, the codebase was transformed from a monolithic Streamlit application into a clean layered architecture (Domain -> Repository -> Service -> Page). The project completed 13 phases of structural refactoring plus 7 feature refinement tasks.
 

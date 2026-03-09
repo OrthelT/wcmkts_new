@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from sqlalchemy import create_engine, text
@@ -198,7 +198,7 @@ def _seed_market_db(path: Path, market_name: str, price_multiplier: float) -> No
     engine = create_engine(f"sqlite:///{path}")
     MarketBase.metadata.create_all(engine)
 
-    now = datetime.utcnow().replace(microsecond=0)
+    now = datetime.now(timezone.utc).replace(microsecond=0)
     history_start = now - timedelta(days=34)
     base_items = []
     for item in DEMO_ITEMS:

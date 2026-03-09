@@ -68,7 +68,7 @@ The central dataframe displays all currently selected items. Currently, only sel
 
 **How to Use:**
 1. Use the sidebar filters to limit results by category or item name
-2. Compare the local price against Jita sell and buy prices to spot local undercut oppotunities
+2. Compare the local price against Jita sell and buy prices to spot local undercut opportunities
 3. Review shipping cost, 30-day profit, and capital utilisation together
 4. Use the 30D Turnover and 30D Volume columns to identify items with meaningful turnover
 

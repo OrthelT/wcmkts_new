@@ -1,4 +1,4 @@
-# Winter Coalition Market App (v.0.2.0)
+# Winter Coalition Market App (v.0.3.1)
 A Streamlit application for viewing EVE Online market statistics for Winter Coalition. This tool provides real-time market data analysis, historical price tracking, and fitting information for various items in EVE Online markets.
 
 SUPPORT: Join the Discord for support https://discord.gg/BxatJE572Y
@@ -7,6 +7,30 @@ CONTRIBUTING: Contributors welcome. This project is fully open source under MIT 
 
 
 # UPDATES:
+## version 0.3.1
+### New Features
+- **Multi-Market Hub Support**: Selectable market hubs (4-HWWF and B-9C24) with per-market database configuration and UI toggle
+- **Import Helper Page**: Compare local market prices against Jita sell/buy to spot import opportunities, including shipping cost, profit margin, and capital utilisation analysis (PR #32, contributed by MrDiao)
+- **CLI Database Sync**: Sync databases from the command line with `uv run python config.py <alias>`
+- **Module Equivalents Overhaul**: Renamed schema, added faction filter, explicit UI indicators, lowest-cost equiv in fit costing, equivalent popovers
+- **Doctrine Display Names from DB**: Display names loaded from database instead of hardcoded dictionary
+
+### Improvements
+- Dynamic market alias resolution via `_resolve_active_alias()` — deprecated aliases (`wcmkt2`, `wcmkt3`) auto-resolve
+- Stale replica metadata detection with automatic retry during sync
+- Cold-start guard on all pages against unsynced market databases
+- Alphabetized ship selections in doctrine pages
+- Per-market cache keying to prevent incorrect module counts across market hubs
+- 7-phase code simplification refactor
+
+### Bug Fixes
+- Fixed infinite loop from `st.rerun()` in build_costs.py (replaced with `st.stop()`)
+- Fixed sync errors for deployment database and SDE/build_cost PRAGMA checks
+- Fixed caching per market to avoid incorrect module counts
+- Prevented empty db files from bypassing cold-start sync
+- Resolved Turso credential mismatch for sde and build_cost aliases
+- Synced VALID_SDE_TABLES allowlist with actual sdelite.db tables
+
 ## version 0.2.0
 ### New Features
 - **Pricer Page**: Item and fitting price calculator accepting EFT fittings or tab-separated item lists, with Jita and 4-HWWF market prices
@@ -234,11 +258,11 @@ streamlit run app.py
 For local Streamlit runs, store credentials in `.streamlit/secrets.toml` (git‑ignored). This is the default source for database URLs/tokens used by `DatabaseConfig`. Example structure:
 
 ```
-[wcmkt2_turso]
+[wcmktprod_turso]
 url = "libsql://..."
 token = "..."
 
-[sde_aws_turso]
+[sdelite_turso]
 url = "libsql://..."
 token = "..."
 
@@ -309,8 +333,9 @@ The class supports the following database aliases:
 
 | Alias | Description | Local File | Purpose |
 |-------|-------------|------------|---------|
-| `wcmkt2` | Production market database | `wcmkt2.db` | Main market data and orders |
-| `sde` | Static Data Export | `sde.db` | EVE Online static data (items, categories) |
+| `wcmktprod` | Production market database | `wcmktprod.db` | Main market data and orders (4-HWWF) |
+| `wcmktnorth` | Deployment market database | `wcmktnorth2.db` | Northern market data (B-9C24) |
+| `sde` | Static Data Export | `sdelite.db` | EVE Online static data (items, categories) |
 | `build_cost` | Build cost calculations | `buildcost.db` | Structure data and industry indexes |
 
 ### Usage Examples
@@ -320,7 +345,7 @@ The class supports the following database aliases:
 from config import DatabaseConfig
 
 # Create a database configuration
-mkt_db = DatabaseConfig("wcmkt2")  # Production market database
+mkt_db = DatabaseConfig("wcmktprod")  # Production market database
 sde_db = DatabaseConfig("sde")     # Static data export
 build_db = DatabaseConfig("build_cost")  # Build cost database
 ```
@@ -426,11 +451,11 @@ The class uses Streamlit secrets for Turso configuration:
 
 ```python
 # Required secrets in .streamlit/secrets.toml
-[wcmkt2_turso]
+[wcmktprod_turso]
 url = "your_turso_url"
 token = "your_auth_token"
 
-[sde_aws_turso]
+[sdelite_turso]
 url = "your_turso_url"
 token = "your_auth_token"
 

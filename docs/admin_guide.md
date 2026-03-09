@@ -6,22 +6,22 @@ This guide is intended for administrators who need to maintain, configure, or de
 
 The application uses a hybrid database approach:
 - **Local SQLite Databases**:
-  - `wcmkt.db`: Contains market data synchronized from the parent Turso database
-  - `sde.db`: Contains EVE Online Static Data Export (item information)
+  - `wcmktprod.db`: Contains market data synchronized from the parent Turso database
+  - `sdelite.db`: Contains EVE Online Static Data Export (item information)
 - **Turso Cloud Database**:
   - Remote database that collects and processes EVE Online market data
   - Local database syncs with remote using Turso's embedded-replica feature
 
 ## Database Schema
 
-Key tables in the market database (`wcmkt.db`):
+Key tables in the market database (`wcmktprod.db`):
 - `marketorders`: Individual sell and buy orders on the market
 - `marketstats`: Aggregated statistics about market items
 - `market_history`: Historical price and volume data
 - `doctrines`: Doctrine fits and their components
 - `ship_targets`: Target inventory levels for doctrine ships
 
-Key tables in the SDE database (`sde.db`):
+Key tables in the SDE database (`sdelite.db`):
 - `invTypes`: Information about all EVE Online items
 - `invGroups`: Item groups classification
 - `invCategories`: High-level item categories
@@ -112,14 +112,14 @@ Target inventory levels for doctrine ships can be configured in two ways:
 
 2. **Optimize SQLite databases**:
    ```bash
-   sqlite3 wcmkt.db 'VACUUM;'
-   sqlite3 sde.db 'VACUUM;'
+   sqlite3 wcmktprod.db 'VACUUM;'
+   sqlite3 sdelite.db 'VACUUM;'
    ```
 
 3. **Backup databases**:
    ```bash
-   cp wcmkt.db wcmkt.db.backup
-   cp sde.db sde.db.backup
+   cp wcmktprod.db wcmktprod.db.backup
+   cp sdelite.db sdelite.db.backup
    ```
 
 ### Log Management
@@ -174,7 +174,7 @@ If the application becomes slow:
 The Static Data Export (SDE) needs periodic updates when EVE Online releases new items:
 1. Download latest SDE from EVE Developers portal
 2. Convert to SQLite format (if needed)
-3. Replace the `sde.db` file
+3. Replace the `sdelite.db` file
 4. Restart the application
 
 ## Security Considerations

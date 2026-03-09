@@ -42,16 +42,22 @@ class TestImportHelperService:
                 }
             ),
         ):
-            result = service.get_import_items()
+            base_df = service.fetch_base_data()
+            result = service.get_import_items(base_df)
 
+        from services.import_helper_service import SHIPPING_COST_PER_M3
+
+        expected_shipping = 0.01 * SHIPPING_COST_PER_M3
         row = result.iloc[0]
-        assert row["shipping_cost"] == 5.0
+        assert row["shipping_cost"] == expected_shipping
         assert row["profit_jita_sell"] == 10.0
         assert row["profit_jita_sell_30d"] == 1500.0
         assert row["turnover_30d"] == 3000.0
         assert row["volume_30d"] == 150.0
         assert row["rrp"] == 24.0
-        assert row["capital_utilis"] == 0.25
+        expected_cap_utilis = (10.0 - expected_shipping) / 20.0
+        # Use epsilon comparison: float division can introduce tiny rounding errors
+        assert abs(row["capital_utilis"] - expected_cap_utilis) < 1e-9
 
     def test_get_import_items_calculates_rrp_with_custom_markup_margin(self):
         from services.import_helper_service import ImportHelperFilters, ImportHelperService
@@ -79,7 +85,8 @@ class TestImportHelperService:
                 }
             ),
         ):
-            result = service.get_import_items(filters)
+            base_df = service.fetch_base_data()
+            result = service.get_import_items(base_df, filters)
 
         row = result.iloc[0]
         assert row["rrp"] == 30.0
@@ -118,7 +125,8 @@ class TestImportHelperService:
                 }
             ),
         ):
-            result = service.get_import_items(filters)
+            base_df = service.fetch_base_data()
+            result = service.get_import_items(base_df, filters)
 
         assert len(result) == 1
         row = result.iloc[0]
@@ -158,7 +166,8 @@ class TestImportHelperService:
                 }
             ),
         ):
-            result = service.get_import_items(filters)
+            base_df = service.fetch_base_data()
+            result = service.get_import_items(base_df, filters)
 
         assert len(result) == 1
         row = result.iloc[0]
@@ -223,6 +232,14 @@ class TestImportHelperService:
         assert result["total_items"] == 3
         assert result["profitable_items"] == 2
         assert result["avg_capital_utilis"] == 0.13333333333333333
+
+    def test_fetch_base_data_returns_empty_when_no_candidates(self):
+        from services.import_helper_service import ImportHelperService
+
+        service = ImportHelperService(Mock(), Mock(), DummyJitaProvider({}))
+        with patch.object(service, "_get_import_candidates", return_value=pd.DataFrame()):
+            result = service.fetch_base_data()
+            assert result.empty
 
     @patch("pandas.read_sql_query")
     def test_get_category_options_reads_marketstats(self, mock_read_sql):
