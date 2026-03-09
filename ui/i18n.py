@@ -14,6 +14,7 @@ LANGUAGE_OPTIONS: Final[dict[str, str]] = {
     "de": "DE",
     "fr": "FR",
     "ru": "RU",
+    "es": "ES",
 }
 
 TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
@@ -167,7 +168,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.title": "{market_name} Import Helper",
         "import_helper.description": (
             "Discover items where the local market price sits well above Jita sell. "
-            "Shipping Cost is `m3 * 500`, 30D Profit uses `(Local Price - Jita Sell) * Avg Daily Volume * 30`, "
+            "Shipping Cost is `m3 * {shipping_cost_per_m3}`, 30D Profit uses "
+            "`(Local Price - Jita Sell) * Avg Daily Volume * 30`, "
             "RRP uses `Jita Sell * (1 + Markup Margin)`, and Cap Utilis uses "
             "`((Local Price - Jita Sell) - Shipping Cost) / Jita Sell`."
         ),
@@ -188,6 +190,9 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.min_turnover_30d_help": "Hide items whose 30D Turnover is below this value.",
         "import_helper.markup_margin": "Markup Margin",
         "import_helper.markup_margin_help": "Used for RRP. 0.20 means 20% above Jita sell.",
+        "import_helper.error_load_failed": (
+            "Failed to load market data. Check database connectivity and try refreshing."
+        ),
         "import_helper.warning_no_items": "No items found with the selected filters.",
         "import_helper.metric_total_items": "Total Items",
         "import_helper.metric_profitable_items": "Positive Profit Items",
@@ -196,7 +201,9 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.column_rrp_help": "Recommended retail price based on Jita sell and markup.",
         "import_helper.column_jita_sell_help": "Jita sell percentile price.",
         "import_helper.column_jita_buy_help": "Jita buy percentile price.",
-        "import_helper.column_shipping_help": "Calculated as item size in m3 multiplied by 500.",
+        "import_helper.column_shipping_help": (
+            "Calculated as item size in m3 multiplied by {shipping_cost_per_m3}."
+        ),
         "import_helper.column_profit_30d_help": (
             "Calculated as (local price - Jita sell price) multiplied by average daily volume and 30."
         ),
@@ -230,7 +237,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "nav.page.downloads": "📥下载",
         "doctrine_status.title": "{market_name} 建制状态",
         "doctrine_status.tab_market_stock": "市场库存",
-        "doctrine_status.tab_fit_details": "装T配详情",
+        "doctrine_status.tab_fit_details": "装配详情",
         "doctrine_status.low_stock_modules": "低库存装备",
         "doctrine_status.no_fits": "数据库中未找到舰队配置。",
         "doctrine_report.subtitle": "{market_name} 舰队配置市场状态",
@@ -348,7 +355,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.warning_no_items": "当前筛选条件下没有找到物品。",
         "import_helper.title": "{market_name} 进货助手",
         "import_helper.description": (
-            "查找本地市场价格明显高于吉他卖价的物品。运费按 `m3 * 500` 计算，30 天利润使用 "
+            "查找本地市场价格明显高于吉他卖价的物品。运费按 `m3 * {shipping_cost_per_m3}` 计算，30 天利润使用 "
             "`(本地价格 - 吉他卖价) * 日均销量 * 30`，RRP 使用 `吉他卖价 * (1 + 加价率)`，"
             "资本利用率使用 `((本地价格 - 吉他卖价) - 运费) / 吉他卖价`。"
         ),
@@ -373,7 +380,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.column_rrp_help": "基于吉他卖价和加价率计算的建议零售价。",
         "import_helper.column_jita_sell_help": "吉他卖单价格。",
         "import_helper.column_jita_buy_help": "吉他买单价格。",
-        "import_helper.column_shipping_help": "按物品体积 m3 乘以 500 计算。",
+        "import_helper.column_shipping_help": "按物品体积 m3 乘以 {shipping_cost_per_m3} 计算。",
         "import_helper.column_profit_30d_help": "按（本地价格 - 吉他卖价）乘以日均销量再乘 30 计算。",
         "import_helper.column_turnover_30d_help": "30 天销量乘以 吉他卖价。",
         "import_helper.column_volume_30d_help": "日均销量乘以 30。",
@@ -533,7 +540,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.title": "Importhilfe fur {market_name}",
         "import_helper.description": (
             "Finde Artikel, bei denen der lokale Marktpreis deutlich uber dem Jita-Verkaufspreis liegt. "
-            "Die Versandkosten verwenden `m3 * 500`, der 30-Tage-Gewinn verwendet "
+            "Die Versandkosten verwenden `m3 * {shipping_cost_per_m3}`, der 30-Tage-Gewinn verwendet "
             "`(Lokaler Preis - Jita Sell) * durchschnittliches Tagesvolumen * 30`, der RRP verwendet "
             "`Jita Sell * (1 + Aufschlag)` und Cap Utilis verwendet "
             "`((Lokaler Preis - Jita Sell) - Versandkosten) / Jita Sell`."
@@ -559,7 +566,9 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.column_rrp_help": "Empfohlener Verkaufspreis basierend auf Jita Sell und Aufschlag.",
         "import_helper.column_jita_sell_help": "Jita-Verkaufspreis.",
         "import_helper.column_jita_buy_help": "Jita-Kaufpreis.",
-        "import_helper.column_shipping_help": "Berechnet als Artikelgroesse in m3 multipliziert mit 500.",
+        "import_helper.column_shipping_help": (
+            "Berechnet als Artikelgroesse in m3 multipliziert mit {shipping_cost_per_m3}."
+        ),
         "import_helper.column_profit_30d_help": "Berechnet als (lokaler Preis - Jita-Verkaufspreis) mal Tagesvolumen mal 30.",
         "import_helper.column_turnover_30d_help": "In 30 Tagen verkaufte Einheiten multipliziert mit Jita Sell.",
         "import_helper.column_volume_30d_help": "Berechnet als durchschnittliches Tagesvolumen mal 30.",
@@ -716,7 +725,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.title": "Aide Import {market_name}",
         "import_helper.description": (
             "Trouvez les objets dont le prix local depasse nettement le prix de vente Jita. "
-            "Le cout d'expedition utilise `m3 * 500`, le profit 30J utilise "
+            "Le cout d'expedition utilise `m3 * {shipping_cost_per_m3}`, le profit 30J utilise "
             "`(Prix local - Vente Jita) * Volume moyen quotidien * 30`, le RRP utilise "
             "`Vente Jita * (1 + marge)`."
         ),
@@ -741,7 +750,9 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.column_rrp_help": "Prix conseille base sur Jita et la marge.",
         "import_helper.column_jita_sell_help": "Prix de vente Jita.",
         "import_helper.column_jita_buy_help": "Prix d'achat Jita.",
-        "import_helper.column_shipping_help": "Calcule comme volume m3 multiplie par 500.",
+        "import_helper.column_shipping_help": (
+            "Calcule comme volume m3 multiplie par {shipping_cost_per_m3}."
+        ),
         "import_helper.column_profit_30d_help": "Calcule a partir du profit unitaire et du volume moyen sur 30 jours.",
         "import_helper.column_turnover_30d_help": "Unites vendues sur 30 jours multipliees par le prix Jita.",
         "import_helper.column_volume_30d_help": "Volume moyen quotidien multiplie par 30.",
@@ -898,7 +909,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.title": "Pomoshchnik importa {market_name}",
         "import_helper.description": (
             "Naydite predmety, gde lokalnaya tsena znachitelno vyshe Jita sell. "
-            "Stoimost dostavki schitaetsya kak `m3 * 500`, pribyl za 30 dnei kak "
+            "Stoimost dostavki schitaetsya kak `m3 * {shipping_cost_per_m3}`, pribyl za 30 dnei kak "
             "`(Lokalnaya tsena - Jita Sell) * sredniy dnevnoi oborot * 30`."
         ),
         "import_helper.filters_header": "Filtry",
@@ -922,7 +933,9 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.column_rrp_help": "Rekomenduemaya tsena na osnove Jita sell i natsenki.",
         "import_helper.column_jita_sell_help": "Tsena prodazhi Jita.",
         "import_helper.column_jita_buy_help": "Tsena pokupki Jita.",
-        "import_helper.column_shipping_help": "Schitaetsya kak obyem v m3 umnozhennyy na 500.",
+        "import_helper.column_shipping_help": (
+            "Schitaetsya kak obyem v m3 umnozhennyy na {shipping_cost_per_m3}."
+        ),
         "import_helper.column_profit_30d_help": "Raschet pribyli za 30 dnei.",
         "import_helper.column_turnover_30d_help": "Oborot za 30 dnei po tsene Jita sell.",
         "import_helper.column_volume_30d_help": "Sredniy oborot v den, umnozhennyy na 30.",
@@ -934,6 +947,119 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.column_profit_30d": "Pribyl 30d",
         "import_helper.column_turnover_30d": "Oborot 30d",
         "import_helper.column_volume_30d": "Obem 30d",
+        "import_helper.column_capital_utilis": "Capital Utilis",
+    },
+    "es": {
+        "app.page_title": "Mercados WinterCo",
+        "app.language_label": "Idioma",
+        "nav.section.market_stats": "Estadisticas del Mercado",
+        "nav.section.analysis_tools": "Herramientas de Analisis",
+        "nav.section.data": "Datos",
+        "nav.page.market_stats": "📈Estadisticas",
+        "nav.page.low_stock": "⚠️Stock Bajo",
+        "nav.page.import_helper": "📦Asistente de Importacion",
+        "nav.page.doctrine_status": "⚔️Estado de Doctrina",
+        "nav.page.doctrine_report": "📝Informe de Doctrina",
+        "nav.page.build_costs": "🏗️Costes de Fabricacion",
+        "nav.page.pricer": "🏷️Calculadora",
+        "nav.page.downloads": "📥Descargas",
+        "doctrine_status.title": "Estado de Doctrina de {market_name}",
+        "doctrine_status.tab_market_stock": "Stock de Mercado",
+        "doctrine_status.tab_fit_details": "Detalles del Fit",
+        "doctrine_status.low_stock_modules": "Modulos con Stock Bajo",
+        "doctrine_status.no_fits": "No se encontraron fits de doctrina en la base de datos.",
+        "doctrine_report.subtitle": "Estado del mercado de {market_name} por doctrina de flota",
+        "doctrine_report.no_data": "No hay datos para mostrar",
+        "doctrine_report.metric_total_fits": "Fits Totales Disponibles",
+        "doctrine_report.metric_total_hulls": "Cascos Totales",
+        "doctrine_report.metric_avg_target_pct": "Promedio del Objetivo %",
+        "doctrine_report.stock_status": "Estado de Stock",
+        "doctrine_report.no_fits": "No se encontraron fits de doctrina en la base de datos.",
+        "doctrine_report.select_doctrine": "Selecciona una doctrina",
+        "common.market_hub": "Hub de mercado",
+        "common.all": "Todos",
+        "common.all_fits": "Todos los fits",
+        "common.select": "Seleccionar",
+        "common.type_id": "ID de tipo",
+        "common.item": "Articulo",
+        "common.price": "Precio",
+        "common.unavailable": "No disponible",
+        "error.market_db_unavailable": (
+            "La base de datos del mercado **{market_name}** no esta disponible. "
+            "Revisa las credenciales de Turso y la conexion de red."
+        ),
+        "sync.last_esi_update": "Ultima actualizacion de ESI",
+        "sync.time_since_update": "Tiempo desde la actualizacion",
+        "sync.minute": "minuto",
+        "sync.minutes": "minutos",
+        "low_stock.title": "Herramienta de Stock Bajo de {market_name}",
+        "low_stock.description": (
+            "Esta pagina muestra los articulos con poco stock en el mercado. "
+            "La columna **Days Remaining** estima cuantos dias dura el stock actual "
+            "segun el volumen historico medio."
+        ),
+        "low_stock.filters_header": "Filtros",
+        "low_stock.warning_no_items": "No se encontraron articulos con los filtros seleccionados.",
+        "import_helper.title": "Asistente de Importacion de {market_name}",
+        "import_helper.description": (
+            "Descubre articulos cuyo precio local esta muy por encima del Jita sell. "
+            "El coste de envio es `m3 * {shipping_cost_per_m3}`, el beneficio de 30D usa "
+            "`(Precio local - Jita Sell) * volumen diario medio * 30`, el RRP usa "
+            "`Jita Sell * (1 + margen)` y Cap Utilis usa "
+            "`((Precio local - Jita Sell) - envio) / Jita Sell`."
+        ),
+        "import_helper.filters_header": "Filtros",
+        "import_helper.categories": "Categorias",
+        "import_helper.categories_help": "Limita la tabla a una o varias categorias.",
+        "import_helper.search_items": "Buscar articulos",
+        "import_helper.search_items_help": "Filtro por nombre sin distinguir mayusculas.",
+        "import_helper.profitable_only": "Solo beneficio positivo",
+        "import_helper.profitable_only_help": (
+            "Oculta articulos cuyo precio local no supera el Jita sell."
+        ),
+        "import_helper.min_capital_utilis": "Capital Utilis minimo",
+        "import_helper.min_capital_utilis_help": (
+            "0.10 significa al menos un 10 % de utilizacion de capital tras el envio."
+        ),
+        "import_helper.min_turnover_30d": "Rotacion minima 30D",
+        "import_helper.min_turnover_30d_help": (
+            "Oculta articulos cuya rotacion de 30D este por debajo de este valor."
+        ),
+        "import_helper.markup_margin": "Margen",
+        "import_helper.markup_margin_help": "Se usa para el RRP. 0.20 significa un 20 % sobre Jita sell.",
+        "import_helper.error_load_failed": (
+            "No se pudieron cargar los datos del mercado. Revisa la conectividad de la base de datos y vuelve a intentarlo."
+        ),
+        "import_helper.warning_no_items": "No se encontraron articulos con los filtros seleccionados.",
+        "import_helper.metric_total_items": "Articulos Totales",
+        "import_helper.metric_profitable_items": "Articulos Rentables",
+        "import_helper.metric_avg_capital_utilis": "Capital Utilis Medio",
+        "import_helper.column_item_help": "Nombre localizado del articulo cuando este disponible.",
+        "import_helper.column_rrp_help": "Precio recomendado basado en Jita sell y el margen.",
+        "import_helper.column_jita_sell_help": "Precio percentil de venta en Jita.",
+        "import_helper.column_jita_buy_help": "Precio percentil de compra en Jita.",
+        "import_helper.column_shipping_help": (
+            "Se calcula como el volumen del articulo en m3 multiplicado por {shipping_cost_per_m3}."
+        ),
+        "import_helper.column_profit_30d_help": (
+            "Se calcula como (precio local - Jita sell) multiplicado por el volumen diario medio y por 30."
+        ),
+        "import_helper.column_turnover_30d_help": (
+            "Unidades vendidas en 30 dias multiplicadas por el precio Jita sell."
+        ),
+        "import_helper.column_volume_30d_help": (
+            "Se calcula como el volumen diario medio multiplicado por 30."
+        ),
+        "import_helper.column_capital_utilis_help": (
+            "Se calcula como ((precio local - Jita sell) - envio) dividido por Jita sell."
+        ),
+        "import_helper.column_rrp": "RRP",
+        "import_helper.column_jita_sell": "Jita Sell",
+        "import_helper.column_jita_buy": "Jita Buy",
+        "import_helper.column_shipping": "Envio",
+        "import_helper.column_profit_30d": "Beneficio 30D",
+        "import_helper.column_turnover_30d": "Rotacion 30D",
+        "import_helper.column_volume_30d": "Volumen 30D",
         "import_helper.column_capital_utilis": "Capital Utilis",
     },
 }

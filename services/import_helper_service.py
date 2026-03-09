@@ -15,6 +15,7 @@ from sqlalchemy import bindparam, text
 from config import DatabaseConfig
 from logging_config import setup_logging
 from services.pricer_service import JitaPriceProvider
+from services.type_name_localization import apply_localized_type_names
 from settings_service import SettingsService
 
 logger = setup_logging(__name__, log_file="import_helper_service.log")
@@ -212,16 +213,29 @@ class ImportHelperService:
 
     def get_import_items(
         self,
-        base_df: pd.DataFrame,
+        base_df: Optional[pd.DataFrame] = None,
         filters: Optional[ImportHelperFilters] = None,
+        language_code: str = "en",
     ) -> pd.DataFrame:
-        """Apply filters to pre-fetched base data and return sorted results."""
+        """Apply localization and filters to import-helper data.
+
+        Accepts either a pre-fetched base dataframe or, for backwards
+        compatibility, an ImportHelperFilters instance as the first argument.
+        """
+        if isinstance(base_df, ImportHelperFilters):
+            filters = base_df
+            base_df = None
+
         filters = filters or ImportHelperFilters()
+        if base_df is None:
+            base_df = self.fetch_base_data()
+
         df = base_df.copy()
         if df.empty:
             return df
 
         df["rrp"] = df["jita_sell_price"] * (1 + filters.markup_margin)
+        df = apply_localized_type_names(df, self._sde_db, language_code, self._logger)
 
         if filters.categories:
             df = df[df["category_name"].isin(filters.categories)]

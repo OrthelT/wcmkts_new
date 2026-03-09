@@ -8,8 +8,13 @@ import streamlit as st
 
 from init_db import ensure_market_db_ready
 from logging_config import setup_logging
+from state import get_active_language
 from services import ImportHelperFilters
-from services.import_helper_service import fetch_import_data, get_import_helper_service
+from services.import_helper_service import (
+    SHIPPING_COST_PER_M3,
+    fetch_import_data,
+    get_import_helper_service,
+)
 from ui.column_definitions import get_import_helper_column_config
 from ui.i18n import translate_text
 from ui.market_selector import render_market_selector
@@ -34,16 +39,12 @@ def main():
     with col2:
         st.title(translate_text(language_code, "import_helper.title", market_name=market.name))
 
-    from services.import_helper_service import SHIPPING_COST_PER_M3
-
     st.markdown(
-        f"""
-        Discover items where the local market price sits well above Jita sell.
-        Shipping Cost is `m3 * {SHIPPING_COST_PER_M3:g}`, 30D Profit uses `(Local Price - Jita Sell) * Avg Daily Volume * 30`,
-        RRP (Recommended Retail Price) uses `Jita Sell * (1 + Markup Margin)`,
-        and Cap Utilis = `((Local Price - Jita Sell) - Shipping Cost) / Jita Sell`.
-        The Cap Utilis stands for Capital Utilisation Efficiency, which indicates the invest-reward ratio.
-        """
+        translate_text(
+            language_code,
+            "import_helper.description",
+            shipping_cost_per_m3=f"{SHIPPING_COST_PER_M3:g}",
+        )
     )
 
     st.sidebar.header(translate_text(language_code, "import_helper.filters_header"))
@@ -103,10 +104,10 @@ def main():
         base_df = fetch_import_data(market.database_alias)
     except Exception as e:
         logger.error(f"Import helper data load failed: {e}")
-        st.error("Failed to load market data. Check database connectivity and try refreshing.")
+        st.error(translate_text(language_code, "import_helper.error_load_failed"))
         st.stop()
 
-    df = service.get_import_items(base_df, filters)
+    df = service.get_import_items(base_df, filters, language_code=language_code)
     if df.empty:
         st.warning(translate_text(language_code, "import_helper.warning_no_items"))
         st.sidebar.markdown("---")
@@ -159,7 +160,10 @@ def main():
         display_df,
         hide_index=True,
         width="stretch",
-        column_config=get_import_helper_column_config(),
+        column_config=get_import_helper_column_config(
+            language_code,
+            shipping_cost_per_m3=SHIPPING_COST_PER_M3,
+        ),
     )
 
     st.sidebar.markdown("---")

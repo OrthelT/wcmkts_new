@@ -576,7 +576,7 @@ if __name__ == "__main__":
         "alias",
         nargs="?",
         default="wcmktprod",
-        help="Database alias from settings.toml [db_paths] (default: build_cost)",
+        help="Database alias from settings.toml [db_paths] (default: wcmktprod)",
     )
     args = parser.parse_args()
 

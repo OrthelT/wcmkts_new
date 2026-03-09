@@ -173,7 +173,10 @@ def get_export_column_config() -> dict:
     }
 
 
-def get_import_helper_column_config(language_code: str = "en") -> dict:
+def get_import_helper_column_config(
+    language_code: str = "en",
+    shipping_cost_per_m3: float = 445,
+) -> dict:
     """Get column configuration for Import Helper table display."""
     return {
         "type_id": st.column_config.NumberColumn(
@@ -208,7 +211,11 @@ def get_import_helper_column_config(language_code: str = "en") -> dict:
         ),
         "shipping_cost": st.column_config.NumberColumn(
             translate_text(language_code, "import_helper.column_shipping"),
-            help=translate_text(language_code, "import_helper.column_shipping_help"),
+            help=translate_text(
+                language_code,
+                "import_helper.column_shipping_help",
+                shipping_cost_per_m3=f"{shipping_cost_per_m3:g}",
+            ),
             format="localized",
         ),
         "profit_jita_sell_30d": st.column_config.NumberColumn(
@@ -217,8 +224,8 @@ def get_import_helper_column_config(language_code: str = "en") -> dict:
             format="compact",
         ),
         "turnover_30d": st.column_config.NumberColumn(
-            "30D Turnover",
-            help="Estimated 30-day turnover: average daily volume x 30 x Jita sell price.",
+            translate_text(language_code, "import_helper.column_turnover_30d"),
+            help=translate_text(language_code, "import_helper.column_turnover_30d_help"),
             format="compact",
         ),
         "volume_30d": st.column_config.NumberColumn(
