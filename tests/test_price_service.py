@@ -26,6 +26,45 @@ class DummyPriceProvider:
         return BatchPriceResult(prices={type_id: self.get_price(type_id) for type_id in type_ids})
 
 
+class StaticPriceProvider:
+    """Provider that returns predefined price results."""
+
+    def __init__(self, name: str, prices: dict[int, tuple[float, float]]):
+        self._name = name
+        self._prices = prices
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def get_price(self, type_id: int):
+        from services.price_service import BatchPriceResult, PriceResult
+
+        return self.get_prices([type_id]).prices.get(
+            type_id,
+            PriceResult.failure_result(type_id, "Not found"),
+        )
+
+    def get_prices(self, type_ids: list[int]):
+        from services.price_service import BatchPriceResult, PriceResult, PriceSource
+
+        prices = {}
+        failed_ids = []
+        for type_id in type_ids:
+            if type_id not in self._prices:
+                failed_ids.append(type_id)
+                continue
+            sell_price, buy_price = self._prices[type_id]
+            prices[type_id] = PriceResult(
+                type_id=type_id,
+                sell_price=sell_price,
+                buy_price=buy_price,
+                source=PriceSource.JITA_FUZZWORK,
+                success=sell_price > 0,
+            )
+        return BatchPriceResult(prices=prices, failed_ids=failed_ids)
+
+
 def test_price_cache_refreshes_only_after_entry_ttl_expires():
     from services.price_service import PriceService
 
@@ -37,9 +76,9 @@ def test_price_cache_refreshes_only_after_entry_ttl_expires():
         second = service.get_jita_price(34)
         third = service.get_jita_price(34)
 
-    assert first.price == 1.0
-    assert second.price == 1.0
-    assert third.price == 2.0
+    assert first.sell_price == 1.0
+    assert second.sell_price == 1.0
+    assert third.sell_price == 2.0
     assert provider.calls == 2
 
 
@@ -97,9 +136,22 @@ def test_jita_cache_persists_across_market_switches():
         second = h4_service.get_jita_price(34)
 
     assert b9_service is not h4_service
-    assert first.price == 1.0
-    assert second.price == 1.0
+    assert first.sell_price == 1.0
+    assert second.sell_price == 1.0
     assert shared_provider.calls == 1
 
     price_service_module._PRICE_SERVICES.clear()
     price_service_module._SHARED_JITA_PRICE_CACHE.clear()
+
+
+def test_fallback_provider_does_not_merge_partial_results():
+    from services.price_service import FallbackPriceProvider
+
+    first_provider = StaticPriceProvider("first", {34: (0.0, 5.0)})
+    second_provider = StaticPriceProvider("second", {34: (10.0, 0.0)})
+    provider = FallbackPriceProvider([first_provider, second_provider])
+
+    result = provider.get_prices([34]).prices[34]
+
+    assert result.sell_price == 10.0
+    assert result.buy_price == 0.0

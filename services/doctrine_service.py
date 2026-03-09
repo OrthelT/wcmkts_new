@@ -534,16 +534,16 @@ class FitDataBuilder:
 
                 jita_result = self._price_service.get_jita_prices(remaining_ids)
                 for type_id, price_result in jita_result.prices.items():
-                    if price_result.success and price_result.price > 0:
+                    if price_result.success and price_result.sell_price > 0:
                         mask = (self._raw_df["type_id"] == type_id) & self._raw_df[
                             "price"
                         ].isna()
                         count_before = self._raw_df["price"].isna().sum()
-                        self._raw_df.loc[mask, "price"] = price_result.price
+                        self._raw_df.loc[mask, "price"] = price_result.sell_price
                         count_after = self._raw_df["price"].isna().sum()
                         jita_filled += count_before - count_after
                         self._logger.debug(
-                            f"Filled type_id {type_id} with Jita: {price_result.price}"
+                            f"Filled type_id {type_id} with Jita: {price_result.sell_price}"
                         )
         self._metadata.prices_filled_from_jita = jita_filled
 

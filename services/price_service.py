@@ -66,11 +66,6 @@ class PriceResult:
     error_message: Optional[str] = None
 
     @property
-    def price(self) -> Price:
-        """Backward-compatible alias for sell price."""
-        return self.sell_price
-
-    @property
     def has_sell_price(self) -> bool:
         """True when a sell price is available."""
         return self.sell_price > 0
@@ -79,11 +74,6 @@ class PriceResult:
     def has_buy_price(self) -> bool:
         """True when a buy price is available."""
         return self.buy_price > 0
-
-    @property
-    def has_any_price(self) -> bool:
-        """True when either a sell or buy price is available."""
-        return self.has_sell_price or self.has_buy_price
 
     @classmethod
     def success_result(
@@ -133,7 +123,7 @@ class BatchPriceResult:
     def get_price(self, type_id: TypeID, default: Price = 0.0) -> Price:
         """Get price for a type_id, with default fallback."""
         result = self.prices.get(type_id)
-        return result.price if result and result.success else default
+        return result.sell_price if result and result.success else default
 
     def get_buy_price(self, type_id: TypeID, default: Price = 0.0) -> Price:
         """Get buy price for a type_id, with default fallback."""
@@ -142,7 +132,7 @@ class BatchPriceResult:
 
     def to_dict(self) -> dict[TypeID, Price]:
         """Convert to simple type_id -> price mapping."""
-        return {tid: r.price for tid, r in self.prices.items() if r.has_sell_price}
+        return {tid: r.sell_price for tid, r in self.prices.items() if r.has_sell_price}
 
     def to_buy_dict(self) -> dict[TypeID, Price]:
         """Convert to simple type_id -> buy price mapping."""
@@ -538,13 +528,12 @@ class FallbackPriceProvider:
                 result = provider.get_prices(list(remaining_ids))
 
                 for type_id, price_result in result.prices.items():
-                    merged_result = self._merge_price_results(
-                        existing=all_prices.get(type_id),
-                        new_result=price_result,
-                    )
-                    if merged_result is not None:
-                        all_prices[type_id] = merged_result
-                    if merged_result and merged_result.has_sell_price:
+                    if not price_result.has_sell_price and not price_result.has_buy_price:
+                        continue
+
+                    all_prices[type_id] = price_result
+
+                    if price_result.has_sell_price:
                         remaining_ids.discard(type_id)
 
                 self._logger.debug(
@@ -565,32 +554,6 @@ class FallbackPriceProvider:
             prices=all_prices,
             source=PriceSource.JITA_FUZZWORK,  # Primary source
             failed_ids=failed_ids
-        )
-
-    @staticmethod
-    def _merge_price_results(
-        existing: Optional[PriceResult],
-        new_result: PriceResult,
-    ) -> Optional[PriceResult]:
-        """Merge partial buy/sell data from multiple providers."""
-        if existing is None:
-            return new_result if new_result.has_any_price or new_result.success else None
-        if not new_result.has_any_price:
-            return existing
-
-        sell_price = existing.sell_price if existing.has_sell_price else new_result.sell_price
-        buy_price = existing.buy_price if existing.has_buy_price else new_result.buy_price
-        source = existing.source if existing.has_sell_price else new_result.source
-        success = sell_price > 0
-        error_message = existing.error_message if success else new_result.error_message
-
-        return PriceResult(
-            type_id=existing.type_id,
-            sell_price=sell_price,
-            buy_price=buy_price,
-            source=source,
-            success=success,
-            error_message=error_message,
         )
 
 
@@ -819,8 +782,10 @@ class PriceService:
             for type_id, price_result in local_result.prices.items():
                 if price_result.success:
                     mask = (df[type_id_column] == type_id) & df[price_column].isna()
-                    df.loc[mask, price_column] = price_result.price
-                    self._logger.debug(f"Filled {type_id} with local price: {price_result.price}")
+                    df.loc[mask, price_column] = price_result.sell_price
+                    self._logger.debug(
+                        f"Filled {type_id} with local price: {price_result.sell_price}"
+                    )
 
         # Then try Jita for remaining nulls
         still_null = df[price_column].isna()
@@ -831,8 +796,10 @@ class PriceService:
             for type_id, price_result in jita_result.prices.items():
                 if price_result.success:
                     mask = (df[type_id_column] == type_id) & df[price_column].isna()
-                    df.loc[mask, price_column] = price_result.price
-                    self._logger.debug(f"Filled {type_id} with Jita price: {price_result.price}")
+                    df.loc[mask, price_column] = price_result.sell_price
+                    self._logger.debug(
+                        f"Filled {type_id} with Jita price: {price_result.sell_price}"
+                    )
 
         # Final fallback: fill remaining with 0
         remaining_nulls = df[price_column].isna().sum()
@@ -963,4 +930,4 @@ def get_jita_price(type_id: int) -> float:
     """Backwards-compatible wrapper for get_jita_price."""
     service = get_price_service()
     result = service.get_jita_price(type_id)
-    return result.price if result.success else 0.0
+    return result.sell_price if result.success else 0.0
