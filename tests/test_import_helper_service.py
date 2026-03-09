@@ -45,14 +45,18 @@ class TestImportHelperService:
             base_df = service.fetch_base_data()
             result = service.get_import_items(base_df)
 
+        from services.import_helper_service import SHIPPING_COST_PER_M3
+
+        expected_shipping = 0.01 * SHIPPING_COST_PER_M3
         row = result.iloc[0]
-        assert row["shipping_cost"] == 4.45  # 0.01 m3 * 445 ISK/m3
+        assert row["shipping_cost"] == expected_shipping
         assert row["profit_jita_sell"] == 10.0
         assert row["profit_jita_sell_30d"] == 1500.0
         assert row["turnover_30d"] == 3000.0
         assert row["volume_30d"] == 150.0
         assert row["rrp"] == 24.0
-        assert abs(row["capital_utilis"] - 0.2775) < 1e-9  # (10.0 - 4.45) / 20.0
+        expected_cap_utilis = (10.0 - expected_shipping) / 20.0
+        assert abs(row["capital_utilis"] - expected_cap_utilis) < 1e-9
 
     def test_get_import_items_calculates_rrp_with_custom_markup_margin(self):
         from services.import_helper_service import ImportHelperFilters, ImportHelperService
