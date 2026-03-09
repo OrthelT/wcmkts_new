@@ -200,7 +200,7 @@ class ImportHelperService:
         )
 
         df["shipping_cost"] = df["volume_m3"] * SHIPPING_COST_PER_M3
-        df["profit_jita_sell"] = df["price"] - df["jita_sell_price"]
+        df["profit_jita_sell"] = df["price"] - (df["jita_sell_price"] + df["shipping_cost"])
         df["profit_jita_sell_30d"] = df["profit_jita_sell"] * 30 * df["avg_volume"]
         df["turnover_30d"] = df["avg_volume"] * 30 * df["jita_sell_price"]
         df["volume_30d"] = df["avg_volume"] * 30
@@ -208,8 +208,9 @@ class ImportHelperService:
         df["capital_utilis"] = 0.0
         nonzero_jita = df["jita_sell_price"] > 0
         df.loc[nonzero_jita, "capital_utilis"] = (
-            df.loc[nonzero_jita, "profit_jita_sell"] - df.loc[nonzero_jita, "shipping_cost"]
-        ) / df.loc[nonzero_jita, "jita_sell_price"]
+            df.loc[nonzero_jita, "profit_jita_sell"]
+            / df.loc[nonzero_jita, "jita_sell_price"]
+        )
 
         return df
 

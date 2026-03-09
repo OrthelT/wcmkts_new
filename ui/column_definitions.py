@@ -182,7 +182,7 @@ def get_import_helper_column_config() -> dict:
         "type_name": st.column_config.TextColumn(
             "Item",
             help="Item name.",
-            width="medium",
+            width="large",
         ),
         "price": st.column_config.NumberColumn(
             "Price",
@@ -206,12 +206,12 @@ def get_import_helper_column_config() -> dict:
         ),
         "shipping_cost": st.column_config.NumberColumn(
             "Shipping",
-            help="Calculated as item size in m3 * 500.",
+            help="Calculated as item size in m3 * shipping_cost.",
             format="localized",
         ),
         "profit_jita_sell_30d": st.column_config.NumberColumn(
             "30D Profit",
-            help="Calculated as (local price - Jita sell price) * average daily volume * 30.",
+            help="Calculated as (local price - (Jita sell price + shipping cost)) * average daily volume * 30.",
             format="compact",
         ),
         "turnover_30d": st.column_config.NumberColumn(
@@ -226,7 +226,7 @@ def get_import_helper_column_config() -> dict:
         ),
         "capital_utilis": st.column_config.NumberColumn(
             "Cap Utilis",
-            help="Calculated as ((local price - Jita sell price) - shipping cost) / Jita sell.",
+            help="Net profit (after shipping) as a percentage of Jita sell price.",
             format="percent",
         ),
     }

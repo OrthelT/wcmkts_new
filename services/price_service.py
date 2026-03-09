@@ -1,17 +1,9 @@
 """
 Price Service Module
 
-This module demonstrates several advanced Python patterns:
-1. Protocol/ABC for provider abstraction (Strategy Pattern)
-2. Dataclasses for structured results
-3. Dependency Injection for testability
-4. Chain of Responsibility for fallback logic
-5. Caching with proper invalidation
-
-Consolidates price logic from:
-- utils.py (get_jita_price, get_multi_item_jita_price, etc.)
-- doctrines.py (calculate_jita_fit_cost_and_delta, null price handling)
-- doctrine_status.py (fetch_jita_prices_for_types)
+Provides Jita and local market price lookups with a provider chain
+(Fuzzwork → Janice) and a process-wide in-memory cache keyed per item
+with TTL-based expiry.
 """
 
 from dataclasses import dataclass, field
@@ -487,6 +479,12 @@ class FallbackPriceProvider:
 
         More efficient than individual lookups - tracks which IDs
         still need pricing and only queries those.
+
+        Note: if Provider A returns only a buy price (no sell) for a
+        type_id, that result is stored but the id stays in remaining_ids.
+        Provider B may then overwrite it entirely.  This is intentional —
+        a buy-only result from an upstream API likely signals bad data,
+        and the next provider's sell price is more useful.
         """
         all_prices: dict[TypeID, PriceResult] = {}
         remaining_ids = set(type_ids)
@@ -578,7 +576,7 @@ class PriceService:
         self._price_cache = price_cache if price_cache is not None else {}
 
     @classmethod
-    def create_default(cls, db_config=None, janice_api_key: str = None) -> "PriceService":
+    def create_default(cls, db_config=None, janice_api_key: Optional[str] = None) -> "PriceService":
         """
         Factory method to create service with default configuration.
 
@@ -629,6 +627,11 @@ class PriceService:
         Get Jita prices for multiple items.
 
         Optimizes by only fetching uncached items.
+
+        Note: concurrent callers may both fetch the same uncached ids
+        (cache is checked then released before the API call).  This is
+        acceptable — Fuzzwork is idempotent and the second write simply
+        refreshes the same cache entry.
         """
         # Separate cached and uncached
         cached: dict[TypeID, PriceResult] = {}
@@ -799,15 +802,10 @@ class PriceService:
         """Check whether a cached entry is older than the configured TTL."""
         return (time.monotonic() - cached_entry.cached_at) >= self._cache_ttl
 
-    def _prune_expired_cache_entries(self) -> None:
-        """Remove expired items from the in-memory cache."""
-        expired_ids = [
-            type_id
-            for type_id, entry in self._price_cache.items()
-            if self._is_cache_entry_expired(entry)
-        ]
-        for type_id in expired_ids:
-            self._price_cache.pop(type_id, None)
+    # TODO: Replace per-entry TTL with Streamlit's native @st.cache_data(ttl=...)
+    # pattern (see repositories/market_repo.py for examples).  The current
+    # approach works but duplicates cache-invalidation logic that Streamlit
+    # already provides.
 
 
 # =============================================================================

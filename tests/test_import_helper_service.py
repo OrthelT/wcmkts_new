@@ -89,15 +89,15 @@ class TestImportHelperService:
         from services.import_helper_service import SHIPPING_COST_PER_M3
 
         expected_shipping = 0.01 * SHIPPING_COST_PER_M3
+        expected_profit = 10.0 - expected_shipping  # price(30) - (jita(20) + shipping)
         row = result.iloc[0]
         assert row["shipping_cost"] == expected_shipping
-        assert row["profit_jita_sell"] == 10.0
-        assert row["profit_jita_sell_30d"] == 1500.0
+        assert abs(row["profit_jita_sell"] - expected_profit) < 1e-9
+        assert abs(row["profit_jita_sell_30d"] - expected_profit * 30 * 5.0) < 1e-9
         assert row["turnover_30d"] == 3000.0
         assert row["volume_30d"] == 150.0
         assert row["rrp"] == 24.0
-        expected_cap_utilis = (10.0 - expected_shipping) / 20.0
-        # Use epsilon comparison: float division can introduce tiny rounding errors
+        expected_cap_utilis = expected_profit / 20.0
         assert abs(row["capital_utilis"] - expected_cap_utilis) < 1e-9
 
     def test_get_import_items_calculates_rrp_with_custom_markup_margin(self):

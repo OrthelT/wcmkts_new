@@ -129,4 +129,3 @@ def _invalidate_market_caches() -> None:
     except ImportError:
         pass
 
-    # Import helper relies on PriceService caching for Jita refresh TTL.
