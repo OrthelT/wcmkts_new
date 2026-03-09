@@ -9,7 +9,7 @@ import streamlit as st
 from init_db import ensure_market_db_ready
 from logging_config import setup_logging
 from services import ImportHelperFilters
-from services.import_helper_service import fetch_import_data, get_import_helper_service
+from services.import_helper_service import get_import_helper_service
 from ui.column_definitions import get_import_helper_column_config
 from ui.market_selector import render_market_selector
 from ui.sync_display import display_sync_status
@@ -101,7 +101,7 @@ def main():
     )
 
     try:
-        base_df = fetch_import_data(market.database_alias)
+        base_df = service.fetch_base_data()
     except Exception as e:
         logger.error(f"Import helper data load failed: {e}")
         st.error("Failed to load market data. Check database connectivity and try refreshing.")
