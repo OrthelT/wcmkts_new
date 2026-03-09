@@ -56,6 +56,7 @@ class TestImportHelperService:
         assert row["volume_30d"] == 150.0
         assert row["rrp"] == 24.0
         expected_cap_utilis = (10.0 - expected_shipping) / 20.0
+        # Use epsilon comparison: float division can introduce tiny rounding errors
         assert abs(row["capital_utilis"] - expected_cap_utilis) < 1e-9
 
     def test_get_import_items_calculates_rrp_with_custom_markup_margin(self):

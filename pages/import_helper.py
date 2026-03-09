@@ -151,7 +151,7 @@ def main():
     st.dataframe(
         display_df,
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
         column_config=get_import_helper_column_config(),
     )
 
