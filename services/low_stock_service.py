@@ -19,6 +19,7 @@ from sqlalchemy import text
 
 from config import DatabaseConfig
 from logging_config import setup_logging
+from services.type_name_localization import apply_localized_type_names
 
 logger = setup_logging(__name__, log_file="low_stock_service.log")
 
@@ -369,7 +370,9 @@ class LowStockService:
     # -------------------------------------------------------------------------
 
     def get_low_stock_items(
-        self, filters: Optional[LowStockFilters] = None
+        self,
+        filters: Optional[LowStockFilters] = None,
+        language_code: str = "en",
     ) -> pd.DataFrame:
         """
         Get low stock items with optional filters applied.
@@ -470,6 +473,7 @@ class LowStockService:
 
                 # Add ships column
                 df["ships"] = df["type_id"].map(ship_groups)
+                df = apply_localized_type_names(df, self._sde_db, language_code, self._logger)
 
             return df
 

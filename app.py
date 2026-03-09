@@ -1,30 +1,69 @@
 import streamlit as st
 from logging_config import setup_logging
+from state.language_state import (
+    set_active_language,
+    set_language_query_param,
+    sync_active_language_with_query_params,
+)
+from ui.i18n import get_language_label, get_language_options, translate_text
 
 logger = setup_logging(__name__)
 
+st.set_page_config(
+    page_title="WinterCo Markets",
+    page_icon="🐼",
+    layout="wide",
+)
+
+available_language_codes = get_language_options()
+current_language = sync_active_language_with_query_params(available_language_codes)
+
+_, language_col = st.columns([0.84, 0.16], vertical_alignment="top")
+with language_col:
+    selected_language = st.selectbox(
+        translate_text(current_language, "app.language_label"),
+        options=available_language_codes,
+        index=available_language_codes.index(current_language),
+        format_func=get_language_label,
+        key="app_language_selector",
+    )
+
+if selected_language != current_language:
+    set_active_language(selected_language)
+    set_language_query_param(selected_language)
+    current_language = selected_language
+
 pages = {
-    "Market Stats": [
-        st.Page("pages/market_stats.py", title="📈Market Stats"),
+    translate_text(current_language, "nav.section.market_stats"): [
+        st.Page(
+            "pages/market_stats.py",
+            title=translate_text(current_language, "nav.page.market_stats"),
+        ),
     ],
-    "Analysis Tools": [
-        st.Page("pages/low_stock.py", title="⚠️Low Stock"),
-        st.Page("pages/import_helper.py", title="📦Import Helper"),
-        st.Page("pages/doctrine_status.py", title="⚔️Doctrine Status"),
-        st.Page("pages/doctrine_report.py", title="📝Doctrine Report"),
-        st.Page("pages/build_costs.py", title="🏗️Build Costs"),
-        st.Page("pages/pricer.py", title="🏷️Pricer")
+    translate_text(current_language, "nav.section.analysis_tools"): [
+        st.Page("pages/low_stock.py", title=translate_text(current_language, "nav.page.low_stock")),
+        st.Page(
+            "pages/import_helper.py",
+            title=translate_text(current_language, "nav.page.import_helper"),
+        ),
+        st.Page(
+            "pages/doctrine_status.py",
+            title=translate_text(current_language, "nav.page.doctrine_status"),
+        ),
+        st.Page(
+            "pages/doctrine_report.py",
+            title=translate_text(current_language, "nav.page.doctrine_report"),
+        ),
+        st.Page(
+            "pages/build_costs.py",
+            title=translate_text(current_language, "nav.page.build_costs"),
+        ),
+        st.Page("pages/pricer.py", title=translate_text(current_language, "nav.page.pricer")),
     ],
-    "Data": [
-        st.Page("pages/downloads.py", title="📥Downloads")
-    ]
+    translate_text(current_language, "nav.section.data"): [
+        st.Page("pages/downloads.py", title=translate_text(current_language, "nav.page.downloads"))
+    ],
 }
 pg = st.navigation(pages)
-
-st.set_page_config(
-        page_title="WinterCo Markets",
-        page_icon="🐼",
-        layout="wide"
-    )
 
 pg.run()

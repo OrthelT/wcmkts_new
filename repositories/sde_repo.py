@@ -19,7 +19,7 @@ from typing import Optional
 
 import pandas as pd
 import streamlit as st
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from config import DatabaseConfig
 from logging_config import setup_logging
@@ -76,6 +76,55 @@ def _get_type_id_impl(engine, type_name: str) -> Optional[int]:
         return row[0] if row is not None else None
 
 
+def _get_localized_type_names_impl(
+    engine,
+    type_ids: list[int],
+    language_code: str,
+) -> dict[int, str]:
+    """Look up localized type names from an optional translation table.
+
+    Expected schema:
+        type_name_translations(type_id INTEGER, language_code TEXT, type_name TEXT)
+
+    Missing tables or rows fall back to English at the caller.
+    """
+    if not type_ids or language_code == "en":
+        return {}
+
+    query = text(
+        """
+        SELECT type_id, type_name
+        FROM type_name_translations
+        WHERE language_code = :language_code
+        AND type_id IN :type_ids
+        """
+    ).bindparams(bindparam("type_ids", expanding=True))
+
+    try:
+        with engine.connect() as conn:
+            df = pd.read_sql_query(
+                query,
+                conn,
+                params={
+                    "language_code": language_code,
+                    "type_ids": type_ids,
+                },
+            )
+    except Exception as exc:
+        if "no such table" in str(exc).lower():
+            logger.debug("Localized type name table is not present in the SDE database")
+            return {}
+        raise
+
+    if df.empty:
+        return {}
+
+    return {
+        int(row["type_id"]): row["type_name"]
+        for _, row in df.dropna(subset=["type_id", "type_name"]).iterrows()
+    }
+
+
 def _get_groups_for_category_impl(engine, category_id: int) -> pd.DataFrame:
     """Fetch groups for a given category ID.
 
@@ -101,7 +150,7 @@ def _get_groups_for_category_impl(engine, category_id: int) -> pd.DataFrame:
         return pd.read_sql_query(query, conn, params={"category_id": category_id})
 
 
-def _get_types_for_group_impl(engine, remote_engine, group_id: int) -> pd.DataFrame:
+def _get_types_for_group_impl(engine, remote_engine_factory, group_id: int) -> pd.DataFrame:
     """Fetch types for a group ID with malformed-DB fallback to remote.
 
     Joins invTypes with industryActivityProducts to find manufacturable items.
@@ -121,6 +170,7 @@ def _get_types_for_group_impl(engine, remote_engine, group_id: int) -> pd.DataFr
             return pd.read_sql_query(query, conn, params={"group_id": group_id})
 
     def _run_remote():
+        remote_engine = remote_engine_factory()
         with remote_engine.connect() as conn:
             return pd.read_sql_query(query, conn, params={"group_id": group_id})
 
@@ -197,6 +247,16 @@ def _get_type_id_cached(_url: str, type_name: str) -> Optional[int]:
     return _get_type_id_impl(db.engine, type_name)
 
 
+@st.cache_data
+def _get_localized_type_names_cached(
+    _url: str,
+    type_ids: tuple[int, ...],
+    language_code: str,
+) -> dict[int, str]:
+    db = DatabaseConfig("sde")
+    return _get_localized_type_names_impl(db.engine, list(type_ids), language_code)
+
+
 @st.cache_resource
 def _get_groups_for_category_cached(_url: str, category_id: int) -> pd.DataFrame:
     db = DatabaseConfig("sde")
@@ -206,7 +266,7 @@ def _get_groups_for_category_cached(_url: str, category_id: int) -> pd.DataFrame
 @st.cache_resource
 def _get_types_for_group_cached(_url: str, group_id: int) -> pd.DataFrame:
     db = DatabaseConfig("sde")
-    return _get_types_for_group_impl(db.engine, db.remote_engine, group_id)
+    return _get_types_for_group_impl(db.engine, lambda: db.remote_engine, group_id)
 
 
 @st.cache_resource
@@ -269,6 +329,18 @@ class SDERepository(BaseRepository):
     def get_type_id(self, type_name: str) -> Optional[int]:
         """Get type ID by name (cached)."""
         return _get_type_id_cached(self._url, type_name)
+
+    def get_localized_type_names(
+        self,
+        type_ids: list[int],
+        language_code: str,
+    ) -> dict[int, str]:
+        """Get localized type names by ID with English fallback handled upstream."""
+        return _get_localized_type_names_cached(
+            self._url,
+            tuple(sorted(set(type_ids))),
+            language_code,
+        )
 
     def get_groups_for_category(self, category_id: int) -> pd.DataFrame:
         """Get groups for a category ID (cached).

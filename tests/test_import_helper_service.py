@@ -166,6 +166,47 @@ class TestImportHelperService:
         assert row["turnover_30d"] == 3000.0
         assert row["volume_30d"] == 150.0
 
+    @patch("services.import_helper_service.apply_localized_type_names")
+    def test_get_import_items_uses_localized_names_and_preserves_english_search(
+        self,
+        mock_localize,
+    ):
+        from services.import_helper_service import ImportHelperFilters, ImportHelperService
+
+        service = ImportHelperService(Mock(), Mock(), DummyJitaProvider({}))
+        provider = DummyJitaProvider(
+            {34: JitaPriceData(type_id=34, sell_price=20.0, buy_price=18.0)}
+        )
+        service._jita_provider = provider
+
+        base_df = pd.DataFrame(
+            {
+                "type_id": [34],
+                "type_name": ["Tritanium"],
+                "price": [30.0],
+                "avg_volume": [5.0],
+                "volume_m3": [0.01],
+                "category_name": ["Mineral"],
+                "group_name": ["Mineral"],
+            }
+        )
+        def _localize(df, *_args, **_kwargs):
+            localized_df = df.copy()
+            localized_df["type_name"] = "三钛合金"
+            localized_df["type_name_en"] = "Tritanium"
+            return localized_df
+
+        mock_localize.side_effect = _localize
+
+        filters = ImportHelperFilters(search_text="trit")
+
+        with patch.object(service, "_get_import_candidates", return_value=base_df):
+            result = service.get_import_items(filters, language_code="zh")
+
+        assert len(result) == 1
+        assert result.iloc[0]["type_name"] == "三钛合金"
+        mock_localize.assert_called_once()
+
     def test_get_summary_stats_returns_counts_and_average(self):
         from services.import_helper_service import ImportHelperService
 

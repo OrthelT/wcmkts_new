@@ -13,7 +13,8 @@ from domain import StockStatus
 from ui import get_fitting_column_config, render_progress_bar_html
 from services.doctrine_service import format_doctrine_name
 from services import get_status_filter_options
-from state import ss_init, ss_get
+from state import get_active_language, ss_init, ss_get
+from ui.i18n import translate_text
 from ui.market_selector import render_market_selector
 from init_db import ensure_market_db_ready
 from ui.sync_display import display_sync_status
@@ -118,13 +119,11 @@ def _rebuild_selections():
     }
 
 def main():
-    market = render_market_selector()
+    language_code = get_active_language()
+    market = render_market_selector(label=translate_text(language_code, "common.market_hub"))
 
     if not ensure_market_db_ready(market.database_alias):
-        st.error(
-            f"Database for **{market.name}** is not available. "
-            "Check Turso credentials and network connectivity."
-        )
+        st.error(translate_text(language_code, "error.market_db_unavailable", market_name=market.name))
         st.stop()
 
     # Initialize service (cached in session state via get_service)
@@ -143,11 +142,11 @@ def main():
 
     with col2:
         st.markdown("&nbsp;")
-        st.title(f"{market.name} Doctrine Status")
+        st.title(translate_text(language_code, "doctrine_status.title", market_name=market.name))
     with col3:
         # Use summary_df directly from FitBuildResult (no redundant get_fit_summary call)
         if summary_df.empty:
-            st.warning("No doctrine fits found in the database.")
+            st.warning(translate_text(language_code, "doctrine_status.no_fits"))
             return
         fit_summary = summary_df.copy()
         st.markdown("&nbsp;")
@@ -323,7 +322,11 @@ def main():
 
             with col2:
                 tab1, tab2 = st.tabs(
-                    ["Market Stock", "Fit Details"], default="Market Stock"
+                    [
+                        translate_text(language_code, "doctrine_status.tab_market_stock"),
+                        translate_text(language_code, "doctrine_status.tab_fit_details"),
+                    ],
+                    default=translate_text(language_code, "doctrine_status.tab_market_stock"),
                 )
                 with tab1:
                     # Ship name with checkbox and metrics in a more compact layout
@@ -387,7 +390,9 @@ def main():
 
                     with col3:
                         # Low stock modules with selection checkboxes
-                        st.markdown(":blue[**Low Stock Modules:**]")
+                        st.markdown(
+                            f":blue[**{translate_text(language_code, 'doctrine_status.low_stock_modules')}:**]"
+                        )
 
                         for mod in row["lowest_modules"]:
                             mod_type_id = mod["type_id"]
@@ -511,9 +516,9 @@ def main():
                 if row["ship_name"] not in st.session_state.displayed_ships:
                     continue
                 sid = int(row["ship_id"])
-                t = int(row["ship_target"]) if pd.notna(row["ship_target"]) else 0
+                target_count = int(row["ship_target"]) if pd.notna(row["ship_target"]) else 0
                 h = int(row["hulls"]) if pd.notna(row["hulls"]) else 0
-                _add_selection(sid, row["ship_name"], h, max(0, t - h))
+                _add_selection(sid, row["ship_name"], h, max(0, target_count - h))
                 for mod in row["lowest_modules"]:
                     _add_selection(
                         mod["type_id"], mod["module_name"],
@@ -605,7 +610,7 @@ def main():
 
     # Display last update timestamp
     st.sidebar.markdown("---")
-    display_sync_status()
+    display_sync_status(language_code=language_code)
 
 
 if __name__ == "__main__":

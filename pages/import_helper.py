@@ -8,8 +8,10 @@ import streamlit as st
 
 from init_db import ensure_market_db_ready
 from logging_config import setup_logging
+from state import get_active_language
 from services import ImportHelperFilters, get_import_helper_service
 from ui.column_definitions import get_import_helper_column_config
+from ui.i18n import translate_text
 from ui.market_selector import render_market_selector
 from ui.sync_display import display_sync_status
 
@@ -17,13 +19,11 @@ logger = setup_logging(__name__, log_file="import_helper.log")
 
 
 def main():
-    market = render_market_selector()
+    language_code = get_active_language()
+    market = render_market_selector(label=translate_text(language_code, "common.market_hub"))
 
     if not ensure_market_db_ready(market.database_alias):
-        st.error(
-            f"Database for **{market.name}** is not available. "
-            "Check Turso credentials and network connectivity."
-        )
+        st.error(translate_text(language_code, "error.market_db_unavailable", market_name=market.name))
         st.stop()
 
     service = get_import_helper_service()
@@ -32,60 +32,52 @@ def main():
     with col1:
         st.image("images/wclogo.png", width=125)
     with col2:
-        st.title(f"{market.name} Import Helper")
+        st.title(translate_text(language_code, "import_helper.title", market_name=market.name))
 
-    st.markdown(
-        """
-        Discover items where the local market price sits well above Jita sell.
-        Shipping Cost is `m3 * 500`, 30D Profit uses `(Local Price - Jita Sell) * Avg Daily Volume * 30`,
-        RRP (Recommended Retail Price) uses `Jita Sell * (1 + Markup Margin)`,
-        and Cap Utilis = `((Local Price - Jita Sell) - Shipping Cost) / Jita Sell`. 
-        The Cap Utilis stands for Capital Utilisation Efficiency, which indicates the invest-reward ratio.
-        """
-    )
+    st.markdown(translate_text(language_code, "import_helper.description"))
 
-    st.sidebar.header("Filters")
+    st.sidebar.header(translate_text(language_code, "import_helper.filters_header"))
     categories = service.get_category_options()
 
     selected_categories = st.sidebar.multiselect(
-        "Categories",
+        translate_text(language_code, "import_helper.categories"),
         options=categories,
         default=[],
-        help="Limit the table to one or more item categories.",
+        help=translate_text(language_code, "import_helper.categories_help"),
     )
     search_text = st.sidebar.text_input(
-        "Search Items",
+        translate_text(language_code, "import_helper.search_items"),
         value="",
-        help="Case-insensitive name filter.",
+        help=translate_text(language_code, "import_helper.search_items_help"),
     )
     profitable_only = st.sidebar.checkbox(
-        "Positive Profit Only",
+        translate_text(language_code, "import_helper.profitable_only"),
         value=True,
-        help="Hide items where the local market price is not above Jita sell.",
+        help=translate_text(language_code, "import_helper.profitable_only_help"),
     )
     min_capital_utilis = st.sidebar.number_input(
-        "Minimum Capital Utilis",
+        translate_text(language_code, "import_helper.min_capital_utilis"),
         min_value=0.0,
         max_value=5.0,
         value=0.0,
         step=0.05,
         format="%.2f",
-        help="0.10 means at least 10% capital utilisation after shipping.",
+        help=translate_text(language_code, "import_helper.min_capital_utilis_help"),
     )
     min_turnover_30d = st.sidebar.number_input(
-        "Minimum 30D Turnover",
+        translate_text(language_code, "import_helper.min_turnover_30d"),
         min_value=0,
         value=0,
         step=200_000_000,
-        help="Hide items whose 30D Turnover is below this value.",
+        help=translate_text(language_code, "import_helper.min_turnover_30d_help"),
     )
     markup_margin = st.sidebar.number_input(
-        "Markup Margin",
+        translate_text(language_code, "import_helper.markup_margin"),
         min_value=0.0,
         value=0.2,
         step=0.05,
         format="%.2f",
-        help="Used for RRP. 0.20 means 20% above Jita sell.",
+        help=translate_text(language_code, "import_helper.markup_margin_help"),
     )
 
     filters = ImportHelperFilters(
@@ -97,21 +89,27 @@ def main():
         markup_margin=float(markup_margin),
     )
 
-    df = service.get_import_items(filters)
+    df = service.get_import_items(filters, language_code=language_code)
     if df.empty:
-        st.warning("No items found with the selected filters.")
+        st.warning(translate_text(language_code, "import_helper.warning_no_items"))
         st.sidebar.markdown("---")
-        display_sync_status()
+        display_sync_status(language_code=language_code)
         return
 
     stats = service.get_summary_stats(df)
     metric_col1, metric_col2, metric_col3 = st.columns(3)
     with metric_col1:
-        st.metric("Total Items", stats["total_items"])
+        st.metric(translate_text(language_code, "import_helper.metric_total_items"), stats["total_items"])
     with metric_col2:
-        st.metric("Positive Profit Items", stats["profitable_items"])
+        st.metric(
+            translate_text(language_code, "import_helper.metric_profitable_items"),
+            stats["profitable_items"],
+        )
     with metric_col3:
-        st.metric("Avg Capital Utilis", f"{stats['avg_capital_utilis']:.1%}")
+        st.metric(
+            translate_text(language_code, "import_helper.metric_avg_capital_utilis"),
+            f"{stats['avg_capital_utilis']:.1%}",
+        )
 
     display_df = df[
         [
@@ -144,11 +142,11 @@ def main():
         display_df,
         hide_index=True,
         use_container_width=True,
-        column_config=get_import_helper_column_config(),
+        column_config=get_import_helper_column_config(language_code),
     )
 
     st.sidebar.markdown("---")
-    display_sync_status()
+    display_sync_status(language_code=language_code)
 
 
 if __name__ == "__main__":

@@ -15,15 +15,16 @@ from logging_config import setup_logging
 from services import get_low_stock_service, LowStockFilters
 from ui.formatters import get_image_url
 from services.doctrine_service import format_doctrine_name
-from state import ss_init, ss_get, ss_set
+from state import get_active_language, ss_init, ss_get, ss_set
 from ui.market_selector import render_market_selector
+from ui.i18n import translate_text
 from init_db import ensure_market_db_ready
 from ui.sync_display import display_sync_status
 logger = setup_logging(__name__, log_file="low_stock.log")
 
 
 
-def create_days_remaining_chart(df: pd.DataFrame):
+def create_days_remaining_chart(df: pd.DataFrame, language_code: str):
     """Create a bar chart showing days of stock remaining."""
     if df.empty:
         return None
@@ -32,15 +33,18 @@ def create_days_remaining_chart(df: pd.DataFrame):
         df,
         x="type_name",
         y="days_remaining",
-        title="Days of Stock Remaining",
-        labels={"days_remaining": "Days Remaining", "type_name": "Item"},
+        title=translate_text(language_code, "low_stock.chart_title"),
+        labels={
+            "days_remaining": translate_text(language_code, "low_stock.chart_days_label"),
+            "type_name": translate_text(language_code, "low_stock.chart_item_label"),
+        },
         color="category_name",
         color_discrete_sequence=px.colors.qualitative.Set3,
     )
 
     fig.update_layout(
-        xaxis_title="Item",
-        yaxis_title="Days Remaining",
+        xaxis_title=translate_text(language_code, "low_stock.chart_item_label"),
+        yaxis_title=translate_text(language_code, "low_stock.chart_days_label"),
         xaxis={"tickangle": 45},
         height=500,
     )
@@ -50,7 +54,7 @@ def create_days_remaining_chart(df: pd.DataFrame):
         y=3,
         line_dash="dash",
         line_color="red",
-        annotation_text="Critical Level (3 days)",
+        annotation_text=translate_text(language_code, "low_stock.chart_critical_level"),
     )
 
     return fig
@@ -118,13 +122,11 @@ def display_fit_data(selected_fit):
 
 
 def main():
-    market = render_market_selector()
+    language_code = get_active_language()
+    market = render_market_selector(label=translate_text(language_code, "common.market_hub"))
 
     if not ensure_market_db_ready(market.database_alias):
-        st.error(
-            f"Database for **{market.name}** is not available. "
-            "Check Turso credentials and network connectivity."
-        )
+        st.error(translate_text(language_code, "error.market_db_unavailable", market_name=market.name))
         st.stop()
 
     # Initialize service (cached in session state via get_service)
@@ -148,71 +150,66 @@ def main():
     with col1:
         st.image("images/wclogo.png", width=125)
     with col2:
-        st.title(f"{market.name} Low Stock Tool")
+        st.title(translate_text(language_code, "low_stock.title", market_name=market.name))
 
-    st.markdown("""
-    This page shows items that are running low on the market. The **Days Remaining** column shows how many days of sales
-    can be sustained by the current stock based on historical average sales. Items with fewer days remaining need attention.
-    The **Used In Fits** column shows the doctrine ships that use the item (if any) and the number of fits that the current
-    market stock of the item can support.
-    """)
+    st.markdown(translate_text(language_code, "low_stock.description"))
 
     # Sidebar filters
-    st.sidebar.header("Filters")
-    st.sidebar.markdown(
-        "Use the filters below to customize your view of low stock items."
-    )
+    st.sidebar.header(translate_text(language_code, "low_stock.filters_header"))
+    st.sidebar.markdown(translate_text(language_code, "low_stock.filters_help"))
 
     # Item type filters
-    st.sidebar.subheader("Item Type Filters")
+    st.sidebar.subheader(translate_text(language_code, "low_stock.item_type_filters"))
 
     doctrine_only = st.sidebar.checkbox(
-        "Doctrine Items Only",
+        translate_text(language_code, "low_stock.doctrine_only"),
         value=ss_get("ls_doctrine_only", False),
-        help="Show only items that are used in a doctrine fit",
+        help=translate_text(language_code, "low_stock.doctrine_only_help"),
     )
     ss_set("ls_doctrine_only", doctrine_only)
 
     tech2_only = st.sidebar.checkbox(
-        "Tech II Items Only",
+        translate_text(language_code, "low_stock.tech2_only"),
         value=ss_get("ls_tech2_only", False),
-        help="Show only Tech II items (metaGroupID=2)",
+        help=translate_text(language_code, "low_stock.tech2_only_help"),
     )
     ss_set("ls_tech2_only", tech2_only)
 
     faction_only = st.sidebar.checkbox(
-        "Faction Items Only",
+        translate_text(language_code, "low_stock.faction_only"),
         value=ss_get("ls_faction_only", False),
-        help="Show only Faction items (metaGroupID=4)",
+        help=translate_text(language_code, "low_stock.faction_only_help"),
     )
     ss_set("ls_faction_only", faction_only)
 
     # Category filter
-    st.sidebar.subheader("Category Filter")
+    st.sidebar.subheader(translate_text(language_code, "low_stock.category_filter"))
     categories = service.get_category_options()
 
     selected_categories = st.sidebar.multiselect(
-        "Select Categories",
+        translate_text(language_code, "low_stock.select_categories"),
         options=categories,
         default=ss_get("ls_selected_categories", []),
-        help="Select one or more categories to filter the data",
+        help=translate_text(language_code, "low_stock.select_categories_help"),
     )
     ss_set("ls_selected_categories", selected_categories)
 
     # Doctrine/Fit filter section
-    st.sidebar.subheader("Doctrine/Fit Filter")
+    st.sidebar.subheader(translate_text(language_code, "low_stock.doctrine_fit_filter"))
 
     # Get doctrine options
     doctrine_options = service.get_doctrine_options()
-    doctrine_names = ["All"] + sorted(
+    all_label = translate_text(language_code, "common.all")
+    all_fits_label = translate_text(language_code, "common.all_fits")
+    doctrine_names = [all_label] + sorted(
         [d.doctrine_name for d in doctrine_options], key=format_doctrine_name
     )
 
     selected_doctrine_name = st.sidebar.selectbox(
-        "Select Doctrine",
+        translate_text(language_code, "low_stock.select_doctrine"),
         options=doctrine_names,
         index=0,
-        help="Filter to show only items from a specific doctrine",
+        help=translate_text(language_code, "low_stock.select_doctrine_help"),
         format_func=format_doctrine_name,
     )
 
@@ -220,7 +217,7 @@ def main():
     selected_fit = None
     fit_ids = []
 
-    if selected_doctrine_name != "All":
+    if selected_doctrine_name != all_label:
         # Find the doctrine info
         selected_doctrine = next(
             (d for d in doctrine_options if d.doctrine_name == selected_doctrine_name),
@@ -238,16 +235,16 @@ def main():
 
             # Get fit options for this doctrine
             fit_options = service.get_fit_options(selected_doctrine.doctrine_id)
-            fit_names = ["All Fits"] + [f.ship_name for f in fit_options]
+            fit_names = [all_fits_label] + [f.ship_name for f in fit_options]
 
             selected_fit_name = st.sidebar.selectbox(
-                "Select Fit",
+                translate_text(language_code, "low_stock.select_fit"),
                 options=fit_names,
                 index=0,
-                help="Filter to show only items from a specific fit",
+                help=translate_text(language_code, "low_stock.select_fit_help"),
             )
 
-            if selected_fit_name != "All Fits":
+            if selected_fit_name != all_fits_label:
                 selected_fit = next(
                     (f for f in fit_options if f.ship_name == selected_fit_name), None
                 )
@@ -260,20 +257,20 @@ def main():
                         caption=f"{selected_fit.ship_name}\n{selected_fit.fit_name}",
                     )
             else:
-                # "All Fits" — filter to all fits in this doctrine
+                # All fits for the selected doctrine
                 fit_ids = selected_doctrine.fit_ids
                 ss_set("single_fit", False)
                 ss_set("fit_target", None)
 
     # Days remaining filter
-    st.sidebar.subheader("Days Remaining Filter")
+    st.sidebar.subheader(translate_text(language_code, "low_stock.days_filter"))
     max_days_remaining = st.sidebar.slider(
-        "Maximum Days Remaining",
+        translate_text(language_code, "low_stock.max_days_remaining"),
         min_value=0.0,
         max_value=30.0,
         value=ss_get("ls_max_days", 7.0),
         step=0.5,
-        help="Show only items with days remaining less than or equal to this value",
+        help=translate_text(language_code, "low_stock.max_days_remaining_help"),
     )
     ss_set("ls_max_days", max_days_remaining)
 
@@ -288,7 +285,7 @@ def main():
     )
 
     # Get filtered data using service
-    df = service.get_low_stock_items(filters)
+    df = service.get_low_stock_items(filters, language_code=language_code)
 
     if not df.empty:
         # Sort by days_remaining (ascending) to show most critical items first
@@ -300,11 +297,11 @@ def main():
         # Display metrics
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Critical Items (\u22643 days)", stats["critical"])
+            st.metric(translate_text(language_code, "low_stock.metric_critical"), stats["critical"])
         with col2:
-            st.metric("Low Stock Items (3-7 days)", stats["low"])
+            st.metric(translate_text(language_code, "low_stock.metric_low"), stats["low"])
         with col3:
-            st.metric("Total Filtered Items", stats["total"])
+            st.metric(translate_text(language_code, "low_stock.metric_total"), stats["total"])
 
         st.divider()
 
@@ -324,12 +321,24 @@ def main():
             with header_col2:
                 if selected_fit:
                     ss_set("single_fit", True)
-                    st.subheader(f"Low Stock: {selected_fit.ship_name}")
+                    st.subheader(
+                        translate_text(
+                            language_code,
+                            "low_stock.subheader_fit",
+                            ship_name=selected_fit.ship_name,
+                        )
+                    )
                     display_fit_data(selected_fit)
                 else:
-                    st.subheader(f"Low Stock: {format_doctrine_name(selected_doctrine_name)}")
+                    st.subheader(
+                        translate_text(
+                            language_code,
+                            "low_stock.subheader_doctrine",
+                            doctrine_name=format_doctrine_name(selected_doctrine_name),
+                        )
+                    )
         else:
-            st.subheader("Low Stock Items")
+            st.subheader(translate_text(language_code, "low_stock.subheader_all"))
 
         # Format the DataFrame for display
         display_df = df.copy()
@@ -384,54 +393,62 @@ def main():
         # Column configuration
         column_config = {
             "select": st.column_config.CheckboxColumn(
-                "Select",
-                help="Check items you want to include in the CSV download",
+                translate_text(language_code, "common.select"),
+                help=translate_text(language_code, "low_stock.column_select_help"),
                 default=False,
                 width="small",
             ),
             "type_id": st.column_config.NumberColumn(
-                "Type ID", help="Type ID of the item", width="small"
+                translate_text(language_code, "common.type_id"),
+                help="Type ID of the item",
+                width="small",
             ),
             "type_name": st.column_config.TextColumn(
-                "Item", help="Name of the item", width="medium"
+                translate_text(language_code, "common.item"),
+                help=translate_text(language_code, "low_stock.column_item_help"),
+                width="medium",
             ),
             "total_volume_remain": st.column_config.NumberColumn(
-                "Volume Remaining",
+                translate_text(language_code, "low_stock.column_volume_remaining"),
                 format="localized",
-                help="Total items currently available on the market",
+                help=translate_text(language_code, "low_stock.column_volume_remaining_help"),
                 width="small",
             ),
             "fits_on_mkt": st.column_config.NumberColumn(
-                "fits",
+                translate_text(language_code, "low_stock.column_fits"),
                 format="localized",
-                help="total fits that can be made based on the stock of this item",
+                help=translate_text(language_code, "low_stock.column_fits_help"),
                 width="small",
             ),
             "price": st.column_config.NumberColumn(
-                "Price",
+                translate_text(language_code, "common.price"),
                 format="localized",
                 help="Lowest 5-percentile price of current sell orders",
             ),
             "days_remaining": st.column_config.NumberColumn(
-                "Days",
+                translate_text(language_code, "low_stock.column_days"),
                 format="localized",
-                help="Days of stock remaining based on historical average sales",
+                help=translate_text(language_code, "low_stock.column_days_help"),
                 width="small",
             ),
             "avg_volume": st.column_config.NumberColumn(
-                "Avg Vol",
+                translate_text(language_code, "low_stock.column_avg_vol"),
                 format="localized",
-                help="Average volume over the last 30 days",
+                help=translate_text(language_code, "low_stock.column_avg_vol_help"),
                 width="small",
             ),
             "ships": st.column_config.ListColumn(
-                "Used In Fits", help="Doctrine ships that use this item", width="large"
+                translate_text(language_code, "low_stock.column_used_in_fits"),
+                help=translate_text(language_code, "low_stock.column_used_in_fits_help"),
+                width="large",
             ),
             "category_name": st.column_config.TextColumn(
-                "Category", help="Category of the item"
+                translate_text(language_code, "low_stock.column_category"),
+                help=translate_text(language_code, "low_stock.column_category_help"),
             ),
             "group_name": st.column_config.TextColumn(
-                "Group", help="Group of the item"
+                translate_text(language_code, "low_stock.column_group"),
+                help=translate_text(language_code, "low_stock.column_group_help"),
             ),
         }
 
@@ -453,21 +470,21 @@ def main():
         selected_rows = edited_df[edited_df["select"] == True]
         if len(selected_rows) > 0:
             st.info(
-                f"{len(selected_rows)} items selected. Visit the **Downloads** page for bulk CSV exports."
+                translate_text(language_code, "low_stock.selected_items", count=len(selected_rows))
             )
 
         # Display chart
-        st.subheader("Days Remaining by Item")
-        days_chart = create_days_remaining_chart(df)
+        st.subheader(translate_text(language_code, "low_stock.chart_section"))
+        days_chart = create_days_remaining_chart(df, language_code)
         if days_chart:
             st.plotly_chart(days_chart)
 
     else:
-        st.warning("No items found with the selected filters.")
+        st.warning(translate_text(language_code, "low_stock.warning_no_items"))
 
     # Display last update timestamp
     st.sidebar.markdown("---")
-    display_sync_status()
+    display_sync_status(language_code=language_code)
 
 
 if __name__ == "__main__":

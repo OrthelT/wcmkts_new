@@ -15,6 +15,7 @@ from sqlalchemy import bindparam, text
 from config import DatabaseConfig
 from logging_config import setup_logging
 from services.pricer_service import JitaPriceProvider
+from services.type_name_localization import apply_localized_type_names
 
 logger = setup_logging(__name__, log_file="import_helper_service.log")
 
@@ -159,6 +160,7 @@ class ImportHelperService:
     def get_import_items(
         self,
         filters: Optional[ImportHelperFilters] = None,
+        language_code: str = "en",
     ) -> pd.DataFrame:
         """Return import-helper rows with calculated profitability metrics."""
         filters = filters or ImportHelperFilters()
@@ -187,6 +189,7 @@ class ImportHelperService:
         df["turnover_30d"] = df["avg_volume"] * 30 * df["jita_sell_price"]
         df["volume_30d"] = df["avg_volume"] * 30
         df["rrp"] = df["jita_sell_price"] * (1 + filters.markup_margin)
+        df = apply_localized_type_names(df, self._sde_db, language_code, self._logger)
 
         df["capital_utilis"] = 0.0
         nonzero_jita = df["jita_sell_price"] > 0
@@ -199,7 +202,10 @@ class ImportHelperService:
 
         if filters.search_text:
             search = filters.search_text.strip().lower()
-            df = df[df["type_name"].str.lower().str.contains(search, na=False)]
+            search_series = df["type_name"].fillna("")
+            if "type_name_en" in df.columns:
+                search_series = search_series + " " + df["type_name_en"].fillna("")
+            df = df[search_series.str.lower().str.contains(search, na=False)]
 
         if filters.profitable_only:
             df = df[df["profit_jita_sell"] > 0]

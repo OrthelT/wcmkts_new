@@ -22,6 +22,8 @@ Usage:
 
 import streamlit as st
 
+from ui.i18n import translate_text
+
 
 def get_fitting_column_config() -> dict:
     """
@@ -171,62 +173,62 @@ def get_export_column_config() -> dict:
     }
 
 
-def get_import_helper_column_config() -> dict:
+def get_import_helper_column_config(language_code: str = "en") -> dict:
     """Get column configuration for Import Helper table display."""
     return {
         "type_id": st.column_config.NumberColumn(
-            "Type ID",
+            translate_text(language_code, "common.type_id"),
             help="EVE type ID.",
             width="small",
         ),
         "type_name": st.column_config.TextColumn(
-            "Item",
-            help="Item name.",
+            translate_text(language_code, "common.item"),
+            help=translate_text(language_code, "import_helper.column_item_help"),
             width="medium",
         ),
         "price": st.column_config.NumberColumn(
-            "Price",
+            translate_text(language_code, "common.price"),
             help="Current local market price.",
             format="localized",
         ),
         "rrp": st.column_config.NumberColumn(
-            "RRP",
-            help="Recommended Retail Price calculated as Jita Sell * (1 + Markup Margin).",
+            translate_text(language_code, "import_helper.column_rrp"),
+            help=translate_text(language_code, "import_helper.column_rrp_help"),
             format="localized",
         ),
         "jita_sell_price": st.column_config.NumberColumn(
-            "Jita Sell",
-            help="Jita sell percentile price.",
+            translate_text(language_code, "import_helper.column_jita_sell"),
+            help=translate_text(language_code, "import_helper.column_jita_sell_help"),
             format="localized",
         ),
         "jita_buy_price": st.column_config.NumberColumn(
-            "Jita Buy",
-            help="Jita buy percentile price.",
+            translate_text(language_code, "import_helper.column_jita_buy"),
+            help=translate_text(language_code, "import_helper.column_jita_buy_help"),
             format="localized",
         ),
         "shipping_cost": st.column_config.NumberColumn(
-            "Shipping",
-            help="Calculated as item size in m3 * 500.",
+            translate_text(language_code, "import_helper.column_shipping"),
+            help=translate_text(language_code, "import_helper.column_shipping_help"),
             format="localized",
         ),
         "profit_jita_sell_30d": st.column_config.NumberColumn(
-            "30D Profit",
-            help="Calculated as (local price - Jita sell price) * average daily volume * 30.",
+            translate_text(language_code, "import_helper.column_profit_30d"),
+            help=translate_text(language_code, "import_helper.column_profit_30d_help"),
             format="compact",
         ),
         "turnover_30d": st.column_config.NumberColumn(
-            "30D Turnover",
-            help="30-day units sold multiplied by Jita Sell Price.",
+            translate_text(language_code, "import_helper.column_turnover_30d"),
+            help=translate_text(language_code, "import_helper.column_turnover_30d_help"),
             format="compact",
         ),
         "volume_30d": st.column_config.NumberColumn(
-            "30D Volume",
-            help="Calculated as average daily volume * 30.",
+            translate_text(language_code, "import_helper.column_volume_30d"),
+            help=translate_text(language_code, "import_helper.column_volume_30d_help"),
             format="localized",
         ),
         "capital_utilis": st.column_config.NumberColumn(
-            "Cap Utilis",
-            help="Calculated as ((local price - Jita sell price) - shipping cost) / Jita sell.",
+            translate_text(language_code, "import_helper.column_capital_utilis"),
+            help=translate_text(language_code, "import_helper.column_capital_utilis_help"),
             format="percent",
         ),
     }

@@ -12,7 +12,7 @@ from settings_service import get_all_market_configs
 from state.market_state import get_active_market, get_active_market_key, set_active_market
 
 
-def render_market_selector() -> MarketConfig:
+def render_market_selector(label: str = "Market Hub") -> MarketConfig:
     """Render a market selector in the sidebar and return the active config.
 
     Uses ``st.pills`` inside a bordered container so the active market hub
@@ -30,7 +30,7 @@ def render_market_selector() -> MarketConfig:
 
     with st.sidebar.container(border=True):
         selected_name = st.pills(
-            "Market Hub",
+            label,
             options=names,
             default=names[current_idx],
             key="market_selector",
