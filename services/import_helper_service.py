@@ -14,7 +14,7 @@ from sqlalchemy import bindparam, text
 
 from config import DatabaseConfig
 from logging_config import setup_logging
-from services.pricer_service import JitaPriceProvider
+from services.price_service import PriceResult, PriceService, get_price_service
 from settings_service import SettingsService
 
 logger = setup_logging(__name__, log_file="import_helper_service.log")
@@ -27,7 +27,7 @@ def _get_jita_sell_price(jita_prices: dict, type_id) -> float:
     """Safely extract Jita sell price from a provider result map."""
     if pd.isna(type_id):
         return 0.0
-    result = jita_prices.get(int(type_id))
+    result: Optional[PriceResult] = jita_prices.get(int(type_id))
     return result.sell_price if result else 0.0
 
 
@@ -35,7 +35,7 @@ def _get_jita_buy_price(jita_prices: dict, type_id) -> float:
     """Safely extract Jita buy price from a provider result map."""
     if pd.isna(type_id):
         return 0.0
-    result = jita_prices.get(int(type_id))
+    result: Optional[PriceResult] = jita_prices.get(int(type_id))
     return result.buy_price if result else 0.0
 
 
@@ -58,12 +58,12 @@ class ImportHelperService:
         self,
         mkt_db: DatabaseConfig,
         sde_db: DatabaseConfig,
-        jita_provider: JitaPriceProvider,
+        price_service: PriceService,
         logger_instance: Optional[logging.Logger] = None,
     ):
         self._mkt_db = mkt_db
         self._sde_db = sde_db
-        self._jita_provider = jita_provider
+        self._price_service = price_service
         self._logger = logger_instance or logger
 
     @classmethod
@@ -95,8 +95,11 @@ class ImportHelperService:
 
         market_db = DatabaseConfig(db_alias)
         sde_db = DatabaseConfig("sde")
-        jita_provider = JitaPriceProvider(janice_api_key)
-        return cls(market_db, sde_db, jita_provider)
+        price_service = get_price_service(
+            db_alias=db_alias,
+            janice_api_key=janice_api_key,
+        )
+        return cls(market_db, sde_db, price_service)
 
     def _get_import_candidates(self) -> pd.DataFrame:
         """Fetch marketstats rows merged with SDE item volume.
@@ -165,7 +168,7 @@ class ImportHelperService:
             return []
 
     def fetch_base_data(self) -> pd.DataFrame:
-        """Fetch candidates from DB and Jita prices. Intended to be cached.
+        """Fetch candidates from DB and Jita prices. Jita Price caching is handled inside PriceService.
 
         Returns a DataFrame with all computed columns (jita prices, shipping,
         profit, capital_utilis) but no filters applied.
@@ -184,7 +187,7 @@ class ImportHelperService:
 
         type_ids = df["type_id"].dropna().astype(int).tolist()
         try:
-            jita_prices = self._jita_provider.get_prices(type_ids)
+            jita_prices = self._price_service.get_jita_price_data_map(type_ids)
         except Exception as e:
             self._logger.error(f"Jita price fetch failed: {e}")
             raise RuntimeError(f"Failed to fetch Jita prices: {e}") from e
@@ -197,7 +200,7 @@ class ImportHelperService:
         )
 
         df["shipping_cost"] = df["volume_m3"] * SHIPPING_COST_PER_M3
-        df["profit_jita_sell"] = df["price"] - df["jita_sell_price"]
+        df["profit_jita_sell"] = df["price"] - (df["jita_sell_price"] + df["shipping_cost"])
         df["profit_jita_sell_30d"] = df["profit_jita_sell"] * 30 * df["avg_volume"]
         df["turnover_30d"] = df["avg_volume"] * 30 * df["jita_sell_price"]
         df["volume_30d"] = df["avg_volume"] * 30
@@ -205,8 +208,9 @@ class ImportHelperService:
         df["capital_utilis"] = 0.0
         nonzero_jita = df["jita_sell_price"] > 0
         df.loc[nonzero_jita, "capital_utilis"] = (
-            df.loc[nonzero_jita, "profit_jita_sell"] - df.loc[nonzero_jita, "shipping_cost"]
-        ) / df.loc[nonzero_jita, "jita_sell_price"]
+            df.loc[nonzero_jita, "profit_jita_sell"]
+            / df.loc[nonzero_jita, "jita_sell_price"]
+        )
 
         return df
 
@@ -263,13 +267,6 @@ class ImportHelperService:
             "profitable_items": profitable_items,
             "avg_capital_utilis": avg_capital_utilis,
         }
-
-
-@st.cache_data(ttl=600)
-def fetch_import_data(db_alias: str) -> pd.DataFrame:
-    """Cached fetch: DB queries + Jita API call. Expensive, runs every 10 min."""
-    service = ImportHelperService.create_default(db_alias=db_alias)
-    return service.fetch_base_data()
 
 
 def get_import_helper_service() -> ImportHelperService:

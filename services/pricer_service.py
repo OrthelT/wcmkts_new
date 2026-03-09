@@ -12,10 +12,8 @@ Data Flow:
 5. Combine into PricedItem list and PricerResult
 """
 
-from dataclasses import dataclass
 from typing import Optional
 import logging
-import requests
 import pandas as pd
 from sqlalchemy import text
 
@@ -36,187 +34,9 @@ from repositories.market_orders_repo import MarketOrdersRepository, get_market_o
 from logging_config import setup_logging
 import streamlit as st
 from domain.converters import get_image_url
+from services.price_service import PriceService, get_price_service, PriceResult
 
 logger = setup_logging(__name__, log_file="pricer_service.log")
-
-
-# =============================================================================
-# Jita Price Data
-# =============================================================================
-
-@dataclass
-class JitaPriceData:
-    """
-    Jita price data for an item (both buy and sell).
-    """
-    type_id: int
-    sell_price: float = 0.0
-    buy_price: float = 0.0
-
-    @property
-    def spread(self) -> float:
-        """Price spread (sell - buy)."""
-        return self.sell_price - self.buy_price
-
-    @property
-    def spread_percentage(self) -> Optional[float]:
-        """Spread as percentage of sell price."""
-        if self.sell_price > 0:
-            return (self.spread / self.sell_price) * 100
-        return None
-
-
-# =============================================================================
-# Jita Price Provider (handles both buy and sell)
-# =============================================================================
-
-class JitaPriceProvider:
-    """
-    Fetches both buy and sell prices from Jita via Fuzzwork API.
-
-    Falls back to Janice API if Fuzzwork fails.
-    """
-
-    FUZZWORK_URL = "https://market.fuzzwork.co.uk/aggregates/"
-    REGION_JITA = 10000002
-    TIMEOUT = 30
-
-    JANICE_URL = "https://janice.e-351.com/api/rest/v2/pricer"
-    JANICE_MARKET = 2
-
-    def __init__(self, janice_api_key: Optional[str] = None, logger_instance: Optional[logging.Logger] = None):
-        self._janice_key = janice_api_key
-        self._logger = logger_instance or logger
-
-    def get_prices(self, type_ids: list[int]) -> dict[int, JitaPriceData]:
-        """
-        Get Jita buy and sell prices for multiple type IDs.
-
-        Tries Fuzzwork first, falls back to Janice if available.
-
-        Args:
-            type_ids: List of EVE type IDs
-
-        Returns:
-            Dictionary mapping type_id to JitaPriceData
-        """
-        if not type_ids:
-            return {}
-
-        # Try Fuzzwork first
-        result = self._fetch_fuzzwork(type_ids)
-
-        # Check for missing items
-        missing = [tid for tid in type_ids if tid not in result or result[tid].sell_price == 0]
-
-        # Fallback to Janice for missing items
-        if missing and self._janice_key:
-            self._logger.debug(f"Falling back to Janice for {len(missing)} items")
-            janice_result = self._fetch_janice(missing)
-            result.update(janice_result)
-
-        # Ensure all requested IDs have an entry
-        for tid in type_ids:
-            if tid not in result:
-                result[tid] = JitaPriceData(type_id=tid)
-
-        return result
-
-    def _fetch_fuzzwork(self, type_ids: list[int]) -> dict[int, JitaPriceData]:
-        """Fetch prices from Fuzzwork API."""
-        try:
-            type_ids_str = ','.join(map(str, type_ids))
-            url = f"{self.FUZZWORK_URL}?region={self.REGION_JITA}&types={type_ids_str}"
-
-            response = requests.get(url, timeout=self.TIMEOUT)
-            response.raise_for_status()
-
-            data = response.json()
-            return self._parse_fuzzwork_response(data, type_ids)
-
-        except requests.exceptions.Timeout:
-            self._logger.error("Fuzzwork API timeout")
-            return {}
-        except requests.exceptions.RequestException as e:
-            self._logger.error(f"Fuzzwork API error: {e}")
-            return {}
-
-    def _parse_fuzzwork_response(self, data: dict, type_ids: list[int]) -> dict[int, JitaPriceData]:
-        """Parse Fuzzwork JSON response."""
-        result = {}
-
-        for type_id in type_ids:
-            type_id_str = str(type_id)
-
-            if type_id_str not in data:
-                continue
-
-            item_data = data[type_id_str]
-            sell_data = item_data.get('sell', {})
-            buy_data = item_data.get('buy', {})
-
-            sell_price = sell_data.get('percentile', 0) or 0
-            buy_price = buy_data.get('percentile', 0) or 0
-
-            if sell_price or buy_price:
-                result[type_id] = JitaPriceData(
-                    type_id=type_id,
-                    sell_price=float(sell_price),
-                    buy_price=float(buy_price),
-                )
-
-        return result
-
-    def _fetch_janice(self, type_ids: list[int]) -> dict[int, JitaPriceData]:
-        """Fetch prices from Janice API."""
-        if not self._janice_key:
-            return {}
-
-        try:
-            body = '\n'.join(map(str, type_ids))
-            headers = {
-                'X-ApiKey': self._janice_key,
-                'accept': 'application/json',
-                'Content-Type': 'text/plain'
-            }
-            params = {'market': str(self.JANICE_MARKET)}
-
-            response = requests.post(
-                self.JANICE_URL,
-                data=body,
-                headers=headers,
-                params=params,
-                timeout=self.TIMEOUT
-            )
-            response.raise_for_status()
-
-            return self._parse_janice_response(response.json())
-
-        except Exception as e:
-            self._logger.error(f"Janice API error: {e}")
-            return {}
-
-    def _parse_janice_response(self, data: dict) -> dict[int, JitaPriceData]:
-        """Parse Janice JSON response."""
-        result = {}
-
-        for item in data.get('appraisalItems', []):
-            type_id = item.get('typeID')
-            if type_id is None:
-                continue
-
-            prices = item.get('prices', {}).get('top5AveragePrices', {})
-            sell_price = prices.get('sellPrice', 0) or 0
-            buy_price = prices.get('buyPrice', 0) or 0
-
-            if sell_price or buy_price:
-                result[type_id] = JitaPriceData(
-                    type_id=type_id,
-                    sell_price=float(sell_price),
-                    buy_price=float(buy_price),
-                )
-
-        return result
 
 
 # =============================================================================
@@ -328,14 +148,14 @@ class PricerService:
         sde_db: DatabaseConfig,
         mkt_db: DatabaseConfig,
         market_repo: MarketOrdersRepository,
-        jita_provider: JitaPriceProvider,
+        price_service: PriceService,
         logger_instance: Optional[logging.Logger] = None
     ):
         self._sde_lookup = SDELookupService(sde_db, logger_instance)
         self._sde_db = sde_db
         self._mkt_db = mkt_db
         self._market_repo = market_repo
-        self._jita_provider = jita_provider
+        self._price_service = price_service
         self._logger = logger_instance or logger
 
     @classmethod
@@ -367,9 +187,12 @@ class PricerService:
             except Exception:
                 logger.warning("Janice API key not found in secrets")
 
-        jita_provider = JitaPriceProvider(janice_key)
+        price_service = get_price_service(
+            db_alias=db_alias,
+            janice_api_key=janice_key,
+        )
 
-        return cls(sde_db, mkt_db, market_repo, jita_provider)
+        return cls(sde_db, mkt_db, market_repo, price_service)
 
     def get_market_stats(self, type_ids: list[int]) -> dict[int, dict]:
         """
@@ -511,7 +334,7 @@ class PricerService:
         type_ids = [item.type_id for item in resolved if item.type_id]
 
         # Step 4: Fetch prices
-        jita_prices = self._jita_provider.get_prices(type_ids)
+        jita_prices = self._price_service.get_jita_price_data_map(type_ids)
         local_prices = self._market_repo.get_local_prices(type_ids)
 
         # Step 5: Fetch market stats (avg volume, days remaining)
@@ -529,7 +352,7 @@ class PricerService:
             # Type assertion: after the check above, item.type_id is guaranteed to be int
             type_id: int = item.type_id
 
-            jita_data = jita_prices.get(type_id, JitaPriceData(type_id=type_id))
+            jita_data = jita_prices.get(type_id, PriceResult.failure_result(type_id, "Not found"))
             local_data = local_prices.get(type_id, LocalPriceData(type_id=type_id))
             stats = market_stats.get(type_id, {'avg_volume': 0.0, 'days_remaining': 0.0})
             doctrine = doctrine_info.get(type_id, {'is_doctrine': False, 'ships': []})

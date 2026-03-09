@@ -56,8 +56,6 @@ from services.pricer_service import (
     PricerService,
     get_pricer_service,
     # Supporting classes
-    JitaPriceProvider,
-    JitaPriceData,
     SDELookupService,
 )
 
@@ -151,8 +149,6 @@ __all__ = [
     # Pricer Service
     "PricerService",
     "get_pricer_service",
-    "JitaPriceProvider",
-    "JitaPriceData",
     "SDELookupService",
     # Low Stock Service
     "LowStockService",
