@@ -2,7 +2,7 @@
 
 ## Getting Started
 1. Run the application: `streamlit run app.py`
-2. Navigate with the sidebar menu: Market Stats, Low Stock, or Doctrine Status
+2. Navigate with the sidebar menu: Market Stats, Low Stock, Import Helper, or Doctrine Status
 3. Data updates automatically at 13:00 UTC daily or use "Sync Now" button
 
 ## Market Stats Page 📈
@@ -33,6 +33,22 @@
 - Color-coded table (red = critical, orange = low)
 - Days remaining chart
 - "Used In Fits" column showing which ships use the item
+
+## Import Helper Page 📦
+**Purpose:** Identify items where the local market price is above Jita sell
+
+**Key Controls:**
+- **Categories:** Limit results by item category
+- **Search Items:** Filter by item name
+- **Positive Profit Only:** Show only items with positive local-over-Jita spread
+- **Minimum Capital Utilis:** Filter by minimum capital utilisation
+
+**What You'll See:**
+- Local price, Jita sell price, and Jita buy price
+- Shipping cost estimate based on volume
+- 30D Profit vs Jita sell
+- 30D turnover and 30D volume
+- Capital utilisation
 
 ## Doctrine Status Page ⚔️
 **Purpose:** Monitor doctrine ship availability and component status

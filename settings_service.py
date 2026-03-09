@@ -77,3 +77,7 @@ class SettingsService:
     @property
     def use_equivalents(self) -> bool:
         return self.settings["module_strategy"]["use_equivalent"]
+
+    @property
+    def default_shipping_cost(self) -> float:
+        return float(self.settings.get("import_helper", {}).get("default_shipping_cost", 445))

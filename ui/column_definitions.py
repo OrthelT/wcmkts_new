@@ -169,3 +169,64 @@ def get_export_column_config() -> dict:
         'fits_on_mkt': st.column_config.NumberColumn("Fits"),
         'ship_target': st.column_config.NumberColumn("Target"),
     }
+
+
+def get_import_helper_column_config() -> dict:
+    """Get column configuration for Import Helper table display."""
+    return {
+        "type_id": st.column_config.NumberColumn(
+            "Type ID",
+            help="EVE type ID.",
+            width="small",
+        ),
+        "type_name": st.column_config.TextColumn(
+            "Item",
+            help="Item name.",
+            width="medium",
+        ),
+        "price": st.column_config.NumberColumn(
+            "Price",
+            help="Current local market price.",
+            format="localized",
+        ),
+        "rrp": st.column_config.NumberColumn(
+            "RRP",
+            help="Recommended Retail Price calculated as Jita Sell * (1 + Markup Margin).",
+            format="localized",
+        ),
+        "jita_sell_price": st.column_config.NumberColumn(
+            "Jita Sell",
+            help="Jita sell percentile price.",
+            format="localized",
+        ),
+        "jita_buy_price": st.column_config.NumberColumn(
+            "Jita Buy",
+            help="Jita buy percentile price.",
+            format="localized",
+        ),
+        "shipping_cost": st.column_config.NumberColumn(
+            "Shipping",
+            help="Calculated as item size in m3 * 500.",
+            format="localized",
+        ),
+        "profit_jita_sell_30d": st.column_config.NumberColumn(
+            "30D Profit",
+            help="Calculated as (local price - Jita sell price) * average daily volume * 30.",
+            format="compact",
+        ),
+        "turnover_30d": st.column_config.NumberColumn(
+            "30D Turnover",
+            help="Estimated 30-day turnover: average daily volume x 30 x Jita sell price.",
+            format="compact",
+        ),
+        "volume_30d": st.column_config.NumberColumn(
+            "30D Volume",
+            help="Calculated as average daily volume * 30.",
+            format="localized",
+        ),
+        "capital_utilis": st.column_config.NumberColumn(
+            "Cap Utilis",
+            help="Calculated as ((local price - Jita sell price) - shipping cost) / Jita sell.",
+            format="percent",
+        ),
+    }

@@ -72,6 +72,14 @@ from services.low_stock_service import (
     FitFilterInfo,
 )
 
+from services.import_helper_service import (
+    # Main service
+    ImportHelperService,
+    get_import_helper_service,
+    # Filters
+    ImportHelperFilters,
+)
+
 from services.selection_service import (
     # Main service
     SelectionService,
@@ -153,6 +161,10 @@ __all__ = [
     "LowStockItem",
     "DoctrineFilterInfo",
     "FitFilterInfo",
+    # Import Helper Service
+    "ImportHelperService",
+    "get_import_helper_service",
+    "ImportHelperFilters",
     # Selection Service
     "SelectionService",
     "get_selection_service",

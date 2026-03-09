@@ -12,6 +12,7 @@ CONTRIBUTING: Contributors welcome. This project is fully open source under MIT 
 - **Pricer Page**: Item and fitting price calculator accepting EFT fittings or tab-separated item lists, with Jita and 4-HWWF market prices
 - **Downloads Page**: Centralized CSV export for market data, doctrine fits, low stock items, and SDE tables
 - **Low Stock Filters**: Doctrine/Fit filtering with ship images, Faction Items checkbox, and Tech2 item filtering
+- **Import Helper Page**: Compare local market prices against Jita sell and buy, shipping cost, 30-day volume, and capital utilisation to spot import opportunities
 - **Doctrine Display Names**: User-friendly doctrine names across all pages
 - **Market Column**: Doctrine ship modules now displayed with fits on market stats
 
@@ -180,6 +181,11 @@ Adds interactive market ISK volume charting to Market Stats, including moving av
   - Last update timestamps
   - Advanced filtering by status, group, and stock levels
   - Export functionality for modules and ships
+
+- **Import Analysis**
+  - Compare local market prices to Jita sell and buy prices
+  - Review shipping cost, profit versus Jita sell, and capital utilisation
+  - Estimate 30-day market value using local volume and Jita sell price
 
 - **Build Cost Analysis**
   - Real-time build cost calculations across multiple structures

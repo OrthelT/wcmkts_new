@@ -76,6 +76,7 @@ _MARKET_SERVICE_NAMES = (
     "market_service",
     "pricer_service",
     "low_stock_service",
+    "import_helper_service",
     "price_service",
     "module_equivalents_service",
     "selection_service",
@@ -125,5 +126,12 @@ def _invalidate_market_caches() -> None:
         )
         _get_equivalence_group_cached.clear()
         _get_all_equivalence_groups_cached.clear()
+    except ImportError:
+        pass
+
+    # Clear import helper cached function
+    try:
+        from services.import_helper_service import fetch_import_data
+        fetch_import_data.clear()
     except ImportError:
         pass
