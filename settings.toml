@@ -107,5 +107,8 @@
     name = "4-HWWF"
     short_name = "4H"
 
+[import_helper]
+    default_shipping_cost = 445
+
 [module_strategy]
   use_equivalent = true

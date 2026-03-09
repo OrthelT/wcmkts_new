@@ -15,10 +15,12 @@ from sqlalchemy import bindparam, text
 from config import DatabaseConfig
 from logging_config import setup_logging
 from services.pricer_service import JitaPriceProvider
+from settings_service import SettingsService
 
 logger = setup_logging(__name__, log_file="import_helper_service.log")
 
-SHIPPING_COST_PER_M3 = 500.0
+_settings = SettingsService()
+SHIPPING_COST_PER_M3: float = _settings.default_shipping_cost
 
 
 def _get_jita_sell_price(jita_prices: dict, type_id) -> float:
