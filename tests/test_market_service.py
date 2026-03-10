@@ -103,6 +103,32 @@ class TestCalculate30dayMetrics:
         mock_repo.get_category_type_ids.assert_called_once_with("Ship")
         assert result[0] > 0  # avg_vol
 
+    def test_sparse_trading_days_uses_full_window(self, mock_repo):
+        """Average should divide by 30, not by number of traded days.
+
+        An item traded on 17 of 30 days with total volume 19 should have
+        avg_daily_volume = 19/30 ≈ 0.633, NOT 19/17 ≈ 1.118.
+        """
+        # 15 trading days within the last 30 days (every other day)
+        now = datetime.now()
+        trade_dates = [now - timedelta(days=d) for d in range(0, 30, 2)]
+        volumes = [1] * 13 + [3, 3]  # total = 19
+        n = len(trade_dates)
+        item_df = pd.DataFrame({
+            "type_id": [34] * n,
+            "date": trade_dates,
+            "average": [100.0] * n,
+            "volume": volumes,
+        })
+        mock_repo.get_history_by_type_ids.return_value = item_df
+
+        from services.market_service import MarketService
+        service = MarketService(mock_repo)
+        avg_vol, avg_isk, *_ = service.calculate_30day_metrics(selected_item_id=34)
+
+        assert avg_vol == pytest.approx(19 / 30, abs=0.01)
+        assert avg_isk == pytest.approx(19 * 100.0 / 30, abs=1.0)
+
     def test_item_filter(self, mock_repo):
         """Filtering by item_id should query by specific type_id."""
         item_df = pd.DataFrame({

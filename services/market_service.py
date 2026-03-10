@@ -156,10 +156,12 @@ class MarketService:
                 {"volume": "sum", "daily_isk_volume": "sum"}
             ).reset_index()
 
-            avg_vol = daily_30["volume"].mean()
-            avg_isk = daily_30["daily_isk_volume"].mean()
-            avg_vol_7 = daily_7["volume"].mean() if not daily_7.empty else 0
-            avg_isk_7 = daily_7["daily_isk_volume"].mean() if not daily_7.empty else 0
+            # Divide totals by the fixed window size, not by traded-day count.
+            # An item traded on 17 of 30 days still has a 30-day denominator.
+            avg_vol = daily_30["volume"].sum() / 30
+            avg_isk = daily_30["daily_isk_volume"].sum() / 30
+            avg_vol_7 = daily_7["volume"].sum() / 7 if not daily_7.empty else 0
+            avg_isk_7 = daily_7["daily_isk_volume"].sum() / 7 if not daily_7.empty else 0
 
             vol_delta = round(
                 ((avg_vol_7 - avg_vol) / avg_vol * 100) if avg_vol > 0 else 0, 1
