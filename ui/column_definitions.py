@@ -185,9 +185,9 @@ def get_import_helper_column_config(
             width="small",
         ),
         "type_name": st.column_config.TextColumn(
-            translate_text(language_code, "common.item"),
-            help=translate_text(language_code, "import_helper.column_item_help"),
-            width="medium",
+            "Item",
+            help="Item name.",
+            width="large",
         ),
         "price": st.column_config.NumberColumn(
             translate_text(language_code, "common.price"),
@@ -195,8 +195,8 @@ def get_import_helper_column_config(
             format="localized",
         ),
         "rrp": st.column_config.NumberColumn(
-            translate_text(language_code, "import_helper.column_rrp"),
-            help=translate_text(language_code, "import_helper.column_rrp_help"),
+            "RRP",
+            help="Recommended Retail Price calculated as Jita Sell * (1 + Markup Margin) + Shipping.",
             format="localized",
         ),
         "jita_sell_price": st.column_config.NumberColumn(
@@ -210,17 +210,13 @@ def get_import_helper_column_config(
             format="localized",
         ),
         "shipping_cost": st.column_config.NumberColumn(
-            translate_text(language_code, "import_helper.column_shipping"),
-            help=translate_text(
-                language_code,
-                "import_helper.column_shipping_help",
-                shipping_cost_per_m3=f"{shipping_cost_per_m3:g}",
-            ),
+            "Shipping",
+            help="Calculated as item size in m3 * shipping_cost.",
             format="localized",
         ),
         "profit_jita_sell_30d": st.column_config.NumberColumn(
-            translate_text(language_code, "import_helper.column_profit_30d"),
-            help=translate_text(language_code, "import_helper.column_profit_30d_help"),
+            "30D Profit",
+            help="Calculated as (local price - (Jita sell price + shipping cost)) * average daily volume * 30.",
             format="compact",
         ),
         "turnover_30d": st.column_config.NumberColumn(
@@ -234,8 +230,8 @@ def get_import_helper_column_config(
             format="localized",
         ),
         "capital_utilis": st.column_config.NumberColumn(
-            translate_text(language_code, "import_helper.column_capital_utilis"),
-            help=translate_text(language_code, "import_helper.column_capital_utilis_help"),
+            "Cap Utilis",
+            help="Net profit (after shipping) as a percentage of Jita sell price.",
             format="percent",
         ),
     }

@@ -129,9 +129,3 @@ def _invalidate_market_caches() -> None:
     except ImportError:
         pass
 
-    # Clear import helper cached function
-    try:
-        from services.import_helper_service import fetch_import_data
-        fetch_import_data.clear()
-    except ImportError:
-        pass

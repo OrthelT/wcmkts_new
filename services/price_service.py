@@ -1,25 +1,17 @@
 """
 Price Service Module
 
-This module demonstrates several advanced Python patterns:
-1. Protocol/ABC for provider abstraction (Strategy Pattern)
-2. Dataclasses for structured results
-3. Dependency Injection for testability
-4. Chain of Responsibility for fallback logic
-5. Caching with proper invalidation
-
-Consolidates price logic from:
-- utils.py (get_jita_price, get_multi_item_jita_price, etc.)
-- doctrines.py (calculate_jita_fit_cost_and_delta, null price handling)
-- doctrine_status.py (fetch_jita_prices_for_types)
+Provides Jita and local market price lookups with a provider chain
+(Fuzzwork → Janice) and a process-wide in-memory cache keyed per item
+with TTL-based expiry.
 """
 
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Protocol, Optional, Callable
+from typing import Protocol, Optional
 from enum import Enum, auto
-from functools import lru_cache
 import logging
+import threading
+import time
 import requests
 import pandas as pd
 import streamlit as st
@@ -31,6 +23,11 @@ logger = setup_logging(__name__, log_file="price_service.log")
 # Type alias for clarity
 TypeID = int
 Price = float
+
+_PRICE_SERVICE_LOCK = threading.Lock()
+_PRICE_SERVICES: dict[str, "PriceService"] = {}
+_PRICE_CACHE_LOCK = threading.Lock()
+_SHARED_JITA_PRICE_CACHE: dict[TypeID, "CachedPriceEntry"] = {}
 
 
 # =============================================================================
@@ -54,22 +51,46 @@ class PriceResult:
     frozen=True makes this hashable and safe for caching.
     """
     type_id: TypeID
-    price: Price
+    sell_price: Price
+    buy_price: Price
     source: PriceSource
     success: bool = True
     error_message: Optional[str] = None
 
+    @property
+    def has_sell_price(self) -> bool:
+        """True when a sell price is available."""
+        return self.sell_price > 0
+
+    @property
+    def has_buy_price(self) -> bool:
+        """True when a buy price is available."""
+        return self.buy_price > 0
+
     @classmethod
-    def success_result(cls, type_id: TypeID, price: Price, source: PriceSource) -> "PriceResult":
+    def success_result(
+        cls,
+        type_id: TypeID,
+        sell_price: Price,
+        source: PriceSource,
+        buy_price: Price = 0.0,
+    ) -> "PriceResult":
         """Factory for successful price lookups."""
-        return cls(type_id=type_id, price=price, source=source, success=True)
+        return cls(
+            type_id=type_id,
+            sell_price=sell_price,
+            buy_price=buy_price,
+            source=source,
+            success=sell_price > 0,
+        )
 
     @classmethod
     def failure_result(cls, type_id: TypeID, error: str) -> "PriceResult":
         """Factory for failed price lookups."""
         return cls(
             type_id=type_id,
-            price=0.0,
+            sell_price=0.0,
+            buy_price=0.0,
             source=PriceSource.FALLBACK_ZERO,
             success=False,
             error_message=error
@@ -87,19 +108,14 @@ class BatchPriceResult:
     def success_count(self) -> int:
         return sum(1 for p in self.prices.values() if p.success)
 
-    @property
-    def failure_count(self) -> int:
-        return len(self.failed_ids)
-
     def get_price(self, type_id: TypeID, default: Price = 0.0) -> Price:
         """Get price for a type_id, with default fallback."""
         result = self.prices.get(type_id)
-        return result.price if result and result.success else default
+        return result.sell_price if result and result.success else default
 
     def to_dict(self) -> dict[TypeID, Price]:
         """Convert to simple type_id -> price mapping."""
-        return {tid: r.price for tid, r in self.prices.items() if r.success}
-
+        return {tid: r.sell_price for tid, r in self.prices.items() if r.has_sell_price}
 
 @dataclass
 class FitCostAnalysis:
@@ -114,26 +130,18 @@ class FitCostAnalysis:
     missing_prices: list[TypeID] = field(default_factory=list)
 
     @property
-    def delta_absolute(self) -> Price:
-        """Absolute difference: local - jita."""
-        return self.local_cost - self.jita_cost
-
-    @property
     def delta_percentage(self) -> Optional[float]:
         """Percentage difference from Jita. None if Jita cost is 0."""
         if self.jita_cost <= 0:
             return None
         return ((self.local_cost - self.jita_cost) / self.jita_cost) * 100
 
-    @property
-    def is_cheaper_than_jita(self) -> bool:
-        """True if local price is cheaper than Jita."""
-        return self.delta_absolute < 0
 
-    @property
-    def has_missing_data(self) -> bool:
-        """True if some items couldn't be priced."""
-        return len(self.missing_prices) > 0
+@dataclass(frozen=True)
+class CachedPriceEntry:
+    """Cached price entry with a per-record timestamp."""
+    result: PriceResult
+    cached_at: float
 
 
 # =============================================================================
@@ -197,6 +205,10 @@ class FuzzworkProvider:
         try:
             type_ids_str = ','.join(map(str, type_ids))
             url = f"{self.BASE_URL}?region={self.REGION_JITA}&types={type_ids_str}"
+            self._logger.info(
+                "Price API call: Fuzzwork batch lookup for %s item(s)",
+                len(type_ids),
+            )
 
             response = requests.get(url, timeout=self.TIMEOUT)
             response.raise_for_status()
@@ -224,17 +236,20 @@ class FuzzworkProvider:
                 continue
 
             sell_data = data[type_id_str].get('sell', {})
-            percentile = sell_data.get('percentile')
+            buy_data = data[type_id_str].get('buy', {})
+            sell_price = sell_data.get('percentile')
+            buy_price = buy_data.get('percentile')
 
-            if percentile is not None:
+            if sell_price is not None or buy_price is not None:
                 prices[type_id] = PriceResult.success_result(
                     type_id=type_id,
-                    price=float(percentile),
-                    source=PriceSource.JITA_FUZZWORK
+                    sell_price=float(sell_price or 0.0),
+                    buy_price=float(buy_price or 0.0),
+                    source=PriceSource.JITA_FUZZWORK,
                 )
             else:
                 failed.append(type_id)
-                self._logger.warning(f"No percentile price for type_id {type_id}")
+                self._logger.warning(f"No buy/sell percentile price for type_id {type_id}")
 
         return BatchPriceResult(
             prices=prices,
@@ -267,16 +282,24 @@ class JaniceProvider:
         try:
             url = f"{self.BASE_URL}/{type_id}?market={self.MARKET_JITA}"
             headers = {'X-ApiKey': self._api_key, 'accept': 'application/json'}
+            self._logger.info("Price API call: Janice single lookup for type_id %s", type_id)
 
             response = requests.get(url, headers=headers, timeout=self.TIMEOUT)
             response.raise_for_status()
 
             data = response.json()
-            price = data.get('top5AveragePrices', {}).get('sellPrice')
+            prices = data.get('top5AveragePrices', {})
+            sell_price = prices.get('sellPrice')
+            buy_price = prices.get('buyPrice')
 
-            if price is not None:
-                return PriceResult.success_result(type_id, float(price), PriceSource.JITA_JANICE)
-            return PriceResult.failure_result(type_id, "No sell price in response")
+            if sell_price is not None or buy_price is not None:
+                return PriceResult.success_result(
+                    type_id=type_id,
+                    sell_price=float(sell_price or 0.0),
+                    buy_price=float(buy_price or 0.0),
+                    source=PriceSource.JITA_JANICE,
+                )
+            return PriceResult.failure_result(type_id, "No buy/sell price in response")
 
         except Exception as e:
             self._logger.error(f"Janice API error for {type_id}: {e}")
@@ -295,6 +318,10 @@ class JaniceProvider:
                 'Content-Type': 'text/plain'
             }
             params = {'market': str(self.MARKET_JITA)}
+            self._logger.info(
+                "Price API call: Janice batch lookup for %s item(s)",
+                len(type_ids),
+            )
 
             response = requests.post(
                 self.BASE_URL,
@@ -322,13 +349,16 @@ class JaniceProvider:
                 continue
 
             found_ids.add(type_id)
-            sell_price = item.get('prices', {}).get('top5AveragePrices', {}).get('sellPrice')
+            prices_data = item.get('prices', {}).get('top5AveragePrices', {})
+            sell_price = prices_data.get('sellPrice')
+            buy_price = prices_data.get('buyPrice')
 
-            if sell_price is not None:
+            if sell_price is not None or buy_price is not None:
                 prices[type_id] = PriceResult.success_result(
                     type_id=type_id,
-                    price=float(sell_price),
-                    source=PriceSource.JITA_JANICE
+                    sell_price=float(sell_price or 0.0),
+                    buy_price=float(buy_price or 0.0),
+                    source=PriceSource.JITA_JANICE,
                 )
 
         failed = [tid for tid in requested_ids if tid not in found_ids or tid not in prices]
@@ -393,8 +423,9 @@ class LocalMarketProvider:
             if pd.notna(price) and price > 0:
                 prices[type_id] = PriceResult.success_result(
                     type_id=type_id,
-                    price=float(price),
-                    source=PriceSource.LOCAL_MARKET
+                    sell_price=float(price),
+                    buy_price=0.0,
+                    source=PriceSource.LOCAL_MARKET,
                 )
 
         failed = [tid for tid in requested_ids if tid not in prices]
@@ -438,18 +469,9 @@ class FallbackPriceProvider:
         return f"Fallback({' -> '.join(names)})"
 
     def get_price(self, type_id: TypeID) -> PriceResult:
-        """Try each provider until one succeeds."""
-        for provider in self._providers:
-            try:
-                result = provider.get_price(type_id)
-                if result.success:
-                    self._logger.debug(f"Got price for {type_id} from {provider.name}")
-                    return result
-            except Exception as e:
-                self._logger.warning(f"{provider.name} failed for {type_id}: {e}")
-                continue
-
-        return PriceResult.failure_result(type_id, "All providers failed")
+        """Try each provider until one yields a sell price."""
+        result = self.get_prices([type_id])
+        return result.prices.get(type_id, PriceResult.failure_result(type_id, "All providers failed"))
 
     def get_prices(self, type_ids: list[TypeID]) -> BatchPriceResult:
         """
@@ -457,6 +479,12 @@ class FallbackPriceProvider:
 
         More efficient than individual lookups - tracks which IDs
         still need pricing and only queries those.
+
+        Note: if Provider A returns only a buy price (no sell) for a
+        type_id, that result is stored but the id stays in remaining_ids.
+        Provider B may then overwrite it entirely.  This is intentional —
+        a buy-only result from an upstream API likely signals bad data,
+        and the next provider's sell price is more useful.
         """
         all_prices: dict[TypeID, PriceResult] = {}
         remaining_ids = set(type_ids)
@@ -468,10 +496,13 @@ class FallbackPriceProvider:
             try:
                 result = provider.get_prices(list(remaining_ids))
 
-                # Add successful results
                 for type_id, price_result in result.prices.items():
-                    if price_result.success:
-                        all_prices[type_id] = price_result
+                    if not price_result.has_sell_price and not price_result.has_buy_price:
+                        continue
+
+                    all_prices[type_id] = price_result
+
+                    if price_result.has_sell_price:
                         remaining_ids.discard(type_id)
 
                 self._logger.debug(
@@ -483,10 +514,10 @@ class FallbackPriceProvider:
                 self._logger.warning(f"{provider.name} batch failed: {e}")
                 continue
 
-        # Mark remaining as failures
         failed_ids = list(remaining_ids)
         for type_id in failed_ids:
-            all_prices[type_id] = PriceResult.failure_result(type_id, "All providers failed")
+            if type_id not in all_prices:
+                all_prices[type_id] = PriceResult.failure_result(type_id, "All providers failed")
 
         return BatchPriceResult(
             prices=all_prices,
@@ -524,7 +555,8 @@ class PriceService:
         jita_provider: PriceProvider,
         local_provider: Optional[PriceProvider] = None,
         logger: Optional[logging.Logger] = None,
-        cache_ttl: int = 3600
+        cache_ttl: int = 3600,
+        price_cache: Optional[dict[TypeID, CachedPriceEntry]] = None,
     ):
         """
         Initialize price service with providers.
@@ -534,17 +566,17 @@ class PriceService:
             local_provider: Provider for local market prices (optional)
             logger: Logger instance
             cache_ttl: Cache time-to-live in seconds
+            price_cache: Shared cache store for Jita prices
         """
         self._jita_provider = jita_provider
         self._local_provider = local_provider
         self._logger = logger or logging.getLogger(__name__)
         self._cache_ttl = cache_ttl
 
-        # In-memory cache (could be replaced with Redis, etc.)
-        self._price_cache: dict[TypeID, PriceResult] = {}
+        self._price_cache = price_cache if price_cache is not None else {}
 
     @classmethod
-    def create_default(cls, db_config=None, janice_api_key: str = None) -> "PriceService":
+    def create_default(cls, db_config=None, janice_api_key: Optional[str] = None) -> "PriceService":
         """
         Factory method to create service with default configuration.
 
@@ -568,7 +600,8 @@ class PriceService:
         return cls(
             jita_provider=jita_provider,
             local_provider=local_provider,
-            logger=logger
+            logger=logger,
+            price_cache=_SHARED_JITA_PRICE_CACHE,
         )
 
     # -------------------------------------------------------------------------
@@ -581,11 +614,12 @@ class PriceService:
 
         Uses cache if available, otherwise fetches from providers.
         """
-        if type_id in self._price_cache:
-            return self._price_cache[type_id]
+        cached_result = self._get_cached_result(type_id)
+        if cached_result is not None:
+            return cached_result
 
         result = self._jita_provider.get_price(type_id)
-        self._price_cache[type_id] = result
+        self._cache_result(type_id, result)
         return result
 
     def get_jita_prices(self, type_ids: list[TypeID]) -> BatchPriceResult:
@@ -593,23 +627,28 @@ class PriceService:
         Get Jita prices for multiple items.
 
         Optimizes by only fetching uncached items.
+
+        Note: concurrent callers may both fetch the same uncached ids
+        (cache is checked then released before the API call).  This is
+        acceptable — Fuzzwork is idempotent and the second write simply
+        refreshes the same cache entry.
         """
         # Separate cached and uncached
-        cached = {}
+        cached: dict[TypeID, PriceResult] = {}
         uncached = []
 
         for type_id in type_ids:
-            if type_id in self._price_cache:
-                cached[type_id] = self._price_cache[type_id]
-            else:
+            cached_result = self._get_cached_result(type_id)
+            if cached_result is None:
                 uncached.append(type_id)
+                continue
+            cached[type_id] = cached_result
 
         # Fetch uncached
         if uncached:
             result = self._jita_provider.get_prices(uncached)
-            # Update cache
             for type_id, price_result in result.prices.items():
-                self._price_cache[type_id] = price_result
+                self._cache_result(type_id, price_result)
             cached.update(result.prices)
 
         return BatchPriceResult(
@@ -626,6 +665,10 @@ class PriceService:
         calculate_jita_fit_cost_and_delta().
         """
         return self.get_jita_prices(type_ids).to_dict()
+
+    def get_jita_price_data_map(self, type_ids: list[TypeID]) -> dict[TypeID, PriceResult]:
+        """Return full price records including sell and buy values."""
+        return dict(self.get_jita_prices(type_ids).prices)
 
     def analyze_fit_cost(
         self,
@@ -709,8 +752,10 @@ class PriceService:
             for type_id, price_result in local_result.prices.items():
                 if price_result.success:
                     mask = (df[type_id_column] == type_id) & df[price_column].isna()
-                    df.loc[mask, price_column] = price_result.price
-                    self._logger.debug(f"Filled {type_id} with local price: {price_result.price}")
+                    df.loc[mask, price_column] = price_result.sell_price
+                    self._logger.debug(
+                        f"Filled {type_id} with local price: {price_result.sell_price}"
+                    )
 
         # Then try Jita for remaining nulls
         still_null = df[price_column].isna()
@@ -721,8 +766,10 @@ class PriceService:
             for type_id, price_result in jita_result.prices.items():
                 if price_result.success:
                     mask = (df[type_id_column] == type_id) & df[price_column].isna()
-                    df.loc[mask, price_column] = price_result.price
-                    self._logger.debug(f"Filled {type_id} with Jita price: {price_result.price}")
+                    df.loc[mask, price_column] = price_result.sell_price
+                    self._logger.debug(
+                        f"Filled {type_id} with Jita price: {price_result.sell_price}"
+                    )
 
         # Final fallback: fill remaining with 0
         remaining_nulls = df[price_column].isna().sum()
@@ -732,30 +779,49 @@ class PriceService:
 
         return df
 
-    def clear_cache(self):
-        """Clear the price cache."""
-        self._price_cache.clear()
-        self._logger.info("Price cache cleared")
+    def _cache_result(self, type_id: TypeID, result: PriceResult) -> None:
+        """Store a price result with its cache timestamp."""
+        with _PRICE_CACHE_LOCK:
+            self._price_cache[type_id] = CachedPriceEntry(
+                result=result,
+                cached_at=time.monotonic(),
+            )
 
-    def get_cache_stats(self) -> dict:
-        """Get cache statistics for debugging."""
-        return {
-            'cached_items': len(self._price_cache),
-            'successful': sum(1 for r in self._price_cache.values() if r.success),
-            'failed': sum(1 for r in self._price_cache.values() if not r.success),
-        }
+    def _get_cached_result(self, type_id: TypeID) -> Optional[PriceResult]:
+        """Return a cached result if it has not expired."""
+        with _PRICE_CACHE_LOCK:
+            cached_entry = self._price_cache.get(type_id)
+            if cached_entry is None:
+                return None
+            if self._is_cache_entry_expired(cached_entry):
+                self._price_cache.pop(type_id, None)
+                return None
+            return cached_entry.result
+
+    def _is_cache_entry_expired(self, cached_entry: CachedPriceEntry) -> bool:
+        """Check whether a cached entry is older than the configured TTL."""
+        return (time.monotonic() - cached_entry.cached_at) >= self._cache_ttl
+
+    # TODO: Replace per-entry TTL with Streamlit's native @st.cache_data(ttl=...)
+    # pattern (see repositories/market_repo.py for examples).  The current
+    # approach works but duplicates cache-invalidation logic that Streamlit
+    # already provides.
 
 
 # =============================================================================
 # Streamlit Integration
 # =============================================================================
 
-def get_price_service() -> PriceService:
+def get_price_service(
+    db_alias: Optional[str] = None,
+    janice_api_key: Optional[str] = None,
+    market_key: Optional[str] = None,
+) -> PriceService:
     """
     Get or create a PriceService instance.
 
-    Uses state.get_service for session state persistence across reruns.
-    Falls back to direct instantiation if state module unavailable.
+    Reuses one process-wide service instance per market key so the
+    in-memory price cache survives across Streamlit sessions.
 
     Example:
         from services.price_service import get_price_service
@@ -763,33 +829,45 @@ def get_price_service() -> PriceService:
         service = get_price_service()
         prices = service.get_jita_prices([34, 35, 36])
     """
-    def _create_price_service() -> PriceService:
-        # Get API key from secrets if available
-        janice_key = None
-        try:
-            janice_key = st.secrets.janice.api_key
-        except Exception:
-            pass
+    resolved_db_alias = db_alias
+    resolved_market_key = market_key
 
+    if resolved_db_alias is None:
         try:
             from state.market_state import get_active_market
-            db_alias = get_active_market().database_alias
+            resolved_db_alias = get_active_market().database_alias
         except (ImportError, Exception):
-            db_alias = "wcmkt"
+            resolved_db_alias = "wcmkt"
 
-        db_config = DatabaseConfig(db_alias)
+    if resolved_market_key is None:
+        try:
+            from state.market_state import get_active_market_key
+            resolved_market_key = get_active_market_key()
+        except (ImportError, Exception):
+            resolved_market_key = resolved_db_alias
+
+    service_key = f"price_service_{resolved_market_key}"
+
+    def _create_price_service() -> PriceService:
+        janice_key = janice_api_key
+        if janice_key is None:
+            try:
+                janice_key = st.secrets.janice.api_key
+            except Exception:
+                janice_key = None
+
+        db_config = DatabaseConfig(resolved_db_alias)
         return PriceService.create_default(
             db_config=db_config,
             janice_api_key=janice_key
         )
 
-    try:
-        from state import get_service
-        from state.market_state import get_active_market_key
-        return get_service(f'price_service_{get_active_market_key()}', _create_price_service)
-    except ImportError:
-        logger.debug("state module unavailable, creating new PriceService instance")
-        return _create_price_service()
+    with _PRICE_SERVICE_LOCK:
+        service = _PRICE_SERVICES.get(service_key)
+        if service is None:
+            service = _create_price_service()
+            _PRICE_SERVICES[service_key] = service
+        return service
 
 
 # =============================================================================
@@ -800,4 +878,4 @@ def get_jita_price(type_id: int) -> float:
     """Backwards-compatible wrapper for get_jita_price."""
     service = get_price_service()
     result = service.get_jita_price(type_id)
-    return result.price if result.success else 0.0
+    return result.sell_price if result.success else 0.0
