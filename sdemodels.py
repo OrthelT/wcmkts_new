@@ -82,5 +82,14 @@ class InvMetaGroups(Base):
     def __repr__(self) -> str:
         return f"invMetaGroups(metaGroupID={self.metaGroupID!r}, metaGroupName={self.metaGroupName!r}, description={self.description!r}, iconID={self.iconID!r})"
 
+class Localization(Base):
+    __tablename__ = "localizations"
+    type_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    language: Mapped[str] = mapped_column(String, primary_key=True)
+    type_name: Mapped[str] = mapped_column(String, nullable=True)
+
+    def __repr__(self) -> str:
+        return f"Localization(type_id={self.type_id!r}, language={self.language!r}, type_name={self.type_name!r})"
+
 if __name__ == "__main__":
     pass

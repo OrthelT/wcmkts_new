@@ -239,6 +239,8 @@ class ImportHelperService:
 
         df["rrp"] = df["jita_sell_price"] * (1 + filters.markup_margin) + df["shipping_cost"]
 
+        df = df[df["avg_volume"] > 0]
+
         if filters.categories:
             df = df[df["category_name"].isin(filters.categories)]
 

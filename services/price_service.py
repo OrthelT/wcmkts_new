@@ -14,7 +14,6 @@ import threading
 import time
 import requests
 import pandas as pd
-import streamlit as st
 from config import DatabaseConfig
 from logging_config import setup_logging
 
@@ -802,10 +801,12 @@ class PriceService:
         """Check whether a cached entry is older than the configured TTL."""
         return (time.monotonic() - cached_entry.cached_at) >= self._cache_ttl
 
-    # TODO: Replace per-entry TTL with Streamlit's native @st.cache_data(ttl=...)
-    # pattern (see repositories/market_repo.py for examples).  The current
-    # approach works but duplicates cache-invalidation logic that Streamlit
-    # already provides.
+    # NOTE: Per-entry TTL is intentional here.  Streamlit's @st.cache_data
+    # caches entire function results keyed by arguments, so each unique
+    # type_id combination becomes a separate cache entry with no
+    # deduplication across overlapping batches.  The per-item dict gives
+    # item-level granularity: a type_id fetched in one batch is immediately
+    # available to all subsequent calls regardless of batch composition.
 
 
 # =============================================================================
@@ -852,6 +853,7 @@ def get_price_service(
         janice_key = janice_api_key
         if janice_key is None:
             try:
+                import streamlit as st
                 janice_key = st.secrets.janice.api_key
             except Exception:
                 janice_key = None

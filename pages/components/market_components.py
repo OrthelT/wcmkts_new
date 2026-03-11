@@ -328,7 +328,7 @@ def render_30day_metrics_ui(service) -> None:
 
                 if avg_daily_volume > 0:
                     display_avg_volume = (
-                        f"{avg_daily_volume:,.0f}" if avg_daily_volume < 1000
+                        f"{avg_daily_volume:,.1f}" if avg_daily_volume < 1000
                         else millify.millify(avg_daily_volume, precision=1)
                     )
                     st.metric("Avg Daily Items (30d)", f"{display_avg_volume}", delta=f"{vol_delta}% this week")
