@@ -54,6 +54,7 @@ class ImportHelperFilters:
     min_capital_utilis: Optional[float] = None
     min_turnover_30d: Optional[float] = None
     markup_margin: float = 0.2
+    shipping_cost_per_m3: float = SHIPPING_COST_PER_M3
 
 
 class ImportHelperService:
@@ -252,6 +253,15 @@ class ImportHelperService:
             return df
 
         df = apply_localized_type_names(df, self._sde_db, language_code, self._logger)
+        df["shipping_cost"] = df["volume_m3"] * filters.shipping_cost_per_m3
+        df["profit_jita_sell"] = df["price"] - (df["jita_sell_price"] + df["shipping_cost"])
+        df["profit_jita_sell_30d"] = df["profit_jita_sell"] * 30 * df["avg_volume"]
+        df["capital_utilis"] = 0.0
+        nonzero_jita = df["jita_sell_price"] > 0
+        df.loc[nonzero_jita, "capital_utilis"] = (
+            df.loc[nonzero_jita, "profit_jita_sell"]
+            / df.loc[nonzero_jita, "jita_sell_price"]
+        )
         df["rrp"] = df["jita_sell_price"] * (1 + filters.markup_margin) + df["shipping_cost"]
 
         df = df[df["avg_volume"] > 0]

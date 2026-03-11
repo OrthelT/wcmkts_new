@@ -35,14 +35,6 @@ def main():
     with col2:
         st.title(translate_text(language_code, "import_helper.title", market_name=market.name))
 
-    st.markdown(
-        translate_text(
-            language_code,
-            "import_helper.description",
-            shipping_cost_per_m3=f"{SHIPPING_COST_PER_M3:g}",
-        )
-    )
-
     st.sidebar.header(translate_text(language_code, "import_helper.filters_header"))
     categories = service.get_category_options()
 
@@ -95,6 +87,14 @@ def main():
         step=200_000_000,
         help=translate_text(language_code, "import_helper.min_turnover_30d_help"),
     )
+    shipping_cost_per_m3 = st.sidebar.number_input(
+        translate_text(language_code, "import_helper.shipping_cost_per_m3"),
+        min_value=0.0,
+        value=float(SHIPPING_COST_PER_M3),
+        step=50.0,
+        format="%.0f",
+        help=translate_text(language_code, "import_helper.shipping_cost_per_m3_help"),
+    )
     markup_margin = st.sidebar.number_input(
         translate_text(language_code, "import_helper.markup_margin"),
         min_value=0.0,
@@ -103,6 +103,8 @@ def main():
         format="%.2f",
         help=translate_text(language_code, "import_helper.markup_margin_help"),
     )
+
+    st.markdown(translate_text(language_code, "import_helper.description"))
 
     filters = ImportHelperFilters(
         categories=selected_categories,
@@ -114,6 +116,7 @@ def main():
         min_capital_utilis=min_capital_utilis,
         min_turnover_30d=float(min_turnover_30d),
         markup_margin=float(markup_margin),
+        shipping_cost_per_m3=float(shipping_cost_per_m3),
     )
 
     try:
@@ -176,7 +179,10 @@ def main():
         display_df,
         hide_index=True,
         width="content",
-        column_config=get_import_helper_column_config(language_code=language_code),
+        column_config=get_import_helper_column_config(
+            language_code=language_code,
+            shipping_cost_per_m3=float(shipping_cost_per_m3),
+        ),
     )
 
     st.sidebar.markdown("---")

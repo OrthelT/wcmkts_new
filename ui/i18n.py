@@ -168,8 +168,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.title": "{market_name} Import Helper",
         "import_helper.description": (
             "Discover items where the local market price sits well above Jita sell. "
-            "Shipping Cost is `m3 * {shipping_cost_per_m3}`, 30D Profit uses "
-            "`(Local Price - Jita Sell) * Avg Daily Volume * 30`, "
+            "30D Profit uses `(Local Price - Jita Sell) * Avg Daily Volume * 30`, "
             "RRP uses `Jita Sell * (1 + Markup Margin)`, and Cap Utilis uses "
             "`((Local Price - Jita Sell) - Shipping Cost) / Jita Sell`."
         ),
@@ -188,6 +187,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         ),
         "import_helper.min_turnover_30d": "Minimum 30D Turnover",
         "import_helper.min_turnover_30d_help": "Hide items whose 30D Turnover is below this value.",
+        "import_helper.shipping_cost_per_m3": "Shipping Cost per m3",
+        "import_helper.shipping_cost_per_m3_help": (
+            "Used to calculate shipping cost. The default value comes from settings.toml."
+        ),
         "import_helper.markup_margin": "Markup Margin",
         "import_helper.markup_margin_help": "Used for RRP. 0.20 means 20% above Jita sell.",
         "import_helper.error_load_failed": (
@@ -563,7 +566,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.warning_no_items": "当前筛选条件下没有找到物品。",
         "import_helper.title": "{market_name} 进货助手",
         "import_helper.description": (
-            "查找本地市场价格明显高于吉他卖价的物品。运费按 `m3 * {shipping_cost_per_m3}` 计算，30 天利润使用 "
+            "查找本地市场价格明显高于吉他卖价的物品。30 天利润使用 "
             "`(本地价格 - 吉他卖价) * 日均销量 * 30`，RRP 使用 `吉他卖价 * (1 + 加价率)`，"
             "资本利用率使用 `((本地价格 - 吉他卖价) - 运费) / 吉他卖价`。"
         ),
@@ -578,6 +581,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.min_capital_utilis_help": "0.10 表示运费后至少有 10% 的资本利用率。",
         "import_helper.min_turnover_30d": "最小 30 天成交额",
         "import_helper.min_turnover_30d_help": "隐藏 30 天成交额低于该值的物品。",
+        "import_helper.shipping_cost_per_m3": "每立方米运费",
+        "import_helper.shipping_cost_per_m3_help": "用于计算运费。默认值来自 settings.toml。",
         "import_helper.markup_margin": "加价率",
         "import_helper.markup_margin_help": "用于计算建议零售价。0.20 表示高于吉他卖价 20%。",
         "import_helper.warning_no_items": "当前筛选条件下没有找到物品。",
@@ -948,7 +953,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.title": "Importhilfe fur {market_name}",
         "import_helper.description": (
             "Finde Artikel, bei denen der lokale Marktpreis deutlich uber dem Jita-Verkaufspreis liegt. "
-            "Die Versandkosten verwenden `m3 * {shipping_cost_per_m3}`, der 30-Tage-Gewinn verwendet "
+            "Der 30-Tage-Gewinn verwendet "
             "`(Lokaler Preis - Jita Sell) * durchschnittliches Tagesvolumen * 30`, der RRP verwendet "
             "`Jita Sell * (1 + Aufschlag)` und Cap Utilis verwendet "
             "`((Lokaler Preis - Jita Sell) - Versandkosten) / Jita Sell`."
@@ -964,6 +969,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.min_capital_utilis_help": "0.10 bedeutet mindestens 10 % Kapitaleffizienz nach Versand.",
         "import_helper.min_turnover_30d": "Minimaler 30D-Umsatz",
         "import_helper.min_turnover_30d_help": "Artikel mit geringerem 30-Tage-Umsatz ausblenden.",
+        "import_helper.shipping_cost_per_m3": "Versandkosten pro m3",
+        "import_helper.shipping_cost_per_m3_help": (
+            "Wird fur die Versandkostenberechnung verwendet. Der Standardwert kommt aus settings.toml."
+        ),
         "import_helper.markup_margin": "Aufschlag",
         "import_helper.markup_margin_help": "Wird fur den RRP verwendet. 0.20 bedeutet 20 % uber Jita Sell.",
         "import_helper.warning_no_items": "Keine Artikel mit den gewahlten Filtern gefunden.",
@@ -1133,8 +1142,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.title": "Aide Import {market_name}",
         "import_helper.description": (
             "Trouvez les objets dont le prix local depasse nettement le prix de vente Jita. "
-            "Le cout d'expedition utilise `m3 * {shipping_cost_per_m3}`, le profit 30J utilise "
-            "`(Prix local - Vente Jita) * Volume moyen quotidien * 30`, le RRP utilise "
+            "Le profit 30J utilise `(Prix local - Vente Jita) * Volume moyen quotidien * 30`, le RRP utilise "
             "`Vente Jita * (1 + marge)`."
         ),
         "import_helper.filters_header": "Filtres",
@@ -1148,6 +1156,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.min_capital_utilis_help": "0,10 signifie au moins 10 % apres expedition.",
         "import_helper.min_turnover_30d": "CA minimum sur 30J",
         "import_helper.min_turnover_30d_help": "Masquer les objets sous ce chiffre d'affaires 30J.",
+        "import_helper.shipping_cost_per_m3": "Cout d'expedition par m3",
+        "import_helper.shipping_cost_per_m3_help": (
+            "Utilise pour calculer l'expedition. La valeur par defaut vient de settings.toml."
+        ),
         "import_helper.markup_margin": "Marge",
         "import_helper.markup_margin_help": "Utilisee pour le RRP. 0,20 signifie 20 % au-dessus de Jita.",
         "import_helper.warning_no_items": "Aucun objet ne correspond aux filtres selectionnes.",
@@ -1317,7 +1329,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.title": "Pomoshchnik importa {market_name}",
         "import_helper.description": (
             "Naydite predmety, gde lokalnaya tsena znachitelno vyshe Jita sell. "
-            "Stoimost dostavki schitaetsya kak `m3 * {shipping_cost_per_m3}`, pribyl za 30 dnei kak "
+            "Pribyl za 30 dnei schitaetsya kak "
             "`(Lokalnaya tsena - Jita Sell) * sredniy dnevnoi oborot * 30`."
         ),
         "import_helper.filters_header": "Filtry",
@@ -1331,6 +1343,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.min_capital_utilis_help": "0.10 oznachaet minimum 10% posle dostavki.",
         "import_helper.min_turnover_30d": "Minimalnyy oborot za 30 dnei",
         "import_helper.min_turnover_30d_help": "Skryt predmety s oborotom nizhe etogo znacheniya.",
+        "import_helper.shipping_cost_per_m3": "Stoimost dostavki za m3",
+        "import_helper.shipping_cost_per_m3_help": (
+            "Ispolzuetsya dlya rascheta dostavki. Znachenie po umolchaniyu beretsya iz settings.toml."
+        ),
         "import_helper.markup_margin": "Natsenka",
         "import_helper.markup_margin_help": "Ispolzuetsya dlya RRP. 0.20 oznachaet 20% vyshe Jita sell.",
         "import_helper.warning_no_items": "Po vybrannym filtрам nichego ne naydeno.",
@@ -1411,8 +1427,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.title": "Asistente de Importacion de {market_name}",
         "import_helper.description": (
             "Descubre articulos cuyo precio local esta muy por encima del Jita sell. "
-            "El coste de envio es `m3 * {shipping_cost_per_m3}`, el beneficio de 30D usa "
-            "`(Precio local - Jita Sell) * volumen diario medio * 30`, el RRP usa "
+            "El beneficio de 30D usa `(Precio local - Jita Sell) * volumen diario medio * 30`, el RRP usa "
             "`Jita Sell * (1 + margen)` y Cap Utilis usa "
             "`((Precio local - Jita Sell) - envio) / Jita Sell`."
         ),
@@ -1432,6 +1447,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.min_turnover_30d": "Rotacion minima 30D",
         "import_helper.min_turnover_30d_help": (
             "Oculta articulos cuya rotacion de 30D este por debajo de este valor."
+        ),
+        "import_helper.shipping_cost_per_m3": "Coste de envio por m3",
+        "import_helper.shipping_cost_per_m3_help": (
+            "Se usa para calcular el envio. El valor por defecto viene de settings.toml."
         ),
         "import_helper.markup_margin": "Margen",
         "import_helper.markup_margin_help": "Se usa para el RRP. 0.20 significa un 20 % sobre Jita sell.",

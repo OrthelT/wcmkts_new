@@ -144,6 +144,43 @@ class TestImportHelperService:
         row = result.iloc[0]
         assert abs(row["rrp"] - expected_rrp) < 1e-9
 
+    def test_get_import_items_uses_custom_shipping_cost_per_m3(self):
+        from services.import_helper_service import ImportHelperFilters, ImportHelperService
+
+        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}))
+        base_df = pd.DataFrame(
+            {
+                "type_id": [34],
+                "type_name": ["Tritanium"],
+                "price": [30.0],
+                "avg_volume": [5.0],
+                "volume_m3": [2.0],
+                "jita_sell_price": [20.0],
+                "jita_buy_price": [18.0],
+                "turnover_30d": [3000.0],
+                "volume_30d": [150.0],
+                "category_name": ["Mineral"],
+                "group_name": ["Mineral"],
+            }
+        )
+
+        result = service.get_import_items(
+            base_df,
+            ImportHelperFilters(
+                profitable_only=False,
+                shipping_cost_per_m3=100.0,
+            ),
+        )
+
+        row = result.iloc[0]
+        assert row["shipping_cost"] == 200.0
+        assert row["profit_jita_sell"] == -190.0
+        assert row["profit_jita_sell_30d"] == -28_500.0
+        assert row["turnover_30d"] == 3000.0
+        assert row["volume_30d"] == 150.0
+        assert row["capital_utilis"] == -9.5
+        assert row["rrp"] == 224.0
+
     def test_get_import_items_applies_filters_using_avg_volume(self):
         from services.import_helper_service import ImportHelperFilters, ImportHelperService
 

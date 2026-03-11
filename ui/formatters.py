@@ -240,6 +240,14 @@ def get_doctrine_report_column_config(language_code: str = "en") -> dict:
                 translate_text(language_code, "doctrine_report.column_fit_id"),
                 help=translate_text(language_code, "doctrine_report.column_fit_id_help")
             ),
+            'fits': st.column_config.NumberColumn(
+                translate_text(language_code, "doctrine_report.metric_total_fits"),
+                width="small",
+            ),
+            'hulls': st.column_config.NumberColumn(
+                translate_text(language_code, "doctrine_report.metric_total_hulls"),
+                width="small",
+            ),
             'price': st.column_config.NumberColumn(
                 translate_text(language_code, "common.price"),
                 format="compact",
