@@ -19,7 +19,6 @@ from ui.i18n import translate_text
 
 logger = setup_logging(__name__)
 
-
 def _get_default_outlier_method() -> str:
     """Get the default outlier method from settings."""
     settings = get_settings()
@@ -336,7 +335,7 @@ def render_30day_metrics_ui(service, language_code: str = "en") -> None:
     elif ss_has("selected_category"):
         metrics_label = st.session_state.selected_category
     else:
-        metrics_label = translate_text(language_code, "market_stats.all_items")
+        metrics_label = "All Items"
 
     st.subheader(
         translate_text(language_code, "market_stats.thirty_day_market_stats_with_label", label=metrics_label),

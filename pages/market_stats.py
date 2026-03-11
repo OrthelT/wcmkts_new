@@ -51,12 +51,15 @@ logger.info("Application started")
 logger.info(f"streamlit version: {st.__version__}")
 logger.info("-" * 100)
 
-
 # =============================================================================
 # Filter Options
 # =============================================================================
 
-def get_filter_options(selected_category: str = None, show_all: bool = False) -> tuple:
+
+def get_filter_options(
+    selected_category: str = None,
+    show_all: bool = False,
+) -> tuple:
     """Get category/item filter options from SDE data via the market service repo.
 
     Returns:
@@ -123,7 +126,10 @@ def check_selected_item(selected_item: str) -> str | None:
         return None
 
 
-def check_selected_category(selected_category: str, show_all: bool) -> list | None:
+def check_selected_category(
+    selected_category: str,
+    show_all: bool,
+) -> list | None:
     if selected_category == "":
         st.session_state.selected_category = None
         st.session_state.selected_category_info = None
@@ -137,7 +143,7 @@ def check_selected_category(selected_category: str, show_all: bool) -> list | No
         st.sidebar.text(f"Category: {selected_category}")
         st.session_state.selected_category = selected_category
         _, available_items, _ = get_filter_options(
-            selected_category if not show_all and selected_category else None
+            selected_category if not show_all and selected_category else None,
         )
         return available_items
     else:
@@ -339,7 +345,7 @@ def main():
         options=[""] + categories,
         index=0,
         key="selected_category_choice",
-        format_func=lambda x: translate_text(language_code, "market_stats.all_categories") if x == "" else x,
+        format_func=lambda x: "All Categories" if x == "" else x,
     )
 
     available_items = check_selected_category(selected_category, show_all)
@@ -350,7 +356,7 @@ def main():
         translate_text(language_code, "market_stats.select_item"),
         options=[""] + available_items,
         index=0,
-        format_func=lambda x: translate_text(language_code, "market_stats.all_items") if x == "" else x,
+        format_func=lambda x: "All Items" if x == "" else x,
     )
     selected_item = check_selected_item(selected_item)
 
@@ -607,7 +613,7 @@ def main():
             filter_info = st.session_state.get('selected_category')
             suffix = "s"
         else:
-            filter_info = translate_text(language_code, "market_stats.all_items")
+            filter_info = "All Items"
             suffix = ""
 
         st.subheader(
