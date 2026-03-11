@@ -9,10 +9,12 @@ import streamlit as st
 
 from domain.market_config import MarketConfig
 from settings_service import get_all_market_configs
+from state import get_active_language
 from state.market_state import get_active_market, get_active_market_key, set_active_market
+from ui.i18n import translate_text
 
 
-def render_market_selector(label: str = "Market Hub") -> MarketConfig:
+def render_market_selector(label: str | None = None) -> MarketConfig:
     """Render a market selector in the sidebar and return the active config.
 
     Uses ``st.pills`` inside a bordered container so the active market hub
@@ -24,13 +26,14 @@ def render_market_selector(label: str = "Market Hub") -> MarketConfig:
     configs = get_all_market_configs()
     keys = list(configs.keys())
     names = [configs[k].short_name for k in keys]
+    selector_label = label or translate_text(get_active_language(), "common.market_hub")
 
     current_key = get_active_market_key()
     current_idx = keys.index(current_key) if current_key in keys else 0
 
     with st.sidebar.container(border=True):
         selected_name = st.pills(
-            label,
+            selector_label,
             options=names,
             default=names[current_idx],
             key="market_selector",

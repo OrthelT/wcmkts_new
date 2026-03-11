@@ -638,7 +638,7 @@ def get_fitting_col_config(language_code: str = "en") -> dict:
         "price": st.column_config.NumberColumn(translate_text(language_code, "common.price"), format="localized"),
         "avg_vol": st.column_config.NumberColumn(translate_text(language_code, "low_stock.column_avg_vol"), format="localized", width="small"),
         "days": st.column_config.NumberColumn(translate_text(language_code, "low_stock.column_days"), format="localized", width="small"),
-        "group_name": st.column_config.Column(translate_text(language_code, "low_stock.column_group"), width="small"),
+        "group_name": st.column_config.Column(translate_text(language_code, "common.group"), width="small"),
         "category_id": st.column_config.NumberColumn(translate_text(language_code, "doctrine_status.column_category_id"), format="plain", width="small"),
     }
 

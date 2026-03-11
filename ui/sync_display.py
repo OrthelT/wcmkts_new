@@ -11,7 +11,6 @@ import streamlit as st
 
 from config import DatabaseConfig
 from logging_config import setup_logging
-from ui.i18n import translate_text
 
 logger = setup_logging(__name__, log_file="sync_display.log")
 
@@ -23,8 +22,8 @@ def display_sync_status(language_code: str = "en"):
 
     update_time: datetime | None = None
     time_since: timedelta | None = None
-    display_time = translate_text(language_code, "common.unavailable")
-    display_time_since = translate_text(language_code, "common.unavailable")
+    display_time = "Unavailable"
+    display_time_since = "Unavailable"
 
     if "local_update_status" not in st.session_state:
         try:
@@ -63,11 +62,7 @@ def display_sync_status(language_code: str = "en"):
     if time_since is not None:
         try:
             total_minutes = int(time_since.total_seconds() // 60)
-            suffix = (
-                translate_text(language_code, "sync.minute")
-                if total_minutes == 1
-                else translate_text(language_code, "sync.minutes")
-            )
+            suffix = "minute" if total_minutes == 1 else "minutes"
             display_time_since = f"{total_minutes} {suffix}"
         except Exception as exc:
             logger.error(f"Error formatting time since update: {exc}")
@@ -75,10 +70,10 @@ def display_sync_status(language_code: str = "en"):
     st.sidebar.markdown(
         (
             "<span style='font-size: 14px; color: lightgrey;'>"
-            f"*{translate_text(language_code, 'sync.last_esi_update')}: {display_time}*</span> "
+            f"*Last ESI update: {display_time}*</span> "
             "<p style='margin: 0;'>"
             "<span style='font-size: 14px; color: lightgrey;'>"
-            f"*{translate_text(language_code, 'sync.time_since_update')}: {display_time_since}*</span>"
+            f"*Time since update: {display_time_since}*</span>"
             "</p>"
         ),
         unsafe_allow_html=True,

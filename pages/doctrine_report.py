@@ -317,10 +317,13 @@ def display_low_stock_modules(
 
 def main():
     language_code = get_active_language()
-    market = render_market_selector(label=translate_text(language_code, "common.market_hub"))
+    market = render_market_selector()
 
     if not ensure_market_db_ready(market.database_alias):
-        st.error(translate_text(language_code, "error.market_db_unavailable", market_name=market.name))
+        st.error(
+            f"Database for **{market.name}** is not available. "
+            "Check Turso credentials and network connectivity."
+        )
         st.stop()
 
     # Initialize service (cached in session state via get_service)

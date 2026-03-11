@@ -132,7 +132,7 @@ def get_pricer_column_config(short_name: str = "4H", language_code: str = "en") 
             format="localized",
         ),
         "Category": st.column_config.TextColumn(
-            translate_text(language_code, "low_stock.column_category"),
+            translate_text(language_code, "common.category"),
             help=translate_text(language_code, "pricer.column_category_help"),
         ),
         "Avg Daily Vol": st.column_config.NumberColumn(
@@ -214,10 +214,13 @@ def render_fit_header(result):
 
 def main():
     language_code = get_active_language()
-    market = render_market_selector(label=translate_text(language_code, "common.market_hub"))
+    market = render_market_selector()
 
     if not ensure_market_db_ready(market.database_alias):
-        st.error(translate_text(language_code, "error.market_db_unavailable", market_name=market.name))
+        st.error(
+            f"Database for **{market.name}** is not available. "
+            "Check Turso credentials and network connectivity."
+        )
         st.stop()
 
     # Initialize session state
@@ -265,7 +268,7 @@ def main():
 
             except Exception as e:
                 logger.error(f"Error pricing items: {e}")
-                st.error(translate_text(language_code, "pricer.error_pricing", error=e))
+                st.error(f"Error pricing items: {e}")
                 return
 
     # Display results from session state
@@ -436,7 +439,7 @@ def main():
                     st.warning(error)
 
     elif price_button:
-        st.warning(translate_text(language_code, "pricer.paste_items_warning"))
+        st.warning("Please paste some items to price.")
 
 
 if __name__ == "__main__":

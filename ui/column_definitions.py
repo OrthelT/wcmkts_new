@@ -88,7 +88,7 @@ def get_fitting_column_config(language_code: str = "en") -> dict:
             width="small"
         ),
         'group_name': st.column_config.Column(
-            translate_text(language_code, "low_stock.column_group"),
+            translate_text(language_code, "common.group"),
             help=translate_text(language_code, "low_stock.column_group_help"),
             width="small"
         ),

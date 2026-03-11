@@ -21,10 +21,13 @@ logger = setup_logging(__name__, log_file="import_helper.log")
 
 def main():
     language_code = get_active_language()
-    market = render_market_selector(label=translate_text(language_code, "common.market_hub"))
+    market = render_market_selector()
 
     if not ensure_market_db_ready(market.database_alias):
-        st.error(translate_text(language_code, "error.market_db_unavailable", market_name=market.name))
+        st.error(
+            f"Database for **{market.name}** is not available. "
+            "Check Turso credentials and network connectivity."
+        )
         st.stop()
 
     service = get_import_helper_service()
@@ -123,12 +126,12 @@ def main():
         base_df = service.fetch_base_data()
     except Exception as e:
         logger.error(f"Import helper data load failed: {e}")
-        st.error(translate_text(language_code, "import_helper.error_load_failed"))
+        st.error("Failed to load market data. Check database connectivity and try refreshing.")
         st.stop()
 
     df = service.get_import_items(base_df, filters, language_code=language_code)
     if df.empty:
-        st.warning(translate_text(language_code, "import_helper.warning_no_items"))
+        st.warning("No items found with the selected filters.")
         st.sidebar.markdown("---")
         display_sync_status(language_code=language_code)
         return

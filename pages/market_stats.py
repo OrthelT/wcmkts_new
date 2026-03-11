@@ -302,7 +302,7 @@ def render_title_headers(market_name: str, language_code: str):
 def main():
     """Main function for the market stats page."""
     language_code = get_active_language()
-    market = render_market_selector(label=translate_text(language_code, "common.market_hub"))
+    market = render_market_selector()
 
     # Initialize databases if needed
     if 'db_init_time' not in st.session_state:
@@ -314,7 +314,10 @@ def main():
     # Ensure the active market's database is synced before any queries.
     # On cold start or after a market switch, the target db may not exist yet.
     if not ensure_market_db_ready(market.database_alias):
-        st.error(translate_text(language_code, "error.market_db_unavailable", market_name=market.name))
+        st.error(
+            f"Database for **{market.name}** is not available. "
+            "Check Turso credentials and network connectivity."
+        )
         st.stop()
 
     if init_result:

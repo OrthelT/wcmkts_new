@@ -78,7 +78,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_report.column_target_help": "Number of fits required for stock.",
         "doctrine_report.column_daily_sales": "Daily Sales",
         "doctrine_report.column_daily_sales_help": "Average daily sales over the last 30 days.",
-        "doctrine_report.column_group": "Group",
         "doctrine_report.column_group_help": "Ship group.",
         "doctrine_report.column_ship": "Ship",
         "doctrine_report.column_ship_help": "Ship name.",
@@ -94,16 +93,9 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "common.select": "Select",
         "common.type_id": "Type ID",
         "common.item": "Item",
+        "common.category": "Category",
+        "common.group": "Group",
         "common.price": "Price",
-        "common.unavailable": "Unavailable",
-        "error.market_db_unavailable": (
-            "Database for **{market_name}** is not available. "
-            "Check Turso credentials and network connectivity."
-        ),
-        "sync.last_esi_update": "Last ESI update",
-        "sync.time_since_update": "Time since update",
-        "sync.minute": "minute",
-        "sync.minutes": "minutes",
         "low_stock.title": "{market_name} Low Stock Tool",
         "low_stock.description": (
             "This page shows items that are running low on the market. "
@@ -152,9 +144,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.column_avg_vol_help": "Average volume over the last 30 days.",
         "low_stock.column_used_in_fits": "Used In Fits",
         "low_stock.column_used_in_fits_help": "Doctrine ships that use this item.",
-        "low_stock.column_category": "Category",
         "low_stock.column_category_help": "Category of the item.",
-        "low_stock.column_group": "Group",
         "low_stock.column_group_help": "Group of the item.",
         "low_stock.selected_items": (
             "{count} items selected. Visit the **Downloads** page for bulk CSV exports."
@@ -162,9 +152,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.chart_section": "Days Remaining by Item",
         "low_stock.chart_title": "Days of Stock Remaining",
         "low_stock.chart_days_label": "Days Remaining",
-        "low_stock.chart_item_label": "Item",
         "low_stock.chart_critical_level": "Critical Level (3 days)",
-        "low_stock.warning_no_items": "No items found with the selected filters.",
         "import_helper.title": "{market_name} Import Helper",
         "import_helper.description": (
             "Discover items where the local market price sits well above Jita sell. "
@@ -193,10 +181,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         ),
         "import_helper.markup_margin": "Markup Margin",
         "import_helper.markup_margin_help": "Used for RRP. 0.20 means 20% above Jita sell.",
-        "import_helper.error_load_failed": (
-            "Failed to load market data. Check database connectivity and try refreshing."
-        ),
-        "import_helper.warning_no_items": "No items found with the selected filters.",
         "import_helper.metric_total_items": "Total Items",
         "import_helper.metric_profitable_items": "Positive Profit Items",
         "import_helper.metric_avg_capital_utilis": "Avg Capital Utilis",
@@ -372,7 +356,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "pricer.input_label": "Paste EFT fitting or item list:",
         "pricer.price_items": "Price Items",
         "pricer.fetching_prices": "Fetching prices...",
-        "pricer.error_pricing": "Error pricing items: {error}",
         "pricer.format_label": "Format",
         "pricer.format_multibuy": "Multibuy/Item List",
         "pricer.totals": "Totals",
@@ -430,7 +413,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "pricer.highlight_doctrine_items_help": "Highlight items used in doctrine fits.",
         "pricer.issues": "Issues",
         "pricer.unpriced_items": "⚠️ {count} items could not be priced",
-        "pricer.paste_items_warning": "Please paste some items to price.",
     },
     "zh": {
         "app.page_title": "凛冬联盟市场",
@@ -487,7 +469,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_report.column_target_help": "库存需要达到的配置数量。",
         "doctrine_report.column_daily_sales": "日均销量",
         "doctrine_report.column_daily_sales_help": "过去 30 天的平均日销量。",
-        "doctrine_report.column_group": "分组",
         "doctrine_report.column_group_help": "舰船分组。",
         "doctrine_report.column_ship": "舰船",
         "doctrine_report.column_ship_help": "舰船名称。",
@@ -503,13 +484,9 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "common.select": "选择",
         "common.type_id": "类型 ID",
         "common.item": "物品",
+        "common.category": "类别",
+        "common.group": "分组",
         "common.price": "价格",
-        "common.unavailable": "不可用",
-        "error.market_db_unavailable": "市场 **{market_name}** 的数据库不可用。请检查 Turso 凭据和网络连接。",
-        "sync.last_esi_update": "最近 ESI 更新时间",
-        "sync.time_since_update": "距今时间",
-        "sync.minute": "分钟",
-        "sync.minutes": "分钟",
         "low_stock.title": "{market_name} 低库存工具",
         "low_stock.description": (
             "此页面显示市场中库存偏低的物品。**剩余天数** 列表示按历史平均销量计算，当前库存还能维持多少天。"
@@ -553,17 +530,13 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.column_avg_vol_help": "过去 30 天平均销量。",
         "low_stock.column_used_in_fits": "已用于配置",
         "low_stock.column_used_in_fits_help": "使用该物品的舰船配置。",
-        "low_stock.column_category": "类别",
         "low_stock.column_category_help": "物品类别。",
-        "low_stock.column_group": "分组",
         "low_stock.column_group_help": "物品分组。",
         "low_stock.selected_items": "已选择 {count} 个物品。可前往 **Downloads** 页面批量导出 CSV。",
         "low_stock.chart_section": "按物品显示剩余天数",
         "low_stock.chart_title": "库存剩余天数",
         "low_stock.chart_days_label": "剩余天数",
-        "low_stock.chart_item_label": "物品",
         "low_stock.chart_critical_level": "严重阈值（3 天）",
-        "low_stock.warning_no_items": "当前筛选条件下没有找到物品。",
         "import_helper.title": "{market_name} 进货助手",
         "import_helper.description": (
             "查找本地市场价格明显高于吉他卖价的物品。30 天利润使用 "
@@ -585,7 +558,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.shipping_cost_per_m3_help": "用于计算运费。默认值来自 settings.toml。",
         "import_helper.markup_margin": "加价率",
         "import_helper.markup_margin_help": "用于计算建议零售价。0.20 表示高于吉他卖价 20%。",
-        "import_helper.warning_no_items": "当前筛选条件下没有找到物品。",
         "import_helper.metric_total_items": "物品总数",
         "import_helper.metric_profitable_items": "正利润物品",
         "import_helper.metric_avg_capital_utilis": "平均资本利用率",
@@ -747,7 +719,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "pricer.input_label": "粘贴 EFT 装配或物品清单：",
         "pricer.price_items": "开始定价",
         "pricer.fetching_prices": "正在获取价格...",
-        "pricer.error_pricing": "定价失败：{error}",
         "pricer.format_label": "格式",
         "pricer.format_multibuy": "多买/物品清单",
         "pricer.totals": "汇总",
@@ -805,7 +776,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "pricer.highlight_doctrine_items_help": "高亮用于建制装配的物品。",
         "pricer.issues": "问题",
         "pricer.unpriced_items": "⚠️ 有 {count} 个物品无法定价",
-        "pricer.paste_items_warning": "请先粘贴要定价的物品。",
     },
     "de": {
         "app.page_title": "WinterCo Markte",
@@ -866,7 +836,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_report.column_target_help": "Anzahl der Fits, die fur den Bestand benotigt werden.",
         "doctrine_report.column_daily_sales": "Tagliche Verkaufe",
         "doctrine_report.column_daily_sales_help": "Durchschnittliche tagliche Verkaufe der letzten 30 Tage.",
-        "doctrine_report.column_group": "Gruppe",
         "doctrine_report.column_group_help": "Schiffsgruppe.",
         "doctrine_report.column_ship": "Schiff",
         "doctrine_report.column_ship_help": "Schiffsname.",
@@ -882,16 +851,9 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "common.select": "Auswahlen",
         "common.type_id": "Typ-ID",
         "common.item": "Artikel",
+        "common.category": "Kategorie",
+        "common.group": "Gruppe",
         "common.price": "Preis",
-        "common.unavailable": "Nicht verfugbar",
-        "error.market_db_unavailable": (
-            "Die Datenbank fur **{market_name}** ist nicht verfugbar. "
-            "Prufe die Turso-Zugangsdaten und die Netzwerkverbindung."
-        ),
-        "sync.last_esi_update": "Letztes ESI-Update",
-        "sync.time_since_update": "Zeit seit dem Update",
-        "sync.minute": "Minute",
-        "sync.minutes": "Minuten",
         "low_stock.title": "Werkzeug fur niedrigen Bestand von {market_name}",
         "low_stock.description": (
             "Diese Seite zeigt Artikel mit niedrigem Marktbestand. Die Spalte **Days Remaining** zeigt, "
@@ -937,9 +899,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.column_avg_vol_help": "Durchschnittliches Volumen der letzten 30 Tage.",
         "low_stock.column_used_in_fits": "Verwendet in Fits",
         "low_stock.column_used_in_fits_help": "Doktrinschiffe, die diesen Artikel verwenden.",
-        "low_stock.column_category": "Kategorie",
         "low_stock.column_category_help": "Kategorie des Artikels.",
-        "low_stock.column_group": "Gruppe",
         "low_stock.column_group_help": "Gruppe des Artikels.",
         "low_stock.selected_items": (
             "{count} Artikel ausgewahlt. Besuche die **Downloads**-Seite fur CSV-Sammel-Exporte."
@@ -947,9 +907,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.chart_section": "Verbleibende Tage nach Artikel",
         "low_stock.chart_title": "Verbleibende Bestandstage",
         "low_stock.chart_days_label": "Verbleibende Tage",
-        "low_stock.chart_item_label": "Artikel",
         "low_stock.chart_critical_level": "Kritisches Niveau (3 Tage)",
-        "low_stock.warning_no_items": "Keine Artikel mit den gewahlten Filtern gefunden.",
         "import_helper.title": "Importhilfe fur {market_name}",
         "import_helper.description": (
             "Finde Artikel, bei denen der lokale Marktpreis deutlich uber dem Jita-Verkaufspreis liegt. "
@@ -975,7 +933,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         ),
         "import_helper.markup_margin": "Aufschlag",
         "import_helper.markup_margin_help": "Wird fur den RRP verwendet. 0.20 bedeutet 20 % uber Jita Sell.",
-        "import_helper.warning_no_items": "Keine Artikel mit den gewahlten Filtern gefunden.",
         "import_helper.metric_total_items": "Artikel gesamt",
         "import_helper.metric_profitable_items": "Profitable Artikel",
         "import_helper.metric_avg_capital_utilis": "Durchschn. Kapitaleffizienz",
@@ -1058,7 +1015,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_report.column_target_help": "Nombre de fits requis en stock.",
         "doctrine_report.column_daily_sales": "Ventes quotidiennes",
         "doctrine_report.column_daily_sales_help": "Ventes moyennes sur les 30 derniers jours.",
-        "doctrine_report.column_group": "Groupe",
         "doctrine_report.column_group_help": "Groupe du vaisseau.",
         "doctrine_report.column_ship": "Vaisseau",
         "doctrine_report.column_ship_help": "Nom du vaisseau.",
@@ -1074,16 +1030,9 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "common.select": "Selection",
         "common.type_id": "ID Type",
         "common.item": "Objet",
+        "common.category": "Categorie",
+        "common.group": "Groupe",
         "common.price": "Prix",
-        "common.unavailable": "Indisponible",
-        "error.market_db_unavailable": (
-            "La base de donnees pour **{market_name}** n'est pas disponible. "
-            "Verifiez les identifiants Turso et la connectivite reseau."
-        ),
-        "sync.last_esi_update": "Derniere mise a jour ESI",
-        "sync.time_since_update": "Temps ecoule",
-        "sync.minute": "minute",
-        "sync.minutes": "minutes",
         "low_stock.title": "Outil Stock Faible {market_name}",
         "low_stock.description": (
             "Cette page montre les objets bientot en rupture. **Days Remaining** indique "
@@ -1128,17 +1077,13 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.column_avg_vol_help": "Volume moyen sur 30 jours.",
         "low_stock.column_used_in_fits": "Utilise dans les fits",
         "low_stock.column_used_in_fits_help": "Vaisseaux de doctrine utilisant cet objet.",
-        "low_stock.column_category": "Categorie",
         "low_stock.column_category_help": "Categorie de l'objet.",
-        "low_stock.column_group": "Groupe",
         "low_stock.column_group_help": "Groupe de l'objet.",
         "low_stock.selected_items": "{count} objets selectionnes. Consultez **Downloads** pour les exports CSV.",
         "low_stock.chart_section": "Jours restants par objet",
         "low_stock.chart_title": "Jours de stock restants",
         "low_stock.chart_days_label": "Jours restants",
-        "low_stock.chart_item_label": "Objet",
         "low_stock.chart_critical_level": "Niveau critique (3 jours)",
-        "low_stock.warning_no_items": "Aucun objet ne correspond aux filtres selectionnes.",
         "import_helper.title": "Aide Import {market_name}",
         "import_helper.description": (
             "Trouvez les objets dont le prix local depasse nettement le prix de vente Jita. "
@@ -1162,7 +1107,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         ),
         "import_helper.markup_margin": "Marge",
         "import_helper.markup_margin_help": "Utilisee pour le RRP. 0,20 signifie 20 % au-dessus de Jita.",
-        "import_helper.warning_no_items": "Aucun objet ne correspond aux filtres selectionnes.",
         "import_helper.metric_total_items": "Total objets",
         "import_helper.metric_profitable_items": "Objets profitables",
         "import_helper.metric_avg_capital_utilis": "Capital Utilis moyen",
@@ -1245,7 +1189,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_report.column_target_help": "Kolichestvo fitov, neobkhodimykh v stock.",
         "doctrine_report.column_daily_sales": "Dnevnye prodazhi",
         "doctrine_report.column_daily_sales_help": "Srednie dnevnye prodazhi za poslednie 30 dney.",
-        "doctrine_report.column_group": "Gruppa",
         "doctrine_report.column_group_help": "Gruppa korablya.",
         "doctrine_report.column_ship": "Korabl",
         "doctrine_report.column_ship_help": "Nazvanie korablya.",
@@ -1261,16 +1204,9 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "common.select": "Vybor",
         "common.type_id": "ID tipa",
         "common.item": "Predmet",
+        "common.category": "Kategoriya",
+        "common.group": "Gruppa",
         "common.price": "Cena",
-        "common.unavailable": "Nedostupno",
-        "error.market_db_unavailable": (
-            "Baza dannykh dlya **{market_name}** nedostupna. "
-            "Proverte uchetnye dannye Turso i setevoye podklyuchenie."
-        ),
-        "sync.last_esi_update": "Poslednee obnovlenie ESI",
-        "sync.time_since_update": "Proshedshee vremya",
-        "sync.minute": "minuta",
-        "sync.minutes": "minut",
         "low_stock.title": "Nizkie zapasy {market_name}",
         "low_stock.description": (
             "Eta stranitsa pokazivaet predmety s nizkim zapasom na rynke. "
@@ -1315,17 +1251,13 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.column_avg_vol_help": "Sredniy oborot za 30 dnei.",
         "low_stock.column_used_in_fits": "Ispolzuetsya v fitakh",
         "low_stock.column_used_in_fits_help": "Doktrinnye korabli, ispolzuyushchie etot predmet.",
-        "low_stock.column_category": "Kategoriya",
         "low_stock.column_category_help": "Kategoriya predmeta.",
-        "low_stock.column_group": "Gruppa",
         "low_stock.column_group_help": "Gruppa predmeta.",
         "low_stock.selected_items": "Vybrano predmetov: {count}. Otkroyte **Downloads** dlya CSV eksportov.",
         "low_stock.chart_section": "Ostavshiesya dni po predmetam",
         "low_stock.chart_title": "Dni ostavshegosya zapasa",
         "low_stock.chart_days_label": "Dni",
-        "low_stock.chart_item_label": "Predmet",
         "low_stock.chart_critical_level": "Kriticheskiy uroven (3 dnya)",
-        "low_stock.warning_no_items": "Po vybrannym filtрам nichego ne naydeno.",
         "import_helper.title": "Pomoshchnik importa {market_name}",
         "import_helper.description": (
             "Naydite predmety, gde lokalnaya tsena znachitelno vyshe Jita sell. "
@@ -1349,7 +1281,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         ),
         "import_helper.markup_margin": "Natsenka",
         "import_helper.markup_margin_help": "Ispolzuetsya dlya RRP. 0.20 oznachaet 20% vyshe Jita sell.",
-        "import_helper.warning_no_items": "Po vybrannym filtрам nichego ne naydeno.",
         "import_helper.metric_total_items": "Vsego predmetov",
         "import_helper.metric_profitable_items": "Pribylnye predmety",
         "import_helper.metric_avg_capital_utilis": "Sredniy Capital Utilis",
@@ -1406,16 +1337,9 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "common.select": "Seleccionar",
         "common.type_id": "ID de tipo",
         "common.item": "Articulo",
+        "common.category": "Categoria",
+        "common.group": "Grupo",
         "common.price": "Precio",
-        "common.unavailable": "No disponible",
-        "error.market_db_unavailable": (
-            "La base de datos del mercado **{market_name}** no esta disponible. "
-            "Revisa las credenciales de Turso y la conexion de red."
-        ),
-        "sync.last_esi_update": "Ultima actualizacion de ESI",
-        "sync.time_since_update": "Tiempo desde la actualizacion",
-        "sync.minute": "minuto",
-        "sync.minutes": "minutos",
         "low_stock.title": "Herramienta de Stock Bajo de {market_name}",
         "low_stock.description": (
             "Esta pagina muestra los articulos con poco stock en el mercado. "
@@ -1423,7 +1347,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "segun el volumen historico medio."
         ),
         "low_stock.filters_header": "Filtros",
-        "low_stock.warning_no_items": "No se encontraron articulos con los filtros seleccionados.",
         "import_helper.title": "Asistente de Importacion de {market_name}",
         "import_helper.description": (
             "Descubre articulos cuyo precio local esta muy por encima del Jita sell. "
@@ -1454,10 +1377,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         ),
         "import_helper.markup_margin": "Margen",
         "import_helper.markup_margin_help": "Se usa para el RRP. 0.20 significa un 20 % sobre Jita sell.",
-        "import_helper.error_load_failed": (
-            "No se pudieron cargar los datos del mercado. Revisa la conectividad de la base de datos y vuelve a intentarlo."
-        ),
-        "import_helper.warning_no_items": "No se encontraron articulos con los filtros seleccionados.",
         "import_helper.metric_total_items": "Articulos Totales",
         "import_helper.metric_profitable_items": "Articulos Rentables",
         "import_helper.metric_avg_capital_utilis": "Capital Utilis Medio",

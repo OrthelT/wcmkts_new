@@ -36,14 +36,14 @@ def create_days_remaining_chart(df: pd.DataFrame, language_code: str):
         title=translate_text(language_code, "low_stock.chart_title"),
         labels={
             "days_remaining": translate_text(language_code, "low_stock.chart_days_label"),
-            "type_name": translate_text(language_code, "low_stock.chart_item_label"),
+            "type_name": translate_text(language_code, "common.item"),
         },
         color="category_name",
         color_discrete_sequence=px.colors.qualitative.Set3,
     )
 
     fig.update_layout(
-        xaxis_title=translate_text(language_code, "low_stock.chart_item_label"),
+        xaxis_title=translate_text(language_code, "common.item"),
         yaxis_title=translate_text(language_code, "low_stock.chart_days_label"),
         xaxis={"tickangle": 45},
         height=500,
@@ -123,10 +123,13 @@ def display_fit_data(selected_fit):
 
 def main():
     language_code = get_active_language()
-    market = render_market_selector(label=translate_text(language_code, "common.market_hub"))
+    market = render_market_selector()
 
     if not ensure_market_db_ready(market.database_alias):
-        st.error(translate_text(language_code, "error.market_db_unavailable", market_name=market.name))
+        st.error(
+            f"Database for **{market.name}** is not available. "
+            "Check Turso credentials and network connectivity."
+        )
         st.stop()
 
     # Initialize service (cached in session state via get_service)
@@ -443,11 +446,11 @@ def main():
                 width="large",
             ),
             "category_name": st.column_config.TextColumn(
-                translate_text(language_code, "low_stock.column_category"),
+                translate_text(language_code, "common.category"),
                 help=translate_text(language_code, "low_stock.column_category_help"),
             ),
             "group_name": st.column_config.TextColumn(
-                translate_text(language_code, "low_stock.column_group"),
+                translate_text(language_code, "common.group"),
                 help=translate_text(language_code, "low_stock.column_group_help"),
             ),
         }
@@ -480,7 +483,7 @@ def main():
             st.plotly_chart(days_chart)
 
     else:
-        st.warning(translate_text(language_code, "low_stock.warning_no_items"))
+        st.warning("No items found with the selected filters.")
 
     # Display last update timestamp
     st.sidebar.markdown("---")
