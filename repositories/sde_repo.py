@@ -183,12 +183,18 @@ def _get_faction_type_ids_impl(engine) -> set[int]:
 
 
 def _get_localized_name_impl(engine, type_id: int, language: str) -> Optional[str]:
-    """Look up a localized type name by ID and language from localizations."""
+    """Look up a localized type name by ID and language from localizations.
+
+    Falls back to English if the requested language has no entry.
+    """
     with engine.connect() as conn:
         result = conn.execute(
             text(
-                "SELECT type_name FROM localizations "
-                "WHERE type_id = :type_id AND language = :language"
+                "SELECT COALESCE(req.type_name, en.type_name) "
+                "FROM localizations en "
+                "LEFT JOIN localizations req "
+                "  ON req.type_id = en.type_id AND req.language = :language "
+                "WHERE en.type_id = :type_id AND en.language = 'en'"
             ),
             {"type_id": type_id, "language": language},
         )
@@ -199,7 +205,10 @@ def _get_localized_name_impl(engine, type_id: int, language: str) -> Optional[st
 def _get_localized_names_impl(
     engine, type_ids: list[int], language: str
 ) -> dict[int, str]:
-    """Batch lookup of localized names for multiple type IDs in one language."""
+    """Batch lookup of localized names for multiple type IDs in one language.
+
+    Falls back to English for any type_id missing the requested language.
+    """
     if not type_ids:
         return {}
     placeholders = ", ".join(f":id_{i}" for i in range(len(type_ids)))
@@ -208,8 +217,11 @@ def _get_localized_names_impl(
     with engine.connect() as conn:
         result = conn.execute(
             text(
-                f"SELECT type_id, type_name FROM localizations "
-                f"WHERE type_id IN ({placeholders}) AND language = :language"
+                f"SELECT en.type_id, COALESCE(req.type_name, en.type_name) "
+                f"FROM localizations en "
+                f"LEFT JOIN localizations req "
+                f"  ON req.type_id = en.type_id AND req.language = :language "
+                f"WHERE en.type_id IN ({placeholders}) AND en.language = 'en'"
             ),
             params,
         )
