@@ -14,6 +14,7 @@ from sqlalchemy import bindparam, text
 
 from config import DatabaseConfig
 from logging_config import setup_logging
+from repositories.sde_repo import SDERepository
 from services.price_service import PriceResult, PriceService, get_price_service
 from services.type_name_localization import apply_localized_type_names
 from settings_service import SettingsService
@@ -46,6 +47,9 @@ class ImportHelperFilters:
 
     categories: list[str] = field(default_factory=list)
     search_text: str = ""
+    doctrine_only: bool = False
+    tech2_only: bool = False
+    faction_only: bool = False
     profitable_only: bool = True
     min_capital_utilis: Optional[float] = None
     min_turnover_30d: Optional[float] = None
@@ -111,13 +115,18 @@ class ImportHelperService:
         market_query = text(
             """
             SELECT
-                type_id,
-                type_name,
-                price,
-                avg_volume,
-                category_name,
-                group_name
-            FROM marketstats
+                ms.type_id,
+                ms.type_name,
+                ms.price,
+                ms.avg_volume,
+                ms.category_name,
+                ms.group_name,
+                CASE WHEN d.type_id IS NOT NULL THEN 1 ELSE 0 END AS is_doctrine
+            FROM marketstats ms
+            LEFT JOIN (
+                SELECT DISTINCT type_id
+                FROM doctrines
+            ) d ON ms.type_id = d.type_id
             """
         )
 
@@ -156,6 +165,10 @@ class ImportHelperService:
             return result
 
         return market_df.merge(volume_df, on="type_id", how="left").fillna({"volume_m3": 0.0})
+
+    def _get_sde_repository(self) -> SDERepository:
+        """Build an SDE repository for metagroup lookups."""
+        return SDERepository(self._sde_db)
 
     def get_category_options(self) -> list[str]:
         """Return category options for sidebar filtering."""
@@ -242,6 +255,17 @@ class ImportHelperService:
         df["rrp"] = df["jita_sell_price"] * (1 + filters.markup_margin) + df["shipping_cost"]
 
         df = df[df["avg_volume"] > 0]
+
+        if filters.doctrine_only:
+            df = df[df.get("is_doctrine", 0) == 1]
+
+        if filters.tech2_only:
+            tech2_type_ids = self._get_sde_repository().get_tech2_type_ids()
+            df = df[df["type_id"].isin(tech2_type_ids)]
+
+        if filters.faction_only:
+            faction_type_ids = self._get_sde_repository().get_faction_type_ids()
+            df = df[df["type_id"].isin(faction_type_ids)]
 
         if filters.categories:
             df = df[df["category_name"].isin(filters.categories)]

@@ -10,7 +10,7 @@ from init_db import ensure_market_db_ready
 from logging_config import setup_logging
 from state import get_active_language
 from services import ImportHelperFilters
-from services.import_helper_service import get_import_helper_service
+from services.import_helper_service import SHIPPING_COST_PER_M3, get_import_helper_service
 from ui.column_definitions import get_import_helper_column_config
 from ui.i18n import translate_text
 from ui.market_selector import render_market_selector
@@ -36,17 +36,32 @@ def main():
         st.title(translate_text(language_code, "import_helper.title", market_name=market.name))
 
     st.markdown(
-        f"""
-        Discover items where the local market price sits well above Jita sell.
-        Shipping Cost is `m3 * {SHIPPING_COST_PER_M3:g}`, Profit uses `Local Price - (Jita Sell + Shipping)`,
-        30D Profit uses `Profit * Avg Daily Volume * 30`,
-        RRP (Recommended Retail Price) uses `Jita Sell * (1 + Markup Margin) + Shipping`,
-        and Cap Utilis (Capital Utilisation Efficiency) = `Profit / Jita Sell`, indicating the invest-reward ratio.
-        """
+        translate_text(
+            language_code,
+            "import_helper.description",
+            shipping_cost_per_m3=f"{SHIPPING_COST_PER_M3:g}",
+        )
     )
 
     st.sidebar.header(translate_text(language_code, "import_helper.filters_header"))
     categories = service.get_category_options()
+
+    st.sidebar.subheader(translate_text(language_code, "low_stock.item_type_filters"))
+    doctrine_only = st.sidebar.checkbox(
+        translate_text(language_code, "low_stock.doctrine_only"),
+        value=False,
+        help=translate_text(language_code, "low_stock.doctrine_only_help"),
+    )
+    tech2_only = st.sidebar.checkbox(
+        translate_text(language_code, "low_stock.tech2_only"),
+        value=False,
+        help=translate_text(language_code, "low_stock.tech2_only_help"),
+    )
+    faction_only = st.sidebar.checkbox(
+        translate_text(language_code, "low_stock.faction_only"),
+        value=False,
+        help=translate_text(language_code, "low_stock.faction_only_help"),
+    )
 
     selected_categories = st.sidebar.multiselect(
         translate_text(language_code, "import_helper.categories"),
@@ -92,6 +107,9 @@ def main():
     filters = ImportHelperFilters(
         categories=selected_categories,
         search_text=search_text,
+        doctrine_only=doctrine_only,
+        tech2_only=tech2_only,
+        faction_only=faction_only,
         profitable_only=profitable_only,
         min_capital_utilis=min_capital_utilis,
         min_turnover_30d=float(min_turnover_30d),
@@ -158,7 +176,7 @@ def main():
         display_df,
         hide_index=True,
         width="content",
-        column_config=get_import_helper_column_config(),
+        column_config=get_import_helper_column_config(language_code=language_code),
     )
 
     st.sidebar.markdown("---")

@@ -248,6 +248,54 @@ class TestImportHelperService:
         assert row["turnover_30d"] == 3000.0
         assert row["volume_30d"] == 150.0
 
+    @patch("services.import_helper_service.SDERepository")
+    def test_get_import_items_applies_item_type_filters(self, mock_sde_repo_cls):
+        from services.import_helper_service import ImportHelperFilters, ImportHelperService
+
+        mock_sde_repo = Mock()
+        mock_sde_repo.get_tech2_type_ids.return_value = [35]
+        mock_sde_repo.get_faction_type_ids.return_value = {36}
+        mock_sde_repo_cls.return_value = mock_sde_repo
+
+        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}))
+        base_df = pd.DataFrame(
+            {
+                "type_id": [34, 35, 36],
+                "type_name": ["Tritanium", "Tech Item", "Faction Item"],
+                "price": [30.0, 40.0, 50.0],
+                "avg_volume": [5.0, 5.0, 5.0],
+                "volume_m3": [0.01, 0.01, 0.01],
+                "jita_sell_price": [20.0, 20.0, 20.0],
+                "jita_buy_price": [18.0, 18.0, 18.0],
+                "shipping_cost": [1.0, 1.0, 1.0],
+                "profit_jita_sell": [9.0, 19.0, 29.0],
+                "profit_jita_sell_30d": [1350.0, 2850.0, 4350.0],
+                "turnover_30d": [3000.0, 3000.0, 3000.0],
+                "volume_30d": [150.0, 150.0, 150.0],
+                "capital_utilis": [0.45, 0.95, 1.45],
+                "category_name": ["Mineral", "Module", "Module"],
+                "group_name": ["Mineral", "Module", "Module"],
+                "is_doctrine": [0, 1, 0],
+            }
+        )
+
+        doctrine_result = service.get_import_items(
+            base_df,
+            ImportHelperFilters(doctrine_only=True, profitable_only=False),
+        )
+        tech2_result = service.get_import_items(
+            base_df,
+            ImportHelperFilters(tech2_only=True, profitable_only=False),
+        )
+        faction_result = service.get_import_items(
+            base_df,
+            ImportHelperFilters(faction_only=True, profitable_only=False),
+        )
+
+        assert doctrine_result["type_id"].tolist() == [35]
+        assert tech2_result["type_id"].tolist() == [35]
+        assert faction_result["type_id"].tolist() == [36]
+
     @patch("services.import_helper_service.apply_localized_type_names")
     def test_get_import_items_uses_localized_names_and_preserves_english_search(
         self,

@@ -138,7 +138,7 @@ def main():
         if image_path.exists():
             st.image(str(image_path), width=150)
         else:
-            st.warning("Logo image not found")
+            st.warning(translate_text(language_code, "doctrine_status.logo_not_found"))
 
     with col2:
         st.markdown("&nbsp;")
@@ -152,39 +152,62 @@ def main():
         st.markdown("&nbsp;")
         st.markdown("&nbsp;")
         st.markdown(
-            "<span style='font-size: 12px; color: #666;'>*Use Downloads page for full data export*</span>",
+            f"<span style='font-size: 12px; color: #666;'>*{translate_text(language_code, 'doctrine_status.downloads_hint')}*</span>",
             unsafe_allow_html=True,
         )
 
     # Add filters in the sidebar
-    st.sidebar.header("Filters")
+    st.sidebar.header(translate_text(language_code, "low_stock.filters_header"))
 
     # Target multiplier
     ds_target_multiplier = 1.0
     ss_init({"ds_target_multiplier": ds_target_multiplier})
-    with st.sidebar.expander("Target Multiplier"):
+    with st.sidebar.expander(translate_text(language_code, "doctrine_report.target_multiplier")):
         ds_target_multiplier = st.slider(
-            "Target Multiplier", min_value=0.5, max_value=2.0, value=1.0, step=0.1
+            translate_text(language_code, "doctrine_report.target_multiplier"),
+            min_value=0.5,
+            max_value=2.0,
+            value=1.0,
+            step=0.1,
         )
         st.session_state.ds_target_multiplier = ds_target_multiplier
-        st.sidebar.write(f"Target Multiplier: {ds_target_multiplier}")
+        st.sidebar.write(
+            translate_text(
+                language_code,
+                "doctrine_report.current_target_multiplier",
+                value=ds_target_multiplier,
+            )
+        )
 
     # Doctrine filter - filter by fleet doctrine composition
     doctrine_comps = service.repository.get_all_doctrine_compositions()
     doctrine_names = (
-        ["All"] + sorted(doctrine_comps["doctrine_name"].unique().tolist(), key=format_doctrine_name)
+        [translate_text(language_code, "common.all")]
+        + sorted(doctrine_comps["doctrine_name"].unique().tolist(), key=format_doctrine_name)
         if not doctrine_comps.empty
-        else ["All"]
+        else [translate_text(language_code, "common.all")]
     )
-    selected_doctrine = st.sidebar.selectbox("Doctrine:", doctrine_names, format_func=format_doctrine_name)
+    selected_doctrine = st.sidebar.selectbox(
+        translate_text(language_code, "doctrine_status.filter_doctrine"),
+        doctrine_names,
+        format_func=format_doctrine_name,
+    )
 
     # Stock Status filter (renamed from "Doctrine Status" for clarity - single unified filter)
     status_options = get_status_filter_options()
-    selected_status = st.sidebar.selectbox("Stock Status:", status_options)
+    selected_status = st.sidebar.selectbox(
+        translate_text(language_code, "doctrine_status.filter_stock_status"),
+        status_options,
+    )
 
     # Ship group filter
-    ship_groups = ["All"] + sorted(fit_summary["ship_group"].unique().tolist())
-    selected_group = st.sidebar.selectbox("Ship Group:", ship_groups)
+    ship_groups = [translate_text(language_code, "common.all")] + sorted(
+        fit_summary["ship_group"].unique().tolist()
+    )
+    selected_group = st.sidebar.selectbox(
+        translate_text(language_code, "doctrine_status.filter_ship_group"),
+        ship_groups,
+    )
 
     # Get unique ship names for selection
     unique_ships = sorted(fit_summary["ship_name"].unique().tolist())
@@ -226,11 +249,11 @@ def main():
             filtered_df = filtered_df[filtered_df["target_percentage"] <= 20]
 
     # Apply ship group filter
-    if selected_group != "All":
+    if selected_group != translate_text(language_code, "common.all"):
         filtered_df = filtered_df[filtered_df["ship_group"] == selected_group]
 
     # Apply doctrine filter
-    if selected_doctrine != "All":
+    if selected_doctrine != translate_text(language_code, "common.all"):
         doctrine_fit_ids = doctrine_comps[
             doctrine_comps["doctrine_name"] == selected_doctrine
         ]["fit_id"].unique()
@@ -240,7 +263,7 @@ def main():
     st.session_state.displayed_ships = filtered_df["ship_name"].unique().tolist()
 
     if filtered_df.empty:
-        st.info("No fits found with the selected filters.")
+        st.info(translate_text(language_code, "doctrine_status.no_filtered_fits"))
         return
 
     # Pre-fetch set of type_ids with equivalents (O(1) lookup per module)
@@ -280,7 +303,11 @@ def main():
     # Iterate through each group and display fits
     for group_name, group_data in grouped_fits:
         # Display group header
-        st.subheader(body=f"{group_name}", help="Ship doctrine group", divider="orange")
+        st.subheader(
+            body=f"{group_name}",
+            help=translate_text(language_code, "doctrine_status.ship_group_help"),
+            divider="orange",
+        )
 
         # Display the fits in this group
         for i, row in group_data.iterrows():
@@ -309,7 +336,7 @@ def main():
                         width=64,
                     )
                 except Exception:
-                    st.text("Image not available")
+                    st.text(translate_text(language_code, "doctrine_status.image_not_available"))
 
                 # Use StockStatus for consistent categorization
                 stock_status = StockStatus.from_percentage(target_pct)
@@ -317,8 +344,8 @@ def main():
                 status = stock_status.display_name
                 fit_name = row["fit_name"]
                 st.badge(status, color=color)
-                st.text(f"ID: {fit_id}")
-                st.text(f"Fit: {fit_name}")
+                st.text(translate_text(language_code, "doctrine_status.fit_id_label", fit_id=fit_id))
+                st.text(translate_text(language_code, "doctrine_status.fit_name_label", fit_name=fit_name))
 
             with col2:
                 tab1, tab2 = st.tabs(
@@ -357,30 +384,54 @@ def main():
                     with metric_cols[0]:
                         if fits:
                             st.metric(
-                                label="Fits", value=f"{int(fits)}", delta=fits_delta
+                                label=translate_text(language_code, "low_stock.column_fits"),
+                                value=f"{int(fits)}",
+                                delta=fits_delta,
                             )
                         else:
-                            st.metric(label="Fits", value="0", delta=fits_delta)
+                            st.metric(
+                                label=translate_text(language_code, "low_stock.column_fits"),
+                                value="0",
+                                delta=fits_delta,
+                            )
 
                     with metric_cols[1]:
                         if hulls:
                             st.metric(
-                                label="Hulls", value=f"{int(hulls)}", delta=hulls_delta
+                                label=translate_text(language_code, "doctrine_report.metric_total_hulls"),
+                                value=f"{int(hulls)}",
+                                delta=hulls_delta,
                             )
                         else:
-                            st.metric(label="Hulls", value="0", delta=hulls_delta)
+                            st.metric(
+                                label=translate_text(language_code, "doctrine_report.metric_total_hulls"),
+                                value="0",
+                                delta=hulls_delta,
+                            )
 
                     with metric_cols[2]:
                         if target:
-                            st.metric(label="Target", value=f"{int(target)}")
+                            st.metric(
+                                label=translate_text(language_code, "doctrine_report.target"),
+                                value=f"{int(target)}",
+                            )
                         else:
-                            st.metric(label="Target", value="0")
+                            st.metric(
+                                label=translate_text(language_code, "doctrine_report.target"),
+                                value="0",
+                            )
 
                     with metric_cols[3]:
                         if fit_cost and fit_cost != "N/A":
-                            st.metric(label="Fit Cost", value=f"{fit_cost}")
+                            st.metric(
+                                label=translate_text(language_code, "doctrine_report.column_total_cost"),
+                                value=f"{fit_cost}",
+                            )
                         else:
-                            st.metric(label="Fit Cost", value="N/A")
+                            st.metric(
+                                label=translate_text(language_code, "doctrine_report.column_total_cost"),
+                                value="N/A",
+                            )
 
                     # Progress bar for target percentage (uses ui.formatters)
                     target_pct = row["target_percentage"]
@@ -430,16 +481,20 @@ def main():
 
                             with col_b:
                                 equiv_prefix = "🔄 " if has_equiv else ""
-                                equiv_help = " (includes equivalent modules)" if has_equiv else ""
+                                equiv_help = (
+                                    f" ({translate_text(language_code, 'doctrine_status.includes_equivalent_modules')})"
+                                    if has_equiv
+                                    else ""
+                                )
                                 if mod_stock_status == StockStatus.CRITICAL:
                                     st.markdown(
                                         f":red-badge[:material/error:] {equiv_prefix}{display_text}",
-                                        help=f"Critical stock level{equiv_help}",
+                                        help=f"{translate_text(language_code, 'doctrine_status.critical_stock_level')}{equiv_help}",
                                     )
                                 elif mod_stock_status == StockStatus.NEEDS_ATTENTION:
                                     st.markdown(
                                         f":orange-badge[:material/error:] {equiv_prefix}{display_text}",
-                                        help=f"Low stock{equiv_help}",
+                                        help=f"{translate_text(language_code, 'doctrine_status.low_stock_help')}{equiv_help}",
                                     )
                                 else:
                                     st.text(f"{equiv_prefix}{display_text}")
@@ -449,25 +504,42 @@ def main():
                                 if equiv_group:
                                     in_stock_modules = [m for m in equiv_group.modules if m.stock > 0]
                                     combined_total = sum(m.stock for m in in_stock_modules)
-                                    with st.popover("📋 View stock breakdown", use_container_width=True):
+                                    with st.popover(
+                                        translate_text(language_code, "doctrine_status.view_stock_breakdown"),
+                                        use_container_width=True,
+                                    ):
                                         st.markdown(f"**{mod_name}**")
-                                        st.caption("Combined stock from equivalent modules:")
+                                        st.caption(
+                                            translate_text(
+                                                language_code,
+                                                "doctrine_status.combined_stock_caption",
+                                            )
+                                        )
                                         for em in in_stock_modules:
                                             indicator = "► " if em.type_id == mod_type_id else "   "
                                             st.text(f"{indicator}{em.type_name}: {em.stock:,}")
                                         st.divider()
-                                        st.markdown(f"**Combined Total: {combined_total:,}**")
+                                        st.markdown(
+                                            f"**{translate_text(language_code, 'doctrine_status.combined_total', total=f'{combined_total:,}')}**"
+                                        )
 
                     with tab2:
                         ship_name = row["ship_name"]
-                        st.write(f"{ship_name} - Fit {fit_id}")
+                        st.write(
+                            translate_text(
+                                language_code,
+                                "doctrine_status.fit_header",
+                                ship_name=ship_name,
+                                fit_id=fit_id,
+                            )
+                        )
 
                         # Lazy-load: only fetch fit details when user explicitly requests
                         tab2_key = f"tab2_data_{fit_id}"
 
                         if tab2_key not in st.session_state:
                             if st.button(
-                                "Load Fit Details",
+                                translate_text(language_code, "doctrine_status.load_fit_details"),
                                 key=f"load_tab2_{fit_id}",
                                 type="secondary",
                             ):
@@ -480,7 +552,7 @@ def main():
                         if tab2_key in st.session_state:
                             fit_detail_df = st.session_state[tab2_key]
                             if not fit_detail_df.empty:
-                                col_config = get_fitting_column_config()
+                                col_config = get_fitting_column_config(language_code)
                                 st.dataframe(
                                     fit_detail_df,
                                     hide_index=True,
@@ -489,7 +561,7 @@ def main():
                                 )
                             else:
                                 st.info(
-                                    "No detailed fitting data available for this fit."
+                                    translate_text(language_code, "doctrine_status.no_fit_details")
                                 )
 
                         # Add a thinner divider between fits
@@ -505,12 +577,12 @@ def main():
     # Sidebar Export Section — unified for ships and modules
     # =========================================================================
     st.sidebar.markdown("---")
-    st.sidebar.header("Export")
+    st.sidebar.header(translate_text(language_code, "doctrine_report.export_options"))
 
     col1, col2 = st.sidebar.columns(2)
 
     # Select All — adds all visible ships + modules
-    if col1.button("📋 Select All", width="content"):
+    if col1.button(translate_text(language_code, "doctrine_status.select_all"), width="content"):
         for _, group_data in grouped_fits:
             for _, row in group_data.iterrows():
                 if row["ship_name"] not in st.session_state.displayed_ships:
@@ -535,7 +607,7 @@ def main():
         st.rerun()
 
     # Clear All
-    if col2.button("🗑️ Clear All", width="content"):
+    if col2.button(translate_text(language_code, "doctrine_status.clear_all"), width="content"):
         st.session_state.selected_type_ids = set()
         st.session_state.type_id_info = {}
         st.session_state.rendered_export_data = {}
@@ -553,7 +625,7 @@ def main():
     selected = st.session_state.selected_type_ids
     if selected:
         st.sidebar.markdown("---")
-        st.sidebar.header("Selected Items", divider="blue")
+        st.sidebar.header(translate_text(language_code, "doctrine_status.selected_items"), divider="blue")
 
         selection_lines = []
         for tid in sorted(selected):
@@ -564,7 +636,10 @@ def main():
         st.sidebar.code("\n".join(selection_lines), language=None)
 
         # Render market data button — triggers DB queries only when clicked
-        if st.sidebar.button("📊 Render market data for export", type="primary"):
+        if st.sidebar.button(
+            translate_text(language_code, "doctrine_status.render_market_data"),
+            type="primary",
+        ):
             render_export_data()
             st.session_state.export_data_rendered = True
             st.rerun()
@@ -572,7 +647,7 @@ def main():
         # Show rendered market data and export options
         if ss_get("export_data_rendered", False):
             st.sidebar.markdown("---")
-            st.sidebar.subheader("Market Data")
+            st.sidebar.subheader(translate_text(language_code, "doctrine_status.market_data"))
 
             detail_lines = []
             rendered = st.session_state.get("rendered_export_data", {})
@@ -582,7 +657,16 @@ def main():
                 stock = data.get("total_stock", 0)
                 fits_mkt = data.get("fits_on_mkt", 0)
                 qty = data.get("qty_needed", 0)
-                detail_lines.append(f"  {name} (Stock: {stock} | Fits: {fits_mkt} | Need: {qty})")
+                detail_lines.append(
+                    translate_text(
+                        language_code,
+                        "doctrine_status.market_data_line",
+                        name=name,
+                        stock=stock,
+                        fits=fits_mkt,
+                        need=qty,
+                    )
+                )
             st.sidebar.code("\n".join(detail_lines), language=None)
 
             # Build CSV export
@@ -598,14 +682,14 @@ def main():
             csv_export = "".join(csv_lines)
 
             st.sidebar.download_button(
-                label="Download CSV",
+                label=translate_text(language_code, "doctrine_report.download_csv"),
                 data=csv_export,
                 file_name="doctrine_export.csv",
                 mime="text/csv",
             )
     else:
         st.sidebar.info(
-            "Select ships and modules to export by checking the boxes next to them."
+            translate_text(language_code, "doctrine_status.select_items_for_export")
         )
 
     # Display last update timestamp

@@ -24,8 +24,9 @@ from pages.components.market_components import (
     get_display_formats,
 )
 from services import get_jita_price
-from state import ss_has, ss_get
+from state import get_active_language, ss_has, ss_get
 from repositories import invalidate_market_caches
+from ui.i18n import translate_text
 from ui.market_selector import render_market_selector
 from ui.sync_display import display_sync_status  # noqa: F401
 # Backwards-compatible alias for pages that may import from here
@@ -279,12 +280,19 @@ def maybe_run_check():
 # Title
 # =============================================================================
 
-def render_title_headers(market_name: str):
+def render_title_headers(market_name: str, language_code: str):
     col1, col2 = st.columns([0.2, 0.8], vertical_alignment="bottom")
     with col1:
         st.image("images/wclogo.png", width=125)
     with col2:
-        st.title(f"Winter Coalition Market Stats - {market_name} Market {header_env}")
+        st.title(
+            translate_text(
+                language_code,
+                "market_stats.title",
+                market_name=market_name,
+                header_env=header_env,
+            ).strip()
+        )
 
 
 # =============================================================================
@@ -293,7 +301,8 @@ def render_title_headers(market_name: str):
 
 def main():
     """Main function for the market stats page."""
-    market = render_market_selector()
+    language_code = get_active_language()
+    market = render_market_selector(label=translate_text(language_code, "common.market_hub"))
 
     # Initialize databases if needed
     if 'db_init_time' not in st.session_state:
@@ -305,32 +314,29 @@ def main():
     # Ensure the active market's database is synced before any queries.
     # On cold start or after a market switch, the target db may not exist yet.
     if not ensure_market_db_ready(market.database_alias):
-        st.error(
-            f"Database for **{market.name}** is not available. "
-            "Check Turso credentials and network connectivity."
-        )
+        st.error(translate_text(language_code, "error.market_db_unavailable", market_name=market.name))
         st.stop()
 
     if init_result:
         update_wcmkt_state()
 
     maybe_run_check()
-    render_title_headers(market.name)
+    render_title_headers(market.name, language_code)
 
     # Get service
     market_service = get_market_service()
 
     # Sidebar filters
-    st.sidebar.header("Filters")
-    show_all = st.sidebar.checkbox("Show All Data", value=False)
+    st.sidebar.header(translate_text(language_code, "low_stock.filters_header"))
+    show_all = st.sidebar.checkbox(translate_text(language_code, "market_stats.show_all_data"), value=False)
 
     categories, all_items, _ = get_filter_options()
     selected_category = st.sidebar.selectbox(
-        "Select Category",
+        translate_text(language_code, "market_stats.select_category"),
         options=[""] + categories,
         index=0,
         key="selected_category_choice",
-        format_func=lambda x: "All Categories" if x == "" else x,
+        format_func=lambda x: translate_text(language_code, "market_stats.all_categories") if x == "" else x,
     )
 
     available_items = check_selected_category(selected_category, show_all)
@@ -338,10 +344,10 @@ def main():
         available_items = all_items
 
     selected_item = st.sidebar.selectbox(
-        "Select Item",
+        translate_text(language_code, "market_stats.select_item"),
         options=[""] + available_items,
         index=0,
-        format_func=lambda x: "All Items" if x == "" else x,
+        format_func=lambda x: translate_text(language_code, "market_stats.all_items") if x == "" else x,
     )
     selected_item = check_selected_item(selected_item)
 
@@ -361,7 +367,7 @@ def main():
     buy_order_count = buy_data['order_id'].nunique() if not buy_data.empty else 0
     buy_total_value = (buy_data['price'] * buy_data['volume_remain']).sum() if not buy_data.empty else 0
 
-    display_formats = get_display_formats()
+    display_formats = get_display_formats(language_code)
 
     # Initialize fitting data
     fit_df = pd.DataFrame()
@@ -429,7 +435,7 @@ def main():
 
         # Headers
         if show_all:
-            st.header("All Sell Orders", divider="green")
+            st.header(translate_text(language_code, "market_stats.all_sell_orders"), divider="green")
         elif ss_has('selected_item'):
             selected_item = st.session_state.selected_item
             selected_item_id = ss_get('selected_item_id') or _resolve_type_id(selected_item)
@@ -453,7 +459,10 @@ def main():
             with col2:
                 try:
                     if fits_on_mkt is not None and fits_on_mkt:
-                        st.subheader("Winter Co. Doctrine", divider="orange")
+                        st.subheader(
+                            translate_text(language_code, "market_stats.winter_co_doctrine"),
+                            divider="orange",
+                        )
                         if cat_id in [7, 8, 18]:
                             all_fits = service.repository.get_all_fits()
                             module_fits = all_fits[all_fits['type_id'] == selected_item_id]
@@ -463,7 +472,14 @@ def main():
                 except Exception as e:
                     logger.error(f"Error: {e}")
         elif ss_has('selected_category'):
-            st.header(st.session_state.selected_category + "s", divider="green")
+            st.header(
+                translate_text(
+                    language_code,
+                    "market_stats.category_plural",
+                    category_name=st.session_state.selected_category,
+                ),
+                divider="green",
+            )
 
         # Current Market Status
         render_current_market_status_ui(
@@ -472,25 +488,39 @@ def main():
             sell_order_count=sell_order_count,
             sell_total_value=sell_total_value,
             fit_df=fit_df, fits_on_mkt=fits_on_mkt, cat_id=cat_id,
+            language_code=language_code,
         )
 
         # 30-Day Historical Metrics
-        with st.expander("30-Day Market Stats (expand to view metrics)", expanded=False):
-            render_30day_metrics_ui(market_service)
+        with st.expander(
+            translate_text(language_code, "market_stats.thirty_day_market_stats"),
+            expanded=False,
+        ):
+            render_30day_metrics_ui(market_service, language_code)
 
         st.divider()
 
         # Sell orders display
         display_df = sell_data.copy()
         if ss_has('selected_item'):
-            st.subheader("Sell Orders for " + st.session_state.selected_item, divider="blue")
+            st.subheader(
+                translate_text(
+                    language_code,
+                    "market_stats.sell_orders_for",
+                    name=st.session_state.selected_item,
+                ),
+                divider="blue",
+            )
         elif ss_has('selected_category'):
             cat_label = st.session_state.selected_category
             if not cat_label.endswith("s"):
                 cat_label += "s"
-            st.subheader(f"Sell Orders for {cat_label}", divider="blue")
+            st.subheader(
+                translate_text(language_code, "market_stats.sell_orders_for", name=cat_label),
+                divider="blue",
+            )
         else:
-            st.subheader("All Sell Orders", divider="green")
+            st.subheader(translate_text(language_code, "market_stats.all_sell_orders"), divider="green")
 
         if 'is_buy_order' in display_df.columns:
             display_df.drop(columns='is_buy_order', inplace=True)
@@ -499,28 +529,41 @@ def main():
     # Buy orders
     if not buy_data.empty:
         if show_all:
-            st.subheader("All Buy Orders", divider="orange")
+            st.subheader(translate_text(language_code, "market_stats.all_buy_orders"), divider="orange")
         elif ss_has('selected_item'):
-            st.subheader(f"Buy Orders for {st.session_state.selected_item}", divider="orange")
+            st.subheader(
+                translate_text(
+                    language_code,
+                    "market_stats.buy_orders_for",
+                    name=st.session_state.selected_item,
+                ),
+                divider="orange",
+            )
         elif ss_has('selected_category'):
             cat_label = st.session_state.selected_category
             if not cat_label.endswith("s"):
                 cat_label += "s"
-            st.subheader(f"Buy Orders for {cat_label}", divider="orange")
+            st.subheader(
+                translate_text(language_code, "market_stats.buy_orders_for", name=cat_label),
+                divider="orange",
+            )
         else:
-            st.subheader("All Buy Orders", divider="orange")
+            st.subheader(translate_text(language_code, "market_stats.all_buy_orders"), divider="orange")
 
         col1, col2 = st.columns(2)
         with col1:
             if buy_total_value > 0:
-                st.metric("Market Value (buy orders)", f"{millify.millify(buy_total_value, precision=2)} ISK")
+                st.metric(
+                    translate_text(language_code, "market_stats.market_value_buy_orders"),
+                    f"{millify.millify(buy_total_value, precision=2)} ISK",
+                )
             else:
-                st.metric("Market Value (buy orders)", "0 ISK")
+                st.metric(translate_text(language_code, "market_stats.market_value_buy_orders"), "0 ISK")
         with col2:
             if buy_order_count > 0:
-                st.metric("Total Buy Orders", f"{buy_order_count:,.0f}")
+                st.metric(translate_text(language_code, "market_stats.total_buy_orders"), f"{buy_order_count:,.0f}")
             else:
-                st.metric("Total Buy Orders", "0")
+                st.metric(translate_text(language_code, "market_stats.total_buy_orders"), "0")
 
         buy_display_df = buy_data.copy()
         if 'is_buy_order' in buy_display_df.columns:
@@ -529,26 +572,48 @@ def main():
 
     elif not sell_data.empty:
         if st.session_state.selected_item is not None:
-            st.write(f"No current buy orders found for {st.session_state.selected_item}")
+            st.write(
+                translate_text(
+                    language_code,
+                    "market_stats.no_current_buy_orders",
+                    item_name=st.session_state.selected_item,
+                )
+            )
     else:
         if st.session_state.selected_item is not None:
-            st.write(f"No current market orders found for {st.session_state.selected_item}")
+            st.write(
+                translate_text(
+                    language_code,
+                    "market_stats.no_current_market_orders",
+                    item_name=st.session_state.selected_item,
+                )
+            )
 
     # Market History section
     if st.session_state.get('selected_item') is not None:
-        st.subheader("Market History - " + st.session_state.get('selected_item'), divider="blue")
+        st.subheader(
+            translate_text(
+                language_code,
+                "market_stats.market_history",
+                item_name=st.session_state.get('selected_item'),
+            ),
+            divider="blue",
+        )
     else:
         if st.session_state.get('selected_category') is not None:
-            filter_info = f"Category: {st.session_state.get('selected_category')}"
+            filter_info = st.session_state.get('selected_category')
             suffix = "s"
         else:
-            filter_info = "All Items"
+            filter_info = translate_text(language_code, "market_stats.all_items")
             suffix = ""
 
-        st.subheader("Price History - " + filter_info + suffix, divider="blue")
-        render_isk_volume_chart_ui(market_service)
-        with st.expander("Expand to view Market History Data"):
-            render_isk_volume_table_ui(market_service)
+        st.subheader(
+            translate_text(language_code, "market_stats.price_history", filter_info=filter_info + suffix),
+            divider="blue",
+        )
+        render_isk_volume_chart_ui(market_service, language_code)
+        with st.expander(translate_text(language_code, "market_stats.expand_market_history_data")):
+            render_isk_volume_table_ui(market_service, language_code)
 
     # Item history chart
     if ss_has('selected_item'):
@@ -579,13 +644,13 @@ def main():
             st.plotly_chart(history_chart, config={'width': 'content'})
 
         if selected_history is not None and not selected_history.empty:
-            logger.info(f"Displaying history data for {selected_item_id}")
-            colh1, colh2 = st.columns(2)
-            with colh1:
-                history_df = display_history_data(selected_history)
-            with colh2:
-                if not history_df.empty:
-                    display_history_metrics(history_df)
+                    logger.info(f"Displaying history data for {selected_item_id}")
+                    colh1, colh2 = st.columns(2)
+                    with colh1:
+                        history_df = display_history_data(selected_history, language_code)
+                    with colh2:
+                        if not history_df.empty:
+                            display_history_metrics(history_df, language_code)
 
         st.divider()
 
@@ -593,7 +658,7 @@ def main():
     if fit_df is None:
         fit_df = pd.DataFrame()
     if not fit_df.empty:
-        st.subheader("Fitting Data", divider="blue")
+        st.subheader(translate_text(language_code, "market_stats.fitting_data"), divider="blue")
         selected_item = ss_get('selected_item', " ")
         selected_item_id = ss_get('selected_item_id') or _resolve_type_id(selected_item)
         try:
@@ -605,19 +670,19 @@ def main():
             unsafe_allow_html=True,
         )
         if isship:
-            column_config = get_fitting_col_config()
+            column_config = get_fitting_col_config(language_code)
             st.dataframe(fit_df, hide_index=True, column_config=column_config, width='content')
 
     # Sidebar bottom
     with st.sidebar:
-        display_sync_status()
+        display_sync_status(language_code)
         st.sidebar.divider()
-        db_check = st.sidebar.button("Check DB State", width='content')
+        db_check = st.sidebar.button(translate_text(language_code, "market_stats.check_db_state"), width='content')
         if db_check:
             check_db(manual_override=True)
         st.sidebar.divider()
-        st.markdown("### Data Downloads")
-        st.markdown("*Visit the **Downloads** page for market data, doctrine fits, and SDE table exports.*")
+        st.markdown(f"### {translate_text(language_code, 'nav.page.downloads').lstrip('📥')}")
+        st.markdown(translate_text(language_code, "market_stats.downloads_hint"))
 
 
 if __name__ == "__main__":
