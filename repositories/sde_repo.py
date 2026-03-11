@@ -46,6 +46,7 @@ VALID_SDE_TABLES = frozenset({
     "invTypeReactions",
     "invTypes",
     "inv_info",
+    "localizations",
     "sdetypes",
 })
 
@@ -84,18 +85,18 @@ def _get_localized_type_names_impl(
     """Look up localized type names from an optional translation table.
 
     Expected schema:
-        type_name_translations(type_id INTEGER, language_code TEXT, type_name TEXT)
+        localizations(type_id INTEGER, language TEXT, type_name TEXT)
 
     Missing tables or rows fall back to English at the caller.
     """
     if not type_ids or language_code == "en":
         return {}
 
-    query = text(
+    localizations_query = text(
         """
         SELECT type_id, type_name
-        FROM type_name_translations
-        WHERE language_code = :language_code
+        FROM localizations
+        WHERE language = :language_code
         AND type_id IN :type_ids
         """
     ).bindparams(bindparam("type_ids", expanding=True))
@@ -103,7 +104,7 @@ def _get_localized_type_names_impl(
     try:
         with engine.connect() as conn:
             df = pd.read_sql_query(
-                query,
+                localizations_query,
                 conn,
                 params={
                     "language_code": language_code,

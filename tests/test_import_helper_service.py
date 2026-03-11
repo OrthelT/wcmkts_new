@@ -255,11 +255,7 @@ class TestImportHelperService:
     ):
         from services.import_helper_service import ImportHelperFilters, ImportHelperService
 
-        service = ImportHelperService(Mock(), Mock(), DummyJitaProvider({}))
-        provider = DummyJitaProvider(
-            {34: JitaPriceData(type_id=34, sell_price=20.0, buy_price=18.0)}
-        )
-        service._jita_provider = provider
+        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}))
 
         base_df = pd.DataFrame(
             {
@@ -268,10 +264,19 @@ class TestImportHelperService:
                 "price": [30.0],
                 "avg_volume": [5.0],
                 "volume_m3": [0.01],
+                "jita_sell_price": [20.0],
+                "jita_buy_price": [18.0],
+                "shipping_cost": [1.0],
+                "profit_jita_sell": [9.0],
+                "profit_jita_sell_30d": [1350.0],
+                "turnover_30d": [3000.0],
+                "volume_30d": [150.0],
+                "capital_utilis": [0.45],
                 "category_name": ["Mineral"],
                 "group_name": ["Mineral"],
             }
         )
+
         def _localize(df, *_args, **_kwargs):
             localized_df = df.copy()
             localized_df["type_name"] = "三钛合金"
@@ -281,9 +286,7 @@ class TestImportHelperService:
         mock_localize.side_effect = _localize
 
         filters = ImportHelperFilters(search_text="trit")
-
-        with patch.object(service, "_get_import_candidates", return_value=base_df):
-            result = service.get_import_items(filters, language_code="zh")
+        result = service.get_import_items(base_df, filters, language_code="zh")
 
         assert len(result) == 1
         assert result.iloc[0]["type_name"] == "三钛合金"

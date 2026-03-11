@@ -6,7 +6,7 @@ Covers type lookups, group/category queries, table exports, and edge cases.
 """
 import pytest
 import pandas as pd
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 
 def _mock_engine():
@@ -88,12 +88,12 @@ class TestGetLocalizedTypeNames:
 
         assert result == {34: "三钛合金", 35: "类晶体胶矿"}
 
-    def test_returns_empty_when_table_missing(self):
+    def test_returns_empty_when_translation_table_missing(self):
         from repositories.sde_repo import _get_localized_type_names_impl
 
         engine, _ = _mock_engine()
 
-        with patch("pandas.read_sql_query", side_effect=Exception("no such table: type_name_translations")):
+        with patch("pandas.read_sql_query", side_effect=Exception("no such table: localizations")):
             result = _get_localized_type_names_impl(engine, [34], "zh")
 
         assert result == {}
@@ -129,7 +129,7 @@ class TestGetGroupsForCategory:
         expected = pd.DataFrame({"groupID": [1136], "groupName": ["Ice Product"]})
 
         with patch("pandas.read_sql_query", return_value=expected) as mock_sql:
-            result = _get_groups_for_category_impl(engine, 4)
+            _get_groups_for_category_impl(engine, 4)
 
         # Verify the query contains the group filter
         call_args = mock_sql.call_args

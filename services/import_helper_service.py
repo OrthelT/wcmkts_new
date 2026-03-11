@@ -15,6 +15,7 @@ from sqlalchemy import bindparam, text
 from config import DatabaseConfig
 from logging_config import setup_logging
 from services.price_service import PriceResult, PriceService, get_price_service
+from services.type_name_localization import apply_localized_type_names
 from settings_service import SettingsService
 
 logger = setup_logging(__name__, log_file="import_helper_service.log")
@@ -237,6 +238,7 @@ class ImportHelperService:
         if df.empty:
             return df
 
+        df = apply_localized_type_names(df, self._sde_db, language_code, self._logger)
         df["rrp"] = df["jita_sell_price"] * (1 + filters.markup_margin) + df["shipping_cost"]
 
         df = df[df["avg_volume"] > 0]
