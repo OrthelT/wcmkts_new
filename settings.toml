@@ -57,10 +57,12 @@
         "288" = "Support"
 
 # Preferred fits for ships with multiple variants
-# Maps ship_name -> fit_id for stock display purposes
+# Maps type_id (as string key) -> fit_id for stock display purposes
 [preferred_fits]
-    "Ferox Navy Issue" = 473
-    "Hurricane Fleet Issue" = 494
+    # Ferox Navy Issue
+    "72812" = 473
+    # Hurricane Fleet Issue
+    "33157" = 494
 
 [markets.primary]
     name = "4-HWWF Keepstar"

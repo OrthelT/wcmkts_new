@@ -48,12 +48,12 @@ class DoctrineRepository:
     - `get_all_doctrine_compositions()`: Get all doctrine compositions
     - `get_doctrine_fit_ids(doctrine_name)`: Get all fit IDs belonging to a specific doctrine
     - `get_doctrine_lead_ship(doctrine_id)`: Get the lead ship type ID for a doctrine
-    - `get_module_stock_info(module_name)`: Get stock information for a specific module
-    - `get_module_usage(module_name)`: Get usage information for a module
-    - `get_module_stock(module_name)`: Get complete module stock information as a domain model
-    - `get_multiple_module_stocks(module_names)`: Get stock information for multiple modules
-    - `get_ship_stock(ship_name)`: Get stock information for a specific ship hull
-    - `get_multiple_ship_stocks(ship_names)`: Get stock information for multiple ships
+    - `get_module_stock_info(type_id)`: Get stock information for a specific module
+    - `get_module_usage(type_id)`: Get usage information for a module
+    - `get_module_stock(type_id)`: Get complete module stock information as a domain model
+    - `get_multiple_module_stocks(type_ids)`: Get stock information for multiple modules
+    - `get_ship_stock(type_id)`: Get stock information for a specific ship hull
+    - `get_multiple_ship_stocks(type_ids)`: Get stock information for multiple ships
     - `get_avg_prices(type_ids)`: Get average prices for multiple type IDs from marketstats
     - `get_fit_items(fit_id)`: Get all items for a fit as domain models
     - `get_doctrine(doctrine_name)`: Get a complete Doctrine domain model
@@ -70,7 +70,7 @@ class DoctrineRepository:
         target = repo.get_target_by_fit_id(123)
 
         # Get module stock info
-        module = repo.get_module_stock("Damage Control II")
+        module = repo.get_module_stock(2048)  # Damage Control II
     """
 
     def __init__(self, db: DatabaseConfig, logger: Optional[logging.Logger] = None):
@@ -192,16 +192,12 @@ class DoctrineRepository:
     # Module Stock
     # =========================================================================
 
-    def get_module_stock_info(self, module_name: str) -> pd.DataFrame:
+    def get_module_stock_info(self, type_id: int) -> pd.DataFrame:
         """
-        Get stock information for a specific module.
-
-        Replaces queries in:
-        - doctrine_status.py:get_module_stock_list()
-        - doctrine_report.py:get_module_stock_list()
+        Get stock information for a specific module by type_id.
 
         Args:
-            module_name: Name of the module
+            type_id: EVE type ID of the module
 
         Returns:
             DataFrame with type_name, type_id, total_stock, fits_on_mkt
@@ -209,25 +205,23 @@ class DoctrineRepository:
         query = text("""
             SELECT type_name, type_id, total_stock, fits_on_mkt
             FROM doctrines
-            WHERE type_name = :module_name
+            WHERE type_id = :type_id
             LIMIT 1
         """)
 
         try:
             with self._db.engine.connect() as conn:
-                return pd.read_sql_query(query, conn, params={"module_name": module_name})
+                return pd.read_sql_query(query, conn, params={"type_id": type_id})
         except Exception as e:
-            self._logger.error(f"Failed to get module stock for {module_name}: {e}")
+            self._logger.error(f"Failed to get module stock for type_id={type_id}: {e}")
             return pd.DataFrame()
 
-    def get_module_usage(self, module_name: str) -> pd.DataFrame:
+    def get_module_usage(self, type_id: int) -> pd.DataFrame:
         """
         Get usage information for a module (which fits use it).
 
-        Replaces: doctrine_status.py usage query in get_module_stock_list()
-
         Args:
-            module_name: Name of the module
+            type_id: EVE type ID of the module
 
         Returns:
             DataFrame with ship_name, ship_target, fit_qty
@@ -236,134 +230,130 @@ class DoctrineRepository:
             SELECT st.ship_name, st.ship_target, d.fit_qty
             FROM doctrines d
             JOIN ship_targets st ON d.fit_id = st.fit_id
-            WHERE d.type_name = :module_name
+            WHERE d.type_id = :type_id
         """)
 
         try:
             with self._db.engine.connect() as conn:
-                return pd.read_sql_query(query, conn, params={"module_name": module_name})
+                return pd.read_sql_query(query, conn, params={"type_id": type_id})
         except Exception as e:
-            self._logger.error(f"Failed to get module usage for {module_name}: {e}")
+            self._logger.error(f"Failed to get module usage for type_id={type_id}: {e}")
             return pd.DataFrame()
 
-    def get_module_stock(self, module_name: str) -> Optional[ModuleStock]:
+    def get_module_stock(self, type_id: int) -> Optional[ModuleStock]:
         """
         Get complete module stock information as a domain model.
 
         Combines stock and usage queries into a single ModuleStock object.
 
         Args:
-            module_name: Name of the module
+            type_id: EVE type ID of the module
 
         Returns:
             ModuleStock instance, or None if not found
         """
-        stock_df = self.get_module_stock_info(module_name)
+        stock_df = self.get_module_stock_info(type_id)
         if stock_df.empty:
             return None
 
-        usage_df = self.get_module_usage(module_name)
+        usage_df = self.get_module_usage(type_id)
 
         return ModuleStock.from_query_results(stock_df.iloc[0], usage_df)
 
-    def get_multiple_module_stocks(self, module_names: list[str]) -> dict[str, ModuleStock]:
+    def get_multiple_module_stocks(self, type_ids: list[int]) -> dict[int, ModuleStock]:
         """
         Get stock information for multiple modules.
 
-        More efficient than calling get_module_stock() in a loop when
-        you need data for many modules.
-
         Args:
-            module_names: List of module names
+            type_ids: List of EVE type IDs
 
         Returns:
-            Dict mapping module name to ModuleStock
+            Dict mapping type_id to ModuleStock
         """
         result = {}
-        for name in module_names:
-            stock = self.get_module_stock(name)
+        for tid in type_ids:
+            stock = self.get_module_stock(tid)
             if stock:
-                result[name] = stock
+                result[tid] = stock
         return result
 
     # =========================================================================
     # Ship Stock
     # =========================================================================
 
-    def get_ship_stock(self, ship_name: str) -> Optional[ShipStock]:
+    def get_ship_stock(self, type_id: int) -> Optional[ShipStock]:
         """
-        Get stock information for a specific ship hull.
+        Get stock information for a specific ship hull by type_id.
 
         Handles ships with multiple fits by using preferred_fits configuration
         from settings.toml. Falls back to first available fit if not configured.
 
         Args:
-            ship_name: Name of the ship (e.g., "Hurricane Fleet Issue")
+            type_id: EVE type ID of the ship
 
         Returns:
             ShipStock domain model, or None if not found
         """
         preferred_fits = _load_preferred_fits()
-        preferred_fit_id = preferred_fits.get(ship_name)
+        preferred_fit_id = preferred_fits.get(type_id)
 
         # Build query with optional fit_id filter
         if preferred_fit_id:
             query = text("""
                 SELECT type_name, type_id, total_stock, fits_on_mkt, fit_id
                 FROM doctrines
-                WHERE type_name = :ship_name AND fit_id = :fit_id
+                WHERE type_id = :type_id AND fit_id = :fit_id
                 LIMIT 1
             """)
-            params = {"ship_name": ship_name, "fit_id": preferred_fit_id}
+            params = {"type_id": type_id, "fit_id": preferred_fit_id}
         else:
             query = text("""
                 SELECT type_name, type_id, total_stock, fits_on_mkt, fit_id
                 FROM doctrines
-                WHERE type_name = :ship_name
+                WHERE type_id = :type_id
                 LIMIT 1
             """)
-            params = {"ship_name": ship_name}
+            params = {"type_id": type_id}
 
         try:
             with self._db.engine.connect() as conn:
                 df = pd.read_sql_query(query, conn, params=params)
 
             if df.empty:
-                self._logger.warning(f"No stock data found for ship: {ship_name}")
+                self._logger.warning(f"No stock data found for type_id={type_id}")
                 return None
 
             row = df.iloc[0]
 
             # Validate required fields
             if pd.isna(row.get('total_stock')) or pd.isna(row.get('type_id')):
-                self._logger.warning(f"Invalid stock data for ship: {ship_name}")
+                self._logger.warning(f"Invalid stock data for type_id={type_id}")
                 return None
 
             # Get target from ship_id
-            ship_id = int(row['type_id'])
-            ship_target = self.get_target_by_ship_id(ship_id)
+            ship_target = self.get_target_by_ship_id(type_id)
 
             return ShipStock.from_query_result(row, ship_target=ship_target)
 
         except Exception as e:
-            self._logger.error(f"Failed to get ship stock for {ship_name}: {e}")
+            self._logger.error(f"Failed to get ship stock for type_id={type_id}: {e}")
             return None
 
-    def get_multiple_ship_stocks(self, ship_names: list[str]) -> dict[str, ShipStock]:
+    def get_multiple_ship_stocks(self, type_ids: list[int]) -> dict[int, ShipStock]:
         """
         Get stock information for multiple ships.
 
         Args:
-            ship_names: List of ship names
+            type_ids: List of EVE type IDs
 
         Returns:
-            Dict mapping ship name to ShipStock
+            Dict mapping type_id to ShipStock
         """
         result = {}
-        for name in ship_names:
-            stock = self.get_ship_stock(name)
+        for tid in type_ids:
+            stock = self.get_ship_stock(tid)
             if stock:
-                result[name] = stock
+                result[tid] = stock
         return result
 
     # =========================================================================
@@ -452,15 +442,16 @@ class DoctrineRepository:
 # =============================================================================
 
 @st.cache_data(ttl=3600)
-def _load_preferred_fits() -> dict[str, int]:
+def _load_preferred_fits() -> dict[int, int]:
     """
     Load preferred fit mappings from settings.toml.
 
-    Maps ship names to their preferred fit_id for ships with multiple fits.
+    Maps ship type_id to their preferred fit_id for ships with multiple fits.
+    TOML keys are type_id strings (TOML requires string keys); parsed to ints here.
     Cached for 1 hour.
 
     Returns:
-        Dict mapping ship_name -> fit_id
+        Dict mapping type_id -> fit_id
     """
     import tomllib
     from pathlib import Path
@@ -474,7 +465,8 @@ def _load_preferred_fits() -> dict[str, int]:
         with open(settings_path, "rb") as f:
             settings = tomllib.load(f)
 
-        return settings.get("preferred_fits", {})
+        raw = settings.get("preferred_fits", {})
+        return {int(k): int(v) for k, v in raw.items()}
 
     except Exception as e:
         logger.error(f"Failed to load preferred fits from settings.toml: {e}")

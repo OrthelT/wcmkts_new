@@ -35,7 +35,7 @@ def render_export_data():
         name = info.get("module_name", f"Unknown ({type_id})")
 
         try:
-            module_stock = svc.repository.get_module_stock(name)
+            module_stock = svc.repository.get_module_stock(type_id)
             if module_stock:
                 st.session_state.rendered_export_data[type_id] = {
                     "name": name,
