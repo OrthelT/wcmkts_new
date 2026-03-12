@@ -232,6 +232,65 @@ def _get_faction_type_ids_impl(engine) -> set[int]:
     return set(df["typeID"].tolist())
 
 
+def _get_localized_name_impl(engine, type_id: int, language: str) -> Optional[str]:
+    """Look up a localized type name by ID and language from localizations.
+
+    Falls back to English if the requested language has no entry.
+    """
+    with engine.connect() as conn:
+        result = conn.execute(
+            text(
+                "SELECT COALESCE(req.type_name, en.type_name) "
+                "FROM localizations en "
+                "LEFT JOIN localizations req "
+                "  ON req.type_id = en.type_id AND req.language = :language "
+                "WHERE en.type_id = :type_id AND en.language = 'en'"
+            ),
+            {"type_id": type_id, "language": language},
+        )
+        row = result.fetchone()
+        return row[0] if row is not None else None
+
+
+def _get_localized_names_impl(
+    engine, type_ids: list[int], language: str
+) -> dict[int, str]:
+    """Batch lookup of localized names for multiple type IDs in one language.
+
+    Falls back to English for any type_id missing the requested language.
+    """
+    if not type_ids:
+        return {}
+    placeholders = ", ".join(f":id_{i}" for i in range(len(type_ids)))
+    params = {f"id_{i}": tid for i, tid in enumerate(type_ids)}
+    params["language"] = language
+    with engine.connect() as conn:
+        result = conn.execute(
+            text(
+                f"SELECT en.type_id, COALESCE(req.type_name, en.type_name) "
+                f"FROM localizations en "
+                f"LEFT JOIN localizations req "
+                f"  ON req.type_id = en.type_id AND req.language = :language "
+                f"WHERE en.type_id IN ({placeholders}) AND en.language = 'en'"
+            ),
+            params,
+        )
+        return {row[0]: row[1] for row in result.fetchall()}
+
+
+def _get_all_translations_impl(engine, type_id: int) -> dict[str, str]:
+    """Get all language translations for a single type ID."""
+    with engine.connect() as conn:
+        result = conn.execute(
+            text(
+                "SELECT language, type_name FROM localizations "
+                "WHERE type_id = :type_id"
+            ),
+            {"type_id": type_id},
+        )
+        return {row[0]: row[1] for row in result.fetchall()}
+
+
 # =============================================================================
 # Cached Wrappers (SDE data is immutable at runtime - no TTL needed)
 # =============================================================================
@@ -286,6 +345,28 @@ def _get_tech2_type_ids_cached(_url: str) -> list[int]:
 def _get_faction_type_ids_cached(_url: str) -> set[int]:
     db = DatabaseConfig("sde")
     return _get_faction_type_ids_impl(db.engine)
+
+
+@st.cache_resource
+def _get_localized_name_cached(
+    _url: str, type_id: int, language: str
+) -> Optional[str]:
+    db = DatabaseConfig("sde")
+    return _get_localized_name_impl(db.engine, type_id, language)
+
+
+@st.cache_resource
+def _get_localized_names_cached(
+    _url: str, type_ids: tuple[int, ...], language: str
+) -> dict[int, str]:
+    db = DatabaseConfig("sde")
+    return _get_localized_names_impl(db.engine, list(type_ids), language)
+
+
+@st.cache_resource
+def _get_all_translations_cached(_url: str, type_id: int) -> dict[str, str]:
+    db = DatabaseConfig("sde")
+    return _get_all_translations_impl(db.engine, type_id)
 
 
 # =============================================================================
@@ -374,6 +455,26 @@ class SDERepository(BaseRepository):
     def get_faction_type_ids(self) -> set[int]:
         """Get all Faction type IDs (metaGroupID=4, cached)."""
         return _get_faction_type_ids_cached(self._url)
+
+    def get_localized_name(self, type_id: int, language: str) -> Optional[str]:
+        """Get localized type name by ID and language code (cached)."""
+        return _get_localized_name_cached(self._url, type_id, language)
+
+    def get_localized_names(
+        self, type_ids: list[int], language: str
+    ) -> dict[int, str]:
+        """Batch lookup of localized names (cached).
+
+        Returns {type_id: localized_name} for items found.
+        """
+        return _get_localized_names_cached(self._url, tuple(type_ids), language)
+
+    def get_all_translations(self, type_id: int) -> dict[str, str]:
+        """Get all language translations for a type ID (cached).
+
+        Returns {language_code: localized_name}.
+        """
+        return _get_all_translations_cached(self._url, type_id)
 
 
 # =============================================================================

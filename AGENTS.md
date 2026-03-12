@@ -92,7 +92,7 @@ All pages follow consistent patterns with Streamlit best practices:
   - Methods: `integrity_check()`, `sync()`, `validate_sync()`, `get_most_recent_update()`
 - **`models.py`**: SQLAlchemy ORM models using modern `mapped_column()` syntax
   - MarketStats, MarketOrders, MarketHistory, Doctrines, ShipTargets, DoctrineFits, ModuleEquivalents, etc.
-- **`sdemodels.py`**: SDE (Static Data Export) ORM models for InvTypes, InvGroups, InvCategories
+- **`sdemodels.py`**: SDE (Static Data Export) ORM models for InvTypes, InvGroups, InvCategories, Localization
 - **`build_cost_models.py`**: Manufacturing models for Structures, IndustryIndex, Rigs
 
 **Pricer Module (`parser/` directory):**
@@ -157,6 +157,7 @@ All pages follow consistent patterns with Streamlit best practices:
 - `invTypes`: EVE Online item definitions
 - `invGroups`: Item group classifications
 - `invCategories`: High-level item categories
+- `localizations`: Localized item names for 8 languages (de, en, es, fr, ja, ko, ru, zh). ~210k rows. Accessed via `SDERepository.get_localized_name()`, `get_localized_names()`, `get_all_translations()`. Falls back to English for items without a translation in the requested language (~20 en-only items).
 
 *buildcost.db tables:*
 - `structures`: Manufacturing structure data
@@ -332,7 +333,7 @@ df = repo.get_all_stats()  # Returns cached pandas DataFrame
 
 ### Current Test Coverage
 The test suite covers repositories, services, database config, and infrastructure:
-- ~128 tests passing (`uv run pytest -q`)
+- ~147 tests passing (`uv run pytest -q`)
 
 ## Commit & Pull Request Guidelines
 
@@ -572,7 +573,7 @@ from state.session_state import ss_get  # ✗ state!
 - **`pages/`**: Streamlit application pages
 - **`pages/components/`**: Extracted Streamlit rendering components (market_components)
 - **`parser/`**: EFT fitting and item list parser (open source contribution)
-- **`tests/`**: pytest unit tests (~128 tests)
+- **`tests/`**: pytest unit tests (~147 tests)
 - **`docs/`**: Documentation
 - **`logs/`**: Application logs (git-ignored)
 - **`images/`**: UI assets
