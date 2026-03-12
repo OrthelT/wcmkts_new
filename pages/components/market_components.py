@@ -39,8 +39,12 @@ def render_isk_volume_chart_ui(service, language_code: str = "en") -> None:
     @st.fragment
     def chart_fragment():
         selected_category = st.session_state.get("selected_category", None)
+        selected_category_id = st.session_state.get("selected_category_id", None)
 
-        min_date, max_date = service.get_available_date_range(selected_category)
+        min_date, max_date = service.get_available_date_range(
+            selected_category,
+            selected_category_id,
+        )
 
         if min_date is None or max_date is None:
             msg = (
@@ -107,7 +111,7 @@ def render_isk_volume_chart_ui(service, language_code: str = "en") -> None:
                 )
             with col2:
                 st.write(f"**{translate_text(language_code, 'market_stats.date_aggregation')}:**")
-                date_period = st.radio(
+            date_period = st.radio(
                     translate_text(language_code, "market_stats.date_period"),
                     options=["daily", "weekly", "monthly", "yearly"],
                     index=0,
@@ -155,6 +159,7 @@ def render_isk_volume_chart_ui(service, language_code: str = "en") -> None:
             outlier_threshold=outlier_threshold,
             cap_percentile=cap_percentile,
             selected_category=selected_category,
+            selected_category_id=selected_category_id,
         )
         st.plotly_chart(chart, config={"width": "stretch"})
 
@@ -175,6 +180,7 @@ def render_isk_volume_table_ui(service, language_code: str = "en") -> None:
     end_date = st.session_state.get("chart_end_date", None)
     date_period = st.session_state.get("chart_date_period_radio") or "daily"
     selected_category = st.session_state.get("selected_category", None)
+    selected_category_id = st.session_state.get("selected_category_id", None)
 
     data_table_config = {
         "Date": st.column_config.DateColumn(
@@ -194,6 +200,7 @@ def render_isk_volume_table_ui(service, language_code: str = "en") -> None:
         start_date=start_date,
         end_date=end_date,
         selected_category=selected_category,
+        selected_category_id=selected_category_id,
     )
 
     filter_info = translate_text(
@@ -204,7 +211,11 @@ def render_isk_volume_table_ui(service, language_code: str = "en") -> None:
         date_period=translate_text(language_code, f"market_stats.period_{date_period}"),
     )
     if selected_category:
-        filter_info += translate_text(language_code, "market_stats.filter_info_category", category_name=selected_category)
+        filter_info += translate_text(
+            language_code,
+            "market_stats.filter_info_category",
+            category_name=selected_category,
+        )
     st.write(filter_info)
 
     if table.empty:
@@ -256,7 +267,12 @@ def configure_top_n_items_ui() -> None:
     )
 
 
-def render_top_n_items_ui(service, df_7days: pd.DataFrame, df_30days: pd.DataFrame) -> None:
+def render_top_n_items_ui(
+    service,
+    df_7days: pd.DataFrame,
+    df_30days: pd.DataFrame,
+    language_code: str = "en",
+) -> None:
     """Render top N items section with configuration and results.
 
     Args:
@@ -323,12 +339,14 @@ def render_30day_metrics_ui(service, language_code: str = "en") -> None:
         service: MarketService instance.
     """
     metrics_category = None
+    metrics_category_id = None
     metrics_item_id = None
 
     if ss_has("selected_item_id"):
         metrics_item_id = st.session_state.selected_item_id
     elif ss_has("selected_category"):
         metrics_category = st.session_state.selected_category
+        metrics_category_id = st.session_state.get("selected_category_id")
 
     if ss_has("selected_item"):
         metrics_label = st.session_state.selected_item
@@ -345,6 +363,7 @@ def render_30day_metrics_ui(service, language_code: str = "en") -> None:
     avg_daily_volume, avg_daily_isk_value, vol_delta, isk_delta, df_7days, df_30days = (
         service.calculate_30day_metrics(
             selected_category=metrics_category,
+            selected_category_id=metrics_category_id,
             selected_item_id=metrics_item_id,
         )
     )
@@ -404,7 +423,12 @@ def render_30day_metrics_ui(service, language_code: str = "en") -> None:
     with colma2:
         if st.session_state.selected_item is None:
             with st.container(border=True):
-                render_top_n_items_ui(service, df_7days=df_7days, df_30days=df_30days)
+                render_top_n_items_ui(
+                    service,
+                    df_7days=df_7days,
+                    df_30days=df_30days,
+                    language_code=language_code,
+                )
 
     st.divider()
 

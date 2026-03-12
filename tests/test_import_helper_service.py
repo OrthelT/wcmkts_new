@@ -285,16 +285,14 @@ class TestImportHelperService:
         assert row["turnover_30d"] == 3000.0
         assert row["volume_30d"] == 150.0
 
-    @patch("services.import_helper_service.SDERepository")
-    def test_get_import_items_applies_item_type_filters(self, mock_sde_repo_cls):
+    def test_get_import_items_applies_item_type_filters(self):
         from services.import_helper_service import ImportHelperFilters, ImportHelperService
 
         mock_sde_repo = Mock()
         mock_sde_repo.get_tech2_type_ids.return_value = [35]
         mock_sde_repo.get_faction_type_ids.return_value = {36}
-        mock_sde_repo_cls.return_value = mock_sde_repo
 
-        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}))
+        service = ImportHelperService(Mock(), mock_sde_repo, DummyPriceService({}))
         base_df = pd.DataFrame(
             {
                 "type_id": [34, 35, 36],
@@ -407,7 +405,10 @@ class TestImportHelperService:
         from services.import_helper_service import ImportHelperService
 
         mock_read_sql.return_value = pd.DataFrame(
-            {"category_name": ["Mineral", "Ship Equipment"]}
+            {
+                "category_id": [4, 7],
+                "category_name": ["Mineral", "Ship Equipment"],
+            }
         )
         mock_conn = Mock()
         mock_conn.__enter__ = Mock(return_value=mock_conn)
@@ -420,4 +421,5 @@ class TestImportHelperService:
         service = ImportHelperService(mkt_db, Mock(), DummyPriceService({}))
         result = service.get_category_options()
 
-        assert result == ["Mineral", "Ship Equipment"]
+        assert result["category_id"].tolist() == [4, 7]
+        assert result["category_name"].tolist() == ["Mineral", "Ship Equipment"]

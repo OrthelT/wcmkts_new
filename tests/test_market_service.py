@@ -6,9 +6,8 @@ in the market service layer. Uses synthetic DataFrames to avoid DB dependencies.
 """
 import pytest
 import pandas as pd
-import numpy as np
 from datetime import datetime, timedelta
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock
 import plotly.graph_objects as go
 
 
@@ -100,7 +99,7 @@ class TestCalculate30dayMetrics:
         service = MarketService(mock_repo)
         result = service.calculate_30day_metrics(selected_category="Ship")
 
-        mock_repo.get_category_type_ids.assert_called_once_with("Ship")
+        mock_repo.get_category_type_ids.assert_called_once_with("Ship", category_id=None)
         assert result[0] > 0  # avg_vol
 
     def test_sparse_trading_days_uses_full_window(self, mock_repo):
@@ -211,7 +210,7 @@ class TestDetectOutliers:
         mask = MarketService.detect_outliers(series, method="iqr", threshold=1.5)
 
         assert isinstance(mask, pd.Series)
-        assert mask.iloc[-1] is True or mask.iloc[-1] == True  # 100 is outlier
+        assert mask.iloc[-1]  # 100 is outlier
 
     def test_zscore_detects_outlier(self):
         from services.market_service import MarketService

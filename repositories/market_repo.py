@@ -161,6 +161,23 @@ def _get_category_type_ids_impl(category_name: str) -> list:
     return df["type_id"].tolist()
 
 
+def _get_category_type_ids_by_id_impl(category_id: int) -> list:
+    """Fetch type_ids for a given SDE category ID."""
+    sde_db = DatabaseConfig("sde")
+    query = text(
+        """
+        SELECT typeID as type_id
+        FROM sdetypes
+        WHERE categoryID = :category_id
+        """
+    )
+    with sde_db.engine.connect() as conn:
+        df = pd.read_sql_query(query, conn, params={"category_id": category_id})
+    if df.empty:
+        return []
+    return df["type_id"].tolist()
+
+
 def _get_watchlist_type_ids_impl(db_alias: str = "wcmkt") -> list:
     """Fetch distinct type_ids from the watchlist table."""
     db = DatabaseConfig(db_alias)
@@ -243,6 +260,11 @@ def _get_history_by_type_ids_cached(type_ids: tuple, db_alias: str = "wcmkt") ->
 @st.cache_data(ttl=3600)
 def _get_category_type_ids_cached(category_name: str) -> list:
     return _get_category_type_ids_impl(category_name)
+
+
+@st.cache_data(ttl=3600)
+def _get_category_type_ids_by_id_cached(category_id: int) -> list:
+    return _get_category_type_ids_by_id_impl(category_id)
 
 
 @st.cache_data(ttl=600)
@@ -372,8 +394,17 @@ class MarketRepository(BaseRepository):
         """Get market history for multiple type_ids (cached, TTL=1800s)."""
         return _get_history_by_type_ids_cached(tuple(type_ids), self.db.alias)
 
-    def get_category_type_ids(self, category_name: str) -> list:
-        """Get type_ids for an SDE category name (cached, TTL=3600s)."""
+    def get_category_type_ids(
+        self,
+        category_name: Optional[str] = None,
+        *,
+        category_id: Optional[int] = None,
+    ) -> list:
+        """Get type_ids for an SDE category by ID or name (cached, TTL=3600s)."""
+        if category_id is not None:
+            return _get_category_type_ids_by_id_cached(category_id)
+        if category_name is None:
+            return []
         return _get_category_type_ids_cached(category_name)
 
     def get_watchlist_type_ids(self) -> list:

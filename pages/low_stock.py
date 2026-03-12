@@ -13,6 +13,8 @@ import plotly.express as px
 
 from logging_config import setup_logging
 from services import get_low_stock_service, LowStockFilters
+from repositories import get_sde_repository
+from services.type_name_localization import get_localized_name_map
 from ui.formatters import get_image_url
 from services.doctrine_service import format_doctrine_name
 from state import get_active_language, ss_init, ss_get, ss_set
@@ -124,6 +126,7 @@ def display_fit_data(selected_fit):
 def main():
     language_code = get_active_language()
     market = render_market_selector()
+    sde_repo = get_sde_repository()
 
     if not ensure_market_db_ready(market.database_alias):
         st.error(
@@ -138,9 +141,9 @@ def main():
     # Initialize session state
     ss_init(
         {
-            "ls_selected_categories": [],
-            "ls_selected_doctrine": None,
-            "ls_selected_fit": None,
+            "ls_selected_category_ids": [],
+            "ls_selected_doctrine_id": None,
+            "ls_selected_fit_id": None,
             "ls_doctrine_only": False,
             "ls_tech2_only": False,
             "ls_faction_only": False,
@@ -187,47 +190,55 @@ def main():
 
     # Category filter
     st.sidebar.subheader(translate_text(language_code, "low_stock.category_filter"))
-    categories = service.get_category_options()
+    category_options = service.get_category_options()
+    category_name_map = {
+        int(row["category_id"]): str(row["category_name"])
+        for _, row in category_options.iterrows()
+    }
+    category_ids = sorted(category_name_map, key=lambda cid: category_name_map[cid])
 
-    selected_categories = st.sidebar.multiselect(
+    selected_category_ids = st.sidebar.multiselect(
         translate_text(language_code, "low_stock.select_categories"),
-        options=categories,
-        default=ss_get("ls_selected_categories", []),
+        options=category_ids,
+        default=ss_get("ls_selected_category_ids", []),
+        format_func=lambda cid: category_name_map[cid],
         help=translate_text(language_code, "low_stock.select_categories_help"),
     )
-    ss_set("ls_selected_categories", selected_categories)
+    ss_set("ls_selected_category_ids", selected_category_ids)
 
     # Doctrine/Fit filter section
     st.sidebar.subheader(translate_text(language_code, "low_stock.doctrine_fit_filter"))
 
     # Get doctrine options
     doctrine_options = service.get_doctrine_options()
-    all_label = translate_text(language_code, "common.all")
-    all_fits_label = translate_text(language_code, "common.all_fits")
-    doctrine_names = [all_label] + sorted(
-        [d.doctrine_name for d in doctrine_options], key=format_doctrine_name
+    all_label = "All"
+    all_fits_label = "All Fits"
+    doctrine_by_id = {d.doctrine_id: d for d in doctrine_options}
+    doctrine_ids = sorted(
+        doctrine_by_id.keys(),
+        key=lambda did: format_doctrine_name(doctrine_by_id[did].doctrine_name),
     )
 
-    selected_doctrine_name = st.sidebar.selectbox(
+    selected_doctrine_id = st.sidebar.selectbox(
         translate_text(language_code, "low_stock.select_doctrine"),
-        options=doctrine_names,
+        options=[None] + doctrine_ids,
         index=0,
         help=translate_text(language_code, "low_stock.select_doctrine_help"),
-        format_func=format_doctrine_name,
+        format_func=lambda did: all_label if did is None else format_doctrine_name(doctrine_by_id[did].doctrine_name),
     )
+    ss_set("ls_selected_doctrine_id", selected_doctrine_id)
 
     selected_doctrine = None
     selected_fit = None
+    selected_fit_display_name = None
     fit_ids = []
+    selected_doctrine_name = all_label
 
-    if selected_doctrine_name != all_label:
-        # Find the doctrine info
-        selected_doctrine = next(
-            (d for d in doctrine_options if d.doctrine_name == selected_doctrine_name),
-            None,
-        )
+    if selected_doctrine_id is not None:
+        selected_doctrine = doctrine_by_id.get(selected_doctrine_id)
 
         if selected_doctrine:
+            selected_doctrine_name = selected_doctrine.doctrine_name
             # Display doctrine image
             if selected_doctrine.lead_ship_id:
                 st.sidebar.image(
@@ -238,26 +249,42 @@ def main():
 
             # Get fit options for this doctrine
             fit_options = service.get_fit_options(selected_doctrine.doctrine_id)
-            fit_names = [all_fits_label] + [f.ship_name for f in fit_options]
+            fit_by_id = {fit.fit_id: fit for fit in fit_options}
+            fit_ship_name_map = {fit.ship_id: fit.ship_name for fit in fit_options}
+            localized_fit_name_map = get_localized_name_map(
+                list(fit_ship_name_map.keys()),
+                sde_repo,
+                language_code,
+                logger,
+            )
+            fit_label_map = {
+                fit_id: localized_fit_name_map.get(fit.ship_id, fit.ship_name)
+                for fit_id, fit in fit_by_id.items()
+            }
+            fit_option_ids = sorted(fit_by_id, key=lambda fid: fit_label_map[fid].lower())
 
-            selected_fit_name = st.sidebar.selectbox(
+            selected_fit_id = st.sidebar.selectbox(
                 translate_text(language_code, "low_stock.select_fit"),
-                options=fit_names,
+                options=[None] + fit_option_ids,
                 index=0,
                 help=translate_text(language_code, "low_stock.select_fit_help"),
+                format_func=lambda fid: all_fits_label if fid is None else fit_label_map[fid],
             )
+            ss_set("ls_selected_fit_id", selected_fit_id)
 
-            if selected_fit_name != all_fits_label:
-                selected_fit = next(
-                    (f for f in fit_options if f.ship_name == selected_fit_name), None
-                )
+            if selected_fit_id is not None:
+                selected_fit = fit_by_id.get(selected_fit_id)
                 if selected_fit:
+                    selected_fit_display_name = fit_label_map.get(
+                        selected_fit.fit_id,
+                        selected_fit.ship_name,
+                    )
                     fit_ids = [selected_fit.fit_id]
                     # Display fit ship image
                     st.sidebar.image(
                         selected_fit.ship_image_url,
                         width=128,
-                        caption=f"{selected_fit.ship_name}\n{selected_fit.fit_name}",
+                        caption=f"{selected_fit_display_name}\n{selected_fit.fit_name}",
                     )
             else:
                 # All fits for the selected doctrine
@@ -279,7 +306,7 @@ def main():
 
     # Build filters
     filters = LowStockFilters(
-        categories=selected_categories,
+        category_ids=selected_category_ids,
         max_days_remaining=max_days_remaining,
         doctrine_only=doctrine_only,
         tech2_only=tech2_only,
@@ -328,7 +355,7 @@ def main():
                         translate_text(
                             language_code,
                             "low_stock.subheader_fit",
-                            ship_name=selected_fit.ship_name,
+                            ship_name=selected_fit_display_name or selected_fit.ship_name,
                         )
                     )
                     display_fit_data(selected_fit)
@@ -470,7 +497,7 @@ def main():
         )
 
         # Selected items info
-        selected_rows = edited_df[edited_df["select"] == True]
+        selected_rows = edited_df[edited_df["select"]]
         if len(selected_rows) > 0:
             st.info(
                 translate_text(language_code, "low_stock.selected_items", count=len(selected_rows))

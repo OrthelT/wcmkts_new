@@ -39,7 +39,12 @@ def main():
         st.title(translate_text(language_code, "import_helper.title", market_name=market.name))
 
     st.sidebar.header(translate_text(language_code, "import_helper.filters_header"))
-    categories = service.get_category_options()
+    category_options = service.get_category_options()
+    category_name_map = {
+        int(row["category_id"]): str(row["category_name"])
+        for _, row in category_options.iterrows()
+    }
+    category_ids = sorted(category_name_map, key=lambda cid: category_name_map[cid])
 
     st.sidebar.subheader(translate_text(language_code, "low_stock.item_type_filters"))
     doctrine_only = st.sidebar.checkbox(
@@ -58,10 +63,11 @@ def main():
         help=translate_text(language_code, "low_stock.faction_only_help"),
     )
 
-    selected_categories = st.sidebar.multiselect(
+    selected_category_ids = st.sidebar.multiselect(
         translate_text(language_code, "import_helper.categories"),
-        options=categories,
+        options=category_ids,
         default=[],
+        format_func=lambda cid: category_name_map[cid],
         help=translate_text(language_code, "import_helper.categories_help"),
     )
     search_text = st.sidebar.text_input(
@@ -110,7 +116,7 @@ def main():
     st.markdown(translate_text(language_code, "import_helper.description"))
 
     filters = ImportHelperFilters(
-        categories=selected_categories,
+        category_ids=selected_category_ids,
         search_text=search_text,
         doctrine_only=doctrine_only,
         tech2_only=tech2_only,

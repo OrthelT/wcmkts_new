@@ -18,16 +18,13 @@ def _mock_db():
 class TestLowStockService:
     @patch("services.low_stock_service.apply_localized_type_names")
     @patch("pandas.read_sql_query")
-    @patch("settings_service.SettingsService")
     def test_get_low_stock_items_applies_localized_names(
         self,
-        mock_settings_service,
         mock_read_sql,
         mock_localize,
     ):
         from services.low_stock_service import LowStockService
 
-        mock_settings_service.return_value.use_equivalents = False
         mock_read_sql.return_value = pd.DataFrame(
             {
                 "type_id": [34],
@@ -71,8 +68,10 @@ class TestLowStockService:
             }
         )
 
-        service = LowStockService(_mock_db(), _mock_db())
-        result = service.get_low_stock_items(language_code="zh")
+        with patch("settings_service.SettingsService") as mock_settings_service:
+            mock_settings_service.return_value.use_equivalents = False
+            service = LowStockService(_mock_db(), Mock())
+            result = service.get_low_stock_items(language_code="zh")
 
         assert len(result) == 1
         assert result.iloc[0]["type_name"] == "三钛合金"

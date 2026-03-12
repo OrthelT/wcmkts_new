@@ -14,6 +14,7 @@ from sqlalchemy import bindparam, text
 
 from config import DatabaseConfig
 from logging_config import setup_logging
+from repositories import get_sde_repository
 from repositories.sde_repo import SDERepository
 from services.price_service import PriceResult, PriceService, get_price_service
 from services.type_name_localization import apply_localized_type_names
@@ -45,6 +46,7 @@ def _get_jita_buy_price(jita_prices: dict, type_id) -> float:
 class ImportHelperFilters:
     """Filter configuration for Import Helper data."""
 
+    category_ids: list[int] = field(default_factory=list)
     categories: list[str] = field(default_factory=list)
     search_text: str = ""
     doctrine_only: bool = False
@@ -63,12 +65,12 @@ class ImportHelperService:
     def __init__(
         self,
         mkt_db: DatabaseConfig,
-        sde_db: DatabaseConfig,
+        sde_repo: SDERepository,
         price_service: PriceService,
         logger_instance: Optional[logging.Logger] = None,
     ):
         self._mkt_db = mkt_db
-        self._sde_db = sde_db
+        self._sde_repo = sde_repo
         self._price_service = price_service
         self._logger = logger_instance or logger
 
@@ -100,12 +102,12 @@ class ImportHelperService:
                 janice_api_key = None
 
         market_db = DatabaseConfig(db_alias)
-        sde_db = DatabaseConfig("sde")
+        sde_repo = get_sde_repository()
         price_service = get_price_service(
             db_alias=db_alias,
             janice_api_key=janice_api_key,
         )
-        return cls(market_db, sde_db, price_service)
+        return cls(market_db, sde_repo, price_service)
 
     def _get_import_candidates(self) -> pd.DataFrame:
         """Fetch marketstats rows merged with SDE item volume.
@@ -120,7 +122,9 @@ class ImportHelperService:
                 ms.type_name,
                 ms.price,
                 ms.avg_volume,
+                ms.category_id,
                 ms.category_name,
+                ms.group_id,
                 ms.group_name,
                 CASE WHEN d.type_id IS NOT NULL THEN 1 ELSE 0 END AS is_doctrine
             FROM marketstats ms
@@ -154,7 +158,7 @@ class ImportHelperService:
         ).bindparams(bindparam("type_ids", expanding=True))
 
         try:
-            with self._sde_db.engine.connect() as conn:
+            with self._sde_repo.db.engine.connect() as conn:
                 volume_df = pd.read_sql_query(sde_query, conn, params={"type_ids": type_ids})
         except Exception as e:
             self._logger.warning(f"Failed to fetch SDE volume data (shipping costs unavailable): {e}")
@@ -167,20 +171,21 @@ class ImportHelperService:
 
         return market_df.merge(volume_df, on="type_id", how="left").fillna({"volume_m3": 0.0})
 
-    def _get_sde_repository(self) -> SDERepository:
-        """Build an SDE repository for metagroup lookups."""
-        return SDERepository(self._sde_db)
-
-    def get_category_options(self) -> list[str]:
+    def get_category_options(self) -> pd.DataFrame:
         """Return category options for sidebar filtering."""
         try:
-            query = "SELECT DISTINCT category_name FROM marketstats ORDER BY category_name"
+            query = (
+                "SELECT DISTINCT category_id, category_name "
+                "FROM marketstats "
+                "WHERE category_id IS NOT NULL AND category_name IS NOT NULL "
+                "ORDER BY category_name"
+            )
             with self._mkt_db.engine.connect() as conn:
                 df = pd.read_sql_query(query, conn)
-            return df["category_name"].dropna().tolist()
+            return df.reset_index(drop=True)
         except Exception as e:
             self._logger.error(f"Failed to get import-helper category options: {e}")
-            return []
+            return pd.DataFrame(columns=["category_id", "category_name"])
 
     def fetch_base_data(self) -> pd.DataFrame:
         """Fetch candidates from DB and Jita prices. Jita Price caching is handled inside PriceService.
@@ -252,7 +257,7 @@ class ImportHelperService:
         if df.empty:
             return df
 
-        df = apply_localized_type_names(df, self._sde_db, language_code, self._logger)
+        df = apply_localized_type_names(df, self._sde_repo, language_code, self._logger)
         df["shipping_cost"] = df["volume_m3"] * filters.shipping_cost_per_m3
         df["profit_jita_sell"] = df["price"] - (df["jita_sell_price"] + df["shipping_cost"])
         df["profit_jita_sell_30d"] = df["profit_jita_sell"] * 30 * df["avg_volume"]
@@ -270,14 +275,16 @@ class ImportHelperService:
             df = df[df.get("is_doctrine", 0) == 1]
 
         if filters.tech2_only:
-            tech2_type_ids = self._get_sde_repository().get_tech2_type_ids()
+            tech2_type_ids = self._sde_repo.get_tech2_type_ids()
             df = df[df["type_id"].isin(tech2_type_ids)]
 
         if filters.faction_only:
-            faction_type_ids = self._get_sde_repository().get_faction_type_ids()
+            faction_type_ids = self._sde_repo.get_faction_type_ids()
             df = df[df["type_id"].isin(faction_type_ids)]
 
-        if filters.categories:
+        if filters.category_ids:
+            df = df[df["category_id"].isin(filters.category_ids)]
+        elif filters.categories:
             df = df[df["category_name"].isin(filters.categories)]
 
         if filters.search_text:

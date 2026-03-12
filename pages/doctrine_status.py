@@ -12,7 +12,13 @@ from services import get_doctrine_service
 from domain import StockStatus
 from ui import get_fitting_column_config, render_progress_bar_html
 from services.doctrine_service import format_doctrine_name
-from services import get_status_filter_options
+from services.type_name_localization import (
+    apply_localized_names,
+    apply_localized_names_to_records,
+    apply_localized_type_names,
+    get_localized_name,
+)
+from repositories import get_sde_repository
 from state import get_active_language, ss_init, ss_get
 from ui.i18n import translate_text
 from ui.market_selector import render_market_selector
@@ -22,6 +28,42 @@ from services.module_equivalents_service import get_module_equivalents_service
 
 # Insert centralized logging configuration
 logger = setup_logging(__name__, log_file="doctrine_status.log")
+
+
+def _drop_localized_backup_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Remove helper columns that should not appear in display tables."""
+    return df.drop(columns=["type_name_en", "ship_name_en"], errors="ignore")
+
+
+def _localize_summary_df(
+    df: pd.DataFrame,
+    sde_repo,
+    language_code: str,
+) -> pd.DataFrame:
+    """Localize ship and module display names in doctrine summary data."""
+    localized_df = apply_localized_names(
+        df,
+        sde_repo,
+        language_code,
+        id_column="ship_id",
+        name_column="ship_name",
+        logger=logger,
+        english_name_column="ship_name_en",
+    )
+    localized_df["lowest_modules"] = localized_df["lowest_modules"].apply(
+        lambda modules: apply_localized_names_to_records(
+            modules,
+            sde_repo,
+            language_code,
+            id_key="type_id",
+            name_key="module_name",
+            logger=logger,
+            english_name_key="module_name_en",
+        )
+        if isinstance(modules, list)
+        else modules
+    )
+    return localized_df
 
 def render_export_data():
     """Query market stock data for all selected type_ids. Stores results in session state."""
@@ -121,6 +163,7 @@ def _rebuild_selections():
 def main():
     language_code = get_active_language()
     market = render_market_selector()
+    sde_repo = get_sde_repository()
 
     if not ensure_market_db_ready(market.database_alias):
         st.error(
@@ -184,32 +227,58 @@ def main():
 
     # Doctrine filter - filter by fleet doctrine composition
     doctrine_comps = service.repository.get_all_doctrine_compositions()
-    doctrine_names = (
-        [translate_text(language_code, "common.all")]
-        + sorted(doctrine_comps["doctrine_name"].unique().tolist(), key=format_doctrine_name)
+    all_label = "All"
+    doctrine_name_map = (
+        {
+            int(row["doctrine_id"]): str(row["doctrine_name"])
+            for _, row in doctrine_comps[["doctrine_id", "doctrine_name"]]
+            .drop_duplicates()
+            .iterrows()
+        }
         if not doctrine_comps.empty
-        else [translate_text(language_code, "common.all")]
+        else {}
     )
-    selected_doctrine = st.sidebar.selectbox(
+    doctrine_ids = sorted(
+        doctrine_name_map,
+        key=lambda did: format_doctrine_name(doctrine_name_map[did]),
+    )
+    selected_doctrine_id = st.sidebar.selectbox(
         translate_text(language_code, "doctrine_status.filter_doctrine"),
-        doctrine_names,
-        format_func=format_doctrine_name,
+        [None] + doctrine_ids,
+        format_func=lambda did: all_label if did is None else format_doctrine_name(doctrine_name_map[did]),
     )
 
     # Stock Status filter (renamed from "Doctrine Status" for clarity - single unified filter)
-    status_options = get_status_filter_options()
-    selected_status = st.sidebar.selectbox(
+    status_option_labels = {
+        "all": all_label,
+        "all_low": "All Low Stock",
+        "critical": StockStatus.CRITICAL.display_name,
+        "needs_attention": StockStatus.NEEDS_ATTENTION.display_name,
+        "good": StockStatus.GOOD.display_name,
+    }
+    selected_status_key = st.sidebar.selectbox(
         translate_text(language_code, "doctrine_status.filter_stock_status"),
-        status_options,
+        list(status_option_labels.keys()),
+        format_func=lambda key: status_option_labels[key],
     )
 
     # Ship group filter
-    ship_groups = [translate_text(language_code, "common.all")] + sorted(
-        fit_summary["ship_group"].unique().tolist()
+    ship_group_df = (
+        fit_summary[["ship_group_id", "ship_group"]]
+        .dropna()
+        .drop_duplicates()
+        .sort_values("ship_group")
+        .reset_index(drop=True)
     )
-    selected_group = st.sidebar.selectbox(
+    ship_group_name_map = {
+        int(row["ship_group_id"]): str(row["ship_group"])
+        for _, row in ship_group_df.iterrows()
+    }
+    ship_group_ids = sorted(ship_group_name_map, key=lambda gid: ship_group_name_map[gid])
+    selected_group_id = st.sidebar.selectbox(
         translate_text(language_code, "doctrine_status.filter_ship_group"),
-        ship_groups,
+        [None] + ship_group_ids,
+        format_func=lambda gid: all_label if gid is None else ship_group_name_map[gid],
     )
 
     # Get unique ship names for selection
@@ -238,27 +307,27 @@ def main():
     )
 
     # Apply status filter using StockStatus thresholds (Critical: <=20%, Good: >90%)
-    if selected_status != "All":
-        if selected_status == "Good":
+    if selected_status_key != "all":
+        if selected_status_key == "good":
             filtered_df = filtered_df[filtered_df["target_percentage"] > 90]
-        elif selected_status == "All Low Stock":
+        elif selected_status_key == "all_low":
             filtered_df = filtered_df[filtered_df["target_percentage"] <= 90]
-        elif selected_status == "Needs Attention":
+        elif selected_status_key == "needs_attention":
             filtered_df = filtered_df[
                 (filtered_df["target_percentage"] > 20)
                 & (filtered_df["target_percentage"] <= 90)
             ]
-        elif selected_status == "Critical":
+        elif selected_status_key == "critical":
             filtered_df = filtered_df[filtered_df["target_percentage"] <= 20]
 
     # Apply ship group filter
-    if selected_group != translate_text(language_code, "common.all"):
-        filtered_df = filtered_df[filtered_df["ship_group"] == selected_group]
+    if selected_group_id is not None:
+        filtered_df = filtered_df[filtered_df["ship_group_id"] == selected_group_id]
 
     # Apply doctrine filter
-    if selected_doctrine != translate_text(language_code, "common.all"):
+    if selected_doctrine_id is not None:
         doctrine_fit_ids = doctrine_comps[
-            doctrine_comps["doctrine_name"] == selected_doctrine
+            doctrine_comps["doctrine_id"] == selected_doctrine_id
         ]["fit_id"].unique()
         filtered_df = filtered_df[filtered_df["fit_id"].isin(doctrine_fit_ids)]
 
@@ -268,6 +337,8 @@ def main():
     if filtered_df.empty:
         st.info(translate_text(language_code, "doctrine_status.no_filtered_fits"))
         return
+
+    display_df = _localize_summary_df(filtered_df, sde_repo, language_code)
 
     # Pre-fetch set of type_ids with equivalents (O(1) lookup per module)
     try:
@@ -301,7 +372,7 @@ def main():
                     equiv_groups[tid] = group
 
     # Group the data by ship_group
-    grouped_fits = filtered_df.groupby("ship_group")
+    grouped_fits = display_df.groupby("ship_group")
 
     # Iterate through each group and display fits
     for group_name, group_data in grouped_fits:
@@ -374,7 +445,12 @@ def main():
                         )
                         hull_qty_needed = max(0, target - hulls)
                         if ship_selected:
-                            _add_selection(ship_id, row["ship_name"], hulls, hull_qty_needed)
+                            _add_selection(
+                                ship_id,
+                                row.get("ship_name_en", row["ship_name"]),
+                                hulls,
+                                hull_qty_needed,
+                            )
 
                     with ship_cols[1]:
                         st.markdown(f"**{row['ship_name']}**")
@@ -454,6 +530,7 @@ def main():
                             mod_fits = mod["fits_on_market"]
                             mod_qty_needed = mod["qty_needed"]
                             mod_position = mod["position"]
+                            mod_name_en = mod.get("module_name_en", mod_name)
 
                             # Display string for the module
                             has_equiv = mod_type_id in equiv_groups
@@ -480,7 +557,12 @@ def main():
                                     "1", key=module_cb_key, label_visibility="hidden"
                                 )
                                 if is_selected:
-                                    _add_selection(mod_type_id, mod_name, mod_fits, mod_qty_needed)
+                                    _add_selection(
+                                        mod_type_id,
+                                        mod_name_en,
+                                        mod_fits,
+                                        mod_qty_needed,
+                                    )
 
                             with col_b:
                                 equiv_prefix = "🔄 " if has_equiv else ""
@@ -520,7 +602,14 @@ def main():
                                         )
                                         for em in in_stock_modules:
                                             indicator = "► " if em.type_id == mod_type_id else "   "
-                                            st.text(f"{indicator}{em.type_name}: {em.stock:,}")
+                                            equiv_name = get_localized_name(
+                                                em.type_id,
+                                                em.type_name,
+                                                sde_repo,
+                                                language_code,
+                                                logger,
+                                            )
+                                            st.text(f"{indicator}{equiv_name}: {em.stock:,}")
                                         st.divider()
                                         st.markdown(
                                             f"**{translate_text(language_code, 'doctrine_status.combined_total', total=f'{combined_total:,}')}**"
@@ -555,9 +644,24 @@ def main():
                         if tab2_key in st.session_state:
                             fit_detail_df = st.session_state[tab2_key]
                             if not fit_detail_df.empty:
+                                fit_detail_df = apply_localized_type_names(
+                                    fit_detail_df,
+                                    sde_repo,
+                                    language_code,
+                                    logger,
+                                )
+                                fit_detail_df = apply_localized_names(
+                                    fit_detail_df,
+                                    sde_repo,
+                                    language_code,
+                                    id_column="ship_id",
+                                    name_column="ship_name",
+                                    logger=logger,
+                                    english_name_column="ship_name_en",
+                                )
                                 col_config = get_fitting_column_config(language_code)
                                 st.dataframe(
-                                    fit_detail_df,
+                                    _drop_localized_backup_columns(fit_detail_df),
                                     hide_index=True,
                                     column_config=col_config,
                                     width="stretch",
@@ -588,15 +692,21 @@ def main():
     if col1.button(translate_text(language_code, "doctrine_status.select_all"), width="content"):
         for _, group_data in grouped_fits:
             for _, row in group_data.iterrows():
-                if row["ship_name"] not in st.session_state.displayed_ships:
+                if row.get("ship_name_en", row["ship_name"]) not in st.session_state.displayed_ships:
                     continue
                 sid = int(row["ship_id"])
                 target_count = int(row["ship_target"]) if pd.notna(row["ship_target"]) else 0
                 h = int(row["hulls"]) if pd.notna(row["hulls"]) else 0
-                _add_selection(sid, row["ship_name"], h, max(0, target_count - h))
+                _add_selection(
+                    sid,
+                    row.get("ship_name_en", row["ship_name"]),
+                    h,
+                    max(0, target_count - h),
+                )
                 for mod in row["lowest_modules"]:
                     _add_selection(
-                        mod["type_id"], mod["module_name"],
+                        mod["type_id"],
+                        mod.get("module_name_en", mod["module_name"]),
                         mod["fits_on_market"], mod["qty_needed"],
                     )
         st.session_state.export_data_rendered = False
@@ -635,7 +745,8 @@ def main():
             info = st.session_state.type_id_info.get(tid, {})
             name = info.get("module_name", f"Unknown ({tid})")
             qty = info.get("qty_needed", 0)
-            selection_lines.append(f"{name} {qty}")
+            display_name = get_localized_name(tid, name, sde_repo, language_code, logger)
+            selection_lines.append(f"{display_name} {qty}")
         st.sidebar.code("\n".join(selection_lines), language=None)
 
         # Render market data button — triggers DB queries only when clicked
@@ -657,6 +768,7 @@ def main():
             for tid in sorted(selected):
                 data = rendered.get(tid, {})
                 name = data.get("name", st.session_state.type_id_info.get(tid, {}).get("module_name", f"Unknown ({tid})"))
+                display_name = get_localized_name(tid, name, sde_repo, language_code, logger)
                 stock = data.get("total_stock", 0)
                 fits_mkt = data.get("fits_on_mkt", 0)
                 qty = data.get("qty_needed", 0)
@@ -664,7 +776,7 @@ def main():
                     translate_text(
                         language_code,
                         "doctrine_status.market_data_line",
-                        name=name,
+                        name=display_name,
                         stock=stock,
                         fits=fits_mkt,
                         need=qty,

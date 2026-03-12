@@ -19,6 +19,8 @@ from sqlalchemy import text
 
 from config import DatabaseConfig
 from logging_config import setup_logging
+from repositories import get_sde_repository
+from repositories.sde_repo import SDERepository
 from services.type_name_localization import apply_localized_type_names
 
 logger = setup_logging(__name__, log_file="low_stock_service.log")
@@ -35,6 +37,7 @@ class LowStockFilters:
     Filter configuration for low stock queries.
 
     Attributes:
+        category_ids: List of category IDs to filter by
         categories: List of category names to filter by
         max_days_remaining: Maximum days of stock remaining
         doctrine_only: Only show items used in doctrines
@@ -44,6 +47,7 @@ class LowStockFilters:
         type_ids: Filter by specific type IDs
     """
 
+    category_ids: list[int] = field(default_factory=list)
     categories: list[str] = field(default_factory=list)
     max_days_remaining: Optional[float] = None
     doctrine_only: bool = False
@@ -171,7 +175,7 @@ class LowStockService:
     def __init__(
         self,
         mkt_db: DatabaseConfig,
-        sde_db: DatabaseConfig,
+        sde_repo: SDERepository,
         logger_instance: Optional[logging.Logger] = None,
     ):
         """
@@ -179,11 +183,11 @@ class LowStockService:
 
         Args:
             mkt_db: DatabaseConfig for market database (wcmkt)
-            sde_db: DatabaseConfig for SDE database
+            sde_repo: Repository for SDE lookups and reads
             logger_instance: Optional logger instance
         """
         self._mkt_db = mkt_db
-        self._sde_db = sde_db
+        self._sde_repo = sde_repo
         self._logger = logger_instance or logger
 
     @classmethod
@@ -199,29 +203,34 @@ class LowStockService:
                 db_alias = "wcmkt"
 
         mkt_db = DatabaseConfig(db_alias)
-        sde_db = DatabaseConfig("sde")
-        return cls(mkt_db, sde_db)
+        sde_repo = get_sde_repository()
+        return cls(mkt_db, sde_repo)
 
     # -------------------------------------------------------------------------
     # Filter Options
     # -------------------------------------------------------------------------
 
-    def get_category_options(self) -> list[str]:
+    def get_category_options(self) -> pd.DataFrame:
         """
-        Get list of available category names for filtering.
+        Get list of available categories for filtering.
 
         Returns:
-            Sorted list of unique category names
+            DataFrame with columns: category_id, category_name
         """
-        query = "SELECT DISTINCT category_name FROM marketstats ORDER BY category_name"
+        query = (
+            "SELECT DISTINCT category_id, category_name "
+            "FROM marketstats "
+            "WHERE category_id IS NOT NULL AND category_name IS NOT NULL "
+            "ORDER BY category_name"
+        )
 
         try:
             with self._mkt_db.engine.connect() as conn:
                 df = pd.read_sql_query(query, conn)
-            return df["category_name"].dropna().tolist()
+            return df.reset_index(drop=True)
         except Exception as e:
             self._logger.error(f"Failed to get category options: {e}")
-            return []
+            return pd.DataFrame(columns=["category_id", "category_name"])
 
     def get_doctrine_options(self) -> list[DoctrineFilterInfo]:
         """
@@ -354,7 +363,7 @@ class LowStockService:
         query = text("SELECT typeID FROM sdetypes WHERE metaGroupID = :metagroup_id")
 
         try:
-            with self._sde_db.engine.connect() as conn:
+            with self._sde_repo.db.engine.connect() as conn:
                 df = pd.read_sql_query(
                     query, conn, params={"metagroup_id": metagroup_id}
                 )
@@ -418,7 +427,9 @@ class LowStockService:
             else:
                 self._logger.debug("use_equivalents is disabled")
             # Apply category filter
-            if filters.categories:
+            if filters.category_ids:
+                df = df[df["category_id"].isin(filters.category_ids)]
+            elif filters.categories:
                 df = df[df["category_name"].isin(filters.categories)]
 
             # Apply doctrine filter
@@ -473,7 +484,7 @@ class LowStockService:
 
                 # Add ships column
                 df["ships"] = df["type_id"].map(ship_groups)
-                df = apply_localized_type_names(df, self._sde_db, language_code, self._logger)
+                df = apply_localized_type_names(df, self._sde_repo, language_code, self._logger)
 
             return df
 

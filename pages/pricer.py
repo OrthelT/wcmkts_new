@@ -23,13 +23,20 @@ from millify import millify
 from logging_config import setup_logging
 from services import get_pricer_service
 from domain import InputFormat
+from services.type_name_localization import apply_localized_names, get_localized_name
 from state import get_active_language, ss_get, ss_has, ss_init, ss_set
+from repositories import get_sde_repository
 from ui.formatters import get_image_url
 from ui.i18n import translate_text
 from ui.market_selector import render_market_selector
 from init_db import ensure_market_db_ready
 
 logger = setup_logging(__name__, log_file="pricer.log")
+
+
+def _drop_localized_backup_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Remove helper columns that should not appear in display tables."""
+    return df.drop(columns=["Item_en"], errors="ignore")
 
 
 def format_isk(value: float) -> str:
@@ -187,7 +194,7 @@ def render_header(language_code: str):
         st.title(translate_text(language_code, "pricer.title"))
 
 
-def render_fit_header(result):
+def render_fit_header(result, sde_repo, language_code: str):
     """Render the header for an EFT fit result with ship image."""
     if result.input_type != InputFormat.EFT:
         return
@@ -207,7 +214,14 @@ def render_fit_header(result):
 
     with col2:
         if result.ship_name:
-            st.subheader(result.ship_name)
+            localized_ship_name = get_localized_name(
+                ship_type_id,
+                result.ship_name,
+                sde_repo,
+                language_code,
+                logger,
+            )
+            st.subheader(localized_ship_name)
         if result.fit_name:
             st.caption(result.fit_name)
 
@@ -215,6 +229,7 @@ def render_fit_header(result):
 def main():
     language_code = get_active_language()
     market = render_market_selector()
+    sde_repo = get_sde_repository()
 
     if not ensure_market_db_ready(market.database_alias):
         st.error(
@@ -279,7 +294,7 @@ def main():
 
         # Render fit header with ship image for EFT fittings
         if result.input_type == InputFormat.EFT:
-            render_fit_header(result)
+            render_fit_header(result, sde_repo, language_code)
         else:
             st.markdown(f"**{translate_text(language_code, 'pricer.format_label')}:** {translate_text(language_code, 'pricer.format_multibuy')}")
 
@@ -324,6 +339,15 @@ def main():
             st.subheader(translate_text(language_code, "pricer.items"))
 
             df = result.to_dataframe()
+            df = apply_localized_names(
+                df,
+                sde_repo,
+                language_code,
+                id_column="type_id",
+                name_column="Item",
+                logger=logger,
+                english_name_column="Item_en",
+            )
 
             # Add calculated columns
             df["Total Volume"] = df["Qty"] * df["Volume"]
@@ -392,8 +416,8 @@ def main():
                 # Filter to only columns that exist
                 column_order = [c for c in column_order if c in df.columns]
 
-                # Apply styling
-                styled_df = df.copy()
+                # Apply styling after removing helper columns.
+                styled_df = _drop_localized_backup_columns(df.copy())
 
                 if highlight_doctrine and 'Is Doctrine' in styled_df.columns:
                     styled_df = styled_df.style.apply(highlight_doctrine_rows, axis=1)
@@ -412,7 +436,7 @@ def main():
                 )
 
                 # Download button
-                csv_data = df.to_csv(index=False)
+                csv_data = _drop_localized_backup_columns(df.copy()).to_csv(index=False)
                 filename = "priced_items.csv"
                 if result.ship_name:
                     filename = f"{result.ship_name.replace(' ', '_')}_priced.csv"

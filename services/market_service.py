@@ -40,19 +40,24 @@ class MarketService:
     # Data Access Orchestration
     # =====================================================================
 
-    def get_history_by_category(self, category: str = None) -> pd.DataFrame:
+    def get_history_by_category(
+        self,
+        category: str = None,
+        category_id: int | None = None,
+    ) -> pd.DataFrame:
         """Get market history, optionally filtered by SDE category.
 
         Args:
             category: SDE category name (e.g. 'Ship'). None for all history.
+            category_id: SDE category ID. Takes precedence over category name.
 
         Returns:
             DataFrame with market history rows.
         """
-        if category is None:
+        if category is None and category_id is None:
             return self._repo.get_all_history()
 
-        type_ids = self._repo.get_category_type_ids(category)
+        type_ids = self._repo.get_category_type_ids(category, category_id=category_id)
         if not type_ids:
             return pd.DataFrame()
 
@@ -113,6 +118,7 @@ class MarketService:
     def calculate_30day_metrics(
         self,
         selected_category: str = None,
+        selected_category_id: int | None = None,
         selected_item_id: int = None,
     ) -> tuple:
         """Calculate 30-day and 7-day market metrics.
@@ -125,8 +131,11 @@ class MarketService:
         try:
             if selected_item_id:
                 df = self._repo.get_history_by_type_ids([selected_item_id])
-            elif selected_category:
-                type_ids = self._repo.get_category_type_ids(selected_category)
+            elif selected_category_id is not None or selected_category:
+                type_ids = self._repo.get_category_type_ids(
+                    selected_category,
+                    category_id=selected_category_id,
+                )
                 if not type_ids:
                     return 0, 0, 0, 0, 0, 0
                 df = self._repo.get_history_by_type_ids(type_ids)
@@ -182,6 +191,7 @@ class MarketService:
         start_date=None,
         end_date=None,
         category: str = None,
+        category_id: int | None = None,
     ) -> pd.Series:
         """Calculate ISK volume aggregated by time period.
 
@@ -190,11 +200,12 @@ class MarketService:
             start_date: Optional start date filter
             end_date: Optional end date filter
             category: Optional SDE category name filter
+            category_id: Optional SDE category ID filter
 
         Returns:
             Series indexed by date/period with ISK volume values.
         """
-        df = self.get_history_by_category(category)
+        df = self.get_history_by_category(category, category_id=category_id)
         if df.empty:
             return pd.Series(dtype=float)
 
@@ -225,14 +236,16 @@ class MarketService:
         return grouped
 
     def get_available_date_range(
-        self, category: str = None
+        self,
+        category: str = None,
+        category_id: int | None = None,
     ) -> tuple:
         """Get min and max dates from market history.
 
         Returns:
             (min_date, max_date) as pandas Timestamps, or (None, None).
         """
-        df = self.get_history_by_category(category)
+        df = self.get_history_by_category(category, category_id=category_id)
         if df.empty:
             return None, None
         df["date"] = pd.to_datetime(df["date"])
@@ -386,6 +399,7 @@ class MarketService:
         outlier_threshold: float = 1.5,
         cap_percentile: int = 95,
         selected_category: str = None,
+        selected_category_id: int | None = None,
     ) -> go.Figure:
         """Create ISK volume bar chart with moving average.
 
@@ -396,7 +410,11 @@ class MarketService:
             outlier_method = _get_default_outlier_method()
 
         df = self.calculate_isk_volume_by_period(
-            date_period, start_date, end_date, selected_category
+            date_period,
+            start_date,
+            end_date,
+            selected_category,
+            selected_category_id,
         )
 
         if outlier_method != "none":
@@ -453,6 +471,7 @@ class MarketService:
         start_date=None,
         end_date=None,
         selected_category: str = None,
+        selected_category_id: int | None = None,
     ) -> pd.DataFrame:
         """Create ISK volume table matching chart filters.
 
@@ -460,7 +479,11 @@ class MarketService:
             DataFrame with Date and ISK Volume columns, sorted descending.
         """
         df = self.calculate_isk_volume_by_period(
-            date_period, start_date, end_date, selected_category
+            date_period,
+            start_date,
+            end_date,
+            selected_category,
+            selected_category_id,
         )
         table = df.reset_index()
         table.columns = ["Date", "ISK Volume"]
