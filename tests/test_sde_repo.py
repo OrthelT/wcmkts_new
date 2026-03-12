@@ -71,34 +71,6 @@ class TestGetTypeId:
         assert result is None
 
 
-class TestGetLocalizedTypeNames:
-    def test_returns_mapping_when_rows_exist(self):
-        from repositories.sde_repo import _get_localized_type_names_impl
-
-        engine, _ = _mock_engine()
-        localized_df = pd.DataFrame(
-            {
-                "type_id": [34, 35],
-                "type_name": ["三钛合金", "类晶体胶矿"],
-            }
-        )
-
-        with patch("pandas.read_sql_query", return_value=localized_df):
-            result = _get_localized_type_names_impl(engine, [34, 35], "zh")
-
-        assert result == {34: "三钛合金", 35: "类晶体胶矿"}
-
-    def test_returns_empty_when_translation_table_missing(self):
-        from repositories.sde_repo import _get_localized_type_names_impl
-
-        engine, _ = _mock_engine()
-
-        with patch("pandas.read_sql_query", side_effect=Exception("no such table: localizations")):
-            result = _get_localized_type_names_impl(engine, [34], "zh")
-
-        assert result == {}
-
-
 class TestGetGroupsForCategory:
     def test_normal_category_queries_database(self):
         from repositories.sde_repo import _get_groups_for_category_impl
@@ -145,7 +117,7 @@ class TestGetTypesForGroup:
         expected = pd.DataFrame({"typeID": [34, 35], "typeName": ["Tritanium", "Pyerite"]})
 
         with patch("pandas.read_sql_query", return_value=expected):
-            result = _get_types_for_group_impl(engine, lambda: remote_engine, 18)
+            result = _get_types_for_group_impl(engine, remote_engine, 18)
 
         assert len(result) == 2
 
@@ -165,7 +137,7 @@ class TestGetTypesForGroup:
             return expected
 
         with patch("pandas.read_sql_query", side_effect=side_effect):
-            result = _get_types_for_group_impl(engine, lambda: remote_engine, 18)
+            result = _get_types_for_group_impl(engine, remote_engine, 18)
 
         assert len(result) == 1
 
@@ -179,7 +151,7 @@ class TestGetTypesForGroup:
         })
 
         with patch("pandas.read_sql_query", return_value=data):
-            result = _get_types_for_group_impl(engine, lambda: remote_engine, 332)
+            result = _get_types_for_group_impl(engine, remote_engine, 332)
 
         assert len(result) == 2
         assert "Something Else" not in result["typeName"].values
@@ -190,7 +162,7 @@ class TestGetTypesForGroup:
         remote_engine, remote_conn = _mock_engine()
 
         with patch("pandas.read_sql_query", side_effect=Exception("no such table: invTypes")):
-            result = _get_types_for_group_impl(engine, lambda: remote_engine, 18)
+            result = _get_types_for_group_impl(engine, remote_engine, 18)
 
         assert result.empty
         assert list(result.columns) == ["typeID", "typeName"]

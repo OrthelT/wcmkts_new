@@ -38,7 +38,7 @@ def apply_localized_type_names(
         return df
 
     try:
-        localized_names = SDERepository(sde_db).get_localized_type_names(type_ids, language_code)
+        localized_names = SDERepository(sde_db).get_localized_names(type_ids, language_code)
     except Exception as exc:
         if logger is not None:
             logger.error("Failed to resolve localized type names: %s", exc)
