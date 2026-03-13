@@ -297,7 +297,9 @@ class ImportHelperService:
         if filters.profitable_only:
             df = df[df["profit_jita_sell"] > 0]
 
-        if filters.min_capital_utilis is not None:
+        # Treat the default 0.0 as "no filter" so disabling
+        # profitable_only can still surface negative-profit items.
+        if filters.min_capital_utilis not in (None, 0, 0.0):
             df = df[df["capital_utilis"] >= filters.min_capital_utilis]
 
         if filters.min_turnover_30d is not None:

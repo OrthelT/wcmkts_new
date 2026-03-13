@@ -181,6 +181,37 @@ class TestImportHelperService:
         assert row["capital_utilis"] == -9.5
         assert row["rrp"] == 224.0
 
+    def test_disabling_profitable_only_allows_negative_profit_items_with_default_capital_filter(self):
+        from services.import_helper_service import ImportHelperFilters, ImportHelperService
+
+        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}))
+        base_df = pd.DataFrame(
+            {
+                "type_id": [34, 35],
+                "type_name": ["Loss Item", "Profit Item"],
+                "price": [10.0, 30.0],
+                "avg_volume": [5.0, 5.0],
+                "volume_m3": [1.0, 0.01],
+                "jita_sell_price": [20.0, 20.0],
+                "jita_buy_price": [18.0, 18.0],
+                "turnover_30d": [3000.0, 3000.0],
+                "volume_30d": [150.0, 150.0],
+                "category_name": ["Mineral", "Mineral"],
+                "group_name": ["Mineral", "Mineral"],
+            }
+        )
+
+        result = service.get_import_items(
+            base_df,
+            ImportHelperFilters(
+                profitable_only=False,
+                min_capital_utilis=0.0,
+            ),
+        )
+
+        assert result["type_id"].tolist() == [35, 34]
+        assert (result["profit_jita_sell"] < 0).any()
+
     def test_get_import_items_applies_filters_using_avg_volume(self):
         from services.import_helper_service import ImportHelperFilters, ImportHelperService
 
