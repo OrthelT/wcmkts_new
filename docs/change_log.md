@@ -4,6 +4,31 @@ Historical record of releases, the architectural refactoring project (Phases 1-1
 
 ---
 
+## v0.4.0 (2026-03-12)
+
+Multi-language support release. All pages now support 8 languages with localized item names and UI strings, plus robustness improvements from the type_id refactor.
+
+### New Features
+- **8-Language UI Translation**: Lightweight translation system (`ui/i18n.py`) supporting EN, ZH, DE, FR, RU, ES, JP, and KR across all pages — ~132 translation keys covering navigation, labels, tooltips, column headers, and help text.
+- **Language Selector**: Top-right selectbox with flag emoji labels. Selection persists via URL query parameter (`?lang=xx`) for bookmarkable links.
+- **Type Name Localization**: New `services/type_name_localization.py` leverages the SDE `localizations` table (~210k rows) to display localized item and ship names with automatic English fallback for untranslated items.
+- **Language State Management**: New `state/language_state.py` synchronizes active language between session state and URL query params, surviving page reloads.
+
+### Improvements
+- **Category ID Filtering**: Market Stats, Low Stock, and Doctrine Status now filter by `category_id` (int) instead of `category_name` (string), making filtering robust across all languages.
+- **Type ID Refactor in Doctrine Report**: Module selection state (`selected_modules`) now uses `set[int]` of type_ids instead of string names, preventing breakage when switching languages. Merged from main's type_id refactor (PR #35).
+- **Configurable Shipping Cost**: Import Helper now exposes a user-facing number input for shipping cost per m³ (default 450 ISK/m³) with localized help text.
+- **Localized Data Tables**: All Streamlit dataframes display localized column headers via `get_doctrine_report_column_config(language_code)` and friends.
+
+### Technical Details
+- New modules: `ui/i18n.py`, `state/language_state.py`, `services/type_name_localization.py`
+- `sde_repo.py` extended with `get_localized_name()`, `get_localized_names()`, `get_all_translations()` methods
+- English-language optimization: SDE queries skipped when `language_code="en"`
+- All 6 data pages updated: Market Stats, Doctrine Status, Doctrine Report, Low Stock, Import Helper, Pricer
+- Test suite grown from ~147 to 181 tests with new coverage for i18n, language state, and type name localization
+
+---
+
 ## v0.3.1 (2026-03-08)
 
 Patch release incorporating the Import Helper feature (PR #32), CLI database sync, and accumulated bug fixes since v0.3.0.
