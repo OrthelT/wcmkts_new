@@ -43,11 +43,6 @@ header_env = f"[{env.upper()}]" if env != "prod" else ""
 
 logger = setup_logging(__name__)
 
-# Services are initialized lazily to avoid database access at module import time
-def _get_doctrine_service():
-    """Get doctrine service lazily to avoid database access before init_db()."""
-    return get_doctrine_service()
-
 def _drop_localized_backup_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Remove helper columns that should not appear in display tables."""
     return df.drop(columns=["type_name_en", "ship_name_en"], errors="ignore")
@@ -341,7 +336,6 @@ def check_db(manual_override: bool = False):
             local_update_since = f"{local_update_since} mins"
             st.toast(f"DB updated: {local_update_since} ago", icon="✅")
 
-
 def maybe_run_check():
     now = time.time()
     if "last_check" not in st.session_state:
@@ -474,7 +468,7 @@ def main():
 
     # Initialize fitting data
     fit_df = pd.DataFrame()
-    service = _get_doctrine_service()
+    service = get_doctrine_service()
     display_sell_data = apply_localized_type_names(
         sell_data,
         sde_repo,
