@@ -1223,7 +1223,7 @@ class DoctrineService:
         """
         return StockStatus.from_stock_and_target(module_fits, target)
 
-    def get_module_stock_with_equivalents(self, module_name: str) -> pd.DataFrame:
+    def get_module_stock_with_equivalents(self, type_id: int) -> pd.DataFrame:
         """
         Get stock information for a module, including equivalent modules.
 
@@ -1231,7 +1231,7 @@ class DoctrineService:
         the combined stock across all equivalent modules.
 
         Args:
-            module_name: Name of the module
+            type_id: EVE type ID of the module
 
         Returns:
             DataFrame with type_name, type_id, total_stock (aggregated),
@@ -1239,11 +1239,9 @@ class DoctrineService:
         """
         from services.module_equivalents_service import get_module_equivalents_service
 
-        stock_df = self._repo.get_module_stock_info(module_name)
+        stock_df = self._repo.get_module_stock_info(type_id)
         if stock_df.empty:
             return stock_df
-
-        type_id = int(stock_df.iloc[0]['type_id'])
 
         equiv_service = get_module_equivalents_service()
         if not equiv_service.has_equivalents(type_id):

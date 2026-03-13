@@ -59,12 +59,14 @@ def _localize_doctrine_df(
     )
 
 
-def get_module_stock_list(
-    module_names: list,
-    sde_repo,
-    language_code: str,
-):
-    """Get lists of modules with their stock quantities for display and CSV export using service."""
+def get_module_stock_list(type_ids: list[int], sde_repo, language_code: str):
+    """Get lists of modules with their stock quantities for display and CSV export using service.
+
+    Args:
+        type_ids: List of EVE type IDs to query stock for
+        sde_repo: SDE repository for localized name lookups
+        language_code: Active language code for display names
+    """
 
     # Set the session state variables for the module list and csv module list
     ss_init({
@@ -72,18 +74,18 @@ def get_module_stock_list(
         'csv_module_list_state': {},
     })
 
-    for module_name in module_names:
-        if module_name not in st.session_state.module_list_state:
-            logger.info(f"Querying database for {module_name} via service")
+    for type_id in type_ids:
+        if type_id not in st.session_state.module_list_state:
+            logger.info(f"Querying database for type_id={type_id} via service")
 
             # Use service repository to get module stock info
             svc = get_doctrine_service()
-            module_stock = svc.repository.get_module_stock(module_name)
+            module_stock = svc.repository.get_module_stock(type_id)
 
             if module_stock:
                 display_name = get_localized_name(
                     module_stock.type_id,
-                    module_name,
+                    module_stock.type_name,
                     sde_repo,
                     language_code,
                     logger,
@@ -94,19 +96,19 @@ def get_module_stock_list(
                     "fits_on_mkt": module_stock.fits_on_mkt,
                 }
                 csv_module_info = (
-                    f"{module_name},{module_stock.type_id},"
+                    f"{module_stock.type_name},{module_stock.type_id},"
                     f"{module_stock.total_stock},{module_stock.fits_on_mkt}\n"
                 )
             else:
                 module_info = {
-                    "display_name": module_name,
+                    "display_name": f"Unknown ({type_id})",
                     "total_stock": 0,
                     "fits_on_mkt": 0,
                 }
-                csv_module_info = f"{module_name},0,0,0\n"
+                csv_module_info = f"Unknown ({type_id}),{type_id},0,0\n"
 
-            st.session_state.module_list_state[module_name] = module_info
-            st.session_state.csv_module_list_state[module_name] = csv_module_info
+            st.session_state.module_list_state[type_id] = module_info
+            st.session_state.csv_module_list_state[type_id] = csv_module_info
 
 def _get_role_label(role: str, language_code: str) -> str:
     role_key = f"doctrine_report.role_{role.lower()}"
@@ -123,7 +125,7 @@ def display_categorized_doctrine_data(selected_data, language_code: str):
     # Create a proper copy of the DataFrame to avoid SettingWithCopyWarning
     selected_data_with_roles = selected_data.copy()
     selected_data_with_roles['role'] = selected_data_with_roles.apply(
-        lambda row: categorize_ship_by_role(row['ship_name'], row['fit_id']), 
+        lambda row: categorize_ship_by_role(row['ship_name'], row['fit_id']),
         axis=1
     )
 
@@ -218,7 +220,7 @@ def display_low_stock_modules(
                 lead_fit_id = lead_matches.fit_id.iloc[0]
             else:
                 lead_fit_id = selected_data.fit_id.iloc[0] if not selected_data.empty else selected_fit_ids[0]
- 
+
         # Create two columns for display
         col1, col2 = st.columns(2)
 
@@ -303,10 +305,10 @@ def display_low_stock_modules(
                         target = 20  # Default target
 
                     module_name = module_row['type_name']
-                    module_name_en = module_row.get('type_name_en', module_name)
+                    type_id = int(module_row['type_id']) if pd.notna(module_row['type_id']) else 0
                     stock = int(module_row['fits_on_mkt']) if pd.notna(module_row['fits_on_mkt']) else 0
                     module_target = int(target) if pd.notna(target) else 0
-                    module_key = f"ship_module_{fit_id}_{module_name_en}_{stock}_{module_target}"
+                    module_key = f"ship_module_{fit_id}_{type_id}"
 
                     stock_status = StockStatus.from_stock_and_target(stock, module_target)
                     badge_status = stock_status.display_name
@@ -320,16 +322,17 @@ def display_low_stock_modules(
                             "x",
                             key=module_key,
                             label_visibility="hidden",
-                            value=module_name_en in st.session_state.selected_modules
+                            value=type_id in st.session_state.selected_modules
                         )
 
                         # Update session state based on checkbox
-                        if is_selected and module_name_en not in st.session_state.selected_modules:
-                            st.session_state.selected_modules.append(module_name_en)
+                        if is_selected and type_id not in st.session_state.selected_modules:
+                            st.session_state.selected_modules.add(type_id)
+                            st.session_state.module_id_info[type_id] = module_name
                             # Also update the stock info
-                            get_module_stock_list([module_name_en], sde_repo, language_code)
-                        elif not is_selected and module_name_en in st.session_state.selected_modules:
-                            st.session_state.selected_modules.remove(module_name_en)
+                            get_module_stock_list([type_id], sde_repo, language_code)
+                        elif not is_selected and type_id in st.session_state.selected_modules:
+                            st.session_state.selected_modules.discard(type_id)
 
                     with badge_col:
                         # Show badge for all modules to indicate their status
@@ -387,11 +390,15 @@ def main():
     # Initialize service (cached in session state via get_service)
     service = get_doctrine_service()
 
-    # Initialize session state for target multiplier and selected modules
+    # Initialize session state for target multiplier and selected module type_ids
     ss_init({
         'target_multiplier': 1.0,
-        'selected_modules': [],
+        'selected_modules': set(),
+        'module_id_info': {},
     })
+    # Coerce legacy list state from pre-deploy sessions to set
+    if isinstance(st.session_state.selected_modules, list):
+        st.session_state.selected_modules = set()
 
     # App title and logo
     # Handle path properly for WSL environment
@@ -517,17 +524,17 @@ def main():
     # Format selected items using code block for cleaner display
     if st.session_state.selected_modules:
         selection_lines = [translate_text(language_code, "doctrine_report.modules_label")]
-        for item_name in st.session_state.selected_modules:
-            if item_name in st.session_state.get('module_list_state', {}):
-                item_info = st.session_state.module_list_state[item_name]
-                display_name = item_info.get("display_name", item_name)
+        for tid in sorted(st.session_state.selected_modules):
+            display_name = st.session_state.module_id_info.get(tid, f"Unknown ({tid})")
+            if tid in st.session_state.get('module_list_state', {}):
+                item_info = st.session_state.module_list_state[tid]
                 total_stock = item_info.get("total_stock", 0)
                 fits_on_mkt = item_info.get("fits_on_mkt", 0)
                 selection_lines.append(
                     f"  {display_name} (Total: {total_stock} | Fits: {fits_on_mkt})"
                 )
             else:
-                selection_lines.append(f"  {item_name} (N/A)")
+                selection_lines.append(f"  {display_name} (N/A)")
 
         st.sidebar.code("\n".join(selection_lines), language=None)
     else:
@@ -538,9 +545,9 @@ def main():
         # Prepare export data
     if st.session_state.get('csv_module_list_state'):
         csv_export = "Type,TypeID,Quantity,Fits\n"
-        for module_name in st.session_state.selected_modules:
-            if module_name in st.session_state.csv_module_list_state:
-                csv_export += st.session_state.csv_module_list_state[module_name]
+        for tid in st.session_state.selected_modules:
+            if tid in st.session_state.csv_module_list_state:
+                csv_export += st.session_state.csv_module_list_state[tid]
 
         # Download button
         st.sidebar.download_button(
@@ -553,7 +560,8 @@ def main():
 
     # Clear selection button
     if st.sidebar.button(translate_text(language_code, "doctrine_report.clear_selection"), width='content'):
-        st.session_state.selected_modules = []
+        st.session_state.selected_modules = set()
+        st.session_state.module_id_info = {}
         st.session_state.module_list_state = {}
         st.session_state.csv_module_list_state = {}
         st.rerun()
