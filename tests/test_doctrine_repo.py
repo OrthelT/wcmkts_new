@@ -179,9 +179,7 @@ class TestGetShipStock:
         assert result is not None
         assert result.fit_id == 473
         # Verify the SQL included fit_id parameter
-        call_args = mock_query.call_args
-        params = call_args[1].get("params") or call_args[0][2] if len(call_args[0]) > 2 else call_args[1].get("params", {})
-        assert params.get("fit_id") == 473
+        assert mock_query.call_args.kwargs["params"]["fit_id"] == 473
 
 
 # ---------------------------------------------------------------------------
