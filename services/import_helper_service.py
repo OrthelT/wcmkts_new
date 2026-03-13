@@ -25,6 +25,56 @@ logger = setup_logging(__name__, log_file="import_helper_service.log")
 _settings = SettingsService()
 SHIPPING_COST_PER_M3: float = _settings.default_shipping_cost
 
+# Ship shipping costs must use packaged volume instead of raw assembled hull volume.
+PACKAGED_SHIP_VOLUMES_M3: dict[str, float] = {
+    "Capsule": 500.0,
+    "Shuttle": 500.0,
+    "Corvette": 2500.0,
+    "Frigate": 2500.0,
+    "Assault Frigate": 2500.0,
+    "Covert Ops": 2500.0,
+    "Electronic Attack Ship": 2500.0,
+    "Expedition Frigate": 2500.0,
+    "Interceptor": 2500.0,
+    "Logistics Frigate": 2500.0,
+    "Prototype Exploration Ship": 2500.0,
+    "Stealth Bomber": 2500.0,
+    "Command Destroyer": 5000.0,
+    "Destroyer": 5000.0,
+    "Interdictor": 5000.0,
+    "Tactical Destroyer": 5000.0,
+    "Strategic Cruiser": 5000.0,
+    "Combat Recon Ship": 10000.0,
+    "Cruiser": 10000.0,
+    "Flag Cruiser": 10000.0,
+    "Force Recon Ship": 10000.0,
+    "Heavy Assault Cruiser": 10000.0,
+    "Heavy Interdiction Cruiser": 10000.0,
+    "Logistics": 10000.0,
+    "Attack Battlecruiser": 15000.0,
+    "Combat Battlecruiser": 15000.0,
+    "Command Ship": 15000.0,
+    "Blockade Runner": 20000.0,
+    "Deep Space Transport": 20000.0,
+    "Hauler": 20000.0,
+    "Exhumer": 3750.0,
+    "Mining Barge": 3750.0,
+    "Battleship": 50000.0,
+    "Black Ops": 50000.0,
+    "Expedition Command Ship": 50000.0,
+    "Marauder": 50000.0,
+    "Industrial Command Ship": 500000.0,
+    "Capital Industrial Ship": 1300000.0,
+    "Carrier": 1300000.0,
+    "Dreadnought": 1300000.0,
+    "Force Auxiliary": 1300000.0,
+    "Freighter": 1300000.0,
+    "Jump Freighter": 1300000.0,
+    "Lancer Dreadnought": 1300000.0,
+    "Supercarrier": 1300000.0,
+    "Titan": 10000000.0,
+}
+
 
 def _get_jita_sell_price(jita_prices: dict, type_id) -> float:
     """Safely extract Jita sell price from a provider result map."""
@@ -40,6 +90,44 @@ def _get_jita_buy_price(jita_prices: dict, type_id) -> float:
         return 0.0
     result: Optional[PriceResult] = jita_prices.get(int(type_id))
     return result.buy_price if result else 0.0
+
+
+def _apply_packaged_ship_volumes(
+    volume_df: pd.DataFrame,
+    logger_instance: Optional[logging.Logger] = None,
+) -> pd.DataFrame:
+    """Replace ship volumes with packaged volumes for shipping-cost calculations."""
+    if volume_df.empty:
+        return volume_df
+
+    result = volume_df.copy()
+    result["raw_volume_m3"] = pd.to_numeric(result.get("raw_volume_m3"), errors="coerce").fillna(0.0)
+
+    if "category_name" not in result.columns or "group_name" not in result.columns:
+        result["volume_m3"] = result["raw_volume_m3"]
+        return result
+
+    ship_mask = result["category_name"].eq("Ship")
+    if ship_mask.any():
+        mapped_ship_volumes = result.loc[ship_mask, "group_name"].map(PACKAGED_SHIP_VOLUMES_M3)
+        if logger_instance is not None:
+            missing_groups = (
+                result.loc[ship_mask & mapped_ship_volumes.isna(), "group_name"]
+                .dropna()
+                .unique()
+                .tolist()
+            )
+            if missing_groups:
+                logger_instance.warning(
+                    "Using raw volume for ship groups without packaged overrides: %s",
+                    ", ".join(sorted(missing_groups)),
+                )
+        result.loc[ship_mask, "raw_volume_m3"] = mapped_ship_volumes.fillna(
+            result.loc[ship_mask, "raw_volume_m3"]
+        )
+
+    result["volume_m3"] = result["raw_volume_m3"]
+    return result.drop(columns=["raw_volume_m3"])
 
 
 @dataclass(frozen=True)
@@ -151,7 +239,9 @@ class ImportHelperService:
             """
             SELECT
                 typeID AS type_id,
-                COALESCE(volume, 0) AS volume_m3
+                groupName AS group_name,
+                categoryName AS category_name,
+                COALESCE(volume, 0) AS raw_volume_m3
             FROM sdetypes
             WHERE typeID IN :type_ids
             """
@@ -169,6 +259,7 @@ class ImportHelperService:
             result["volume_m3"] = 0.0
             return result
 
+        volume_df = _apply_packaged_ship_volumes(volume_df, self._logger)
         return market_df.merge(volume_df, on="type_id", how="left").fillna({"volume_m3": 0.0})
 
     def get_category_options(self) -> pd.DataFrame:
