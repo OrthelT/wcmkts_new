@@ -1,7 +1,7 @@
 """Tests for PriceService caching behavior."""
 
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 
 class DummyPriceProvider:
@@ -155,3 +155,54 @@ def test_fallback_provider_does_not_merge_partial_results():
 
     assert result.sell_price == 10.0
     assert result.buy_price == 0.0
+
+
+def test_get_jita_prices_dedupes_uncached_type_ids():
+    from services.price_service import PriceService
+
+    provider = DummyPriceProvider()
+    service = PriceService(jita_provider=provider, cache_ttl=3600)
+
+    result = service.get_jita_prices([34, 34, 35, 35])
+
+    assert sorted(result.prices) == [34, 35]
+    assert provider.calls == 2
+
+
+def test_fuzzwork_provider_chunks_requests_and_sleeps_between_chunks():
+    from services.price_service import FuzzworkProvider
+
+    provider = FuzzworkProvider()
+    response_payloads = [
+        {
+            "34": {"sell": {"percentile": 10.0}, "buy": {"percentile": 9.0}},
+            "35": {"sell": {"percentile": 20.0}, "buy": {"percentile": 19.0}},
+        },
+        {
+            "36": {"sell": {"percentile": 30.0}, "buy": {"percentile": 29.0}},
+            "37": {"sell": {"percentile": 40.0}, "buy": {"percentile": 39.0}},
+        },
+        {
+            "38": {"sell": {"percentile": 50.0}, "buy": {"percentile": 49.0}},
+        },
+    ]
+
+    responses = []
+    for payload in response_payloads:
+        response = Mock()
+        response.raise_for_status = Mock()
+        response.json.return_value = payload
+        responses.append(response)
+
+    with (
+        patch.object(FuzzworkProvider, "BATCH_SIZE", 2),
+        patch.object(FuzzworkProvider, "CHUNK_DELAY_SECONDS", 0.2),
+        patch("services.price_service.requests.get", side_effect=responses) as mock_get,
+        patch("services.price_service.time.sleep") as mock_sleep,
+    ):
+        result = provider.get_prices([34, 35, 36, 37, 38])
+
+    assert sorted(result.prices) == [34, 35, 36, 37, 38]
+    assert mock_get.call_count == 3
+    assert mock_sleep.call_count == 2
+    mock_sleep.assert_has_calls([call(0.2), call(0.2)])
