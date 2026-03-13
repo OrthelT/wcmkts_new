@@ -323,6 +323,9 @@ def main():
         'selected_modules': set(),
         'module_id_info': {},
     })
+    # Coerce legacy list state from pre-deploy sessions to set
+    if isinstance(st.session_state.selected_modules, list):
+        st.session_state.selected_modules = set()
 
     # App title and logo
     # Handle path properly for WSL environment
