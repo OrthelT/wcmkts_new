@@ -144,6 +144,43 @@ class TestImportHelperService:
         row = result.iloc[0]
         assert abs(row["rrp"] - expected_rrp) < 1e-9
 
+    def test_get_import_items_uses_custom_shipping_cost_per_m3(self):
+        from services.import_helper_service import ImportHelperFilters, ImportHelperService
+
+        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}))
+        base_df = pd.DataFrame(
+            {
+                "type_id": [34],
+                "type_name": ["Tritanium"],
+                "price": [30.0],
+                "avg_volume": [5.0],
+                "volume_m3": [2.0],
+                "jita_sell_price": [20.0],
+                "jita_buy_price": [18.0],
+                "turnover_30d": [3000.0],
+                "volume_30d": [150.0],
+                "category_name": ["Mineral"],
+                "group_name": ["Mineral"],
+            }
+        )
+
+        result = service.get_import_items(
+            base_df,
+            ImportHelperFilters(
+                profitable_only=False,
+                shipping_cost_per_m3=100.0,
+            ),
+        )
+
+        row = result.iloc[0]
+        assert row["shipping_cost"] == 200.0
+        assert row["profit_jita_sell"] == -190.0
+        assert row["profit_jita_sell_30d"] == -28_500.0
+        assert row["turnover_30d"] == 3000.0
+        assert row["volume_30d"] == 150.0
+        assert row["capital_utilis"] == -9.5
+        assert row["rrp"] == 224.0
+
     def test_get_import_items_applies_filters_using_avg_volume(self):
         from services.import_helper_service import ImportHelperFilters, ImportHelperService
 
@@ -248,6 +285,96 @@ class TestImportHelperService:
         assert row["turnover_30d"] == 3000.0
         assert row["volume_30d"] == 150.0
 
+    def test_get_import_items_applies_item_type_filters(self):
+        from services.import_helper_service import ImportHelperFilters, ImportHelperService
+
+        mock_sde_repo = Mock()
+        mock_sde_repo.get_tech2_type_ids.return_value = [35]
+        mock_sde_repo.get_faction_type_ids.return_value = {36}
+
+        service = ImportHelperService(Mock(), mock_sde_repo, DummyPriceService({}))
+        base_df = pd.DataFrame(
+            {
+                "type_id": [34, 35, 36],
+                "type_name": ["Tritanium", "Tech Item", "Faction Item"],
+                "price": [30.0, 40.0, 50.0],
+                "avg_volume": [5.0, 5.0, 5.0],
+                "volume_m3": [0.01, 0.01, 0.01],
+                "jita_sell_price": [20.0, 20.0, 20.0],
+                "jita_buy_price": [18.0, 18.0, 18.0],
+                "shipping_cost": [1.0, 1.0, 1.0],
+                "profit_jita_sell": [9.0, 19.0, 29.0],
+                "profit_jita_sell_30d": [1350.0, 2850.0, 4350.0],
+                "turnover_30d": [3000.0, 3000.0, 3000.0],
+                "volume_30d": [150.0, 150.0, 150.0],
+                "capital_utilis": [0.45, 0.95, 1.45],
+                "category_name": ["Mineral", "Module", "Module"],
+                "group_name": ["Mineral", "Module", "Module"],
+                "is_doctrine": [0, 1, 0],
+            }
+        )
+
+        doctrine_result = service.get_import_items(
+            base_df,
+            ImportHelperFilters(doctrine_only=True, profitable_only=False),
+        )
+        tech2_result = service.get_import_items(
+            base_df,
+            ImportHelperFilters(tech2_only=True, profitable_only=False),
+        )
+        faction_result = service.get_import_items(
+            base_df,
+            ImportHelperFilters(faction_only=True, profitable_only=False),
+        )
+
+        assert doctrine_result["type_id"].tolist() == [35]
+        assert tech2_result["type_id"].tolist() == [35]
+        assert faction_result["type_id"].tolist() == [36]
+
+    @patch("services.import_helper_service.apply_localized_type_names")
+    def test_get_import_items_uses_localized_names_and_preserves_english_search(
+        self,
+        mock_localize,
+    ):
+        from services.import_helper_service import ImportHelperFilters, ImportHelperService
+
+        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}))
+
+        base_df = pd.DataFrame(
+            {
+                "type_id": [34],
+                "type_name": ["Tritanium"],
+                "price": [30.0],
+                "avg_volume": [5.0],
+                "volume_m3": [0.01],
+                "jita_sell_price": [20.0],
+                "jita_buy_price": [18.0],
+                "shipping_cost": [1.0],
+                "profit_jita_sell": [9.0],
+                "profit_jita_sell_30d": [1350.0],
+                "turnover_30d": [3000.0],
+                "volume_30d": [150.0],
+                "capital_utilis": [0.45],
+                "category_name": ["Mineral"],
+                "group_name": ["Mineral"],
+            }
+        )
+
+        def _localize(df, *_args, **_kwargs):
+            localized_df = df.copy()
+            localized_df["type_name"] = "三钛合金"
+            localized_df["type_name_en"] = "Tritanium"
+            return localized_df
+
+        mock_localize.side_effect = _localize
+
+        filters = ImportHelperFilters(search_text="trit")
+        result = service.get_import_items(base_df, filters, language_code="zh")
+
+        assert len(result) == 1
+        assert result.iloc[0]["type_name"] == "三钛合金"
+        mock_localize.assert_called_once()
+
     def test_get_summary_stats_returns_counts_and_average(self):
         from services.import_helper_service import ImportHelperService
 
@@ -278,7 +405,10 @@ class TestImportHelperService:
         from services.import_helper_service import ImportHelperService
 
         mock_read_sql.return_value = pd.DataFrame(
-            {"category_name": ["Mineral", "Ship Equipment"]}
+            {
+                "category_id": [4, 7],
+                "category_name": ["Mineral", "Ship Equipment"],
+            }
         )
         mock_conn = Mock()
         mock_conn.__enter__ = Mock(return_value=mock_conn)
@@ -291,4 +421,5 @@ class TestImportHelperService:
         service = ImportHelperService(mkt_db, Mock(), DummyPriceService({}))
         result = service.get_category_options()
 
-        assert result == ["Mineral", "Ship Equipment"]
+        assert result["category_id"].tolist() == [4, 7]
+        assert result["category_name"].tolist() == ["Mineral", "Ship Equipment"]

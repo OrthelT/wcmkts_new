@@ -13,6 +13,13 @@ Usage:
 
 from state.session_state import ss_get, ss_has, ss_init, ss_set, ss_clear
 from state.service_registry import get_service, register_service, clear_services, has_service
+from state.language_state import (
+    get_active_language,
+    get_query_param_language,
+    set_active_language,
+    set_language_query_param,
+    sync_active_language_with_query_params,
+)
 from state.market_state import get_active_market, get_active_market_key, set_active_market
 
 __all__ = [
@@ -27,6 +34,12 @@ __all__ = [
     'register_service',
     'clear_services',
     'has_service',
+    # Language state
+    'get_active_language',
+    'get_query_param_language',
+    'set_active_language',
+    'set_language_query_param',
+    'sync_active_language_with_query_params',
     # Market state
     'get_active_market',
     'get_active_market_key',

@@ -15,7 +15,7 @@ from logging_config import setup_logging
 logger = setup_logging(__name__, log_file="sync_display.log")
 
 
-def display_sync_status():
+def display_sync_status(language_code: str = "en"):
     """Display sync status in the sidebar."""
     from state.market_state import get_active_market
     active_alias = get_active_market().database_alias

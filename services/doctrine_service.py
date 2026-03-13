@@ -614,6 +614,7 @@ class FitDataBuilder:
             hull_rows.groupby("fit_id")
             .agg(
                 {
+                    "group_id": "first",
                     "group_name": "first",
                     "price": "first",
                     "avg_vol": "first",
@@ -626,6 +627,7 @@ class FitDataBuilder:
         summary = summary.merge(ship_data, on="fit_id", how="left")
         summary["price"] = summary["price"].fillna(0)
         summary["ship_group"] = summary["group_name"]
+        summary["ship_group_id"] = summary["group_id"]
 
         # Rename for expected output
         summary = summary.rename(columns={"fits_on_mkt": "fits"})
@@ -806,6 +808,7 @@ class FitDataBuilder:
             "hulls",
             "fits",
             "ship_group",
+            "ship_group_id",
             "price",
             "total_cost",
             "ship_target",

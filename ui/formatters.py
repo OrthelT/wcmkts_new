@@ -14,6 +14,7 @@ Design Principles:
 import streamlit as st
 
 from domain.enums import ShipRole, StockStatus
+from ui.i18n import translate_text
 
 def format_module_list(modules_list: list[str]) -> str:
     """
@@ -203,51 +204,59 @@ def get_ship_role_format(role: str) -> str:
     ship_role = ShipRole.from_string(role)
     return f"{ship_role.display_emoji} **{ship_role.display_name}** - {ship_role.description}"
 
-def get_doctrine_report_column_config() -> dict:
+def get_doctrine_report_column_config(language_code: str = "en") -> dict:
     """
     Get the column configuration for the doctrine_report.py display table.
     Returns:
         Column configuration for the doctrine_report.py display table
     """
     config = {'target_percentage': st.column_config.ProgressColumn(
-                        "Target %",
+                        translate_text(language_code, "doctrine_report.column_target_pct"),
                         format="percent",
                         width="medium",
                     ),
             'ship_target': st.column_config.Column(
-                "Target",
-                help="Number of fits required for stock",
+                translate_text(language_code, "doctrine_report.column_target"),
+                help=translate_text(language_code, "doctrine_report.column_target_help"),
 
             ),
             'daily_avg': st.column_config.NumberColumn(
-                "Daily Sales",
-                help="Average daily sales over the last 30 days"
+                translate_text(language_code, "doctrine_report.column_daily_sales"),
+                help=translate_text(language_code, "doctrine_report.column_daily_sales_help")
             ),
             'ship_group': st.column_config.Column(
-                "Group",
-                help="Ship group"
+                translate_text(language_code, "common.group"),
+                help=translate_text(language_code, "doctrine_report.column_group_help")
             ),
             'ship_name': st.column_config.Column(
-                "Ship",
-                help="Ship name"
+                translate_text(language_code, "doctrine_report.column_ship"),
+                help=translate_text(language_code, "doctrine_report.column_ship_help")
             ),
             'ship_id': st.column_config.Column(
-                "Type ID",
-                help="Ship ID"
+                translate_text(language_code, "common.type_id"),
+                help=translate_text(language_code, "doctrine_report.column_ship_id_help")
             ),
             'fit_id': st.column_config.Column(
-                "Fit ID",
-                help="Fit ID"
+                translate_text(language_code, "doctrine_report.column_fit_id"),
+                help=translate_text(language_code, "doctrine_report.column_fit_id_help")
+            ),
+            'fits': st.column_config.NumberColumn(
+                translate_text(language_code, "doctrine_report.metric_total_fits"),
+                width="small",
+            ),
+            'hulls': st.column_config.NumberColumn(
+                translate_text(language_code, "doctrine_report.metric_total_hulls"),
+                width="small",
             ),
             'price': st.column_config.NumberColumn(
-                "Price",
+                translate_text(language_code, "common.price"),
                 format="compact",
-                help="Price of the ship"
+                help=translate_text(language_code, "doctrine_report.column_price_help")
             ),
             'total_cost': st.column_config.NumberColumn(
-                "Total Cost",
+                translate_text(language_code, "doctrine_report.column_total_cost"),
                 format="compact",
-                help="Total cost of the fit"
+                help=translate_text(language_code, "doctrine_report.column_total_cost_help")
             )
             }
     return config

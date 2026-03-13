@@ -6,7 +6,7 @@ Covers type lookups, group/category queries, table exports, and edge cases.
 """
 import pytest
 import pandas as pd
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 
 def _mock_engine():
@@ -101,7 +101,7 @@ class TestGetGroupsForCategory:
         expected = pd.DataFrame({"groupID": [1136], "groupName": ["Ice Product"]})
 
         with patch("pandas.read_sql_query", return_value=expected) as mock_sql:
-            result = _get_groups_for_category_impl(engine, 4)
+            _get_groups_for_category_impl(engine, 4)
 
         # Verify the query contains the group filter
         call_args = mock_sql.call_args

@@ -246,66 +246,72 @@ def _get_all_translations_impl(engine, type_id: int) -> dict[str, str]:
 # =============================================================================
 
 @st.cache_resource
-def _get_type_name_cached(_url: str, type_id: int) -> Optional[str]:
-    db = DatabaseConfig("sde")
+def _get_sde_db_cached(_cache_key: str) -> DatabaseConfig:
+    """Return the shared SDE database config for cached repository reads."""
+    return DatabaseConfig("sde")
+
+
+@st.cache_resource
+def _get_type_name_cached(_cache_key: str, type_id: int) -> Optional[str]:
+    db = _get_sde_db_cached(_cache_key)
     return _get_type_name_impl(db.engine, type_id)
 
 
 @st.cache_resource
-def _get_type_id_cached(_url: str, type_name: str) -> Optional[int]:
-    db = DatabaseConfig("sde")
+def _get_type_id_cached(_cache_key: str, type_name: str) -> Optional[int]:
+    db = _get_sde_db_cached(_cache_key)
     return _get_type_id_impl(db.engine, type_name)
 
 
 @st.cache_resource
-def _get_groups_for_category_cached(_url: str, category_id: int) -> pd.DataFrame:
-    db = DatabaseConfig("sde")
+def _get_groups_for_category_cached(_cache_key: str, category_id: int) -> pd.DataFrame:
+    db = _get_sde_db_cached(_cache_key)
     return _get_groups_for_category_impl(db.engine, category_id)
 
 
 @st.cache_resource
-def _get_types_for_group_cached(_url: str, group_id: int) -> pd.DataFrame:
-    db = DatabaseConfig("sde")
+def _get_types_for_group_cached(_cache_key: str, group_id: int) -> pd.DataFrame:
+    db = _get_sde_db_cached(_cache_key)
     return _get_types_for_group_impl(db.engine, db.remote_engine, group_id)
 
 
 @st.cache_resource
-def _get_sde_table_cached(_url: str, table_name: str) -> pd.DataFrame:
-    db = DatabaseConfig("sde")
+def _get_sde_table_cached(_cache_key: str, table_name: str) -> pd.DataFrame:
+    db = _get_sde_db_cached(_cache_key)
     return _get_sde_table_impl(db.engine, table_name)
 
 
 @st.cache_resource
-def _get_tech2_type_ids_cached(_url: str) -> list[int]:
-    db = DatabaseConfig("sde")
+def _get_tech2_type_ids_cached(_cache_key: str) -> list[int]:
+    db = _get_sde_db_cached(_cache_key)
     return _get_tech2_type_ids_impl(db.engine)
 
 
 @st.cache_resource
-def _get_faction_type_ids_cached(_url: str) -> set[int]:
-    db = DatabaseConfig("sde")
+def _get_faction_type_ids_cached(_cache_key: str) -> set[int]:
+    db = _get_sde_db_cached(_cache_key)
     return _get_faction_type_ids_impl(db.engine)
 
 
 @st.cache_resource
 def _get_localized_name_cached(
-    _url: str, type_id: int, language: str
+    _cache_key: str, type_id: int, language: str
 ) -> Optional[str]:
-    db = DatabaseConfig("sde")
+    db = _get_sde_db_cached(_cache_key)
     return _get_localized_name_impl(db.engine, type_id, language)
 
 
 @st.cache_resource
 def _get_localized_names_cached(
-    _url: str, type_ids: tuple[int, ...], language: str
+    _cache_key: str, type_ids: tuple[int, ...], language: str
 ) -> dict[int, str]:
-    db = DatabaseConfig("sde")
+    db = _get_sde_db_cached(_cache_key)
     return _get_localized_names_impl(db.engine, list(type_ids), language)
 
 
 @st.cache_resource
-def _get_all_translations_cached(_url: str, type_id: int) -> dict[str, str]:
-    db = DatabaseConfig("sde")
+def _get_all_translations_cached(_cache_key: str, type_id: int) -> dict[str, str]:
+    db = _get_sde_db_cached(_cache_key)
     return _get_all_translations_impl(db.engine, type_id)
 
 
@@ -342,15 +348,15 @@ class SDERepository(BaseRepository):
 
     def __init__(self, db: DatabaseConfig, logger_instance: Optional[logging.Logger] = None):
         super().__init__(db, logger_instance)
-        self._url = getattr(db, "url", "sde")
+        self._cache_key = getattr(db, "url", "sde")
 
     def get_type_name(self, type_id: int) -> Optional[str]:
         """Get type name by ID (cached)."""
-        return _get_type_name_cached(self._url, type_id)
+        return _get_type_name_cached(self._cache_key, type_id)
 
     def get_type_id(self, type_name: str) -> Optional[int]:
         """Get type ID by name (cached)."""
-        return _get_type_id_cached(self._url, type_name)
+        return _get_type_id_cached(self._cache_key, type_name)
 
     def get_groups_for_category(self, category_id: int) -> pd.DataFrame:
         """Get groups for a category ID (cached).
@@ -358,7 +364,7 @@ class SDERepository(BaseRepository):
         Returns DataFrame with columns: groupID, groupName.
         Category 17 reads from CSV. Category 4 filters to group 1136.
         """
-        return _get_groups_for_category_cached(self._url, category_id)
+        return _get_groups_for_category_cached(self._cache_key, category_id)
 
     def get_types_for_group(self, group_id: int) -> pd.DataFrame:
         """Get types for a group ID (cached).
@@ -367,26 +373,26 @@ class SDERepository(BaseRepository):
         Joins with industryActivityProducts to find manufacturable items.
         Group 332 filters to R.A.M./R.Db items.
         """
-        return _get_types_for_group_cached(self._url, group_id)
+        return _get_types_for_group_cached(self._cache_key, group_id)
 
     def get_sde_table(self, table_name: str) -> pd.DataFrame:
         """Get full SDE table by name (cached).
 
         Validates table_name against allowlist to prevent SQL injection.
         """
-        return _get_sde_table_cached(self._url, table_name)
+        return _get_sde_table_cached(self._cache_key, table_name)
 
     def get_tech2_type_ids(self) -> list[int]:
         """Get all Tech 2 type IDs (cached)."""
-        return _get_tech2_type_ids_cached(self._url)
+        return _get_tech2_type_ids_cached(self._cache_key)
 
     def get_faction_type_ids(self) -> set[int]:
         """Get all Faction type IDs (metaGroupID=4, cached)."""
-        return _get_faction_type_ids_cached(self._url)
+        return _get_faction_type_ids_cached(self._cache_key)
 
     def get_localized_name(self, type_id: int, language: str) -> Optional[str]:
         """Get localized type name by ID and language code (cached)."""
-        return _get_localized_name_cached(self._url, type_id, language)
+        return _get_localized_name_cached(self._cache_key, type_id, language)
 
     def get_localized_names(
         self, type_ids: list[int], language: str
@@ -395,14 +401,14 @@ class SDERepository(BaseRepository):
 
         Returns {type_id: localized_name} for items found.
         """
-        return _get_localized_names_cached(self._url, tuple(type_ids), language)
+        return _get_localized_names_cached(self._cache_key, tuple(type_ids), language)
 
     def get_all_translations(self, type_id: int) -> dict[str, str]:
         """Get all language translations for a type ID (cached).
 
         Returns {language_code: localized_name}.
         """
-        return _get_all_translations_cached(self._url, type_id)
+        return _get_all_translations_cached(self._cache_key, type_id)
 
 
 # =============================================================================

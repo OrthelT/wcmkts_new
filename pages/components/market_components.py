@@ -15,9 +15,9 @@ import millify
 from config import get_settings
 from logging_config import setup_logging
 from state import ss_has
+from ui.i18n import translate_text
 
 logger = setup_logging(__name__)
-
 
 def _get_default_outlier_method() -> str:
     """Get the default outlier method from settings."""
@@ -29,7 +29,7 @@ def _get_default_outlier_method() -> str:
 # ISK Volume Chart UI
 # =============================================================================
 
-def render_isk_volume_chart_ui(service) -> None:
+def render_isk_volume_chart_ui(service, language_code: str = "en") -> None:
     """Render ISK volume chart with all controls as a Streamlit fragment.
 
     Args:
@@ -39,98 +39,116 @@ def render_isk_volume_chart_ui(service) -> None:
     @st.fragment
     def chart_fragment():
         selected_category = st.session_state.get("selected_category", None)
+        selected_category_id = st.session_state.get("selected_category_id", None)
 
-        min_date, max_date = service.get_available_date_range(selected_category)
+        min_date, max_date = service.get_available_date_range(
+            selected_category,
+            selected_category_id,
+        )
 
         if min_date is None or max_date is None:
-            msg = f"No market history data available for category: {selected_category}" if selected_category else "No market history data available"
+            msg = (
+                translate_text(
+                    language_code,
+                    "market_stats.no_market_history_for_category",
+                    category_name=selected_category,
+                )
+                if selected_category
+                else translate_text(language_code, "market_stats.no_market_history")
+            )
             st.warning(msg)
             return
 
-        st.write("**Date Range:**")
-        st.caption(f"Available data range: {min_date.strftime('%Y-%m-%d')} to {max_date.strftime('%Y-%m-%d')}")
+        st.write(f"**{translate_text(language_code, 'market_stats.date_range')}:**")
+        st.caption(
+            translate_text(
+                language_code,
+                "market_stats.available_data_range",
+                start=min_date.strftime('%Y-%m-%d'),
+                end=max_date.strftime('%Y-%m-%d'),
+            )
+        )
         col3, col4 = st.columns(2)
         with col3:
             start_date = st.date_input(
-                "Start Date",
+                translate_text(language_code, "market_stats.start_date"),
                 value=None,
                 min_value=min_date.date(),
                 max_value=max_date.date(),
-                help=f"Select start date (available: {min_date.strftime('%Y-%m-%d')} to {max_date.strftime('%Y-%m-%d')})",
+                help=translate_text(
+                    language_code,
+                    "market_stats.start_date_help",
+                    start=min_date.strftime('%Y-%m-%d'),
+                    end=max_date.strftime('%Y-%m-%d'),
+                ),
                 key="chart_start_date",
             )
         with col4:
             end_date = st.date_input(
-                "End Date",
+                translate_text(language_code, "market_stats.end_date"),
                 value=None,
                 min_value=min_date.date(),
                 max_value=max_date.date(),
-                help=f"Select end date (available: {min_date.strftime('%Y-%m-%d')} to {max_date.strftime('%Y-%m-%d')})",
+                help=translate_text(
+                    language_code,
+                    "market_stats.end_date_help",
+                    start=min_date.strftime('%Y-%m-%d'),
+                    end=max_date.strftime('%Y-%m-%d'),
+                ),
                 key="chart_end_date",
             )
 
-        with st.expander("Chart Controls"):
+        with st.expander(translate_text(language_code, "market_stats.chart_controls")):
             col1, col2 = st.columns(2)
             with col1:
-                st.write("**Moving Average Period:**")
+                st.write(f"**{translate_text(language_code, 'market_stats.moving_average_period')}:**")
                 moving_avg_period = st.radio(
-                    "Moving Average",
+                    translate_text(language_code, "market_stats.moving_average"),
                     options=[3, 7, 14, 30],
                     index=2,
                     horizontal=True,
                     key="chart_moving_avg_radio",
                 )
             with col2:
-                st.write("**Date Aggregation:**")
-                date_period = st.radio(
-                    "Date Period",
+                st.write(f"**{translate_text(language_code, 'market_stats.date_aggregation')}:**")
+            date_period = st.radio(
+                    translate_text(language_code, "market_stats.date_period"),
                     options=["daily", "weekly", "monthly", "yearly"],
                     index=0,
-                    format_func=lambda x: x.title(),
+                    format_func=lambda x: translate_text(language_code, f"market_stats.period_{x}"),
                     horizontal=True,
                     key="chart_date_period_radio",
                 )
 
             st.divider()
-            st.write("**Outlier Handling:**")
+            st.write(f"**{translate_text(language_code, 'market_stats.outlier_handling')}:**")
             col5, col6, col7 = st.columns(3)
 
             with col5:
                 default = _get_default_outlier_method()
                 idx = {"none": 2, "remove": 1, "cap": 0}.get(default, 0)
                 outlier_method = st.selectbox(
-                    "Outlier Method",
+                    translate_text(language_code, "market_stats.outlier_method"),
                     options=["cap", "remove", "none"],
                     index=idx,
-                    format_func=lambda x: {
-                        "cap": "Cap Outliers",
-                        "remove": "Remove Outliers",
-                        "none": "Show All Data",
-                    }[x],
-                    help="How to handle extreme values that skew the chart scale",
+                    format_func=lambda x: translate_text(language_code, f"market_stats.outlier_method_{x}"),
+                    help=translate_text(language_code, "market_stats.outlier_method_help"),
                 )
             with col6:
                 outlier_threshold = st.slider(
-                    "Outlier Sensitivity",
+                    translate_text(language_code, "market_stats.outlier_sensitivity"),
                     min_value=1.0, max_value=3.0, value=1.5, step=0.1,
-                    help="Lower values = more aggressive outlier detection (1.5 = standard IQR method)",
+                    help=translate_text(language_code, "market_stats.outlier_sensitivity_help"),
                 )
             with col7:
                 cap_percentile = st.slider(
-                    "Cap at Percentile",
+                    translate_text(language_code, "market_stats.cap_at_percentile"),
                     min_value=85, max_value=99, value=95, step=1,
-                    help="Percentile to cap outliers at (when using 'Cap Outliers')",
+                    help=translate_text(language_code, "market_stats.cap_at_percentile_help"),
                     disabled=(outlier_method != "cap"),
                 )
 
-            st.info("""
-            **Outlier Handling Explained:**
-            - **Cap Outliers**: Replaces extreme values with a percentile-based limit (recommended)
-            - **Remove Outliers**: Completely removes extreme data points
-            - **Show All Data**: No outlier handling (may skew chart scale)
-
-            **Outlier Sensitivity**: Lower values detect more outliers. 1.5 is the standard IQR method.
-            """)
+            st.info(translate_text(language_code, "market_stats.outlier_handling_explained"))
 
         chart = service.create_isk_volume_chart(
             moving_avg_period=moving_avg_period,
@@ -141,6 +159,7 @@ def render_isk_volume_chart_ui(service) -> None:
             outlier_threshold=outlier_threshold,
             cap_percentile=cap_percentile,
             selected_category=selected_category,
+            selected_category_id=selected_category_id,
         )
         st.plotly_chart(chart, config={"width": "stretch"})
 
@@ -151,7 +170,7 @@ def render_isk_volume_chart_ui(service) -> None:
 # ISK Volume Table UI
 # =============================================================================
 
-def render_isk_volume_table_ui(service) -> None:
+def render_isk_volume_table_ui(service, language_code: str = "en") -> None:
     """Render ISK volume data table with chart-matching filters.
 
     Args:
@@ -161,10 +180,19 @@ def render_isk_volume_table_ui(service) -> None:
     end_date = st.session_state.get("chart_end_date", None)
     date_period = st.session_state.get("chart_date_period_radio") or "daily"
     selected_category = st.session_state.get("selected_category", None)
+    selected_category_id = st.session_state.get("selected_category_id", None)
 
     data_table_config = {
-        "Date": st.column_config.DateColumn("Date", help="Date of the data", format="YYYY-MM-DD"),
-        "ISK Volume": st.column_config.NumberColumn("ISK Volume", help="ISK Volume of the data", format="compact"),
+        "Date": st.column_config.DateColumn(
+            translate_text(language_code, "market_stats.date"),
+            help=translate_text(language_code, "market_stats.date_help"),
+            format="YYYY-MM-DD",
+        ),
+        "ISK Volume": st.column_config.NumberColumn(
+            translate_text(language_code, "market_stats.isk_volume"),
+            help=translate_text(language_code, "market_stats.isk_volume_help"),
+            format="compact",
+        ),
     }
 
     table = service.create_isk_volume_table(
@@ -172,15 +200,34 @@ def render_isk_volume_table_ui(service) -> None:
         start_date=start_date,
         end_date=end_date,
         selected_category=selected_category,
+        selected_category_id=selected_category_id,
     )
 
-    filter_info = f"Start Date: {start_date} | End Date: {end_date} | Date Period: {date_period}"
+    filter_info = translate_text(
+        language_code,
+        "market_stats.filter_info",
+        start_date=start_date,
+        end_date=end_date,
+        date_period=translate_text(language_code, f"market_stats.period_{date_period}"),
+    )
     if selected_category:
-        filter_info += f" | Category: {selected_category}"
+        filter_info += translate_text(
+            language_code,
+            "market_stats.filter_info_category",
+            category_name=selected_category,
+        )
     st.write(filter_info)
 
     if table.empty:
-        msg = f"No market history data available for category: {selected_category}" if selected_category else "No market history data available for the selected filters"
+        msg = (
+            translate_text(
+                language_code,
+                "market_stats.no_market_history_for_category",
+                category_name=selected_category,
+            )
+            if selected_category
+            else translate_text(language_code, "market_stats.no_market_history_selected_filters")
+        )
         st.warning(msg)
     else:
         st.dataframe(table, width="content", column_config=data_table_config)
@@ -220,7 +267,12 @@ def configure_top_n_items_ui() -> None:
     )
 
 
-def render_top_n_items_ui(service, df_7days: pd.DataFrame, df_30days: pd.DataFrame) -> None:
+def render_top_n_items_ui(
+    service,
+    df_7days: pd.DataFrame,
+    df_30days: pd.DataFrame,
+    language_code: str = "en",
+) -> None:
     """Render top N items section with configuration and results.
 
     Args:
@@ -280,19 +332,21 @@ def render_top_n_items_ui(service, df_7days: pd.DataFrame, df_30days: pd.DataFra
 # 30-Day Metrics UI
 # =============================================================================
 
-def render_30day_metrics_ui(service) -> None:
+def render_30day_metrics_ui(service, language_code: str = "en") -> None:
     """Render 30-day market performance metrics section.
 
     Args:
         service: MarketService instance.
     """
     metrics_category = None
+    metrics_category_id = None
     metrics_item_id = None
 
     if ss_has("selected_item_id"):
         metrics_item_id = st.session_state.selected_item_id
     elif ss_has("selected_category"):
         metrics_category = st.session_state.selected_category
+        metrics_category_id = st.session_state.get("selected_category_id")
 
     if ss_has("selected_item"):
         metrics_label = st.session_state.selected_item
@@ -301,18 +355,22 @@ def render_30day_metrics_ui(service) -> None:
     else:
         metrics_label = "All Items"
 
-    st.subheader(f"30-Day Market Stats ({metrics_label})", divider="gray")
+    st.subheader(
+        translate_text(language_code, "market_stats.thirty_day_market_stats_with_label", label=metrics_label),
+        divider="gray",
+    )
 
     avg_daily_volume, avg_daily_isk_value, vol_delta, isk_delta, df_7days, df_30days = (
         service.calculate_30day_metrics(
             selected_category=metrics_category,
+            selected_category_id=metrics_category_id,
             selected_item_id=metrics_item_id,
         )
     )
 
     if avg_daily_volume == 0 and avg_daily_isk_value == 0:
         logger.warning("Insufficient data recorded for this item")
-        st.warning("Insufficient data recorded for this item")
+        st.warning(translate_text(language_code, "market_stats.insufficient_data"))
         return
 
     colma1, colma2 = st.columns(2)
@@ -322,36 +380,55 @@ def render_30day_metrics_ui(service) -> None:
             with col_m1:
                 if avg_daily_isk_value > 0:
                     display_avg_isk = millify.millify(avg_daily_isk_value, precision=2)
-                    st.metric("Avg Daily ISK (30d)", f"{display_avg_isk} ISK", delta=f"{isk_delta}% this week")
+                    st.metric(
+                        translate_text(language_code, "market_stats.avg_daily_isk_30d"),
+                        f"{display_avg_isk} ISK",
+                        delta=translate_text(language_code, "market_stats.this_week_delta", value=isk_delta),
+                    )
                 else:
-                    st.metric("Avg Daily ISK (30d)", "0 ISK")
+                    st.metric(translate_text(language_code, "market_stats.avg_daily_isk_30d"), "0 ISK")
 
                 if avg_daily_volume > 0:
                     display_avg_volume = (
                         f"{avg_daily_volume:,.1f}" if avg_daily_volume < 1000
                         else millify.millify(avg_daily_volume, precision=1)
                     )
-                    st.metric("Avg Daily Items (30d)", f"{display_avg_volume}", delta=f"{vol_delta}% this week")
+                    st.metric(
+                        translate_text(language_code, "market_stats.avg_daily_items_30d"),
+                        f"{display_avg_volume}",
+                        delta=translate_text(language_code, "market_stats.this_week_delta", value=vol_delta),
+                    )
                 else:
-                    st.metric("Avg Daily Items (30d)", "0")
+                    st.metric(translate_text(language_code, "market_stats.avg_daily_items_30d"), "0")
 
             with col_m2:
                 total_30d_isk = avg_daily_isk_value * 30 if avg_daily_isk_value > 0 else 0
                 if total_30d_isk > 0:
-                    st.metric("Total Value (30d)", f"{millify.millify(total_30d_isk, precision=2)} ISK")
+                    st.metric(
+                        translate_text(language_code, "market_stats.total_value_30d"),
+                        f"{millify.millify(total_30d_isk, precision=2)} ISK",
+                    )
                 else:
-                    st.metric("Total 30d Value", "0 ISK")
+                    st.metric(translate_text(language_code, "market_stats.total_value_30d"), "0 ISK")
 
                 total_30d_volume = avg_daily_volume * 30 if avg_daily_volume > 0 else 0
                 if total_30d_volume > 0:
-                    st.metric("Total Volume (30d)", f"{millify.millify(total_30d_volume, precision=2)}")
+                    st.metric(
+                        translate_text(language_code, "market_stats.total_volume_30d"),
+                        f"{millify.millify(total_30d_volume, precision=2)}",
+                    )
                 else:
-                    st.metric("Total 30d Volume", "0")
+                    st.metric(translate_text(language_code, "market_stats.total_volume_30d"), "0")
 
     with colma2:
         if st.session_state.selected_item is None:
             with st.container(border=True):
-                render_top_n_items_ui(service, df_7days=df_7days, df_30days=df_30days)
+                render_top_n_items_ui(
+                    service,
+                    df_7days=df_7days,
+                    df_30days=df_30days,
+                    language_code=language_code,
+                )
 
     st.divider()
 
@@ -362,7 +439,7 @@ def render_30day_metrics_ui(service) -> None:
 
 def render_current_market_status_ui(
     sell_data, stats, selected_item, sell_order_count, sell_total_value,
-    fit_df, fits_on_mkt, cat_id
+    fit_df, fits_on_mkt, cat_id, language_code: str = "en"
 ) -> None:
     """Render current market status metrics section.
 
@@ -376,7 +453,7 @@ def render_current_market_status_ui(
         fits_on_mkt: Number of fits on market.
         cat_id: Category ID of selected item.
     """
-    st.subheader("Current Market Status", divider="grey")
+    st.subheader(translate_text(language_code, "market_stats.current_market_status"), divider="grey")
 
     if selected_item:
         col1, col2, col3, col4 = st.columns(4)
@@ -401,9 +478,17 @@ def render_current_market_status_ui(
                     st.session_state.current_price = min_price
                     display_min_price = millify.millify(min_price, precision=2)
                     if delta_price is not None:
-                        st.metric("Sell Price", f"{display_min_price} ISK", delta=f"{round(100 * delta_price, 1)}% Jita")
+                        st.metric(
+                            translate_text(language_code, "market_stats.sell_price"),
+                            f"{display_min_price} ISK",
+                            delta=translate_text(
+                                language_code,
+                                "market_stats.delta_vs_jita",
+                                value=round(100 * delta_price, 1),
+                            ),
+                        )
                     else:
-                        st.metric("Sell Price", f"{display_min_price} ISK")
+                        st.metric(translate_text(language_code, "market_stats.sell_price"), f"{display_min_price} ISK")
 
                 elif selected_item and st.session_state.selected_item_id is not None:
                     try:
@@ -412,33 +497,36 @@ def render_current_market_status_ui(
                         price = repo.get_price(st.session_state.selected_item_id)
                         if price is not None:
                             display_min_price = millify.millify(price, precision=2)
-                            st.metric("Sell Price", f"{display_min_price} ISK")
+                            st.metric(translate_text(language_code, "market_stats.sell_price"), f"{display_min_price} ISK")
                     except Exception:
                         pass
 
             if st.session_state.jita_price is not None:
                 display_jita_price = millify.millify(st.session_state.jita_price, precision=2)
-                st.metric("Jita Sell Price", f"{display_jita_price} ISK")
+                st.metric(translate_text(language_code, "market_stats.jita_sell_price"), f"{display_jita_price} ISK")
 
     with col2:
         if not sell_data.empty:
             volume = sell_data["volume_remain"].sum()
             if pd.notna(volume) and ss_has("selected_item"):
                 display_volume = millify.millify(volume, precision=2)
-                st.metric("Market Stock (sell orders)", f"{display_volume}")
+                st.metric(translate_text(language_code, "market_stats.market_stock"), f"{display_volume}")
         if sell_total_value > 0:
-            st.metric("Sell Orders Value", f"{millify.millify(sell_total_value, precision=2)} ISK")
+            st.metric(
+                translate_text(language_code, "market_stats.sell_orders_value"),
+                f"{millify.millify(sell_total_value, precision=2)} ISK",
+            )
         else:
-            st.metric("Sell Orders Value", "0 ISK")
+            st.metric(translate_text(language_code, "market_stats.sell_orders_value"), "0 ISK")
 
     with col3:
         days_remaining = stats["days_remaining"].min()
         if pd.notna(days_remaining) and selected_item:
-            st.metric("Days Remaining", f"{days_remaining:.1f}")
+            st.metric(translate_text(language_code, "low_stock.column_days"), f"{days_remaining:.1f}")
         elif sell_order_count > 0:
-            st.metric("Total Sell Orders", f"{sell_order_count:,.0f}")
+            st.metric(translate_text(language_code, "market_stats.total_sell_orders"), f"{sell_order_count:,.0f}")
         else:
-            st.metric("Total Sell Orders", "0")
+            st.metric(translate_text(language_code, "market_stats.total_sell_orders"), "0")
 
     with col4:
         if fit_df is not None and not fit_df.empty and fits_on_mkt is not None:
@@ -452,27 +540,40 @@ def render_current_market_status_ui(
                     if len(fits) == 1:
                         target = doctrine_svc.repository.get_target_by_fit_id(fits[0])
                         fits_on_mkt_delta = round(fits_on_mkt - target, 0)
-                        st.metric("Fits on Market", f"{display_fits_on_mkt}", delta=f"{fits_on_mkt_delta}")
+                        st.metric(
+                            translate_text(language_code, "market_stats.fits_on_market"),
+                            f"{display_fits_on_mkt}",
+                            delta=f"{fits_on_mkt_delta}",
+                        )
                     elif len(fits) > 1:
                         for fit in fits:
                             target = doctrine_svc.repository.get_target_by_fit_id(fit)
                             fits_on_mkt_delta = fits_on_mkt - target
-                            st.write(f"Fit: {fit}, Target: {target}, Fits on Market: {fits_on_mkt}, Delta: {fits_on_mkt_delta}")
+                            st.write(
+                                translate_text(
+                                    language_code,
+                                    "market_stats.fit_target_delta",
+                                    fit_id=fit,
+                                    target=target,
+                                    fits_on_market=fits_on_mkt,
+                                    delta=fits_on_mkt_delta,
+                                )
+                            )
                     else:
-                        st.metric("Fits on Market", f"{display_fits_on_mkt}")
+                        st.metric(translate_text(language_code, "market_stats.fits_on_market"), f"{display_fits_on_mkt}")
                 except Exception as e:
                     logger.error(f"Error getting target from fit_id: {e}")
-                    st.metric("Fits on Market", f"{display_fits_on_mkt}")
+                    st.metric(translate_text(language_code, "market_stats.fits_on_market"), f"{display_fits_on_mkt}")
 
                 if target is not None:
-                    st.write(f"Target: {target}")
+                    st.write(translate_text(language_code, "market_stats.target_value", target=target))
 
 
 # =============================================================================
 # History Display Helpers (from market_stats.py)
 # =============================================================================
 
-def display_history_data(history_df: pd.DataFrame) -> pd.DataFrame:
+def display_history_data(history_df: pd.DataFrame, language_code: str = "en") -> pd.DataFrame:
     """Format and display history data table.
 
     Args:
@@ -488,15 +589,21 @@ def display_history_data(history_df: pd.DataFrame) -> pd.DataFrame:
     history_df.volume = history_df.volume.astype(int)
 
     hist_col_config = {
-        "date": st.column_config.DateColumn("Date", format="localized"),
-        "average": st.column_config.NumberColumn("Average Price", format="localized"),
-        "volume": st.column_config.NumberColumn("Volume", format="localized"),
+        "date": st.column_config.DateColumn(translate_text(language_code, "market_stats.date"), format="localized"),
+        "average": st.column_config.NumberColumn(
+            translate_text(language_code, "market_stats.average_price"),
+            format="localized",
+        ),
+        "volume": st.column_config.NumberColumn(
+            translate_text(language_code, "market_stats.volume"),
+            format="localized",
+        ),
     }
     st.dataframe(history_df, hide_index=True, column_config=hist_col_config, width=600)
     return history_df
 
 
-def display_history_metrics(history_df: pd.DataFrame) -> None:
+def display_history_metrics(history_df: pd.DataFrame, language_code: str = "en") -> None:
     """Display 7-day and 30-day history metrics.
 
     Args:
@@ -515,46 +622,60 @@ def display_history_metrics(history_df: pd.DataFrame) -> None:
 
     col1h1, col1h2 = st.columns(2, border=True)
     with col1h1:
-        st.metric("Average Price (7 days)", f"{millify.millify(avgpr7, precision=2)} ISK", delta=f"{prdelta}% this week")
-        st.metric("Average Volume (7 days)", f"{millify.millify(avgvol7, precision=0)}", delta=f"{voldelta}% this week")
+        st.metric(
+            translate_text(language_code, "market_stats.average_price_7d"),
+            f"{millify.millify(avgpr7, precision=2)} ISK",
+            delta=translate_text(language_code, "market_stats.this_week_delta", value=prdelta),
+        )
+        st.metric(
+            translate_text(language_code, "market_stats.average_volume_7d"),
+            f"{millify.millify(avgvol7, precision=0)}",
+            delta=translate_text(language_code, "market_stats.this_week_delta", value=voldelta),
+        )
     with col1h2:
-        st.metric("Average Price (30 days)", f"{millify.millify(avgpr30, precision=2)} ISK")
-        st.metric("Average Volume (30 days)", f"{millify.millify(avgvol30, precision=0)}")
+        st.metric(
+            translate_text(language_code, "market_stats.average_price_30d"),
+            f"{millify.millify(avgpr30, precision=2)} ISK",
+        )
+        st.metric(
+            translate_text(language_code, "market_stats.average_volume_30d"),
+            f"{millify.millify(avgvol30, precision=0)}",
+        )
 
 
 # =============================================================================
 # Column Config Helpers (from market_stats.py)
 # =============================================================================
 
-def get_fitting_col_config() -> dict:
+def get_fitting_col_config(language_code: str = "en") -> dict:
     """Get column configuration for fitting data display."""
     return {
-        "fit_id": st.column_config.NumberColumn("Fit ID", help="WC Doctrine Fit ID"),
-        "ship_name": st.column_config.TextColumn("Ship Name", width="medium"),
-        "type_id": st.column_config.NumberColumn("Type ID"),
-        "type_name": st.column_config.TextColumn("Type Name", width="medium"),
-        "hulls": st.column_config.NumberColumn("Hulls", width="small"),
-        "fit_qty": st.column_config.NumberColumn("Qty/fit", format="localized", width="small"),
-        "fits_on_mkt": st.column_config.NumberColumn("Fits", format="localized", width="small"),
-        "total_stock": st.column_config.NumberColumn("Stock", format="localized", width="small"),
-        "price": st.column_config.NumberColumn("Price", format="localized"),
-        "avg_vol": st.column_config.NumberColumn("Avg Vol", format="localized", width="small"),
-        "days": st.column_config.NumberColumn("Days", format="localized", width="small"),
-        "group_name": st.column_config.Column("Group", width="small"),
-        "category_id": st.column_config.NumberColumn("Category ID", format="plain", width="small"),
+        "fit_id": st.column_config.NumberColumn(translate_text(language_code, "doctrine_report.column_fit_id")),
+        "ship_name": st.column_config.TextColumn(translate_text(language_code, "doctrine_report.column_ship"), width="medium"),
+        "type_id": st.column_config.NumberColumn(translate_text(language_code, "common.type_id")),
+        "type_name": st.column_config.TextColumn(translate_text(language_code, "common.item"), width="medium"),
+        "hulls": st.column_config.NumberColumn(translate_text(language_code, "doctrine_report.metric_total_hulls"), width="small"),
+        "fit_qty": st.column_config.NumberColumn(translate_text(language_code, "doctrine_status.column_qty_per_fit"), format="localized", width="small"),
+        "fits_on_mkt": st.column_config.NumberColumn(translate_text(language_code, "low_stock.column_fits"), format="localized", width="small"),
+        "total_stock": st.column_config.NumberColumn(translate_text(language_code, "market_stats.market_stock"), format="localized", width="small"),
+        "price": st.column_config.NumberColumn(translate_text(language_code, "common.price"), format="localized"),
+        "avg_vol": st.column_config.NumberColumn(translate_text(language_code, "low_stock.column_avg_vol"), format="localized", width="small"),
+        "days": st.column_config.NumberColumn(translate_text(language_code, "low_stock.column_days"), format="localized", width="small"),
+        "group_name": st.column_config.Column(translate_text(language_code, "common.group"), width="small"),
+        "category_id": st.column_config.NumberColumn(translate_text(language_code, "doctrine_status.column_category_id"), format="plain", width="small"),
     }
 
 
-def get_display_formats() -> dict:
+def get_display_formats(language_code: str = "en") -> dict:
     """Get column configuration for order data display."""
     return {
-        "type_id": st.column_config.NumberColumn("Type ID", width="small"),
-        "order_id": st.column_config.NumberColumn("Order ID", width="small"),
-        "type_name": st.column_config.TextColumn("Type Name", width="medium"),
-        "volume_remain": st.column_config.NumberColumn("Qty", format="localized", width="small"),
-        "price": st.column_config.NumberColumn("Price", format="localized"),
-        "duration": st.column_config.NumberColumn("Duration", format="localized", width="small"),
-        "issued": st.column_config.DateColumn("Issued", format="YYYY-MM-DD"),
-        "expiry": st.column_config.DateColumn("Expires", format="YYYY-MM-DD"),
-        "days_remaining": st.column_config.NumberColumn("Days Remaining", format="plain", width="small"),
+        "type_id": st.column_config.NumberColumn(translate_text(language_code, "common.type_id"), width="small"),
+        "order_id": st.column_config.NumberColumn(translate_text(language_code, "market_stats.order_id"), width="small"),
+        "type_name": st.column_config.TextColumn(translate_text(language_code, "common.item"), width="medium"),
+        "volume_remain": st.column_config.NumberColumn(translate_text(language_code, "pricer.column_qty"), format="localized", width="small"),
+        "price": st.column_config.NumberColumn(translate_text(language_code, "common.price"), format="localized"),
+        "duration": st.column_config.NumberColumn(translate_text(language_code, "market_stats.duration"), format="localized", width="small"),
+        "issued": st.column_config.DateColumn(translate_text(language_code, "market_stats.issued"), format="YYYY-MM-DD"),
+        "expiry": st.column_config.DateColumn(translate_text(language_code, "market_stats.expires"), format="YYYY-MM-DD"),
+        "days_remaining": st.column_config.NumberColumn(translate_text(language_code, "low_stock.column_days"), format="plain", width="small"),
     }

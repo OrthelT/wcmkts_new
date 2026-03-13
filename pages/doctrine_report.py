@@ -12,11 +12,18 @@ from domain import StockStatus
 from logging_config import setup_logging
 from services import get_doctrine_service
 from services.categorization import categorize_ship_by_role
-from ui.formatters import get_doctrine_report_column_config, get_image_url, get_ship_role_format
+from ui.formatters import get_doctrine_report_column_config, get_image_url
 from services.doctrine_service import format_doctrine_name
+from services.type_name_localization import (
+    apply_localized_names,
+    apply_localized_type_names,
+    get_localized_name,
+)
+from repositories import get_sde_repository
 from ui.popovers import render_ship_with_popover, render_market_popover
 from services.module_equivalents_service import get_module_equivalents_service
-from state import ss_init
+from state import get_active_language, ss_init
+from ui.i18n import translate_text
 from ui.market_selector import render_market_selector
 from init_db import ensure_market_db_ready
 from ui.sync_display import display_sync_status
@@ -25,11 +32,40 @@ logger = setup_logging(__name__, log_file="doctrine_report.log")
 icon_id = 0
 icon_url = f"https://images.evetech.net/types/{icon_id}/render?size=64"
 
-def get_module_stock_list(type_ids: list[int]):
+def _drop_localized_backup_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Remove helper columns that should not appear in display tables."""
+    return df.drop(columns=["type_name_en", "ship_name_en"], errors="ignore")
+
+
+def _localize_doctrine_df(
+    df: pd.DataFrame,
+    sde_repo,
+    language_code: str,
+    include_type_names: bool = False,
+) -> pd.DataFrame:
+    """Localize doctrine dataframe display columns."""
+    localized_df = df
+    if include_type_names:
+        localized_df = apply_localized_type_names(localized_df, sde_repo, language_code, logger)
+
+    return apply_localized_names(
+        localized_df,
+        sde_repo,
+        language_code,
+        id_column="ship_id",
+        name_column="ship_name",
+        logger=logger,
+        english_name_column="ship_name_en",
+    )
+
+
+def get_module_stock_list(type_ids: list[int], sde_repo, language_code: str):
     """Get lists of modules with their stock quantities for display and CSV export using service.
 
     Args:
         type_ids: List of EVE type IDs to query stock for
+        sde_repo: SDE repository for localized name lookups
+        language_code: Active language code for display names
     """
 
     # Set the session state variables for the module list and csv module list
@@ -47,28 +83,49 @@ def get_module_stock_list(type_ids: list[int]):
             module_stock = svc.repository.get_module_stock(type_id)
 
             if module_stock:
-                module_name = module_stock.type_name
-                module_info = f"{module_name} (Total: {module_stock.total_stock} | Fits: {module_stock.fits_on_mkt})"
-                csv_module_info = f"{module_name},{module_stock.type_id},{module_stock.total_stock},{module_stock.fits_on_mkt}\n"
+                display_name = get_localized_name(
+                    module_stock.type_id,
+                    module_stock.type_name,
+                    sde_repo,
+                    language_code,
+                    logger,
+                )
+                module_info = {
+                    "display_name": display_name,
+                    "total_stock": module_stock.total_stock,
+                    "fits_on_mkt": module_stock.fits_on_mkt,
+                }
+                csv_module_info = (
+                    f"{module_stock.type_name},{module_stock.type_id},"
+                    f"{module_stock.total_stock},{module_stock.fits_on_mkt}\n"
+                )
             else:
-                module_name = f"Unknown ({type_id})"
-                module_info = module_name
-                csv_module_info = f"{module_name},{type_id},0,0\n"
+                module_info = {
+                    "display_name": f"Unknown ({type_id})",
+                    "total_stock": 0,
+                    "fits_on_mkt": 0,
+                }
+                csv_module_info = f"Unknown ({type_id}),{type_id},0,0\n"
 
             st.session_state.module_list_state[type_id] = module_info
             st.session_state.csv_module_list_state[type_id] = csv_module_info
 
-def display_categorized_doctrine_data(selected_data):
+def _get_role_label(role: str, language_code: str) -> str:
+    role_key = f"doctrine_report.role_{role.lower()}"
+    return translate_text(language_code, role_key)
+
+
+def display_categorized_doctrine_data(selected_data, language_code: str):
     """Display doctrine data grouped by ship functional roles."""
 
     if selected_data.empty:
-        st.warning("No data to display")
+        st.warning(translate_text(language_code, "doctrine_report.no_data"))
         return
 
     # Create a proper copy of the DataFrame to avoid SettingWithCopyWarning
     selected_data_with_roles = selected_data.copy()
     selected_data_with_roles['role'] = selected_data_with_roles.apply(
-        lambda row: categorize_ship_by_role(row['ship_name'], row['fit_id']), 
+        lambda row: categorize_ship_by_role(row['ship_name'], row['fit_id']),
         axis=1
     )
 
@@ -83,7 +140,7 @@ def display_categorized_doctrine_data(selected_data):
             continue
 
         role_data = selected_data_with_roles[selected_data_with_roles['role'] == role]
-        styler = get_ship_role_format(role)
+        styler = _get_role_label(role, language_code)
 
         # Create expandable section for each role
         with st.expander(styler, expanded=True):
@@ -93,17 +150,20 @@ def display_categorized_doctrine_data(selected_data):
             with col1:
                 total_fits = role_data['fits'].sum() if 'fits' in role_data.columns else 0
                 total_fits = 0 if pd.isna(total_fits) else total_fits
-                st.metric("Total Fits Available", f"{int(total_fits)}")
+                st.metric(translate_text(language_code, "doctrine_report.metric_total_fits"), f"{int(total_fits)}")
 
             with col2:
                 total_hulls = role_data['hulls'].sum() if 'hulls' in role_data.columns else 0
                 total_hulls = 0 if pd.isna(total_hulls) else total_hulls
-                st.metric("Total Hulls", f"{int(total_hulls)}")
+                st.metric(translate_text(language_code, "doctrine_report.metric_total_hulls"), f"{int(total_hulls)}")
 
             with col3:
                 avg_target_pct = role_data['target_percentage'].mean() if 'target_percentage' in role_data.columns else 0
                 avg_target_pct = 0 if pd.isna(avg_target_pct) else avg_target_pct
-                st.metric("Avg Target %", f"{int(avg_target_pct)}%")
+                st.metric(
+                    translate_text(language_code, "doctrine_report.metric_avg_target_pct"),
+                    f"{int(avg_target_pct)}%",
+                )
 
 
             df = role_data.copy()
@@ -115,14 +175,23 @@ def display_categorized_doctrine_data(selected_data):
             static_height = len(df) * 40 + 50 if len(df) < 10 else 'auto'
 
             st.dataframe(
-                df, 
-                column_config=get_doctrine_report_column_config(),
+                _drop_localized_backup_columns(df),
+                column_config=get_doctrine_report_column_config(language_code),
                 width='content',
                 hide_index=True,
                 height=static_height
             )
 
-def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.DataFrame, selected_fit_ids: list, fit_summary: pd.DataFrame, lead_ship_id: int, selected_doctrine_id: int):
+def display_low_stock_modules(
+    selected_data: pd.DataFrame,
+    doctrine_modules: pd.DataFrame,
+    selected_fit_ids: list,
+    fit_summary: pd.DataFrame,
+    lead_ship_id: int,
+    selected_doctrine_id: int,
+    sde_repo,
+    language_code: str,
+):
     """Display low stock modules for the selected doctrine"""
         # Get module data from master_df for the selected doctrine
     if not doctrine_modules.empty:
@@ -137,8 +206,8 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
         except Exception:
             pass
 
-        st.subheader("Stock Status",divider="blue")
-        st.markdown("*Summary of the stock status of the three lowest stock modules for each ship in the selected doctrine. Numbers in parentheses represent the number of fits that can be supported with the current stock of the item. Use the checkboxes to select items for export to a CSV file.*")
+        st.subheader(translate_text(language_code, "doctrine_report.stock_status"), divider="blue")
+        st.markdown(translate_text(language_code, "doctrine_report.stock_status_summary"))
         st.markdown("---")
 
         exceptions = {21: 123, 75: 473, 84: 494}
@@ -151,7 +220,7 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
                 lead_fit_id = lead_matches.fit_id.iloc[0]
             else:
                 lead_fit_id = selected_data.fit_id.iloc[0] if not selected_data.empty else selected_fit_ids[0]
- 
+
         # Create two columns for display
         col1, col2 = st.columns(2)
 
@@ -196,7 +265,7 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
                         st.image(get_image_url(ship_id, 64), width=64)
                     except Exception:
                         st.text("🚀")
-                    st.text(f"Fit ID: {fit_id}")
+                    st.text(f"{translate_text(language_code, 'doctrine_report.fit_id')}: {fit_id}")
 
                 with ship_col2:
                     # Get fit name from service
@@ -217,7 +286,9 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
                         target=ship_target,
                         key_suffix=f"dr_{fit_id}"
                     )
-                    st.markdown(f"{fit_name}  (**Target: {ship_target}**)")
+                    st.markdown(
+                        f"{fit_name}  (**{translate_text(language_code, 'doctrine_report.target')}: {ship_target}**)"
+                    )
 
                 # Track if any module has equivalents for caption
                 fit_has_equivalents = False
@@ -230,7 +301,7 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
                     if not fit_target_row.empty and 'ship_target' in fit_target_row.columns:
                         target = fit_target_row['ship_target'].iloc[0]
                     else:
-                        st.write("No target found for this fit")
+                        st.write(translate_text(language_code, "doctrine_report.no_target_found"))
                         target = 20  # Default target
 
                     module_name = module_row['type_name']
@@ -259,7 +330,7 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
                             st.session_state.selected_modules.add(type_id)
                             st.session_state.module_id_info[type_id] = module_name
                             # Also update the stock info
-                            get_module_stock_list([type_id])
+                            get_module_stock_list([type_id], sde_repo, language_code)
                         elif not is_selected and type_id in st.session_state.selected_modules:
                             st.session_state.selected_modules.discard(type_id)
 
@@ -299,13 +370,15 @@ def display_low_stock_modules(selected_data: pd.DataFrame, doctrine_modules: pd.
 
                 # Show caption if any module has equivalents
                 if fit_has_equivalents:
-                    st.caption("🔄 Stock includes equivalent modules")
+                    st.caption(translate_text(language_code, "doctrine_report.equivalent_stock_caption"))
 
                 # Add spacing between ships
                 st.markdown("<br>", unsafe_allow_html=True)
 
 def main():
+    language_code = get_active_language()
     market = render_market_selector()
+    sde_repo = get_sde_repository()
 
     if not ensure_market_db_ready(market.database_alias):
         st.error(
@@ -336,8 +409,8 @@ def main():
     with col1:
         st.image(image_path, 150)
     with col2:
-        st.title("Doctrine Report")
-        st.text(f"{market.name} Market Status By Fleet Doctrine")
+        st.title(translate_text(language_code, "nav.page.doctrine_report").lstrip("📝"))
+        st.text(translate_text(language_code, "doctrine_report.subtitle", market_name=market.name))
 
     # Fetch the data using service
     result = service.build_fit_data()
@@ -345,39 +418,65 @@ def main():
     fit_summary = result.summary_df
 
     if fit_summary.empty:
-        st.warning("No doctrine fits found in the database.")
+        st.warning(translate_text(language_code, "doctrine_report.no_fits"))
         return
 
     df = service.repository.get_all_doctrine_compositions()
 
-    doctrine_names = sorted(
-        df.doctrine_name.unique().tolist(),
-        key=format_doctrine_name,
+    doctrine_df = (
+        df[["doctrine_id", "doctrine_name"]]
+        .drop_duplicates()
+        .sort_values("doctrine_name")
+        .reset_index(drop=True)
     )
+    doctrine_name_map = {
+        int(row["doctrine_id"]): str(row["doctrine_name"])
+        for _, row in doctrine_df.iterrows()
+    }
+    doctrine_ids = sorted(doctrine_name_map, key=lambda did: format_doctrine_name(doctrine_name_map[did]))
 
-    selected_doctrine = st.sidebar.selectbox("Select a doctrine", doctrine_names, format_func=format_doctrine_name)
-    selected_doctrine_id = df[df.doctrine_name == selected_doctrine].doctrine_id.unique()[0]
+    selected_doctrine_id = st.sidebar.selectbox(
+        translate_text(language_code, "doctrine_report.select_doctrine"),
+        doctrine_ids,
+        format_func=lambda did: format_doctrine_name(doctrine_name_map[did]),
+    )
+    selected_doctrine = doctrine_name_map[selected_doctrine_id]
 
-    selected_data = fit_summary[fit_summary['fit_id'].isin(df[df.doctrine_name == selected_doctrine].fit_id.unique())]
+    selected_data = fit_summary[
+        fit_summary["fit_id"].isin(df[df["doctrine_id"] == selected_doctrine_id].fit_id.unique())
+    ]
 
     # Get module data from master_df for the selected doctrine
-    selected_fit_ids = df[df.doctrine_name == selected_doctrine].fit_id.unique()
+    selected_fit_ids = df[df["doctrine_id"] == selected_doctrine_id].fit_id.unique()
     doctrine_modules = master_df[master_df['fit_id'].isin(selected_fit_ids)]
+    display_selected_data = _localize_doctrine_df(
+        selected_data,
+        sde_repo,
+        language_code,
+    )
+    display_doctrine_modules = _localize_doctrine_df(
+        doctrine_modules,
+        sde_repo,
+        language_code,
+        include_type_names=True,
+    )
 
     # Add Target Multiplier expander to sidebar
     st.sidebar.markdown("---")
 
     target_multiplier = st.sidebar.slider(
-            "Target Multiplier",
+            translate_text(language_code, "doctrine_report.target_multiplier"),
             min_value=0.5,
             max_value=2.0,
             value=st.session_state.target_multiplier,
             step=0.1,
-            help="This is a multiplier that is applied to the target value for each fit. It is used to adjust the target value for each fit to be more or less aggressive. The default value is 1.0, which means that the target value is the same as the target value in the database."
+            help=translate_text(language_code, "doctrine_report.target_multiplier_help"),
         )
 
     st.session_state.target_multiplier = target_multiplier
-    st.sidebar.markdown(f"Current Target Multiplier: {target_multiplier}")
+    st.sidebar.markdown(
+        translate_text(language_code, "doctrine_report.current_target_multiplier", value=target_multiplier)
+    )
 
     # Create enhanced header with lead ship image
     # Get lead ship image for this doctrine
@@ -391,49 +490,57 @@ def main():
         try:
             st.image(lead_ship_image_url, width=128)
         except Exception:
-            st.text("🚀 Ship Image Not Available")
+            st.text(translate_text(language_code, "doctrine_report.ship_image_not_available"))
 
     with header_col2:
         st.markdown("&nbsp;")  # Add some spacing
         st.subheader(format_doctrine_name(selected_doctrine), anchor=selected_doctrine, divider=True)
         st.markdown("&nbsp;")  # Add some spacing
 
-    st.write(f"Doctrine ID: {selected_doctrine_id}")
+    st.write(translate_text(language_code, "doctrine_report.doctrine_id", doctrine_id=selected_doctrine_id))
     st.markdown("---")
 
     # Display categorized doctrine data instead of simple dataframe
-    display_categorized_doctrine_data(selected_data)
+    display_categorized_doctrine_data(display_selected_data, language_code)
 
     # Display lowest stock modules by ship with checkboxes
-    display_low_stock_modules(selected_data, doctrine_modules, selected_fit_ids, fit_summary, lead_ship_id, selected_doctrine_id)
+    display_low_stock_modules(
+        display_selected_data,
+        display_doctrine_modules,
+        selected_fit_ids,
+        fit_summary,
+        lead_ship_id,
+        selected_doctrine_id,
+        sde_repo,
+        language_code,
+    )
 
     # Display selected modules if any
     st.sidebar.markdown("---")
 
 
-    st.sidebar.header("Selected Items", divider="blue")
+    st.sidebar.header(translate_text(language_code, "doctrine_report.selected_items"), divider="blue")
 
     # Format selected items using code block for cleaner display
     if st.session_state.selected_modules:
-        selection_lines = ["Modules:"]
+        selection_lines = [translate_text(language_code, "doctrine_report.modules_label")]
         for tid in sorted(st.session_state.selected_modules):
             display_name = st.session_state.module_id_info.get(tid, f"Unknown ({tid})")
             if tid in st.session_state.get('module_list_state', {}):
                 item_info = st.session_state.module_list_state[tid]
-                # Extract stock from the info string
-                try:
-                    stock = item_info.split('(')[1].split(')')[0]
-                    selection_lines.append(f"  {display_name} ({stock})")
-                except (IndexError, ValueError):
-                    selection_lines.append(f"  {display_name}")
+                total_stock = item_info.get("total_stock", 0)
+                fits_on_mkt = item_info.get("fits_on_mkt", 0)
+                selection_lines.append(
+                    f"  {display_name} (Total: {total_stock} | Fits: {fits_on_mkt})"
+                )
             else:
                 selection_lines.append(f"  {display_name} (N/A)")
 
         st.sidebar.code("\n".join(selection_lines), language=None)
     else:
-        st.sidebar.info("No items selected")
+        st.sidebar.info(translate_text(language_code, "doctrine_report.no_items_selected"))
 
-    st.sidebar.markdown("### Export Options")
+    st.sidebar.markdown(f"### {translate_text(language_code, 'doctrine_report.export_options')}")
 
         # Prepare export data
     if st.session_state.get('csv_module_list_state'):
@@ -444,7 +551,7 @@ def main():
 
         # Download button
         st.sidebar.download_button(
-            label="📥 Download CSV",
+            label=translate_text(language_code, "doctrine_report.download_csv"),
             data=csv_export,
             file_name="low_stock_list.csv",
             mime="text/csv",
@@ -452,14 +559,14 @@ def main():
         )
 
     # Clear selection button
-    if st.sidebar.button("🗑️ Clear Selection", width='content'):
+    if st.sidebar.button(translate_text(language_code, "doctrine_report.clear_selection"), width='content'):
         st.session_state.selected_modules = set()
         st.session_state.module_id_info = {}
         st.session_state.module_list_state = {}
         st.session_state.csv_module_list_state = {}
         st.rerun()
 
-    display_sync_status()
+    display_sync_status(language_code=language_code)
     st.sidebar.markdown("---")
 if __name__ == "__main__":
     main()

@@ -20,7 +20,6 @@ from sqlalchemy import text
 from config import DatabaseConfig
 from domain.pricer import (
     InputFormat,
-    SlotType,
     ParsedItem,
     PricedItem,
     PricerResult,
@@ -52,6 +51,17 @@ class SDELookupService:
         self._db = db
         self._logger = logger_instance or logger
 
+    @staticmethod
+    def _row_to_item_data(row) -> dict:
+        """Convert an SDE lookup row into the item payload expected by Pricer."""
+        return {
+            "type_id": row[0],
+            "type_name": row[1],
+            "group_name": row[2] or "",
+            "category_name": row[3] or "",
+            "volume": row[4] or 0.0,
+        }
+
     def resolve_item(self, type_name: str) -> Optional[dict]:
         """
         Resolve a single item name to SDE data.
@@ -69,19 +79,26 @@ class SDELookupService:
             WHERE typeName = :type_name COLLATE NOCASE
             LIMIT 1
         """
+        localized_query = """
+            SELECT s.typeID, s.typeName, s.groupName, s.categoryName, s.volume
+            FROM localizations l
+            JOIN sdetypes s ON s.typeID = l.type_id
+            WHERE l.type_name = :type_name COLLATE NOCASE
+            ORDER BY CASE WHEN l.language = 'en' THEN 0 ELSE 1 END
+            LIMIT 1
+        """
 
         try:
             with self._db.engine.connect() as conn:
-                result = conn.execute(text(query), {"type_name": type_name.strip()}).fetchone()
+                params = {"type_name": type_name.strip()}
+                result = conn.execute(text(query), params).fetchone()
 
                 if result:
-                    return {
-                        "type_id": result[0],
-                        "type_name": result[1],
-                        "group_name": result[2] or "",
-                        "category_name": result[3] or "",
-                        "volume": result[4] or 0.0,
-                    }
+                    return self._row_to_item_data(result)
+
+                result = conn.execute(text(localized_query), params).fetchone()
+                if result:
+                    return self._row_to_item_data(result)
 
             # Try fuzzy match if exact match fails
             return self._fuzzy_match(type_name)
@@ -100,24 +117,31 @@ class SDELookupService:
             ORDER BY LENGTH(typeName)
             LIMIT 1
         """
+        localized_query = """
+            SELECT s.typeID, s.typeName, s.groupName, s.categoryName, s.volume
+            FROM localizations l
+            JOIN sdetypes s ON s.typeID = l.type_id
+            WHERE l.type_name LIKE :pattern COLLATE NOCASE
+            ORDER BY LENGTH(l.type_name)
+            LIMIT 1
+        """
 
         try:
             with self._db.engine.connect() as conn:
+                params = {"pattern": f"{type_name.strip()}%"}
                 # Try exact prefix match first
-                result = conn.execute(
-                    text(query),
-                    {"pattern": f"{type_name.strip()}%"}
-                ).fetchone()
+                result = conn.execute(text(query), params).fetchone()
 
                 if result:
                     self._logger.debug(f"Fuzzy matched '{type_name}' to '{result[1]}'")
-                    return {
-                        "type_id": result[0],
-                        "type_name": result[1],
-                        "group_name": result[2] or "",
-                        "category_name": result[3] or "",
-                        "volume": result[4] or 0.0,
-                    }
+                    return self._row_to_item_data(result)
+
+                result = conn.execute(text(localized_query), params).fetchone()
+                if result:
+                    self._logger.debug(
+                        f"Localized fuzzy matched '{type_name}' to '{result[1]}'"
+                    )
+                    return self._row_to_item_data(result)
 
         except Exception as e:
             self._logger.error(f"Fuzzy match error: {e}")
