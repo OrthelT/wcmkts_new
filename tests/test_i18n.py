@@ -32,3 +32,36 @@ def test_translate_text_formats_spanish_shipping_cost_copy():
 
     assert "445" in result
     assert "m3" in result
+
+
+def test_translate_text_formats_build_cost_market_summary():
+    result = translate_text(
+        "en",
+        "build_costs.market_price_summary",
+        market_name="4-HWWF",
+        price="12.3M",
+        profit="2.1M",
+        margin="17.07",
+    )
+
+    assert "4-HWWF" in result
+    assert "12.3M" in result
+    assert "17.07%" in result
+
+
+def test_translate_text_returns_chinese_build_cost_label():
+    result = translate_text("zh", "build_costs.material_breakdown")
+
+    assert result == "材料明细"
+
+
+def test_translate_text_returns_german_build_cost_label():
+    result = translate_text("de", "build_costs.material_breakdown")
+
+    assert result == "Materialaufschlusselung"
+
+
+def test_translate_text_returns_spanish_build_cost_label():
+    result = translate_text("es", "build_costs.material_breakdown")
+
+    assert result == "Desglose de materiales"

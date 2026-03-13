@@ -411,6 +411,161 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "pricer.highlight_doctrine_items_help": "Highlight items used in doctrine fits.",
         "pricer.issues": "Issues",
         "pricer.unpriced_items": "⚠️ {count} items could not be priced",
+        "build_costs.title": "Build Cost Tool",
+        "build_costs.category_label": "Select a category",
+        "build_costs.category_placeholder": "Ship",
+        "build_costs.category_help": "Select a category to filter the groups and items by.",
+        "build_costs.group_label": "Select a group",
+        "build_costs.item_label": "Select an item",
+        "build_costs.runs_label": "Runs",
+        "build_costs.me_label": "ME",
+        "build_costs.te_label": "TE",
+        "build_costs.material_price_source_label": "Select a material price source",
+        "build_costs.material_price_source_help": (
+            "This is the source of the material prices used in the calculations. ESI Average "
+            "is the CCP average price used in the in-game industry window, Jita Sell is the "
+            "minimum sale price in Jita, and Jita Buy is the maximum buy price in Jita."
+        ),
+        "build_costs.price_source_esi_average": "ESI Average",
+        "build_costs.price_source_jita_sell": "Jita Sell",
+        "build_costs.price_source_jita_buy": "Jita Buy",
+        "build_costs.structure_compare_expander": "Select a structure to compare (optional)",
+        "build_costs.structure_compare_label": "Structures",
+        "build_costs.structure_compare_placeholder": "All Structures",
+        "build_costs.structure_compare_help": (
+            "Select a structure to compare the build cost against. Leave empty to show all "
+            "structures."
+        ),
+        "build_costs.parameters_changed": (
+            "⚠️ Parameters have changed. Click 'Recalculate' to get updated results."
+        ),
+        "build_costs.calculate": "Calculate",
+        "build_costs.recalculate": "Recalculate",
+        "build_costs.calculate_help": "Click to calculate the cost for the selected item.",
+        "build_costs.industry_indexes_last_updated": "Industry indexes last updated: {timestamp}",
+        "build_costs.progress_start": "Fetching data from {total} structures...",
+        "build_costs.progress_fetching": "Fetching {current} of {total} structures: {structure}",
+        "build_costs.no_results": (
+            "No results returned. This is likely due to problems with the external industry data "
+            "API. Please try again later."
+        ),
+        "build_costs.header": "Build cost for {item_name}",
+        "build_costs.summary": (
+            "Build cost for {item_name} with {runs} runs, {me} ME, {te} TE, {price_source} "
+            "material price (type_id: {type_id})"
+        ),
+        "build_costs.metric_build_cost_per_unit": "Build cost per unit",
+        "build_costs.metric_build_cost_per_unit_help": (
+            "Based on the lowest cost structure: {structure}"
+        ),
+        "build_costs.metric_total_build_cost": "Total Build Cost",
+        "build_costs.materials_job_cost": (
+            "**Materials:** {materials} ISK | **Job cost:** {job_cost} ISK"
+        ),
+        "build_costs.market_price_summary": (
+            "**{market_name} price:** <span style='color: orange;'>{price} ISK</span> "
+            "(profit: {profit} ISK | {margin}%)"
+        ),
+        "build_costs.no_market_price": "No {market_name} price data found for this item",
+        "build_costs.jita_price_summary": (
+            "**Jita price:** <span style='color: orange;'>{price} ISK</span> "
+            "(profit: {profit} ISK | {margin}%)"
+        ),
+        "build_costs.no_jita_price": "No Jita price data found for this item",
+        "build_costs.super_note": (
+            "<span style=\"font-weight: bold;\">Note:</span> "
+            "<span style=\"color: orange;\">Only structures configured for supercapital "
+            "construction are displayed.</span>"
+        ),
+        "build_costs.material_breakdown": "Material Breakdown",
+        "build_costs.material_breakdown_for_structure": "Material Breakdown: {structure}",
+        "build_costs.material_breakdown_selector": "Select a structure to view material breakdown",
+        "build_costs.material_breakdown_selector_help": (
+            "Choose a structure to see detailed material costs and quantities."
+        ),
+        "build_costs.material_breakdown_missing": "No data found for structure: {structure}",
+        "build_costs.material_breakdown_summary": (
+            "{item} Material Cost: <span style='color: orange;'>**{cost} ISK**</span> "
+            "(*{volume} m3*) - {price_source}"
+        ),
+        "build_costs.material_breakdown_tip": (
+            "💡 **Tip:** You can download this data as CSV using the download icon (⬇️) "
+            "in the top-right corner of the table above."
+        ),
+        "build_costs.selected_structure": "Selected structure",
+        "build_costs.empty_subheader": "WC Markets Build Cost Tool",
+        "build_costs.empty_description": (
+            "Find a build cost for an item by selecting a category, group, and item in the "
+            "sidebar. The build cost is calculated for all structures in the database and "
+            "ordered by total cost from lowest to highest. You can also compare against a "
+            "specific structure and inspect a material breakdown for each result."
+        ),
+        "build_costs.tool_description": """
+    - <span style="font-weight: bold; color: orange;">Runs:</span> The number of runs to calculate the cost for.
+    - <span style="font-weight: bold; color: orange;">ME:</span> The material efficiency of the blueprint. (default 0)
+    - <span style="font-weight: bold; color: orange;">TE:</span> The time efficiency of the blueprint. (default 0)
+    - <span style="font-weight: bold; color: orange;">Material price source:</span> The source of the material prices used in the calculations.
+        - *ESI Average* - the CCP average price used in the in-game industry window.
+        - *Jita Sell* - the minimum price of sale orders in Jita.
+        - *Jita Buy* - the maximum price of buy orders in Jita.
+    - <span style="font-weight: bold; color: orange;">Structure:</span> The structure to compare the cost to build against. (optional)
+    - <span style="font-weight: bold; color: orange;">Skills:</span> All skills are assumed to be at level 5.
+    """,
+        "build_costs.no_buildable_items": (
+            "No buildable items found for group: {group_name}. This may indicate a missing SDE "
+            "table such as `industryActivityProducts`. Try syncing the database or selecting a "
+            "different group."
+        ),
+        "build_costs.load_items_error": "Failed to load items for group: {error}",
+        "build_costs.invalid_selected_item": "Selected item: {item_name} is not a buildable item",
+        "build_costs.item_not_found": "Selected item: {item_name} was not found in the types database",
+        "build_costs.invalid_item": "Invalid item: {error}",
+        "build_costs.select_valid_item": (
+            "Selected item: {item_name} is not a buildable item. Please select a valid item "
+            "from the sidebar."
+        ),
+        "build_costs.unknown_type": "Unknown ({type_id})",
+        "build_costs.special_group_sovereignty_hub": "Sovereignty Hub",
+        "build_costs.column_structure": "Structure",
+        "build_costs.column_structure_help": "Structure name.",
+        "build_costs.column_structure_type": "Type",
+        "build_costs.column_units": "Units",
+        "build_costs.column_units_help": "Number of units built.",
+        "build_costs.column_total_cost": "Total Cost",
+        "build_costs.column_total_cost_help": "Total cost of building the units.",
+        "build_costs.column_cost_per_unit": "Cost per Unit",
+        "build_costs.column_cost_per_unit_help": "Cost per unit of the item.",
+        "build_costs.column_material_cost": "Material Cost",
+        "build_costs.column_material_cost_help": "Total material cost.",
+        "build_costs.column_total_job_cost": "Total Job Cost",
+        "build_costs.column_total_job_cost_help": (
+            "Total job cost including facility tax, SCC surcharge, and system cost index."
+        ),
+        "build_costs.column_facility_tax": "Facility Tax",
+        "build_costs.column_facility_tax_help": "Facility tax cost.",
+        "build_costs.column_scc_surcharge": "SCC Surcharge",
+        "build_costs.column_scc_surcharge_help": "SCC surcharge cost.",
+        "build_costs.column_system_cost_index": "Cost Index",
+        "build_costs.column_rigs": "Rigs",
+        "build_costs.column_rigs_help": "Rigs fitted to the structure.",
+        "build_costs.column_comparison_cost": "Comparison Cost",
+        "build_costs.column_comparison_cost_help": "Difference from the selected structure total cost.",
+        "build_costs.column_comparison_cost_per_unit": "Comparison Cost per Unit",
+        "build_costs.column_comparison_cost_per_unit_help": (
+            "Difference from the selected structure cost per unit."
+        ),
+        "build_costs.column_material_help": "The name of the required material.",
+        "build_costs.column_quantity": "Quantity",
+        "build_costs.column_quantity_help": "Amount of material needed.",
+        "build_costs.column_volume_per_unit": "Volume/Unit",
+        "build_costs.column_volume_per_unit_help": "Volume per unit of material (m3).",
+        "build_costs.column_total_volume": "Total Volume",
+        "build_costs.column_total_volume_help": "Total volume of this material (m3).",
+        "build_costs.column_unit_price": "Unit Price",
+        "build_costs.column_unit_price_help": "Cost per unit of material (ISK).",
+        "build_costs.column_total_cost_materials_help": "Total cost for this material (ISK).",
+        "build_costs.column_percent_total": "% of Total",
+        "build_costs.column_percent_total_help": "Percentage of the total material cost.",
     },
     "zh": {
         "app.page_title": "凛冬联盟市场",
@@ -770,6 +925,134 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "pricer.highlight_doctrine_items_help": "高亮用于建制装配的物品。",
         "pricer.issues": "问题",
         "pricer.unpriced_items": "⚠️ 有 {count} 个物品无法定价",
+        "build_costs.title": "制造成本工具",
+        "build_costs.category_label": "选择类别",
+        "build_costs.category_placeholder": "舰船",
+        "build_costs.category_help": "选择一个类别来筛选分组和物品。",
+        "build_costs.group_label": "选择分组",
+        "build_costs.item_label": "选择物品",
+        "build_costs.runs_label": "制造次数",
+        "build_costs.me_label": "ME",
+        "build_costs.te_label": "TE",
+        "build_costs.material_price_source_label": "选择材料价格来源",
+        "build_costs.material_price_source_help": (
+            "用于计算材料成本的价格来源。ESI Average 是游戏工业窗口使用的 CCP 平均价，"
+            "Jita Sell 是吉他最低卖单价，Jita Buy 是吉他最高买单价。"
+        ),
+        "build_costs.price_source_esi_average": "ESI 平均价",
+        "build_costs.price_source_jita_sell": "吉他卖价",
+        "build_costs.price_source_jita_buy": "吉他买价",
+        "build_costs.structure_compare_expander": "选择要比较的建筑（可选）",
+        "build_costs.structure_compare_label": "建筑",
+        "build_costs.structure_compare_placeholder": "所有建筑",
+        "build_costs.structure_compare_help": "选择一个建筑来比较制造成本；留空则显示所有建筑。",
+        "build_costs.parameters_changed": "⚠️ 参数已更改。请点击“重新计算”以刷新结果。",
+        "build_costs.calculate": "计算",
+        "build_costs.recalculate": "重新计算",
+        "build_costs.calculate_help": "点击计算所选物品的制造成本。",
+        "build_costs.industry_indexes_last_updated": "工业指数最后更新时间: {timestamp}",
+        "build_costs.progress_start": "正在从 {total} 个建筑获取数据...",
+        "build_costs.progress_fetching": "正在获取第 {current}/{total} 个建筑: {structure}",
+        "build_costs.no_results": "没有返回结果。这通常意味着外部工业数据 API 出现问题，请稍后再试。",
+        "build_costs.header": "{item_name} 的制造成本",
+        "build_costs.summary": (
+            "{item_name} 的制造成本计算参数: {runs} 次, ME {me}, TE {te}, "
+            "材料价格来源为 {price_source} (type_id: {type_id})"
+        ),
+        "build_costs.metric_build_cost_per_unit": "单件制造成本",
+        "build_costs.metric_build_cost_per_unit_help": "基于成本最低的建筑: {structure}",
+        "build_costs.metric_total_build_cost": "总制造成本",
+        "build_costs.materials_job_cost": "**材料:** {materials} ISK | **工单费:** {job_cost} ISK",
+        "build_costs.market_price_summary": (
+            "**{market_name} 价格:** <span style='color: orange;'>{price} ISK</span> "
+            "(利润: {profit} ISK | {margin}%)"
+        ),
+        "build_costs.no_market_price": "未找到该物品在 {market_name} 的价格数据",
+        "build_costs.jita_price_summary": (
+            "**吉他价格:** <span style='color: orange;'>{price} ISK</span> "
+            "(利润: {profit} ISK | {margin}%)"
+        ),
+        "build_costs.no_jita_price": "未找到该物品的吉他价格数据",
+        "build_costs.super_note": (
+            "<span style=\"font-weight: bold;\">注意:</span> "
+            "<span style=\"color: orange;\">这里只显示可用于超级旗舰建造的建筑。</span>"
+        ),
+        "build_costs.material_breakdown": "材料明细",
+        "build_costs.material_breakdown_for_structure": "材料明细: {structure}",
+        "build_costs.material_breakdown_selector": "选择一个建筑查看材料明细",
+        "build_costs.material_breakdown_selector_help": "选择一个建筑以查看详细材料数量和成本。",
+        "build_costs.material_breakdown_missing": "未找到建筑数据: {structure}",
+        "build_costs.material_breakdown_summary": (
+            "{item} 材料成本: <span style='color: orange;'>**{cost} ISK**</span> "
+            "(*{volume} m3*) - {price_source}"
+        ),
+        "build_costs.material_breakdown_tip": (
+            "💡 **提示:** 你可以使用上方表格右上角的下载图标（⬇️）将数据导出为 CSV。"
+        ),
+        "build_costs.selected_structure": "选定建筑",
+        "build_costs.empty_subheader": "WC Markets 制造成本工具",
+        "build_costs.empty_description": (
+            "在侧边栏选择类别、分组和物品即可查询制造成本。系统会计算数据库中所有建筑的造价，"
+            "并按总成本从低到高排序。你也可以选择某个建筑进行对比，并查看每个结果的材料明细。"
+        ),
+        "build_costs.tool_description": """
+    - <span style="font-weight: bold; color: orange;">制造次数:</span> 要计算的制造次数。
+    - <span style="font-weight: bold; color: orange;">ME:</span> 蓝图材料效率。（默认 0）
+    - <span style="font-weight: bold; color: orange;">TE:</span> 蓝图时间效率。（默认 0）
+    - <span style="font-weight: bold; color: orange;">材料价格来源:</span> 计算中使用的材料价格来源。
+        - *ESI 平均价* - 游戏工业窗口使用的 CCP 平均价。
+        - *吉他卖价* - 吉他最低卖单价格。
+        - *吉他买价* - 吉他最高买单价格。
+    - <span style="font-weight: bold; color: orange;">建筑:</span> 用于比较制造成本的建筑。（可选）
+    - <span style="font-weight: bold; color: orange;">技能:</span> 默认所有相关技能均为 5 级。
+    """,
+        "build_costs.no_buildable_items": (
+            "分组 {group_name} 中没有可制造的物品。这可能表示缺少 SDE 表，例如 "
+            "`industryActivityProducts`。请尝试同步数据库或选择其他分组。"
+        ),
+        "build_costs.load_items_error": "加载分组物品失败: {error}",
+        "build_costs.invalid_selected_item": "所选物品 {item_name} 不是可制造物品",
+        "build_costs.item_not_found": "在类型数据库中未找到所选物品: {item_name}",
+        "build_costs.invalid_item": "无效物品: {error}",
+        "build_costs.select_valid_item": "所选物品 {item_name} 不是可制造物品，请从侧边栏重新选择。",
+        "build_costs.unknown_type": "未知 ({type_id})",
+        "build_costs.special_group_sovereignty_hub": "主权中心",
+        "build_costs.column_structure": "建筑",
+        "build_costs.column_structure_help": "建筑名称。",
+        "build_costs.column_structure_type": "类型",
+        "build_costs.column_units": "数量",
+        "build_costs.column_units_help": "制造出的单位数量。",
+        "build_costs.column_total_cost": "总成本",
+        "build_costs.column_total_cost_help": "制造这些单位的总成本。",
+        "build_costs.column_cost_per_unit": "单件成本",
+        "build_costs.column_cost_per_unit_help": "该物品的单件制造成本。",
+        "build_costs.column_material_cost": "材料成本",
+        "build_costs.column_material_cost_help": "总材料成本。",
+        "build_costs.column_total_job_cost": "总工单费",
+        "build_costs.column_total_job_cost_help": "包含设施税、SCC 附加费和系统成本指数的总工单费。",
+        "build_costs.column_facility_tax": "设施税",
+        "build_costs.column_facility_tax_help": "设施税成本。",
+        "build_costs.column_scc_surcharge": "SCC 附加费",
+        "build_costs.column_scc_surcharge_help": "SCC 附加费成本。",
+        "build_costs.column_system_cost_index": "成本指数",
+        "build_costs.column_rigs": "插装",
+        "build_costs.column_rigs_help": "该建筑安装的插装。",
+        "build_costs.column_comparison_cost": "比较成本",
+        "build_costs.column_comparison_cost_help": "与所选建筑总成本的差值。",
+        "build_costs.column_comparison_cost_per_unit": "比较单件成本",
+        "build_costs.column_comparison_cost_per_unit_help": "与所选建筑单件成本的差值。",
+        "build_costs.column_material_help": "所需材料名称。",
+        "build_costs.column_quantity": "数量",
+        "build_costs.column_quantity_help": "所需材料数量。",
+        "build_costs.column_volume_per_unit": "单件体积",
+        "build_costs.column_volume_per_unit_help": "每单位材料的体积（m3）。",
+        "build_costs.column_total_volume": "总体积",
+        "build_costs.column_total_volume_help": "该材料的总体积（m3）。",
+        "build_costs.column_unit_price": "单价",
+        "build_costs.column_unit_price_help": "每单位材料成本（ISK）。",
+        "build_costs.column_total_cost_materials_help": "该材料的总成本（ISK）。",
+        "build_costs.column_percent_total": "总成本占比",
+        "build_costs.column_percent_total_help": "该材料占总材料成本的比例。",
     },
     "de": {
         "app.page_title": "WinterCo Markte",
@@ -947,6 +1230,157 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.column_turnover_30d": "30D Umsatz",
         "import_helper.column_volume_30d": "30D Volumen",
         "import_helper.column_capital_utilis": "Kapitaleffizienz",
+        "build_costs.title": "Produktionskostenrechner",
+        "build_costs.category_label": "Kategorie auswahlen",
+        "build_costs.category_placeholder": "Schiff",
+        "build_costs.category_help": "Kategorie auswahlen, um Gruppen und Artikel zu filtern.",
+        "build_costs.group_label": "Gruppe auswahlen",
+        "build_costs.item_label": "Artikel auswahlen",
+        "build_costs.runs_label": "Laufe",
+        "build_costs.me_label": "ME",
+        "build_costs.te_label": "TE",
+        "build_costs.material_price_source_label": "Quelle fur Materialpreise auswahlen",
+        "build_costs.material_price_source_help": (
+            "Quelle der Materialpreise fur die Berechnung. ESI Average ist der CCP-Durchschnitt "
+            "im Industrie-Fenster, Jita Sell ist der niedrigste Verkaufspreis in Jita und Jita "
+            "Buy der hochste Ankaufspreis in Jita."
+        ),
+        "build_costs.price_source_esi_average": "ESI Durchschnitt",
+        "build_costs.price_source_jita_sell": "Jita Verkauf",
+        "build_costs.price_source_jita_buy": "Jita Ankauf",
+        "build_costs.structure_compare_expander": "Struktur zum Vergleich auswahlen (optional)",
+        "build_costs.structure_compare_label": "Strukturen",
+        "build_costs.structure_compare_placeholder": "Alle Strukturen",
+        "build_costs.structure_compare_help": (
+            "Wahle eine Struktur, mit der die Baukosten verglichen werden sollen. Leer lassen, "
+            "um alle Strukturen anzuzeigen."
+        ),
+        "build_costs.parameters_changed": (
+            "⚠️ Parameter wurden geandert. Klicke auf 'Neu berechnen', um die Ergebnisse zu aktualisieren."
+        ),
+        "build_costs.calculate": "Berechnen",
+        "build_costs.recalculate": "Neu berechnen",
+        "build_costs.calculate_help": "Klicke, um die Kosten fur den ausgewahlten Artikel zu berechnen.",
+        "build_costs.industry_indexes_last_updated": "Industrieindizes zuletzt aktualisiert: {timestamp}",
+        "build_costs.progress_start": "Daten von {total} Strukturen werden geladen...",
+        "build_costs.progress_fetching": "Lade {current} von {total} Strukturen: {structure}",
+        "build_costs.no_results": (
+            "Keine Ergebnisse zuruckgegeben. Wahrscheinlich gibt es ein Problem mit der externen "
+            "Industrie-API. Bitte spater erneut versuchen."
+        ),
+        "build_costs.header": "Produktionskosten fur {item_name}",
+        "build_costs.summary": (
+            "Produktionskosten fur {item_name} mit {runs} Laufen, {me} ME, {te} TE und "
+            "{price_source} als Materialpreisquelle (type_id: {type_id})"
+        ),
+        "build_costs.metric_build_cost_per_unit": "Baukosten pro Einheit",
+        "build_costs.metric_build_cost_per_unit_help": "Basierend auf der gunstigsten Struktur: {structure}",
+        "build_costs.metric_total_build_cost": "Gesamte Baukosten",
+        "build_costs.materials_job_cost": "**Materialien:** {materials} ISK | **Jobkosten:** {job_cost} ISK",
+        "build_costs.market_price_summary": (
+            "**{market_name}-Preis:** <span style='color: orange;'>{price} ISK</span> "
+            "(Gewinn: {profit} ISK | {margin}%)"
+        ),
+        "build_costs.no_market_price": "Keine {market_name}-Preisdaten fur diesen Artikel gefunden",
+        "build_costs.jita_price_summary": (
+            "**Jita-Preis:** <span style='color: orange;'>{price} ISK</span> "
+            "(Gewinn: {profit} ISK | {margin}%)"
+        ),
+        "build_costs.no_jita_price": "Keine Jita-Preisdaten fur diesen Artikel gefunden",
+        "build_costs.super_note": (
+            "<span style=\"font-weight: bold;\">Hinweis:</span> "
+            "<span style=\"color: orange;\">Es werden nur Strukturen fur Supercapital-Bau "
+            "angezeigt.</span>"
+        ),
+        "build_costs.material_breakdown": "Materialaufschlusselung",
+        "build_costs.material_breakdown_for_structure": "Materialaufschlusselung: {structure}",
+        "build_costs.material_breakdown_selector": "Struktur fur Materialaufschlusselung auswahlen",
+        "build_costs.material_breakdown_selector_help": (
+            "Wahle eine Struktur, um detaillierte Materialkosten und Mengen anzuzeigen."
+        ),
+        "build_costs.material_breakdown_missing": "Keine Daten fur Struktur gefunden: {structure}",
+        "build_costs.material_breakdown_summary": (
+            "{item} Materialkosten: <span style='color: orange;'>**{cost} ISK**</span> "
+            "(*{volume} m3*) - {price_source}"
+        ),
+        "build_costs.material_breakdown_tip": (
+            "💡 **Tipp:** Diese Daten konnen uber das Download-Symbol (⬇️) oben rechts in der Tabelle "
+            "als CSV heruntergeladen werden."
+        ),
+        "build_costs.selected_structure": "Ausgewahlte Struktur",
+        "build_costs.empty_subheader": "WC Markets Produktionskostenrechner",
+        "build_costs.empty_description": (
+            "Wahle in der Seitenleiste Kategorie, Gruppe und Artikel aus, um Baukosten zu berechnen. "
+            "Die Kosten werden fur alle Strukturen in der Datenbank berechnet und nach Gesamtkosten "
+            "sortiert. Optional kann mit einer bestimmten Struktur verglichen und die "
+            "Materialaufschlusselung angezeigt werden."
+        ),
+        "build_costs.tool_description": """
+    - <span style="font-weight: bold; color: orange;">Laufe:</span> Anzahl der zu berechnenden Produktionslaufe.
+    - <span style="font-weight: bold; color: orange;">ME:</span> Materialeffizienz der Blaupause. (Standard 0)
+    - <span style="font-weight: bold; color: orange;">TE:</span> Zeiteffizienz der Blaupause. (Standard 0)
+    - <span style="font-weight: bold; color: orange;">Materialpreisquelle:</span> Quelle der verwendeten Materialpreise.
+        - *ESI Durchschnitt* - der CCP-Durchschnittspreis im Industrie-Fenster.
+        - *Jita Verkauf* - der niedrigste Verkaufspreis in Jita.
+        - *Jita Ankauf* - der hochste Ankaufspreis in Jita.
+    - <span style="font-weight: bold; color: orange;">Struktur:</span> Struktur fur den Kostenvergleich. (optional)
+    - <span style="font-weight: bold; color: orange;">Skills:</span> Alle Skills werden als Stufe 5 angenommen.
+    """,
+        "build_costs.no_buildable_items": (
+            "Keine herstellbaren Artikel fur Gruppe {group_name} gefunden. Moglicherweise fehlt "
+            "eine SDE-Tabelle wie `industryActivityProducts`. Versuche einen Sync oder wahle "
+            "eine andere Gruppe."
+        ),
+        "build_costs.load_items_error": "Artikel fur die Gruppe konnten nicht geladen werden: {error}",
+        "build_costs.invalid_selected_item": "Ausgewahlter Artikel {item_name} ist nicht herstellbar",
+        "build_costs.item_not_found": "Ausgewahlter Artikel {item_name} wurde in der Typdatenbank nicht gefunden",
+        "build_costs.invalid_item": "Ungueltiger Artikel: {error}",
+        "build_costs.select_valid_item": (
+            "Ausgewahlter Artikel {item_name} ist nicht herstellbar. Bitte wahle einen gueltigen "
+            "Artikel in der Seitenleiste."
+        ),
+        "build_costs.unknown_type": "Unbekannt ({type_id})",
+        "build_costs.special_group_sovereignty_hub": "Souveranitats-Hub",
+        "build_costs.column_structure": "Struktur",
+        "build_costs.column_structure_help": "Name der Struktur.",
+        "build_costs.column_structure_type": "Typ",
+        "build_costs.column_units": "Einheiten",
+        "build_costs.column_units_help": "Anzahl der gebauten Einheiten.",
+        "build_costs.column_total_cost": "Gesamtkosten",
+        "build_costs.column_total_cost_help": "Gesamtkosten fur die Produktion dieser Einheiten.",
+        "build_costs.column_cost_per_unit": "Kosten pro Einheit",
+        "build_costs.column_cost_per_unit_help": "Baukosten pro Einheit des Artikels.",
+        "build_costs.column_material_cost": "Materialkosten",
+        "build_costs.column_material_cost_help": "Gesamte Materialkosten.",
+        "build_costs.column_total_job_cost": "Gesamte Jobkosten",
+        "build_costs.column_total_job_cost_help": (
+            "Gesamte Jobkosten inklusive Anlagensteuer, SCC-Aufschlag und Systemkostenindex."
+        ),
+        "build_costs.column_facility_tax": "Anlagensteuer",
+        "build_costs.column_facility_tax_help": "Kosten der Anlagensteuer.",
+        "build_costs.column_scc_surcharge": "SCC-Aufschlag",
+        "build_costs.column_scc_surcharge_help": "Kosten des SCC-Aufschlags.",
+        "build_costs.column_system_cost_index": "Kostenindex",
+        "build_costs.column_rigs": "Rigs",
+        "build_costs.column_rigs_help": "In der Struktur verbaute Rigs.",
+        "build_costs.column_comparison_cost": "Vergleichskosten",
+        "build_costs.column_comparison_cost_help": "Differenz zu den Gesamtkosten der ausgewahlten Struktur.",
+        "build_costs.column_comparison_cost_per_unit": "Vergleichskosten pro Einheit",
+        "build_costs.column_comparison_cost_per_unit_help": (
+            "Differenz zu den Kosten pro Einheit der ausgewahlten Struktur."
+        ),
+        "build_costs.column_material_help": "Name des benotigten Materials.",
+        "build_costs.column_quantity": "Menge",
+        "build_costs.column_quantity_help": "Benotigte Materialmenge.",
+        "build_costs.column_volume_per_unit": "Volumen/Einheit",
+        "build_costs.column_volume_per_unit_help": "Volumen pro Materialeinheit (m3).",
+        "build_costs.column_total_volume": "Gesamtvolumen",
+        "build_costs.column_total_volume_help": "Gesamtvolumen dieses Materials (m3).",
+        "build_costs.column_unit_price": "Einheitspreis",
+        "build_costs.column_unit_price_help": "Kosten pro Materialeinheit (ISK).",
+        "build_costs.column_total_cost_materials_help": "Gesamtkosten fur dieses Material (ISK).",
+        "build_costs.column_percent_total": "% des Gesamtwerts",
+        "build_costs.column_percent_total_help": "Anteil an den gesamten Materialkosten.",
     },
     "fr": {
         "app.page_title": "Marches WinterCo",
@@ -1119,6 +1553,157 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.column_turnover_30d": "CA 30J",
         "import_helper.column_volume_30d": "Volume 30J",
         "import_helper.column_capital_utilis": "Capital Utilis",
+        "build_costs.title": "Outil de Cout de Production",
+        "build_costs.category_label": "Selectionner une categorie",
+        "build_costs.category_placeholder": "Vaisseau",
+        "build_costs.category_help": "Selectionnez une categorie pour filtrer les groupes et les objets.",
+        "build_costs.group_label": "Selectionner un groupe",
+        "build_costs.item_label": "Selectionner un objet",
+        "build_costs.runs_label": "Cycles",
+        "build_costs.me_label": "ME",
+        "build_costs.te_label": "TE",
+        "build_costs.material_price_source_label": "Selectionner une source de prix des materiaux",
+        "build_costs.material_price_source_help": (
+            "Source des prix materiaux utilisee pour le calcul. ESI Average est le prix moyen CCP "
+            "de la fenetre industrielle, Jita Sell est le prix de vente minimum a Jita, et Jita "
+            "Buy est le prix d'achat maximum a Jita."
+        ),
+        "build_costs.price_source_esi_average": "Moyenne ESI",
+        "build_costs.price_source_jita_sell": "Vente Jita",
+        "build_costs.price_source_jita_buy": "Achat Jita",
+        "build_costs.structure_compare_expander": "Selectionner une structure de comparaison (optionnel)",
+        "build_costs.structure_compare_label": "Structures",
+        "build_costs.structure_compare_placeholder": "Toutes les structures",
+        "build_costs.structure_compare_help": (
+            "Choisissez une structure pour comparer les couts de production. Laissez vide pour "
+            "afficher toutes les structures."
+        ),
+        "build_costs.parameters_changed": (
+            "⚠️ Les parametres ont change. Cliquez sur 'Recalculer' pour mettre a jour les resultats."
+        ),
+        "build_costs.calculate": "Calculer",
+        "build_costs.recalculate": "Recalculer",
+        "build_costs.calculate_help": "Cliquez pour calculer le cout de l'objet selectionne.",
+        "build_costs.industry_indexes_last_updated": "Indices industriels mis a jour le : {timestamp}",
+        "build_costs.progress_start": "Recuperation des donnees de {total} structures...",
+        "build_costs.progress_fetching": "Recuperation {current} sur {total} structures : {structure}",
+        "build_costs.no_results": (
+            "Aucun resultat retourne. Il s'agit probablement d'un probleme avec l'API industrielle "
+            "externe. Reessayez plus tard."
+        ),
+        "build_costs.header": "Cout de production pour {item_name}",
+        "build_costs.summary": (
+            "Cout de production pour {item_name} avec {runs} cycles, {me} ME, {te} TE et "
+            "{price_source} comme source de prix des materiaux (type_id : {type_id})"
+        ),
+        "build_costs.metric_build_cost_per_unit": "Cout de production par unite",
+        "build_costs.metric_build_cost_per_unit_help": "Base sur la structure la moins chere : {structure}",
+        "build_costs.metric_total_build_cost": "Cout total de production",
+        "build_costs.materials_job_cost": "**Materiaux :** {materials} ISK | **Cout job :** {job_cost} ISK",
+        "build_costs.market_price_summary": (
+            "**Prix {market_name} :** <span style='color: orange;'>{price} ISK</span> "
+            "(profit : {profit} ISK | {margin}%)"
+        ),
+        "build_costs.no_market_price": "Aucune donnee de prix {market_name} pour cet objet",
+        "build_costs.jita_price_summary": (
+            "**Prix Jita :** <span style='color: orange;'>{price} ISK</span> "
+            "(profit : {profit} ISK | {margin}%)"
+        ),
+        "build_costs.no_jita_price": "Aucune donnee de prix Jita pour cet objet",
+        "build_costs.super_note": (
+            "<span style=\"font-weight: bold;\">Note :</span> "
+            "<span style=\"color: orange;\">Seules les structures configurees pour la construction "
+            "de supercapitaux sont affichees.</span>"
+        ),
+        "build_costs.material_breakdown": "Detail des materiaux",
+        "build_costs.material_breakdown_for_structure": "Detail des materiaux : {structure}",
+        "build_costs.material_breakdown_selector": "Selectionner une structure pour voir le detail des materiaux",
+        "build_costs.material_breakdown_selector_help": (
+            "Choisissez une structure pour afficher les quantites et couts detailles des materiaux."
+        ),
+        "build_costs.material_breakdown_missing": "Aucune donnee trouvee pour la structure : {structure}",
+        "build_costs.material_breakdown_summary": (
+            "Cout materiaux de {item} : <span style='color: orange;'>**{cost} ISK**</span> "
+            "(*{volume} m3*) - {price_source}"
+        ),
+        "build_costs.material_breakdown_tip": (
+            "💡 **Astuce :** Vous pouvez telecharger ces donnees en CSV via l'icone de telechargement "
+            "(⬇️) en haut a droite du tableau."
+        ),
+        "build_costs.selected_structure": "Structure selectionnee",
+        "build_costs.empty_subheader": "Outil de Cout de Production WC Markets",
+        "build_costs.empty_description": (
+            "Selectionnez une categorie, un groupe et un objet dans la barre laterale pour calculer "
+            "le cout de production. Les resultats sont calcules pour toutes les structures de la base "
+            "et tries par cout total. Vous pouvez aussi comparer avec une structure precise et afficher "
+            "le detail des materiaux."
+        ),
+        "build_costs.tool_description": """
+    - <span style="font-weight: bold; color: orange;">Cycles :</span> Nombre de cycles a calculer.
+    - <span style="font-weight: bold; color: orange;">ME :</span> Efficacite materielle du blueprint. (par defaut 0)
+    - <span style="font-weight: bold; color: orange;">TE :</span> Efficacite temporelle du blueprint. (par defaut 0)
+    - <span style="font-weight: bold; color: orange;">Source de prix des materiaux :</span> Source de prix utilisee pour les calculs.
+        - *Moyenne ESI* - prix moyen CCP de la fenetre industrielle.
+        - *Vente Jita* - prix de vente minimum a Jita.
+        - *Achat Jita* - prix d'achat maximum a Jita.
+    - <span style="font-weight: bold; color: orange;">Structure :</span> Structure de comparaison des couts. (optionnel)
+    - <span style="font-weight: bold; color: orange;">Competences :</span> Toutes les competences sont supposees au niveau 5.
+    """,
+        "build_costs.no_buildable_items": (
+            "Aucun objet constructible trouve pour le groupe {group_name}. Cela peut indiquer "
+            "qu'une table SDE comme `industryActivityProducts` manque. Essayez une synchronisation "
+            "ou choisissez un autre groupe."
+        ),
+        "build_costs.load_items_error": "Impossible de charger les objets du groupe : {error}",
+        "build_costs.invalid_selected_item": "L'objet selectionne {item_name} n'est pas constructible",
+        "build_costs.item_not_found": "L'objet selectionne {item_name} est introuvable dans la base de types",
+        "build_costs.invalid_item": "Objet invalide : {error}",
+        "build_costs.select_valid_item": (
+            "L'objet selectionne {item_name} n'est pas constructible. Veuillez choisir un objet "
+            "valide dans la barre laterale."
+        ),
+        "build_costs.unknown_type": "Inconnu ({type_id})",
+        "build_costs.special_group_sovereignty_hub": "Hub de souverainete",
+        "build_costs.column_structure": "Structure",
+        "build_costs.column_structure_help": "Nom de la structure.",
+        "build_costs.column_structure_type": "Type",
+        "build_costs.column_units": "Unites",
+        "build_costs.column_units_help": "Nombre d'unites produites.",
+        "build_costs.column_total_cost": "Cout total",
+        "build_costs.column_total_cost_help": "Cout total pour produire ces unites.",
+        "build_costs.column_cost_per_unit": "Cout par unite",
+        "build_costs.column_cost_per_unit_help": "Cout de production par unite.",
+        "build_costs.column_material_cost": "Cout materiaux",
+        "build_costs.column_material_cost_help": "Cout total des materiaux.",
+        "build_costs.column_total_job_cost": "Cout total du job",
+        "build_costs.column_total_job_cost_help": (
+            "Cout total du job incluant taxe d'installation, surcharge SCC et indice systeme."
+        ),
+        "build_costs.column_facility_tax": "Taxe d'installation",
+        "build_costs.column_facility_tax_help": "Cout de la taxe d'installation.",
+        "build_costs.column_scc_surcharge": "Surcharge SCC",
+        "build_costs.column_scc_surcharge_help": "Cout de la surcharge SCC.",
+        "build_costs.column_system_cost_index": "Indice de cout",
+        "build_costs.column_rigs": "Rigs",
+        "build_costs.column_rigs_help": "Rigs installes sur la structure.",
+        "build_costs.column_comparison_cost": "Cout de comparaison",
+        "build_costs.column_comparison_cost_help": "Difference avec le cout total de la structure selectionnee.",
+        "build_costs.column_comparison_cost_per_unit": "Cout de comparaison par unite",
+        "build_costs.column_comparison_cost_per_unit_help": (
+            "Difference avec le cout par unite de la structure selectionnee."
+        ),
+        "build_costs.column_material_help": "Nom du materiau requis.",
+        "build_costs.column_quantity": "Quantite",
+        "build_costs.column_quantity_help": "Quantite de materiau necessaire.",
+        "build_costs.column_volume_per_unit": "Volume/unite",
+        "build_costs.column_volume_per_unit_help": "Volume par unite de materiau (m3).",
+        "build_costs.column_total_volume": "Volume total",
+        "build_costs.column_total_volume_help": "Volume total de ce materiau (m3).",
+        "build_costs.column_unit_price": "Prix unitaire",
+        "build_costs.column_unit_price_help": "Cout par unite de materiau (ISK).",
+        "build_costs.column_total_cost_materials_help": "Cout total pour ce materiau (ISK).",
+        "build_costs.column_percent_total": "% du total",
+        "build_costs.column_percent_total_help": "Pourcentage du cout total des materiaux.",
     },
     "ru": {
         "app.page_title": "Rynki WinterCo",
@@ -1291,6 +1876,157 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.column_turnover_30d": "Oborot 30d",
         "import_helper.column_volume_30d": "Obem 30d",
         "import_helper.column_capital_utilis": "Capital Utilis",
+        "build_costs.title": "Instrument stoimosti proizvodstva",
+        "build_costs.category_label": "Vyberite kategoriyu",
+        "build_costs.category_placeholder": "Korabl",
+        "build_costs.category_help": "Vyberite kategoriyu dlya filtra grupp i predmetov.",
+        "build_costs.group_label": "Vyberite gruppu",
+        "build_costs.item_label": "Vyberite predmet",
+        "build_costs.runs_label": "Progonov",
+        "build_costs.me_label": "ME",
+        "build_costs.te_label": "TE",
+        "build_costs.material_price_source_label": "Vyberite istochnik tsen materialov",
+        "build_costs.material_price_source_help": (
+            "Istochnik tsen materialov dlya rascheta. ESI Average eto srednyaya tsena CCP v "
+            "okne proizvodstva, Jita Sell eto minimalnaya tsena prodazhi v Jita, a Jita Buy "
+            "eto maksimalnaya tsena pokupki v Jita."
+        ),
+        "build_costs.price_source_esi_average": "Srednyaya ESI",
+        "build_costs.price_source_jita_sell": "Prodazha Jita",
+        "build_costs.price_source_jita_buy": "Pokupka Jita",
+        "build_costs.structure_compare_expander": "Vyberite strukturu dlya sravneniya (neobyazatelno)",
+        "build_costs.structure_compare_label": "Struktury",
+        "build_costs.structure_compare_placeholder": "Vse struktury",
+        "build_costs.structure_compare_help": (
+            "Vyberite strukturu dlya sravneniya stoimosti proizvodstva. Ostavte pustym, chtoby "
+            "pokazat vse struktury."
+        ),
+        "build_costs.parameters_changed": (
+            "⚠️ Parametry izmenilis. Nazhmitie 'Pereschitat' obnovit rezultaty."
+        ),
+        "build_costs.calculate": "Rasschitat",
+        "build_costs.recalculate": "Pereschitat",
+        "build_costs.calculate_help": "Nazhmitie rasschityvaet stoimost dlya vybrannogo predmeta.",
+        "build_costs.industry_indexes_last_updated": "Promyshlennye indeksy obnovleny: {timestamp}",
+        "build_costs.progress_start": "Poluchenie dannykh iz {total} struktur...",
+        "build_costs.progress_fetching": "Poluchenie {current} iz {total} struktur: {structure}",
+        "build_costs.no_results": (
+            "Rezultatov net. Veroyatno, est problema s vneshnim API promyshlennykh dannykh. "
+            "Poprobuyte pozzhe."
+        ),
+        "build_costs.header": "Stoimost proizvodstva dlya {item_name}",
+        "build_costs.summary": (
+            "Stoimost proizvodstva dlya {item_name}: {runs} progonov, {me} ME, {te} TE, "
+            "istochnik tsen materialov {price_source} (type_id: {type_id})"
+        ),
+        "build_costs.metric_build_cost_per_unit": "Stoimost za edinitsu",
+        "build_costs.metric_build_cost_per_unit_help": "Na osnove samoy deshevoy struktury: {structure}",
+        "build_costs.metric_total_build_cost": "Obshchaya stoimost proizvodstva",
+        "build_costs.materials_job_cost": "**Materialy:** {materials} ISK | **Stoimost raboty:** {job_cost} ISK",
+        "build_costs.market_price_summary": (
+            "**Tsena {market_name}:** <span style='color: orange;'>{price} ISK</span> "
+            "(pribyl: {profit} ISK | {margin}%)"
+        ),
+        "build_costs.no_market_price": "Dannye o tsene {market_name} dlya etogo predmeta ne naideny",
+        "build_costs.jita_price_summary": (
+            "**Tsena Jita:** <span style='color: orange;'>{price} ISK</span> "
+            "(pribyl: {profit} ISK | {margin}%)"
+        ),
+        "build_costs.no_jita_price": "Dannye o tsene Jita dlya etogo predmeta ne naideny",
+        "build_costs.super_note": (
+            "<span style=\"font-weight: bold;\">Primechanie:</span> "
+            "<span style=\"color: orange;\">Pokazany tolko struktury, nastroennye dlya "
+            "stroitelstva supercapital.</span>"
+        ),
+        "build_costs.material_breakdown": "Razbor materialov",
+        "build_costs.material_breakdown_for_structure": "Razbor materialov: {structure}",
+        "build_costs.material_breakdown_selector": "Vyberite strukturu dlya prosmotra materialov",
+        "build_costs.material_breakdown_selector_help": (
+            "Vyberite strukturu, chtoby uvidet podrobnye kolichestva i stoimost materialov."
+        ),
+        "build_costs.material_breakdown_missing": "Dannye po strukture ne naideny: {structure}",
+        "build_costs.material_breakdown_summary": (
+            "Stoimost materialov dlya {item}: <span style='color: orange;'>**{cost} ISK**</span> "
+            "(*{volume} m3*) - {price_source}"
+        ),
+        "build_costs.material_breakdown_tip": (
+            "💡 **Sovet:** Eti dannye mozhno skachat v CSV cherez ikonku zagruzki (⬇️) v pravom "
+            "verkhnem uglu tablitsy."
+        ),
+        "build_costs.selected_structure": "Vybrannaya struktura",
+        "build_costs.empty_subheader": "Instrument stoimosti proizvodstva WC Markets",
+        "build_costs.empty_description": (
+            "Vyberite kategoriyu, gruppu i predmet na bokovoy paneli, chtoby rasschitat stoimost "
+            "proizvodstva. Rezultaty schitayutsya dlya vsekh struktur v baze i sortiruyutsya po "
+            "obshchey stoimosti. Takzhe mozhno sravnit s konkretnoy strukturoy i posmotret razbor "
+            "materialov."
+        ),
+        "build_costs.tool_description": """
+    - <span style="font-weight: bold; color: orange;">Progonov:</span> Kolichestvo progonov dlya rascheta.
+    - <span style="font-weight: bold; color: orange;">ME:</span> Materialnaya effektivnost chertezha. (po umolchaniyu 0)
+    - <span style="font-weight: bold; color: orange;">TE:</span> Vremennaya effektivnost chertezha. (po umolchaniyu 0)
+    - <span style="font-weight: bold; color: orange;">Istochnik tsen materialov:</span> Istochnik tsen, ispolzuemykh v raschetakh.
+        - *Srednyaya ESI* - srednyaya tsena CCP v okne proizvodstva.
+        - *Prodazha Jita* - minimalnaya tsena prodazhi v Jita.
+        - *Pokupka Jita* - maksimalnaya tsena pokupki v Jita.
+    - <span style="font-weight: bold; color: orange;">Struktura:</span> Struktura dlya sravneniya stoimosti. (neobyazatelno)
+    - <span style="font-weight: bold; color: orange;">Navyki:</span> Predpolagaetsya, chto vse navyki na urovne 5.
+    """,
+        "build_costs.no_buildable_items": (
+            "Dlya gruppy {group_name} ne naideno proizvodimykh predmetov. Vozmozhno, otsutstvuet "
+            "tablitsa SDE, naprimer `industryActivityProducts`. Poprobuyte sinkhronizatsiyu ili "
+            "vyberite druguyu gruppu."
+        ),
+        "build_costs.load_items_error": "Ne udalos zagruzit predmety dlya gruppy: {error}",
+        "build_costs.invalid_selected_item": "Vybrannyy predmet {item_name} nelzya proizvodit",
+        "build_costs.item_not_found": "Vybrannyy predmet {item_name} ne naiden v baze tipov",
+        "build_costs.invalid_item": "Nekorrektnyy predmet: {error}",
+        "build_costs.select_valid_item": (
+            "Vybrannyy predmet {item_name} nelzya proizvodit. Pozhaluysta, vyberite korrektnyy "
+            "predmet na bokovoy paneli."
+        ),
+        "build_costs.unknown_type": "Neizvestno ({type_id})",
+        "build_costs.special_group_sovereignty_hub": "Tsentr suvereniteta",
+        "build_costs.column_structure": "Struktura",
+        "build_costs.column_structure_help": "Nazvanie struktury.",
+        "build_costs.column_structure_type": "Tip",
+        "build_costs.column_units": "Edinitsy",
+        "build_costs.column_units_help": "Kolichestvo proizvedennykh edinits.",
+        "build_costs.column_total_cost": "Obshchaya stoimost",
+        "build_costs.column_total_cost_help": "Obshchaya stoimost proizvodstva etikh edinits.",
+        "build_costs.column_cost_per_unit": "Stoimost za edinitsu",
+        "build_costs.column_cost_per_unit_help": "Stoimost proizvodstva odnoi edinitsy.",
+        "build_costs.column_material_cost": "Stoimost materialov",
+        "build_costs.column_material_cost_help": "Obshchaya stoimost materialov.",
+        "build_costs.column_total_job_cost": "Obshchaya stoimost raboty",
+        "build_costs.column_total_job_cost_help": (
+            "Obshchaya stoimost raboty, vklyuchaya nalog sooruzheniya, sbor SCC i indeks sistemy."
+        ),
+        "build_costs.column_facility_tax": "Nalog sooruzheniya",
+        "build_costs.column_facility_tax_help": "Stoimost naloga sooruzheniya.",
+        "build_costs.column_scc_surcharge": "Sbor SCC",
+        "build_costs.column_scc_surcharge_help": "Stoimost sbora SCC.",
+        "build_costs.column_system_cost_index": "Indeks stoimosti",
+        "build_costs.column_rigs": "Rigi",
+        "build_costs.column_rigs_help": "Rigi, ustanovlennye na strukture.",
+        "build_costs.column_comparison_cost": "Sravnitelnaya stoimost",
+        "build_costs.column_comparison_cost_help": "Raznitsa s obshchey stoimostyu vybrannoy struktury.",
+        "build_costs.column_comparison_cost_per_unit": "Sravnitelnaya stoimost za edinitsu",
+        "build_costs.column_comparison_cost_per_unit_help": (
+            "Raznitsa so stoimostyu za edinitsu vybrannoy struktury."
+        ),
+        "build_costs.column_material_help": "Nazvanie trebuemogo materiala.",
+        "build_costs.column_quantity": "Kolichestvo",
+        "build_costs.column_quantity_help": "Trebuemoe kolichestvo materiala.",
+        "build_costs.column_volume_per_unit": "Obem/edinitsa",
+        "build_costs.column_volume_per_unit_help": "Obem na edinitsu materiala (m3).",
+        "build_costs.column_total_volume": "Obshchiy obem",
+        "build_costs.column_total_volume_help": "Obshchiy obem etogo materiala (m3).",
+        "build_costs.column_unit_price": "Tsena za edinitsu",
+        "build_costs.column_unit_price_help": "Stoimost edinitsy materiala (ISK).",
+        "build_costs.column_total_cost_materials_help": "Obshchaya stoimost etogo materiala (ISK).",
+        "build_costs.column_percent_total": "% ot itoga",
+        "build_costs.column_percent_total_help": "Dolya v obshchey stoimosti materialov.",
     },
     "es": {
         "app.page_title": "Mercados WinterCo",
@@ -1393,6 +2129,157 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.column_turnover_30d": "Rotacion 30D",
         "import_helper.column_volume_30d": "Volumen 30D",
         "import_helper.column_capital_utilis": "Capital Utilis",
+        "build_costs.title": "Herramienta de Costes de Fabricacion",
+        "build_costs.category_label": "Selecciona una categoria",
+        "build_costs.category_placeholder": "Nave",
+        "build_costs.category_help": "Selecciona una categoria para filtrar grupos y articulos.",
+        "build_costs.group_label": "Selecciona un grupo",
+        "build_costs.item_label": "Selecciona un articulo",
+        "build_costs.runs_label": "Runs",
+        "build_costs.me_label": "ME",
+        "build_costs.te_label": "TE",
+        "build_costs.material_price_source_label": "Selecciona una fuente de precio de materiales",
+        "build_costs.material_price_source_help": (
+            "Fuente de precios de materiales usada en los calculos. ESI Average es el precio medio "
+            "de CCP en la ventana de industria, Jita Sell es el precio minimo de venta en Jita y "
+            "Jita Buy es el precio maximo de compra en Jita."
+        ),
+        "build_costs.price_source_esi_average": "Media ESI",
+        "build_costs.price_source_jita_sell": "Venta Jita",
+        "build_costs.price_source_jita_buy": "Compra Jita",
+        "build_costs.structure_compare_expander": "Selecciona una estructura para comparar (opcional)",
+        "build_costs.structure_compare_label": "Estructuras",
+        "build_costs.structure_compare_placeholder": "Todas las estructuras",
+        "build_costs.structure_compare_help": (
+            "Selecciona una estructura para comparar el coste de fabricacion. Dejalo vacio para "
+            "mostrar todas las estructuras."
+        ),
+        "build_costs.parameters_changed": (
+            "⚠️ Los parametros han cambiado. Pulsa 'Recalcular' para actualizar los resultados."
+        ),
+        "build_costs.calculate": "Calcular",
+        "build_costs.recalculate": "Recalcular",
+        "build_costs.calculate_help": "Pulsa para calcular el coste del articulo seleccionado.",
+        "build_costs.industry_indexes_last_updated": "Indices industriales actualizados por ultima vez: {timestamp}",
+        "build_costs.progress_start": "Obteniendo datos de {total} estructuras...",
+        "build_costs.progress_fetching": "Obteniendo {current} de {total} estructuras: {structure}",
+        "build_costs.no_results": (
+            "No se devolvieron resultados. Probablemente haya un problema con la API externa de "
+            "datos industriales. Vuelve a intentarlo mas tarde."
+        ),
+        "build_costs.header": "Coste de fabricacion de {item_name}",
+        "build_costs.summary": (
+            "Coste de fabricacion de {item_name} con {runs} runs, {me} ME, {te} TE y "
+            "{price_source} como fuente de precios de materiales (type_id: {type_id})"
+        ),
+        "build_costs.metric_build_cost_per_unit": "Coste por unidad",
+        "build_costs.metric_build_cost_per_unit_help": "Basado en la estructura mas barata: {structure}",
+        "build_costs.metric_total_build_cost": "Coste total de fabricacion",
+        "build_costs.materials_job_cost": "**Materiales:** {materials} ISK | **Coste del job:** {job_cost} ISK",
+        "build_costs.market_price_summary": (
+            "**Precio en {market_name}:** <span style='color: orange;'>{price} ISK</span> "
+            "(beneficio: {profit} ISK | {margin}%)"
+        ),
+        "build_costs.no_market_price": "No se encontraron datos de precio de {market_name} para este articulo",
+        "build_costs.jita_price_summary": (
+            "**Precio en Jita:** <span style='color: orange;'>{price} ISK</span> "
+            "(beneficio: {profit} ISK | {margin}%)"
+        ),
+        "build_costs.no_jita_price": "No se encontraron datos de precio de Jita para este articulo",
+        "build_costs.super_note": (
+            "<span style=\"font-weight: bold;\">Nota:</span> "
+            "<span style=\"color: orange;\">Solo se muestran estructuras configuradas para "
+            "construccion de supercapitales.</span>"
+        ),
+        "build_costs.material_breakdown": "Desglose de materiales",
+        "build_costs.material_breakdown_for_structure": "Desglose de materiales: {structure}",
+        "build_costs.material_breakdown_selector": "Selecciona una estructura para ver el desglose de materiales",
+        "build_costs.material_breakdown_selector_help": (
+            "Elige una estructura para ver cantidades y costes detallados de materiales."
+        ),
+        "build_costs.material_breakdown_missing": "No se encontraron datos para la estructura: {structure}",
+        "build_costs.material_breakdown_summary": (
+            "Coste de materiales de {item}: <span style='color: orange;'>**{cost} ISK**</span> "
+            "(*{volume} m3*) - {price_source}"
+        ),
+        "build_costs.material_breakdown_tip": (
+            "💡 **Consejo:** Puedes descargar estos datos como CSV con el icono de descarga (⬇️) "
+            "en la esquina superior derecha de la tabla."
+        ),
+        "build_costs.selected_structure": "Estructura seleccionada",
+        "build_costs.empty_subheader": "Herramienta de Costes de Fabricacion de WC Markets",
+        "build_costs.empty_description": (
+            "Selecciona una categoria, grupo y articulo en la barra lateral para calcular el coste "
+            "de fabricacion. El calculo se hace para todas las estructuras de la base de datos y se "
+            "ordena por coste total. Tambien puedes comparar con una estructura concreta y revisar "
+            "el desglose de materiales."
+        ),
+        "build_costs.tool_description": """
+    - <span style="font-weight: bold; color: orange;">Runs:</span> Numero de runs que quieres calcular.
+    - <span style="font-weight: bold; color: orange;">ME:</span> Eficiencia material del plano. (por defecto 0)
+    - <span style="font-weight: bold; color: orange;">TE:</span> Eficiencia temporal del plano. (por defecto 0)
+    - <span style="font-weight: bold; color: orange;">Fuente de precio de materiales:</span> Fuente de precios usada en los calculos.
+        - *Media ESI* - el precio medio de CCP en la ventana de industria.
+        - *Venta Jita* - el precio minimo de venta en Jita.
+        - *Compra Jita* - el precio maximo de compra en Jita.
+    - <span style="font-weight: bold; color: orange;">Estructura:</span> Estructura para comparar el coste. (opcional)
+    - <span style="font-weight: bold; color: orange;">Habilidades:</span> Se asume que todas las habilidades estan al nivel 5.
+    """,
+        "build_costs.no_buildable_items": (
+            "No se encontraron articulos fabricables para el grupo {group_name}. Esto puede "
+            "indicar que falta una tabla SDE como `industryActivityProducts`. Intenta sincronizar "
+            "la base de datos o selecciona otro grupo."
+        ),
+        "build_costs.load_items_error": "No se pudieron cargar los articulos del grupo: {error}",
+        "build_costs.invalid_selected_item": "El articulo seleccionado {item_name} no es fabricable",
+        "build_costs.item_not_found": "No se encontro el articulo seleccionado {item_name} en la base de tipos",
+        "build_costs.invalid_item": "Articulo invalido: {error}",
+        "build_costs.select_valid_item": (
+            "El articulo seleccionado {item_name} no es fabricable. Selecciona un articulo valido "
+            "en la barra lateral."
+        ),
+        "build_costs.unknown_type": "Desconocido ({type_id})",
+        "build_costs.special_group_sovereignty_hub": "Centro de soberania",
+        "build_costs.column_structure": "Estructura",
+        "build_costs.column_structure_help": "Nombre de la estructura.",
+        "build_costs.column_structure_type": "Tipo",
+        "build_costs.column_units": "Unidades",
+        "build_costs.column_units_help": "Numero de unidades fabricadas.",
+        "build_costs.column_total_cost": "Coste total",
+        "build_costs.column_total_cost_help": "Coste total de fabricar esas unidades.",
+        "build_costs.column_cost_per_unit": "Coste por unidad",
+        "build_costs.column_cost_per_unit_help": "Coste de fabricacion por unidad del articulo.",
+        "build_costs.column_material_cost": "Coste de materiales",
+        "build_costs.column_material_cost_help": "Coste total de materiales.",
+        "build_costs.column_total_job_cost": "Coste total del job",
+        "build_costs.column_total_job_cost_help": (
+            "Coste total del job, incluidos impuesto de instalacion, recargo SCC e indice del sistema."
+        ),
+        "build_costs.column_facility_tax": "Impuesto de instalacion",
+        "build_costs.column_facility_tax_help": "Coste del impuesto de instalacion.",
+        "build_costs.column_scc_surcharge": "Recargo SCC",
+        "build_costs.column_scc_surcharge_help": "Coste del recargo SCC.",
+        "build_costs.column_system_cost_index": "Indice de coste",
+        "build_costs.column_rigs": "Rigs",
+        "build_costs.column_rigs_help": "Rigs instalados en la estructura.",
+        "build_costs.column_comparison_cost": "Coste comparativo",
+        "build_costs.column_comparison_cost_help": "Diferencia frente al coste total de la estructura seleccionada.",
+        "build_costs.column_comparison_cost_per_unit": "Coste comparativo por unidad",
+        "build_costs.column_comparison_cost_per_unit_help": (
+            "Diferencia frente al coste por unidad de la estructura seleccionada."
+        ),
+        "build_costs.column_material_help": "Nombre del material requerido.",
+        "build_costs.column_quantity": "Cantidad",
+        "build_costs.column_quantity_help": "Cantidad de material necesaria.",
+        "build_costs.column_volume_per_unit": "Volumen/unidad",
+        "build_costs.column_volume_per_unit_help": "Volumen por unidad de material (m3).",
+        "build_costs.column_total_volume": "Volumen total",
+        "build_costs.column_total_volume_help": "Volumen total de este material (m3).",
+        "build_costs.column_unit_price": "Precio unitario",
+        "build_costs.column_unit_price_help": "Coste por unidad de material (ISK).",
+        "build_costs.column_total_cost_materials_help": "Coste total de este material (ISK).",
+        "build_costs.column_percent_total": "% del total",
+        "build_costs.column_percent_total_help": "Porcentaje del coste total de materiales.",
     },
 }
 
