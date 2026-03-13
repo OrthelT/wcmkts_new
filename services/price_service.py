@@ -7,7 +7,7 @@ with TTL-based expiry.
 """
 
 from dataclasses import dataclass, field
-from typing import Protocol, Optional
+from typing import Protocol, Optional, Iterable
 from enum import Enum, auto
 import logging
 import threading
@@ -27,6 +27,17 @@ _PRICE_SERVICE_LOCK = threading.Lock()
 _PRICE_SERVICES: dict[str, "PriceService"] = {}
 _PRICE_CACHE_LOCK = threading.Lock()
 _SHARED_JITA_PRICE_CACHE: dict[TypeID, "CachedPriceEntry"] = {}
+
+API_BATCH_SIZE = 250
+API_CHUNK_DELAY_SECONDS = 2
+
+
+def _chunked(values: Iterable[TypeID], chunk_size: int) -> list[list[TypeID]]:
+    """Split values into fixed-size chunks, preserving order."""
+    items = list(values)
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be positive")
+    return [items[i:i + chunk_size] for i in range(0, len(items), chunk_size)]
 
 
 # =============================================================================
@@ -183,6 +194,8 @@ class FuzzworkProvider:
     BASE_URL = "https://market.fuzzwork.co.uk/aggregates/"
     REGION_JITA = 10000002
     TIMEOUT = 30
+    BATCH_SIZE = API_BATCH_SIZE
+    CHUNK_DELAY_SECONDS = API_CHUNK_DELAY_SECONDS
 
     def __init__(self, logger: Optional[logging.Logger] = None):
         self._logger = logger or logging.getLogger(__name__)
@@ -201,26 +214,44 @@ class FuzzworkProvider:
         if not type_ids:
             return BatchPriceResult()
 
-        try:
-            type_ids_str = ','.join(map(str, type_ids))
-            url = f"{self.BASE_URL}?region={self.REGION_JITA}&types={type_ids_str}"
-            self._logger.info(
-                "Price API call: Fuzzwork batch lookup for %s item(s)",
-                len(type_ids),
-            )
+        all_prices: dict[TypeID, PriceResult] = {}
+        failed_ids: set[TypeID] = set()
+        chunks = _chunked(type_ids, self.BATCH_SIZE)
 
-            response = requests.get(url, timeout=self.TIMEOUT)
-            response.raise_for_status()
+        for index, chunk in enumerate(chunks):
+            try:
+                type_ids_str = ','.join(map(str, chunk))
+                url = f"{self.BASE_URL}?region={self.REGION_JITA}&types={type_ids_str}"
+                self._logger.info(
+                    "Price API call: Fuzzwork chunk %s/%s for %s item(s)",
+                    index + 1,
+                    len(chunks),
+                    len(chunk),
+                )
 
-            data = response.json()
-            return self._parse_response(data, type_ids)
+                response = requests.get(url, timeout=self.TIMEOUT)
+                response.raise_for_status()
 
-        except requests.exceptions.Timeout:
-            self._logger.error("Fuzzwork API timeout")
-            return BatchPriceResult(failed_ids=type_ids)
-        except requests.exceptions.RequestException as e:
-            self._logger.error(f"Fuzzwork API error: {e}")
-            return BatchPriceResult(failed_ids=type_ids)
+                data = response.json()
+                chunk_result = self._parse_response(data, chunk)
+                all_prices.update(chunk_result.prices)
+                failed_ids.update(chunk_result.failed_ids)
+
+            except requests.exceptions.Timeout:
+                self._logger.error("Fuzzwork API timeout on chunk %s/%s", index + 1, len(chunks))
+                failed_ids.update(chunk)
+            except requests.exceptions.RequestException as e:
+                self._logger.error("Fuzzwork API error on chunk %s/%s: %s", index + 1, len(chunks), e)
+                failed_ids.update(chunk)
+
+            if index < len(chunks) - 1:
+                time.sleep(self.CHUNK_DELAY_SECONDS)
+
+        return BatchPriceResult(
+            prices=all_prices,
+            source=PriceSource.JITA_FUZZWORK,
+            failed_ids=sorted(failed_ids),
+        )
 
     def _parse_response(self, data: dict, requested_ids: list[TypeID]) -> BatchPriceResult:
         """Parse Fuzzwork JSON response into BatchPriceResult."""
@@ -267,6 +298,8 @@ class JaniceProvider:
     BASE_URL = "https://janice.e-351.com/api/rest/v2/pricer"
     MARKET_JITA = 2
     TIMEOUT = 30
+    BATCH_SIZE = API_BATCH_SIZE
+    CHUNK_DELAY_SECONDS = API_CHUNK_DELAY_SECONDS
 
     def __init__(self, api_key: str, logger: Optional[logging.Logger] = None):
         self._api_key = api_key
@@ -309,33 +342,51 @@ class JaniceProvider:
         if not type_ids:
             return BatchPriceResult()
 
-        try:
-            body = '\n'.join(map(str, type_ids))
-            headers = {
-                'X-ApiKey': self._api_key,
-                'accept': 'application/json',
-                'Content-Type': 'text/plain'
-            }
-            params = {'market': str(self.MARKET_JITA)}
-            self._logger.info(
-                "Price API call: Janice batch lookup for %s item(s)",
-                len(type_ids),
-            )
+        prices: dict[TypeID, PriceResult] = {}
+        failed_ids: set[TypeID] = set()
+        chunks = _chunked(type_ids, self.BATCH_SIZE)
 
-            response = requests.post(
-                self.BASE_URL,
-                data=body,
-                headers=headers,
-                params=params,
-                timeout=self.TIMEOUT
-            )
-            response.raise_for_status()
+        for index, chunk in enumerate(chunks):
+            try:
+                body = '\n'.join(map(str, chunk))
+                headers = {
+                    'X-ApiKey': self._api_key,
+                    'accept': 'application/json',
+                    'Content-Type': 'text/plain'
+                }
+                params = {'market': str(self.MARKET_JITA)}
+                self._logger.info(
+                    "Price API call: Janice chunk %s/%s for %s item(s)",
+                    index + 1,
+                    len(chunks),
+                    len(chunk),
+                )
 
-            return self._parse_response(response.json(), type_ids)
+                response = requests.post(
+                    self.BASE_URL,
+                    data=body,
+                    headers=headers,
+                    params=params,
+                    timeout=self.TIMEOUT
+                )
+                response.raise_for_status()
 
-        except Exception as e:
-            self._logger.error(f"Janice batch API error: {e}")
-            return BatchPriceResult(failed_ids=type_ids)
+                chunk_result = self._parse_response(response.json(), chunk)
+                prices.update(chunk_result.prices)
+                failed_ids.update(chunk_result.failed_ids)
+
+            except Exception as e:
+                self._logger.error("Janice batch API error on chunk %s/%s: %s", index + 1, len(chunks), e)
+                failed_ids.update(chunk)
+
+            if index < len(chunks) - 1:
+                time.sleep(self.CHUNK_DELAY_SECONDS)
+
+        return BatchPriceResult(
+            prices=prices,
+            source=PriceSource.JITA_JANICE,
+            failed_ids=sorted(failed_ids),
+        )
 
     def _parse_response(self, data: dict, requested_ids: list[TypeID]) -> BatchPriceResult:
         """Parse Janice JSON response."""
@@ -632,11 +683,14 @@ class PriceService:
         acceptable — Fuzzwork is idempotent and the second write simply
         refreshes the same cache entry.
         """
+        # Dedupe first so large multibuy lists do not resend the same type IDs.
+        unique_type_ids = list(dict.fromkeys(type_ids))
+
         # Separate cached and uncached
         cached: dict[TypeID, PriceResult] = {}
         uncached = []
 
-        for type_id in type_ids:
+        for type_id in unique_type_ids:
             cached_result = self._get_cached_result(type_id)
             if cached_result is None:
                 uncached.append(type_id)
@@ -653,7 +707,7 @@ class PriceService:
         return BatchPriceResult(
             prices=cached,
             source=PriceSource.JITA_FUZZWORK,
-            failed_ids=[tid for tid in type_ids if tid not in cached or not cached[tid].success]
+            failed_ids=[tid for tid in unique_type_ids if tid not in cached or not cached[tid].success]
         )
 
     def get_jita_prices_as_dict(self, type_ids: list[TypeID]) -> dict[TypeID, Price]:
