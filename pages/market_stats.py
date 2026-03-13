@@ -370,16 +370,19 @@ def main():
     if not sell_data.empty:
         if ss_has('selected_item'):
             selected_item = st.session_state.selected_item
-            sell_data = sell_data[sell_data['type_name'] == selected_item]
-            if not buy_data.empty:
-                buy_data = buy_data[buy_data['type_name'] == selected_item]
-            stats = stats[stats['type_name'] == selected_item]
+            selected_item_id = ss_get('selected_item_id') or _resolve_type_id(selected_item)
+            st.session_state.selected_item_id = selected_item_id
 
-            if selected_item_id := ss_get('selected_item_id'):
-                pass
+            if selected_item_id:
+                sell_data = sell_data[sell_data['type_id'] == selected_item_id]
+                if not buy_data.empty:
+                    buy_data = buy_data[buy_data['type_id'] == selected_item_id]
+                stats = stats[stats['type_id'] == selected_item_id]
             else:
-                selected_item_id = _resolve_type_id(selected_item)
-                st.session_state.selected_item_id = selected_item_id
+                sell_data = sell_data[sell_data['type_name'] == selected_item]
+                if not buy_data.empty:
+                    buy_data = buy_data[buy_data['type_name'] == selected_item]
+                stats = stats[stats['type_name'] == selected_item]
 
             if selected_item_id:
                 try:
