@@ -38,7 +38,8 @@ See CLAUDE.md for the full dependency rules table.
 | `enums.py` | `StockStatus` (CRITICAL/NEEDS_ATTENTION/GOOD), `ShipRole` (DPS/LOGI/LINKS/SUPPORT) with display helpers |
 | `converters.py` | `safe_int()`, `safe_float()`, `safe_str()` -- centralized type conversion |
 | `pricer.py` | `PricedItem`, `PricingResult`, `InputFormat` for the Pricer page |
-| `doctrine_names.py` | User-friendly doctrine display name mappings |
+| `doctrine_names.py` | Passthrough for doctrine name resolution; DB-backed lookup lives in `DoctrineRepository` |
+| `market_config.py` | `MarketConfig` (frozen dataclass) -- market hub metadata (key, name, short_name, region_id, database_alias); `DEFAULT_MARKET_KEY` constant |
 
 All domain dataclasses use `frozen=True` for immutability and safe caching.
 
@@ -62,11 +63,13 @@ All domain dataclasses use `frozen=True` for immutability and safe caching.
 | `build_cost_service.py` | `BuildCostService` -- async cost fetching (httpx), URL construction, `BuildCostJob` dataclass |
 | `price_service.py` | `PriceService` -- provider chain (Fuzzwork -> Janice) with `FallbackPriceProvider` |
 | `pricer_service.py` | `PricerService` -- EFT/multibuy parsing, dual-market price lookups |
+| `import_helper_service.py` | `ImportHelperService` -- local-vs-Jita price comparison, shipping cost, profit, capital utilisation |
 | `low_stock_service.py` | `LowStockService` -- low stock analysis with category/doctrine/tech2/faction filtering |
 | `categorization.py` | `ConfigBasedCategorizer` -- ship role categorization via Strategy pattern |
 | `module_equivalents_service.py` | `ModuleEquivalentsService` -- interchangeable faction module lookups |
 | `selection_service.py` | `SelectionService` -- item selection state management for doctrine pages |
 | `type_resolution_service.py` | `TypeResolutionService` -- type name/ID resolution with SDE + API fallbacks |
+| `type_name_localization.py` | `get_localized_name_map()`, `apply_localized_type_names()` -- applies SDE translations to DataFrames; no-op for English |
 | `parser_utils.py` | Parsing utilities for EFT fittings and item lists |
 
 ### `state/` -- Session State Management
@@ -75,26 +78,31 @@ All domain dataclasses use `frozen=True` for immutability and safe caching.
 |------|-------------|
 | `session_state.py` | `ss_get()`, `ss_has()`, `ss_set()`, `ss_init()` -- None-safe state access wrappers |
 | `service_registry.py` | `get_service()` -- singleton service management via `st.session_state` |
+| `language_state.py` | `get_active_language()`, `set_active_language()`, `set_language_query_param()` -- language selection with URL param persistence |
+| `market_state.py` | `get_active_market()`, `get_active_market_key()`, `set_active_market()` -- market hub selection with cache/service cleanup on switch |
 
 ### `ui/` -- UI Utilities
 
 | File | Key Contents |
 |------|-------------|
 | `formatters.py` | Pure formatting functions for prices, percentages, image URLs, ship roles |
-| `column_definitions.py` | `st.column_config` definitions for data tables |
+| `column_definitions.py` | `st.column_config` definitions for data tables; `get_doctrine_report_column_config(language_code)` for localized headers |
 | `popovers.py` | Market data popover components (Jita fetching disabled by default for performance) |
+| `i18n.py` | `translate_text(language_code, key)` + `TRANSLATIONS` dict (~132 keys); `LANGUAGE_OPTIONS` dict mapping code to flag label |
+| `market_selector.py` | `render_market_selector()` -- sidebar pill toggle returning active `MarketConfig` |
 
 ### `pages/` -- Streamlit Pages
 
 | File | Page |
 |------|------|
-| `market_stats.py` | Primary market data visualization with Plotly charts |
-| `doctrine_status.py` | Doctrine fit status tracking with stock levels |
-| `doctrine_report.py` | Detailed doctrine analysis and reporting |
-| `low_stock.py` | Low inventory alerting with category/doctrine filtering |
+| `market_stats.py` | Primary market data visualization with Plotly charts; localized item names |
+| `doctrine_status.py` | Doctrine fit status tracking with stock levels; localized item names |
+| `doctrine_report.py` | Detailed doctrine analysis and reporting; type_id-based module selection state |
+| `low_stock.py` | Low inventory alerting with category/doctrine filtering; category_id-based filtering |
 | `build_costs.py` | Manufacturing cost analysis with async API calls |
 | `downloads.py` | Centralized CSV export (uses callable pattern for lazy data loading) |
-| `pricer.py` | Item/fitting price calculator (EFT + multibuy input) |
+| `pricer.py` | Item/fitting price calculator (EFT + multibuy input); localized item names |
+| `import_helper.py` | Local-vs-Jita import opportunity finder; configurable shipping cost |
 | `components/market_components.py` | Extracted Streamlit rendering functions for market_stats |
 
 ### Infrastructure (Root Level)
@@ -110,7 +118,6 @@ All domain dataclasses use `frozen=True` for immutability and safe caching.
 | `logging_config.py` | Centralized logging with rotating file handlers to `./logs/` |
 | `sync_state.py` | Database update time tracking (uses `ss_set()`) |
 | `init_db.py` | Database initialization with path verification and auto-sync |
-| `init_equivalents.py` | Module equivalents table creation (uses raw sqlite3, not libsql) |
 
 ---
 
@@ -206,8 +213,8 @@ SDE (Static Data Export) data is immutable at runtime -- it only changes on EVE 
 ### Malformed-DB Recovery
 `BaseRepository.read_df()` implements automatic fallback to remote database queries when the local SQLite file is malformed. Repository `_impl()` functions in `market_repo` also include this recovery logic (they create `DatabaseConfig` internally to access both local and remote engines).
 
-### `init_equivalents.py` Recreates Table on Startup
-Turso embedded replicas currently use pull-only sync, so local-only tables are overwritten on each sync. The module equivalents table is recreated on every app startup via `init_db.py` -> `init_module_equivalents()` using raw `sqlite3`. This workaround may become unnecessary after migrating to Turso's newer database engine with bidirectional sync support.
+### Module Equivalents Table Ownership
+The `module_equivalents` table is owned and managed by the backend repository (mkts_backend). It is synced to the frontend via Turso like all other tables, so it does not need to be recreated locally on startup. `init_equivalents.py` has been deleted. See `docs/module_equivalents.md` for details.
 
 ### `settings_service.py` at Root Level
 Lives at root level (not in `services/`) because it is infrastructure. Uses only stdlib imports to avoid circular dependencies through `services/__init__.py`'s eager imports.

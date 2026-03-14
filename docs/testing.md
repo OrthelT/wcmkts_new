@@ -28,21 +28,34 @@ uv run pytest tests/ --cov=. --cov-report=html
 
 ```
 tests/
-├── conftest.py                      # Path setup
-├── test_get_market_history.py       # Market history functions
-├── test_get_fitting_data.py         # Doctrine fitting functions
-├── test_get_all_mkt_orders.py       # Market order functions
-├── test_get_all_market_history.py   # All market history functions
-├── test_clean_mkt_data.py           # Data cleaning utilities
-├── test_fetch_industry_indices.py   # Industry index functions
-├── test_logging_config.py           # Logging configuration
-├── test_safe_format.py              # Number formatting utilities
-└── test_settings_toml.py            # Configuration file validation
+├── conftest.py                        # Path setup
+├── test_base_repository.py            # BaseRepository + malformed-DB recovery
+├── test_build_cost_repo.py            # BuildCostRepository
+├── test_build_cost_service.py         # BuildCostService
+├── test_database_config_concurrency.py # DatabaseConfig sync + _SYNC_LOCK
+├── test_doctrine_repo.py              # DoctrineRepository
+├── test_fetch_industry_indices.py     # Industry index fetching
+├── test_i18n.py                       # UI translation (i18n.py)
+├── test_import_helper_service.py      # ImportHelperService
+├── test_language_state.py             # Language session state management
+├── test_logging_config.py             # Logging configuration
+├── test_low_stock_service.py          # LowStockService
+├── test_market_repo.py                # MarketRepository
+├── test_market_service.py             # MarketService
+├── test_pricer_service.py             # PricerService
+├── test_price_service.py              # PriceService provider chain
+├── test_rwlock.py                     # RWLock (legacy, kept for reference)
+├── test_sde_repo.py                   # SDERepository
+├── test_sde_repo_localization.py      # SDERepository localization methods
+├── test_settings_toml.py              # Configuration file validation
+├── test_type_name_localization.py     # TypeNameLocalization service
+├── test_type_resolution_service.py    # TypeResolutionService
+└── pages/                             # Page-level integration tests
 ```
 
 ## Current Test Coverage
 
-**34 tests** (24 unit tests + 10 config validation tests) covering core functionality:
+**~191 tests** covering repositories, services, database config, i18n, and infrastructure:
 
 - **Success cases**: Normal function operation
 - **Data validation**: Return types and structure
@@ -93,23 +106,30 @@ pythonpath = .
 4. **Use realistic test data**
 5. **Keep tests simple and focused**
 
-Example:
+Example (repository pattern):
 ```python
-@patch('streamlit.cache_data')
-@patch('db_handler.mkt_db')
-def test_function_success(self, mock_db, mock_cache):
-    mock_cache.return_value = lambda func: func
-    # Setup mocks and test function behavior
+from unittest.mock import MagicMock, patch
+import pandas as pd
+
+def test_get_all_stats_returns_dataframe():
+    mock_engine = MagicMock()
+    mock_conn = MagicMock()
+    mock_engine.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
+    mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
+
+    with patch("repositories.market_repo._get_all_stats_impl") as mock_impl:
+        mock_impl.return_value = pd.DataFrame({"type_id": [34], "price": [5.0]})
+        result = mock_impl(mock_engine)
+        assert isinstance(result, pd.DataFrame)
+        assert "type_id" in result.columns
 ```
 
 ## Coverage Configuration
 
-The project uses `.coveragerc` to configure code coverage:
+Coverage is configured in `pyproject.toml`:
 
-- **Focuses on core modules**: `db_handler.py`, `utils.py`, `models.py`, `logging_config.py`, `config.py`
-- **Excludes**: Pages, app.py, init scripts, and utility scripts
-- **Minimum coverage**: 40% (focused on tested core functions)
-- **Current coverage**: ~50% of core modules
+- **Focuses on**: `repositories/`, `services/`, `domain/`, `state/`, `ui/`, `config.py`, `models.py`, `logging_config.py`
+- **Excludes**: `pages/`, `app.py`, init scripts, and utility scripts
 
 ## Configuration Testing
 
@@ -140,8 +160,7 @@ uv run pytest tests/test_settings_toml.py -v
 
 ## Key Metrics
 
-- **Total tests**: 34 (24 unit + 10 config validation)
-- **Test types**: Unit tests and configuration validation
-- **Run time**: ~0.7 seconds
-- **Success rate**: 100%
-- **Coverage**: 50.5% of core modules (40%+ required)
+- **Total tests**: ~191
+- **Test types**: Unit tests, integration tests, configuration validation
+- **Run time**: ~1-2 seconds (fast unit tests only; integration tests may be slower)
+- **Success rate**: 100% (CI enforced)

@@ -108,29 +108,35 @@ All pages follow consistent patterns with Streamlit best practices:
 - **`services/price_service.py`**: PriceService with provider chain (Fuzzwork → Janice) for Jita price lookups with caching
 - **`services/pricer_service.py`**: PricerService orchestrates parsing and price lookups from Jita (via Janice API or Fuzzworks) and 4-HWWF (local market database)
 - **`services/low_stock_service.py`**: LowStockService for low stock analysis with filtering (categories, doctrines, fits, tech2/faction items)
+- **`services/import_helper_service.py`**: ImportHelperService for computing local-vs-Jita price comparisons including shipping cost, profit margin, 30-day turnover, and capital utilisation
 - **`services/categorization.py`**: ConfigBasedCategorizer for ship role categorization via Strategy pattern
 - **`services/selection_service.py`**: SelectionService for managing item selections on doctrine pages with sidebar rendering
 - **`services/module_equivalents_service.py`**: ModuleEquivalentsService for looking up equivalent/interchangeable faction modules and calculating aggregated stock levels
 - **`services/type_resolution_service.py`**: TypeResolutionService for type name/ID resolution with SDE + Fuzzworks/ESI API fallbacks
+- **`services/type_name_localization.py`**: Applies localized item/ship names to DataFrames using SDE translations; skips work when language is English
 
 **Domain Models (`domain/` directory):**
 - **`domain/models.py`**: Core models: `FitItem`, `FitSummary`, `ModuleStock`, `Doctrine`
 - **`domain/enums.py`**: `StockStatus`, `ShipRole` enums with display formatting
 - **`domain/converters.py`**: Centralized `safe_int()`, `safe_float()`, `safe_str()` type conversion
 - **`domain/pricer.py`**: Domain models including `PricedItem`, `PricingResult`, and `InputFormat` enum for EFT vs multibuy detection
-- **`domain/doctrine_names.py`**: User-friendly doctrine display name mappings
+- **`domain/doctrine_names.py`**: Passthrough for doctrine name resolution; DB-backed lookup lives in `DoctrineRepository`
+- **`domain/market_config.py`**: `MarketConfig` frozen dataclass representing a market hub's configuration (key, name, short_name, region_id, database_alias)
 
 **UI Components (`ui/` directory):**
 - **`ui/popovers.py`**: Reusable market data popover components with item images, market stats, Jita prices, and doctrine usage. Pass pre-fetched `jita_prices` dict to avoid per-popover API calls (Jita fetching is disabled by default)
 - **`ui/formatters.py`**: Pure formatting functions for prices, percentages, image URLs
-- **`ui/column_definitions.py`**: Streamlit column_config definitions for data tables
+- **`ui/column_definitions.py`**: Streamlit column_config definitions for data tables; supports localized column headers via `get_doctrine_report_column_config(language_code)` and friends
+- **`ui/i18n.py`**: Lightweight UI translation system with ~132 keys covering navigation, labels, tooltips, and column headers across 8 languages (EN, ZH, DE, FR, RU, ES, JP, KR). Used via `translate_text(language_code, key)`.
+- **`ui/market_selector.py`**: Sidebar pill toggle for switching between market hubs; returns active `MarketConfig`
 
 **Initialization & State:**
 - **`init_db.py`**: Database initialization with path verification and auto-sync for missing files
-- **`init_equivalents.py`**: DELETED - Module equivalents table is now owned and managed by the backend repository (mkts_backend). See `docs/module_equivalents.md` for details.
 - **`sync_state.py`**: Updates session state with local/remote database update times for sync tracking (uses `ss_set()`)
 - **`settings_service.py`**: Module-level settings cache (stdlib only, no Streamlit dependency). Lives at root level, not in `services/`, to avoid circular imports
 - **`logging_config.py`**: Centralized logging setup with rotating file handlers to `./logs/`
+- **`state/language_state.py`**: Manages active UI language in session state and URL query parameter (`?lang=xx`) for bookmarkable language links
+- **`state/market_state.py`**: Manages the active market hub selection in session state; clears market-specific services and caches on hub switch
 
 ### Local Databases
 
@@ -195,35 +201,52 @@ The application uses Turso's embedded-replica feature for optimal performance:
 
 ### Database Configuration
 
-Databases are managed via `DatabaseConfig` class in `config.py`:
+Databases are managed via the `DatabaseConfig` class in `config.py`. Each instance represents one named database (alias-based):
 ```python
 from config import DatabaseConfig
 
-db = DatabaseConfig()
-# Access engines
-mkt_engine = db.mkt_engine  # wcmktprod.db
-sde_engine = db.sde_engine  # sdelite.db
-bc_engine = db.bc_engine    # buildcost.db
+mkt_db = DatabaseConfig("wcmktprod")   # wcmktprod.db — main market data
+sde_db = DatabaseConfig("sde")         # sdelite.db — static data
+bc_db  = DatabaseConfig("build_cost")  # buildcost.db — manufacturing
 
-# Sync from remote
-db.sync()
+# Access engines
+engine = mkt_db.engine        # SQLAlchemy engine (local file)
+remote = mkt_db.remote_engine # SQLAlchemy engine (Turso remote)
+
+# Sync from remote — returns bool; caller handles UI feedback
+ok = mkt_db.sync()
 
 # Check integrity
-db.integrity_check()
+mkt_db.integrity_check()
+
+# CLI sync (from terminal)
+# uv run python config.py wcmktprod
 ```
 
 ## Environment Setup
 
 ### Required Secrets (Streamlit Cloud & Local Development)
 
-Create `.streamlit/secrets.toml`:
+Create `.streamlit/secrets.toml` (section-per-database format):
 ```toml
-[secrets]
-TURSO_DATABASE_URL = "libsql://your-database.turso.io"
-TURSO_AUTH_TOKEN = "your_turso_auth_token"
-SDE_URL = "libsql://your-sde.turso.io"
-SDE_AUTH_TOKEN = "your_sde_auth_token"
-JANICE_API_KEY = "your_janice_api_key"  # For Pricer page Jita price lookups
+[wcmktprod_turso]
+url = "libsql://your-database.turso.io"
+token = "your_turso_auth_token"
+
+[wcmktnorth_turso]
+url = "libsql://your-north-database.turso.io"
+token = "your_turso_auth_token"
+
+[sdelite_turso]
+url = "libsql://your-sde.turso.io"
+token = "your_sde_auth_token"
+
+[buildcost_turso]
+url = "libsql://your-buildcost.turso.io"
+token = "your_buildcost_auth_token"
+
+[janice]
+api_key = "your_janice_api_key"  # For Pricer page Jita price lookups
 ```
 
 ### Local Development Notes
@@ -281,14 +304,16 @@ if __name__ == "__main__":
 ```python
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from config import DatabaseConfig
 from models import MarketStats
 
-# Reading data
-with Session(db.mkt_engine) as session:
+# Reading data via DatabaseConfig
+mkt_db = DatabaseConfig("wcmktprod")
+with Session(mkt_db.engine) as session:
     stmt = select(MarketStats).where(MarketStats.type_id == 34)
     results = session.execute(stmt).scalars().all()
 
-# Or use repository cached methods
+# Or use repository cached methods (preferred)
 from repositories import get_market_repository
 repo = get_market_repository()
 df = repo.get_all_stats()  # Returns cached pandas DataFrame
@@ -332,8 +357,8 @@ df = repo.get_all_stats()  # Returns cached pandas DataFrame
 - Sync operations and integrity checks
 
 ### Current Test Coverage
-The test suite covers repositories, services, database config, and infrastructure:
-- ~147 tests passing (`uv run pytest -q`)
+The test suite covers repositories, services, database config, i18n, and infrastructure:
+- ~191 tests passing (`uv run pytest -q`)
 
 ## Commit & Pull Request Guidelines
 
@@ -450,6 +475,8 @@ The codebase follows a strict layered architecture. Dependencies must flow **dow
 │  state/              → Session state management             │
 │    session_state.py  → ss_get, ss_has, ss_init utilities    │
 │    service_registry.py → get_service singleton management   │
+│    language_state.py → active language + URL query param    │
+│    market_state.py   → active market hub + cache cleanup    │
 └─────────────────────────────────────────────────────────────┘
                               │ imports from ↓
 ┌─────────────────────────────────────────────────────────────┐
@@ -509,7 +536,7 @@ The codebase follows a strict layered architecture. Dependencies must flow **dow
 
 †Services and repositories use try/except imports from `state/` only in factory functions to maintain testability outside Streamlit.
 
-‡**`ui/sync_display.py` exception:** This module imports from `state/` and `config` because it is a shared presentation component that cannot live in `pages/` (Streamlit auto-discovers `pages/` subdirectories as navigation entries). The layer violation is accepted to avoid Streamlit side effects.
+‡**`ui/sync_display.py` and `ui/market_selector.py` exceptions:** These modules import from `state/` and `config` because they are shared presentation components that cannot live in `pages/` (Streamlit auto-discovers `pages/` subdirectories as navigation entries). The layer violation is accepted to avoid Streamlit side effects.
 
 §**`state/sync_state.py` exception:** This module imports `DatabaseConfig` from `config` to query database update timestamps and populate session state. The bidirectional dependency (`state/ → config` here, `config → state/` via deferred import in `DatabaseConfig`) is safe because both sides use deferred or function-scoped imports that prevent circular import at runtime.
 
@@ -538,11 +565,10 @@ from state.session_state import ss_get  # ✗ state!
 
 ## Version Information
 
-- **Current version**: 0.4.0
+- **Current version**: 0.4.1
 - **Python version**: 3.12+
 - **Package manager**: uv (preferred)
 - **Main branch**: main
-- **Active development**: refactormain branch (as of last update)
 
 ## Additional Resources & Documentation Index
 
@@ -554,7 +580,7 @@ from state.session_state import ss_get  # ✗ state!
 
 **Technical Reference:**
 - `architecture_reference.md` - Definitive technical reference for the current architecture
-- `change_log.md` - Change log covering v0.2.0 refactoring (Phases 1-13) through v0.3.x releases
+- `change_log.md` - Change log covering v0.2.0 refactoring (Phases 1-13) through v0.4.0 releases
 - `database_config.md` - Database configuration and Turso sync details
 - `module_equivalents.md` - Module equivalents feature architecture, CLI usage, and aggregation pipeline
 - `testing.md` - Testing guidelines and pytest patterns
@@ -565,15 +591,15 @@ from state.session_state import ss_get  # ✗ state!
 - `walkthrough.md` - Step-by-step walkthroughs
 
 ### Project Directories
-- **`domain/`**: Core business models (FitItem, FitSummary, StockStatus, ShipRole, PricedItem, converters)
+- **`domain/`**: Core business models (FitItem, FitSummary, StockStatus, ShipRole, PricedItem, MarketConfig, converters)
 - **`repositories/`**: Database access layer (BaseRepository, DoctrineRepository, MarketRepository, BuildCostRepository, SDERepository)
-- **`services/`**: Business logic (DoctrineService, MarketService, BuildCostService, PriceService, PricerService, LowStockService, SelectionService, ModuleEquivalentsService, TypeResolutionService, categorization)
-- **`state/`**: Session state management (ss_get, ss_has, ss_set, ss_init, get_service)
-- **`ui/`**: UI formatting utilities, column configurations, and reusable popover components
+- **`services/`**: Business logic (DoctrineService, MarketService, BuildCostService, PriceService, PricerService, ImportHelperService, LowStockService, SelectionService, ModuleEquivalentsService, TypeResolutionService, TypeNameLocalization, categorization)
+- **`state/`**: Session state management (ss_get, ss_has, ss_set, ss_init, get_service, language_state, market_state)
+- **`ui/`**: UI formatting utilities, column configurations, reusable popover components, i18n translations, market selector
 - **`pages/`**: Streamlit application pages
 - **`pages/components/`**: Extracted Streamlit rendering components (market_components)
 - **`parser/`**: EFT fitting and item list parser (open source contribution)
-- **`tests/`**: pytest unit tests (~147 tests)
+- **`tests/`**: pytest unit tests (~191 tests)
 - **`docs/`**: Documentation
 - **`logs/`**: Application logs (git-ignored)
 - **`images/`**: UI assets

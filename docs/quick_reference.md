@@ -1,9 +1,11 @@
 # Winter Coalition Market Stats Viewer - Quick Reference
 
 ## Getting Started
-1. Run the application: `streamlit run app.py`
+1. Run the application: `uv run streamlit run app.py`
 2. Navigate with the sidebar menu: Market Stats, Low Stock, Import Helper, or Doctrine Status
 3. Data updates automatically at 13:00 UTC daily or use "Sync Now" button
+4. Select your active market hub (4-HWWF or B-9C24) with the pills toggle in the sidebar
+5. Select your preferred language (EN, ZH, DE, FR, RU, ES, JP, KR) using the language selector in the top right
 
 ## Market Stats Page 📈
 **Purpose:** View detailed market data for specific items
@@ -38,6 +40,7 @@
 **Purpose:** Identify items where the local market price is above Jita sell
 
 **Key Controls:**
+- **Shipping Cost per m³:** Configurable number input (default 450 ISK/m³)
 - **Categories:** Limit results by item category
 - **Search Items:** Filter by item name
 - **Positive Profit Only:** Show only items with positive local-over-Jita spread
@@ -45,7 +48,7 @@
 
 **What You'll See:**
 - Local price, Jita sell price, and Jita buy price
-- Shipping cost estimate based on volume
+- Shipping cost estimate based on volume and your configured rate
 - 30D Profit vs Jita sell
 - 30D turnover and 30D volume
 - Capital utilisation

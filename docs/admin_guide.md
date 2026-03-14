@@ -6,76 +6,94 @@ This guide is intended for administrators who need to maintain, configure, or de
 
 The application uses a hybrid database approach:
 - **Local SQLite Databases**:
-  - `wcmktprod.db`: Contains market data synchronized from the parent Turso database
-  - `sdelite.db`: Contains EVE Online Static Data Export (item information)
+  - `wcmktprod.db`: Main market data (4-HWWF) — synchronized from the Turso remote
+  - `wcmktnorth2.db`: Deployment market data (B-9C24) — synchronized from Turso
+  - `sdelite.db`: EVE Online Static Data Export (item information, localizations)
+  - `buildcost.db`: Manufacturing structures, rigs, and industry indices
 - **Turso Cloud Database**:
   - Remote database that collects and processes EVE Online market data
-  - Local database syncs with remote using Turso's embedded-replica feature
+  - Local databases sync with remote using Turso's embedded-replica feature via `DatabaseConfig.sync()`
+- **Backend Repository** (`mkts_backend`): Separate repository that handles ESI API calls and updates the Turso remote. This frontend application is read-only for market data.
 
 ## Database Schema
 
-Key tables in the market database (`wcmktprod.db`):
+Key tables in the market database (`wcmktprod.db` / `wcmktnorth2.db`):
 - `marketorders`: Individual sell and buy orders on the market
 - `marketstats`: Aggregated statistics about market items
 - `market_history`: Historical price and volume data
 - `doctrines`: Doctrine fits and their components
+- `doctrine_fits`: Doctrine fitting details
 - `ship_targets`: Target inventory levels for doctrine ships
+- `lead_ships`: Leadership ship configurations
+- `watchlist`: Market watchlist items
+- `updatelog`: Database update tracking
+- `module_equivalents`: Interchangeable faction module mappings (managed by backend, read-only here)
 
 Key tables in the SDE database (`sdelite.db`):
 - `invTypes`: Information about all EVE Online items
 - `invGroups`: Item groups classification
 - `invCategories`: High-level item categories
+- `localizations`: Localized item names for 8 languages (~210k rows)
+
+Key tables in the build cost database (`buildcost.db`):
+- `structures`: Manufacturing structure data
+- `industry_index`: Industry cost indices
+- `rigs`: Structure rig configurations
 
 ## Configuration
 
 ### Environment Variables
 
-Production environments should use Streamlit secrets management:
-1. Create a `.streamlit/secrets.toml` file with:
-   ```toml
-   TURSO_DATABASE_URL = "your_turso_database_url"
-   TURSO_AUTH_TOKEN = "your_turso_auth_token"
-   SDE_URL = "your_sde_url"
-   SDE_AUTH_TOKEN = "your_sde_auth_token"
-   ```
+Production environments use Streamlit secrets management. Create `.streamlit/secrets.toml` with per-database sections:
 
-Development environments can use a `.env` file as described in the README.
+```toml
+[wcmktprod_turso]
+url = "libsql://your-database.turso.io"
+token = "your_turso_auth_token"
+
+[wcmktnorth_turso]
+url = "libsql://your-north-database.turso.io"
+token = "your_turso_auth_token"
+
+[sdelite_turso]
+url = "libsql://your-sde.turso.io"
+token = "your_sde_auth_token"
+
+[buildcost_turso]
+url = "libsql://your-buildcost.turso.io"
+token = "your_buildcost_auth_token"
+```
+
+Note: The `sde` alias maps to `sdelite_turso` and `build_cost` maps to `buildcost_turso` via `[db_turso_keys]` overrides in `settings.toml`.
 
 ### Database Synchronization Settings
 
-Database synchronization is configured in `db_handler.py` and `db_utils.py`:
-- Automatic sync occurs daily at 13:00 UTC (configurable in `schedule_db_sync()`)
-- Manual sync via sidebar button calls `sync_db()` function
-- Cache TTL is set to 60 seconds in various functions
+Database synchronization is managed by the `DatabaseConfig` class in `config.py`:
+- Automatic sync occurs daily at 13:00 UTC
+- Manual sync via sidebar button triggers `DatabaseConfig.sync()` on the active market database
+- `sync()` serializes via `_SYNC_LOCK` (threading.Lock) and runs `PRAGMA integrity_check` after sync
+- CLI sync: `uv run python config.py <alias>` (e.g., `uv run python config.py wcmktprod`)
 
 ### Doctrine Targets Configuration
 
-Target inventory levels for doctrine ships can be configured in two ways:
-1. **Using the dictionary in `doctrines.py`**:
-   - Modify the `SHIP_TARGETS` dictionary
-   - Set default value for ships not explicitly listed
-
-2. **Using the database table** (preferred for production):
-   - Use `set_targets.py` functionality to update the `ship_targets` table
-   - Each entry has `fit_id`, `ship_target`, and `fit_name` columns
+Target inventory levels for doctrine ships are stored in the `ship_targets` table in `wcmktprod.db`. This table is managed via the backend repository (mkts_backend). Each entry has `fit_id`, `ship_target`, and `fit_name` columns.
 
 ## Deployment Options
 
 ### Local Deployment
 1. Clone the repository
-2. Install dependencies: `pip install -r requirements.txt`
-3. Configure environment variables
-4. Run with: `streamlit run app.py`
+2. Install dependencies: `uv sync`
+3. Configure secrets in `.streamlit/secrets.toml` (see Configuration section above)
+4. Run with: `uv run streamlit run app.py`
 
 ### Server Deployment
-1. Set up a virtual environment: `python -m venv venv`
-2. Activate and install dependencies
-3. Configure environment variables or secrets
-4. Use a process manager like Supervisor:
+1. Install `uv` and sync dependencies: `uv sync`
+2. Configure `.streamlit/secrets.toml` with Turso credentials
+3. Use a process manager like Supervisor:
    ```
    [program:wc_mkts]
-   command=/path/to/venv/bin/streamlit run app.py
-   directory=/path/to/wc_mkts_streamlit
+   command=/path/to/.venv/bin/streamlit run app.py
+   directory=/path/to/wcmkts_new
    autostart=true
    autorestart=true
    ```
@@ -83,23 +101,24 @@ Target inventory levels for doctrine ships can be configured in two ways:
 ### Docker Deployment
 1. Create a Dockerfile:
    ```dockerfile
-   FROM python:3.10-slim
+   FROM python:3.12-slim
 
    WORKDIR /app
 
-   COPY requirements.txt .
-   RUN pip install -r requirements.txt
+   RUN pip install uv
+   COPY pyproject.toml uv.lock ./
+   RUN uv sync --frozen
 
    COPY . .
 
    EXPOSE 8501
 
-   CMD ["streamlit", "run", "app.py"]
+   CMD ["uv", "run", "streamlit", "run", "app.py"]
    ```
 2. Build and run the container:
    ```bash
    docker build -t wc_mkts .
-   docker run -p 8501:8501 -v /path/to/secrets:/app/.streamlit/secrets.toml wc_mkts
+   docker run -p 8501:8501 -v /path/to/.streamlit:/app/.streamlit wc_mkts
    ```
 
 ## Maintenance Tasks
@@ -130,44 +149,36 @@ Logs are configured in `logging_config.py` and stored in the `logs/` directory:
 
 ### Managing Doctrine Targets
 
-To update doctrine target values:
-1. Access the database directly:
-   ```python
-   from db_utils import update_targets
-   
-   # Update target for a specific fit
-   update_targets(fit_id=1001, target_value=50)
-   ```
-
-2. Or use the `set_targets.py` script (if available)
+Doctrine targets are stored in the `ship_targets` table and managed via the backend repository (mkts_backend). After updating the backend database, trigger a sync on the frontend to pick up changes.
 
 ### Performance Optimization
 
 If the application becomes slow:
-1. Check and potentially increase caching TTL values (currently 60s for most functions)
+1. Check cache invalidation: use `invalidate_market_caches()` after sync (not global `st.cache_data.clear()`)
 2. Consider adding indices to frequently queried database columns
-3. Optimize SQL queries in `db_handler.py` for better performance
-4. Adjust batch sizes in the `get_mkt_data()` function
+3. Check the `logs/` directory for slow query warnings
+4. Ensure the SDE repository is using `@st.cache_resource` (no TTL) for immutable data
 
 ## Troubleshooting Common Issues
 
 ### Sync Failures
-- Check Turso credentials and connectivity
-- Examine logs for detailed error messages
-- Try clearing cache with `st.cache_data.clear()`
-- Verify synchronization URL and auth token
+- Check Turso credentials in `.streamlit/secrets.toml`
+- Verify secret section names match (e.g., `sde` alias requires `sdelite_turso` section — see `[db_turso_keys]` in `settings.toml`)
+- Examine logs in `logs/` directory for detailed error messages
+- Run CLI sync to test: `uv run python config.py wcmktprod`
+- Check for empty db file artifacts (`.db-info` alongside a 0-byte `.db`): delete both and re-sync
 
 ### Missing Data
-- Confirm data exists in the remote database
-- Check SQL queries for incorrect filters
-- Verify SDE database has correct item information
+- Confirm data exists in the remote Turso database (check backend repository logs)
+- Verify the active market hub is correctly selected (primary vs deployment)
+- Check SDE database has correct item information
 - Look for exceptions in log files
 
 ### Streamlit Interface Issues
 - Clear browser cache or use incognito mode
 - Check for JavaScript errors in browser console
 - Restart the Streamlit server
-- Update Streamlit to the latest version: `pip install --upgrade streamlit`
+- Update dependencies: `uv sync`
 
 ## Updating EVE SDE Data
 

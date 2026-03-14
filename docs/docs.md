@@ -9,6 +9,8 @@ The Winter Coalition Market Stats Viewer is a Streamlit application that provide
 
 **How to Contribute:** WCMkts is an open source project written in Python 3.12 and provided under the MIT License. The source code is available on GitHub at https://github.com/OrthelT/wcmkts_new Contributions to this project are very welcome. 
 
+**Language Support:** The app supports 8 languages (English, Chinese, German, French, Russian, Spanish, Japanese, Korean). Use the language selector in the upper-right corner of the app to switch. Your selection persists via a URL query parameter (`?lang=xx`) so you can bookmark a specific language.
+
 **NOTE:** Note, this app was designed to be used in dark mode. Use the "hamburger" menu in the upper right-hand corner to select Settings -> "Choose app theme, colors and fonts" -> "dark."
 
 **Update Frequency:** While not fully real time, data is refreshed every three hours, with full market history updated each day around 1300 Eve time. This allows for very fast performance, because we handle calls to the Eve ESI and data processing elsewhere. The app uses just a local sqlite database that syncs periodically with a remote master database to generate data displays. Hit the "Sync Now" button on the market stats page to update the app with the most recent data.  
@@ -60,7 +62,7 @@ The central dataframe displays all currently selected items. Currently, only sel
 
 **Key Features:**
 - **Jita Comparison Columns:** Compare local price to Jita sell and Jita buy prices
-- **Shipping Cost Estimate:** Calculated as item volume in m3 multiplied by 500
+- **Shipping Cost Input:** Configurable shipping cost per m³ (default 450 ISK/m³); edit the number input at the top of the page to adjust
 - **30D Profit vs Jita Sell:** Calculated as `(local market price - Jita Sell Price) * average daily volume * 30`
 - **30D Turnover:** Calculated from local average daily volume over 30 days, multiplied by Jita sell price
 - **30D Volume:** Calculated as local average daily volume multiplied by 30
@@ -68,9 +70,10 @@ The central dataframe displays all currently selected items. Currently, only sel
 
 **How to Use:**
 1. Use the sidebar filters to limit results by category or item name
-2. Compare the local price against Jita sell and buy prices to spot local undercut opportunities
-3. Review shipping cost, 30-day profit, and capital utilisation together
-4. Use the 30D Turnover and 30D Volume columns to identify items with meaningful turnover
+2. Optionally adjust the shipping cost per m³ input to match your freight rates
+3. Compare the local price against Jita sell and buy prices to spot local undercut opportunities
+4. Review shipping cost, 30-day profit, and capital utilisation together
+5. Use the 30D Turnover and 30D Volume columns to identify items with meaningful turnover
 
 ### 4. Doctrine Status Page
 **Purpose:** Monitors the availability of doctrine ship fits and their components.

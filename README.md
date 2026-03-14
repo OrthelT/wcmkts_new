@@ -1,4 +1,4 @@
-# Winter Coalition Market App (v.0.3.1)
+# Winter Coalition Market App (v.0.4.1)
 A Streamlit application for viewing EVE Online market statistics for Winter Coalition. This tool provides real-time market data analysis, historical price tracking, and fitting information for various items in EVE Online markets.
 
 SUPPORT: Join the Discord for support https://discord.gg/BxatJE572Y
@@ -7,6 +7,20 @@ CONTRIBUTING: Contributors welcome. This project is fully open source under MIT 
 
 
 # UPDATES:
+## version 0.4.0 / 0.4.1
+### New Features
+- **8-Language UI Translation**: Full UI translation in EN, ZH, DE, FR, RU, ES, JP, and KR via `ui/i18n.py`; ~132 translation keys covering navigation, labels, tooltips, and column headers
+- **Language Selector**: Top-right selectbox with flag emoji labels; selection persists via URL query parameter (`?lang=xx`) for bookmarkable links
+- **Localized Item Names**: `services/type_name_localization.py` uses the SDE `localizations` table (~210k rows) to display item and ship names in the selected language with automatic English fallback
+- **Category ID Filtering**: Market Stats, Low Stock, and Doctrine Status now filter by `category_id` (int) instead of `category_name` for robustness across all languages
+- **Configurable Shipping Cost (Import Helper)**: User-facing number input for shipping cost per m³ (default 450 ISK/m³)
+
+### Improvements
+- Type ID refactor in Doctrine Report: module selection state uses `set[int]` of type_ids instead of string names
+- Localized data table column headers
+- English-language optimization: SDE localization queries skipped when `language_code="en"`
+- Test suite grown to ~191 tests with new i18n, language state, and type name localization coverage
+
 ## version 0.3.1
 ### New Features
 - **Multi-Market Hub Support**: Selectable market hubs (4-HWWF and B-9C24) with per-market database configuration and UI toggle
@@ -47,14 +61,13 @@ CONTRIBUTING: Contributors welcome. This project is fully open source under MIT 
 - ~128 tests covering repositories, services, and infrastructure
 
 ## version 0.1.6
-**NOTE: This feature is currently disabled.** 
-### Interchangeable Faction Module Support (Phase 6) NOTE: This feature currently disabled. 
+### Interchangeable Faction Module Support
 - Added support for equivalent faction modules (e.g., Dark Blood Thermal Armor Hardener and its 5 equivalents)
 - Stock levels now aggregate across all interchangeable modules for accurate fit calculations
-- 🔄 indicator shown next to modules with equivalents in Doctrine Status/Report pages
+- Indicator shown next to modules with equivalents in Doctrine Status/Report pages
 - Popovers display "Equivalent Modules" section with individual and combined stock
-- New `module_equivalents` database table for configuring interchangeable module groups
-- New `ModuleEquivalentsService` for equivalence lookups and aggregated stock calculations
+- `module_equivalents` database table owned and managed by the backend repository (mkts_backend)
+- `ModuleEquivalentsService` for equivalence lookups and aggregated stock calculations
 
 ## version 0.1.5
 ### Low Stock Page Enhancements
@@ -239,18 +252,28 @@ cd wc_mkts_streamlit
 uv sync
 ```
 
-3. Set up environment variables:
-Create a `.env` file with the following variables:
-```
-TURSO_DATABASE_URL=your_turso_database_url
-TURSO_AUTH_TOKEN=your_turso_auth_token
-SDE_URL=your_sde_url
-SDE_AUTH_TOKEN=your_sde_auth_token
+3. Set up credentials. Create `.streamlit/secrets.toml` with per-database sections:
+```toml
+[wcmktprod_turso]
+url = "libsql://your-database.turso.io"
+token = "your_turso_auth_token"
+
+[wcmktnorth_turso]
+url = "libsql://your-north-database.turso.io"
+token = "your_turso_auth_token"
+
+[sdelite_turso]
+url = "libsql://your-sde.turso.io"
+token = "your_sde_auth_token"
+
+[buildcost_turso]
+url = "libsql://your-buildcost.turso.io"
+token = "your_buildcost_auth_token"
 ```
 
 4. Run the application:
 ```bash
-streamlit run app.py
+uv run streamlit run app.py
 ```
 
 ### Local Secrets

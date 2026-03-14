@@ -4,6 +4,12 @@ Historical record of releases, the architectural refactoring project (Phases 1-1
 
 ---
 
+## v0.4.1 (2026-03-14)
+
+Version bump. No functional changes.
+
+---
+
 ## v0.4.0 (2026-03-12)
 
 Multi-language support release. All pages now support 8 languages with localized item names and UI strings, plus robustness improvements from the type_id refactor.
