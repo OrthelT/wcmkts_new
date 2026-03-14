@@ -91,5 +91,23 @@ class Localization(Base):
     def __repr__(self) -> str:
         return f"Localization(type_id={self.type_id!r}, language={self.language!r}, type_name={self.type_name!r})"
 
+class GroupLocalization(Base):
+    __tablename__ = "group_localizations"
+    group_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    language: Mapped[str] = mapped_column(String, primary_key=True)
+    group_name: Mapped[str] = mapped_column(String, nullable=True)
+
+    def __repr__(self) -> str:
+        return f"GroupLocalization(group_id={self.group_id!r}, language={self.language!r}, group_name={self.group_name!r})"
+
+class CategoryLocalization(Base):
+    __tablename__ = "category_localizations"
+    category_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    language: Mapped[str] = mapped_column(String, primary_key=True)
+    category_name: Mapped[str] = mapped_column(String, nullable=True)
+
+    def __repr__(self) -> str:
+        return f"CategoryLocalization(category_id={self.category_id!r}, language={self.language!r}, category_name={self.category_name!r})"
+
 if __name__ == "__main__":
     pass
