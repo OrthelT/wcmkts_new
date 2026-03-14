@@ -18,6 +18,38 @@ class DummyPriceService:
 
 
 class TestImportHelperService:
+    def test_apply_packaged_ship_volumes_uses_packaged_ship_sizes(self):
+        from services.import_helper_service import _apply_packaged_ship_volumes
+
+        volume_df = pd.DataFrame(
+            {
+                "type_id": [582, 620, 648, 34],
+                "group_name": ["Frigate", "Cruiser", "Hauler", "Mineral"],
+                "category_name": ["Ship", "Ship", "Ship", "Material"],
+                "raw_volume_m3": [28000.0, 119000.0, 450000.0, 0.01],
+            }
+        )
+
+        result = _apply_packaged_ship_volumes(volume_df)
+
+        assert result["volume_m3"].tolist() == [2500.0, 10000.0, 20000.0, 0.01]
+
+    def test_apply_packaged_ship_volumes_keeps_raw_volume_for_unknown_ship_group(self):
+        from services.import_helper_service import _apply_packaged_ship_volumes
+
+        volume_df = pd.DataFrame(
+            {
+                "type_id": [999999],
+                "group_name": ["Unknown Ship Group"],
+                "category_name": ["Ship"],
+                "raw_volume_m3": [123456.0],
+            }
+        )
+
+        result = _apply_packaged_ship_volumes(volume_df)
+
+        assert result["volume_m3"].tolist() == [123456.0]
+
     def test_fetch_base_data_recomputes_each_call(self):
         from services.import_helper_service import ImportHelperService
 
@@ -144,6 +176,59 @@ class TestImportHelperService:
         row = result.iloc[0]
         assert abs(row["rrp"] - expected_rrp) < 1e-9
 
+    @patch("pandas.read_sql_query")
+    def test_get_import_candidates_uses_packaged_volume_for_ships(self, mock_read_sql):
+        from services.import_helper_service import ImportHelperService
+
+        market_df = pd.DataFrame(
+            {
+                "type_id": [620],
+                "type_name": ["Osprey"],
+                "price": [2_000_000.0],
+                "avg_volume": [1.0],
+                "category_id": [6],
+                "category_name": ["Ship"],
+                "group_id": [26],
+                "group_name": ["Cruiser"],
+                "is_doctrine": [0],
+            }
+        )
+        volume_df = pd.DataFrame(
+            {
+                "type_id": [620],
+                "group_name": ["Cruiser"],
+                "category_name": ["Ship"],
+                "raw_volume_m3": [119000.0],
+            }
+        )
+        mock_read_sql.side_effect = [market_df, volume_df]
+
+        mock_market_conn = Mock()
+        mock_market_conn.__enter__ = Mock(return_value=mock_market_conn)
+        mock_market_conn.__exit__ = Mock(return_value=None)
+        mock_market_engine = Mock()
+        mock_market_engine.connect.return_value = mock_market_conn
+
+        mock_sde_conn = Mock()
+        mock_sde_conn.__enter__ = Mock(return_value=mock_sde_conn)
+        mock_sde_conn.__exit__ = Mock(return_value=None)
+        mock_sde_engine = Mock()
+        mock_sde_engine.connect.return_value = mock_sde_conn
+
+        mkt_db = Mock()
+        mkt_db.engine = mock_market_engine
+        sde_repo = Mock()
+        sde_repo.db.engine = mock_sde_engine
+
+        service = ImportHelperService(mkt_db, sde_repo, DummyPriceService({}))
+        result = service._get_import_candidates()
+
+        assert result.iloc[0]["volume_m3"] == 10000.0
+        assert "category_name" in result.columns
+        assert "group_name" in result.columns
+        assert "category_name_x" not in result.columns
+        assert "group_name_x" not in result.columns
+
     def test_get_import_items_uses_custom_shipping_cost_per_m3(self):
         from services.import_helper_service import ImportHelperFilters, ImportHelperService
 
@@ -180,6 +265,37 @@ class TestImportHelperService:
         assert row["volume_30d"] == 150.0
         assert row["capital_utilis"] == -9.5
         assert row["rrp"] == 224.0
+
+    def test_disabling_profitable_only_allows_negative_profit_items_with_default_capital_filter(self):
+        from services.import_helper_service import ImportHelperFilters, ImportHelperService
+
+        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}))
+        base_df = pd.DataFrame(
+            {
+                "type_id": [34, 35],
+                "type_name": ["Loss Item", "Profit Item"],
+                "price": [10.0, 30.0],
+                "avg_volume": [5.0, 5.0],
+                "volume_m3": [1.0, 0.01],
+                "jita_sell_price": [20.0, 20.0],
+                "jita_buy_price": [18.0, 18.0],
+                "turnover_30d": [3000.0, 3000.0],
+                "volume_30d": [150.0, 150.0],
+                "category_name": ["Mineral", "Mineral"],
+                "group_name": ["Mineral", "Mineral"],
+            }
+        )
+
+        result = service.get_import_items(
+            base_df,
+            ImportHelperFilters(
+                profitable_only=False,
+                min_capital_utilis=0.0,
+            ),
+        )
+
+        assert result["type_id"].tolist() == [35, 34]
+        assert (result["profit_jita_sell"] < 0).any()
 
     def test_get_import_items_applies_filters_using_avg_volume(self):
         from services.import_helper_service import ImportHelperFilters, ImportHelperService
