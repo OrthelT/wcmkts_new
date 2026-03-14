@@ -224,6 +224,10 @@ class TestImportHelperService:
         result = service._get_import_candidates()
 
         assert result.iloc[0]["volume_m3"] == 10000.0
+        assert "category_name" in result.columns
+        assert "group_name" in result.columns
+        assert "category_name_x" not in result.columns
+        assert "group_name_x" not in result.columns
 
     def test_get_import_items_uses_custom_shipping_cost_per_m3(self):
         from services.import_helper_service import ImportHelperFilters, ImportHelperService

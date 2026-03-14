@@ -102,11 +102,19 @@ def _apply_packaged_ship_volumes(
 
     result = volume_df.copy()
     if "raw_volume_m3" not in result.columns:
+        if logger_instance is not None:
+            logger_instance.warning("raw_volume_m3 column missing; defaulting to 0.0")
         result["raw_volume_m3"] = 0.0
     else:
-        result["raw_volume_m3"] = pd.to_numeric(result["raw_volume_m3"], errors="coerce").fillna(0.0)
+        result["raw_volume_m3"] = (
+            pd.to_numeric(result["raw_volume_m3"], errors="coerce").fillna(0.0)
+        )
 
     if "category_name" not in result.columns or "group_name" not in result.columns:
+        if logger_instance is not None:
+            logger_instance.warning(
+                "category_name/group_name columns missing; skipping packaged volume logic"
+            )
         result["volume_m3"] = result["raw_volume_m3"]
         return result
 
@@ -130,7 +138,10 @@ def _apply_packaged_ship_volumes(
         )
 
     result["volume_m3"] = result["raw_volume_m3"]
-    return result.drop(columns=["raw_volume_m3"])
+    return result.drop(
+        columns=["raw_volume_m3", "group_name", "category_name"],
+        errors="ignore",
+    )
 
 
 @dataclass(frozen=True)
