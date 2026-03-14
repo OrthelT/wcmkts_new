@@ -58,7 +58,7 @@ def test_translate_text_returns_chinese_build_cost_label():
 def test_translate_text_returns_german_build_cost_label():
     result = translate_text("de", "build_costs.material_breakdown")
 
-    assert result == "Materialaufschlusselung"
+    assert result == "Materialaufschlüsselung"
 
 
 def test_translate_text_returns_spanish_build_cost_label():

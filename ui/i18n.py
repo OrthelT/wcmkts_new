@@ -1055,7 +1055,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.column_percent_total_help": "该材料占总材料成本的比例。",
     },
     "de": {
-        "app.page_title": "WinterCo Markte",
+        "app.page_title": "WinterCo Märkte",
         "app.language_label": "Sprache",
         "nav.section.market_stats": "Marktstatistiken",
         "nav.section.analysis_tools": "Analysewerkzeuge",
@@ -1075,44 +1075,44 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_status.no_fits": "Keine Doktrin-Fits in der Datenbank gefunden.",
         "doctrine_report.subtitle": "Marktstatus von {market_name} nach Flottendoktrin",
         "doctrine_report.no_data": "Keine Daten zum Anzeigen",
-        "doctrine_report.metric_total_fits": "Verfugbare Fits gesamt",
-        "doctrine_report.metric_total_hulls": "Rumpfe gesamt",
+        "doctrine_report.metric_total_fits": "Verfügbare Fits gesamt",
+        "doctrine_report.metric_total_hulls": "Rümpfe gesamt",
         "doctrine_report.metric_avg_target_pct": "Durchschnittliches Ziel %",
-        "doctrine_report.role_dps": "💥 **DPS** - Primare DPS-Schiffe",
+        "doctrine_report.role_dps": "💥 **DPS** - Primäre DPS-Schiffe",
         "doctrine_report.role_logi": "🏥 **Logi** - Logistikschiffe",
         "doctrine_report.role_links": "📡 **Links** - Kommandoschiffe",
-        "doctrine_report.role_support": "🛠️ **Support** - EWAR, Tackle und andere Unterstutzungsschiffe",
+        "doctrine_report.role_support": "🛠️ **Support** - EWAR, Tackle und andere Unterstützungsschiffe",
         "doctrine_report.stock_status": "Bestandsstatus",
         "doctrine_report.stock_status_summary": (
-            "*Zusammenfassung des Bestandsstatus der drei Module mit dem niedrigsten Bestand fur jedes "
-            "Schiff in der ausgewahlten Doktrin. Zahlen in Klammern zeigen, wie viele Fits mit dem "
-            "aktuellen Bestand unterstutzt werden konnen. Verwende die Kontrollkastchen fur den CSV-Export.*"
+            "*Zusammenfassung des Bestandsstatus der drei Module mit dem niedrigsten Bestand für jedes "
+            "Schiff in der ausgewählten Doktrin. Zahlen in Klammern zeigen, wie viele Fits mit dem "
+            "aktuellen Bestand unterstützt werden können. Verwende die Kontrollkästchen für den CSV-Export.*"
         ),
         "doctrine_report.fit_id": "Fit-ID",
         "doctrine_report.target": "Ziel",
-        "doctrine_report.no_target_found": "Kein Ziel fur diesen Fit gefunden",
-        "doctrine_report.equivalent_stock_caption": "🔄 Bestand enthalt aquivalente Module",
+        "doctrine_report.no_target_found": "Kein Ziel für diesen Fit gefunden",
+        "doctrine_report.equivalent_stock_caption": "🔄 Bestand enthält äquivalente Module",
         "doctrine_report.no_fits": "Keine Doktrin-Fits in der Datenbank gefunden.",
-        "doctrine_report.select_doctrine": "Doktrin auswahlen",
+        "doctrine_report.select_doctrine": "Doktrin auswählen",
         "doctrine_report.target_multiplier": "Zielmultiplikator",
         "doctrine_report.target_multiplier_help": (
             "Dieser Multiplikator wird auf den Zielwert jedes Fits angewendet. Damit kann das Ziel "
             "aggressiver oder konservativer gesetzt werden. Der Standardwert ist 1.0."
         ),
         "doctrine_report.current_target_multiplier": "Aktueller Zielmultiplikator: {value}",
-        "doctrine_report.ship_image_not_available": "🚀 Schiffsbild nicht verfugbar",
+        "doctrine_report.ship_image_not_available": "🚀 Schiffsbild nicht verfügbar",
         "doctrine_report.doctrine_id": "Doktrin-ID: {doctrine_id}",
-        "doctrine_report.selected_items": "Ausgewahlte Elemente",
+        "doctrine_report.selected_items": "Ausgewählte Elemente",
         "doctrine_report.modules_label": "Module:",
-        "doctrine_report.no_items_selected": "Keine Elemente ausgewahlt",
+        "doctrine_report.no_items_selected": "Keine Elemente ausgewählt",
         "doctrine_report.export_options": "Exportoptionen",
         "doctrine_report.download_csv": "📥 CSV herunterladen",
-        "doctrine_report.clear_selection": "🗑️ Auswahl loschen",
+        "doctrine_report.clear_selection": "🗑️ Auswahl löschen",
         "doctrine_report.column_target_pct": "Ziel %",
         "doctrine_report.column_target": "Ziel",
-        "doctrine_report.column_target_help": "Anzahl der Fits, die fur den Bestand benotigt werden.",
-        "doctrine_report.column_daily_sales": "Tagliche Verkaufe",
-        "doctrine_report.column_daily_sales_help": "Durchschnittliche tagliche Verkaufe der letzten 30 Tage.",
+        "doctrine_report.column_target_help": "Anzahl der Fits, die für den Bestand benötigt werden.",
+        "doctrine_report.column_daily_sales": "Tägliche Verkäufe",
+        "doctrine_report.column_daily_sales_help": "Durchschnittliche tägliche Verkäufe der letzten 30 Tage.",
         "doctrine_report.column_group_help": "Schiffsgruppe.",
         "doctrine_report.column_ship": "Schiff",
         "doctrine_report.column_ship_help": "Schiffsname.",
@@ -1123,18 +1123,18 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_report.column_total_cost": "Gesamtkosten",
         "doctrine_report.column_total_cost_help": "Gesamtkosten des Fits.",
         "common.market_hub": "Markthub",
-        "common.select": "Auswahlen",
+        "common.select": "Auswählen",
         "common.type_id": "Typ-ID",
         "common.item": "Artikel",
         "common.category": "Kategorie",
         "common.group": "Gruppe",
         "common.price": "Preis",
-        "low_stock.title": "Werkzeug fur niedrigen Bestand von {market_name}",
+        "low_stock.title": "Werkzeug für niedrigen Bestand von {market_name}",
         "low_stock.description": (
             "Diese Seite zeigt Artikel mit niedrigem Marktbestand. Die Spalte **Days Remaining** zeigt, "
-            "wie viele Verkaufstage der aktuelle Bestand auf Basis des historischen Durchschnitts tragt. "
+            "wie viele Verkaufstage der aktuelle Bestand auf Basis des historischen Durchschnitts trägt. "
             "Die Spalte **Used In Fits** zeigt die Doktrinschiffe, die den Artikel verwenden, und wie viele "
-            "Fits vom aktuellen Bestand unterstutzt werden."
+            "Fits vom aktuellen Bestand unterstützt werden."
         ),
         "low_stock.filters_header": "Filter",
         "low_stock.filters_help": "Verwende die folgenden Filter, um die Ansicht anzupassen.",
@@ -1146,14 +1146,14 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.faction_only": "Nur Fraktionsartikel",
         "low_stock.faction_only_help": "Nur Fraktionsartikel anzeigen (metaGroupID=4).",
         "low_stock.category_filter": "Kategoriefilter",
-        "low_stock.select_categories": "Kategorien auswahlen",
-        "low_stock.select_categories_help": "Eine oder mehrere Kategorien zum Filtern auswahlen.",
+        "low_stock.select_categories": "Kategorien auswählen",
+        "low_stock.select_categories_help": "Eine oder mehrere Kategorien zum Filtern auswählen.",
         "low_stock.doctrine_fit_filter": "Doktrin-/Fit-Filter",
-        "low_stock.select_doctrine": "Doktrin auswahlen",
+        "low_stock.select_doctrine": "Doktrin auswählen",
         "low_stock.select_doctrine_help": "Nur Artikel einer bestimmten Doktrin anzeigen.",
-        "low_stock.select_fit": "Fit auswahlen",
+        "low_stock.select_fit": "Fit auswählen",
         "low_stock.select_fit_help": "Nur Artikel eines bestimmten Fits anzeigen.",
-        "low_stock.days_filter": "Filter fur verbleibende Tage",
+        "low_stock.days_filter": "Filter für verbleibende Tage",
         "low_stock.max_days_remaining": "Maximale verbleibende Tage",
         "low_stock.max_days_remaining_help": "Nur Artikel mit gleicher oder geringerer Tageszahl anzeigen.",
         "low_stock.metric_critical": "Kritische Artikel (≤3 Tage)",
@@ -1162,12 +1162,12 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.subheader_fit": "Niedriger Bestand: {ship_name}",
         "low_stock.subheader_doctrine": "Niedriger Bestand: {doctrine_name}",
         "low_stock.subheader_all": "Artikel mit niedrigem Bestand",
-        "low_stock.column_select_help": "Markiere Artikel fur den CSV-Download.",
+        "low_stock.column_select_help": "Markiere Artikel für den CSV-Download.",
         "low_stock.column_item_help": "Name des Artikels.",
         "low_stock.column_volume_remaining": "Verbleibende Menge",
-        "low_stock.column_volume_remaining_help": "Aktuell verfugbare Gesamtmenge auf dem Markt.",
+        "low_stock.column_volume_remaining_help": "Aktuell verfügbare Gesamtmenge auf dem Markt.",
         "low_stock.column_fits": "Fits",
-        "low_stock.column_fits_help": "Gesamtzahl der Fits, die mit diesem Bestand gebaut werden konnen.",
+        "low_stock.column_fits_help": "Gesamtzahl der Fits, die mit diesem Bestand gebaut werden können.",
         "low_stock.column_days": "Tage",
         "low_stock.column_days_help": "Verbleibende Bestandstage basierend auf historischen Durchschnittsverkaufen.",
         "low_stock.column_avg_vol": "Durchschn. Vol.",
@@ -1177,15 +1177,15 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.column_category_help": "Kategorie des Artikels.",
         "low_stock.column_group_help": "Gruppe des Artikels.",
         "low_stock.selected_items": (
-            "{count} Artikel ausgewahlt. Besuche die **Downloads**-Seite fur CSV-Sammel-Exporte."
+            "{count} Artikel ausgewählt. Besuche die **Downloads**-Seite für CSV-Sammel-Exporte."
         ),
         "low_stock.chart_section": "Verbleibende Tage nach Artikel",
         "low_stock.chart_title": "Verbleibende Bestandstage",
         "low_stock.chart_days_label": "Verbleibende Tage",
         "low_stock.chart_critical_level": "Kritisches Niveau (3 Tage)",
-        "import_helper.title": "Importhilfe fur {market_name}",
+        "import_helper.title": "Importhilfe für {market_name}",
         "import_helper.description": (
-            "Finde Artikel, bei denen der lokale Marktpreis deutlich uber dem Jita-Verkaufspreis liegt. "
+            "Finde Artikel, bei denen der lokale Marktpreis deutlich über dem Jita-Verkaufspreis liegt. "
             "Der 30-Tage-Gewinn verwendet "
             "`(Lokaler Preis - Jita Sell) * durchschnittliches Tagesvolumen * 30`, der RRP verwendet "
             "`Jita Sell * (1 + Aufschlag)` und Cap Utilis verwendet "
@@ -1193,30 +1193,30 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         ),
         "import_helper.filters_header": "Filter",
         "import_helper.categories": "Kategorien",
-        "import_helper.categories_help": "Die Tabelle auf eine oder mehrere Kategorien beschranken.",
+        "import_helper.categories_help": "Die Tabelle auf eine oder mehrere Kategorien beschränken.",
         "import_helper.search_items": "Artikel suchen",
-        "import_helper.search_items_help": "Namensfilter ohne Beachtung der Gross-/Kleinschreibung.",
+        "import_helper.search_items_help": "Namensfilter ohne Beachtung der Groß-/Kleinschreibung.",
         "import_helper.profitable_only": "Nur positiver Gewinn",
-        "import_helper.profitable_only_help": "Artikel ausblenden, deren lokaler Preis nicht uber Jita Sell liegt.",
+        "import_helper.profitable_only_help": "Artikel ausblenden, deren lokaler Preis nicht über Jita Sell liegt.",
         "import_helper.min_capital_utilis": "Minimale Kapitaleffizienz",
         "import_helper.min_capital_utilis_help": "0.10 bedeutet mindestens 10 % Kapitaleffizienz nach Versand.",
         "import_helper.min_turnover_30d": "Minimaler 30D-Umsatz",
         "import_helper.min_turnover_30d_help": "Artikel mit geringerem 30-Tage-Umsatz ausblenden.",
         "import_helper.shipping_cost_per_m3": "Versandkosten pro m3",
         "import_helper.shipping_cost_per_m3_help": (
-            "Wird fur die Versandkostenberechnung verwendet. Der Standardwert kommt aus settings.toml."
+            "Wird für die Versandkostenberechnung verwendet. Der Standardwert kommt aus settings.toml."
         ),
         "import_helper.markup_margin": "Aufschlag",
-        "import_helper.markup_margin_help": "Wird fur den RRP verwendet. 0.20 bedeutet 20 % uber Jita Sell.",
+        "import_helper.markup_margin_help": "Wird für den RRP verwendet. 0.20 bedeutet 20 % über Jita Sell.",
         "import_helper.metric_total_items": "Artikel gesamt",
         "import_helper.metric_profitable_items": "Profitable Artikel",
         "import_helper.metric_avg_capital_utilis": "Durchschn. Kapitaleffizienz",
-        "import_helper.column_item_help": "Lokalisierter Artikelname, falls verfugbar.",
+        "import_helper.column_item_help": "Lokalisierter Artikelname, falls verfügbar.",
         "import_helper.column_rrp_help": "Empfohlener Verkaufspreis basierend auf Jita Sell und Aufschlag.",
         "import_helper.column_jita_sell_help": "Jita-Verkaufspreis.",
         "import_helper.column_jita_buy_help": "Jita-Kaufpreis.",
         "import_helper.column_shipping_help": (
-            "Berechnet als Artikelgroesse in m3 multipliziert mit {shipping_cost_per_m3}."
+            "Berechnet als Artikelgröße in m3 multipliziert mit {shipping_cost_per_m3}."
         ),
         "import_helper.column_profit_30d_help": "Berechnet als (lokaler Preis - Jita-Verkaufspreis) mal Tagesvolumen mal 30.",
         "import_helper.column_turnover_30d_help": "In 30 Tagen verkaufte Einheiten multipliziert mit Jita Sell.",
@@ -1231,89 +1231,89 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.column_volume_30d": "30D Volumen",
         "import_helper.column_capital_utilis": "Kapitaleffizienz",
         "build_costs.title": "Produktionskostenrechner",
-        "build_costs.category_label": "Kategorie auswahlen",
+        "build_costs.category_label": "Kategorie auswählen",
         "build_costs.category_placeholder": "Schiff",
-        "build_costs.category_help": "Kategorie auswahlen, um Gruppen und Artikel zu filtern.",
-        "build_costs.group_label": "Gruppe auswahlen",
-        "build_costs.item_label": "Artikel auswahlen",
-        "build_costs.runs_label": "Laufe",
+        "build_costs.category_help": "Kategorie auswählen, um Gruppen und Artikel zu filtern.",
+        "build_costs.group_label": "Gruppe auswählen",
+        "build_costs.item_label": "Artikel auswählen",
+        "build_costs.runs_label": "Läufe",
         "build_costs.me_label": "ME",
         "build_costs.te_label": "TE",
-        "build_costs.material_price_source_label": "Quelle fur Materialpreise auswahlen",
+        "build_costs.material_price_source_label": "Quelle für Materialpreise auswählen",
         "build_costs.material_price_source_help": (
-            "Quelle der Materialpreise fur die Berechnung. ESI Average ist der CCP-Durchschnitt "
+            "Quelle der Materialpreise für die Berechnung. ESI Average ist der CCP-Durchschnitt "
             "im Industrie-Fenster, Jita Sell ist der niedrigste Verkaufspreis in Jita und Jita "
-            "Buy der hochste Ankaufspreis in Jita."
+            "Buy der höchste Ankaufspreis in Jita."
         ),
         "build_costs.price_source_esi_average": "ESI Durchschnitt",
         "build_costs.price_source_jita_sell": "Jita Verkauf",
         "build_costs.price_source_jita_buy": "Jita Ankauf",
-        "build_costs.structure_compare_expander": "Struktur zum Vergleich auswahlen (optional)",
+        "build_costs.structure_compare_expander": "Struktur zum Vergleich auswählen (optional)",
         "build_costs.structure_compare_label": "Strukturen",
         "build_costs.structure_compare_placeholder": "Alle Strukturen",
         "build_costs.structure_compare_help": (
-            "Wahle eine Struktur, mit der die Baukosten verglichen werden sollen. Leer lassen, "
+            "Wähle eine Struktur, mit der die Baukosten verglichen werden sollen. Leer lassen, "
             "um alle Strukturen anzuzeigen."
         ),
         "build_costs.parameters_changed": (
-            "⚠️ Parameter wurden geandert. Klicke auf 'Neu berechnen', um die Ergebnisse zu aktualisieren."
+            "⚠️ Parameter wurden geändert. Klicke auf 'Neu berechnen', um die Ergebnisse zu aktualisieren."
         ),
         "build_costs.calculate": "Berechnen",
         "build_costs.recalculate": "Neu berechnen",
-        "build_costs.calculate_help": "Klicke, um die Kosten fur den ausgewahlten Artikel zu berechnen.",
+        "build_costs.calculate_help": "Klicke, um die Kosten für den ausgewählten Artikel zu berechnen.",
         "build_costs.industry_indexes_last_updated": "Industrieindizes zuletzt aktualisiert: {timestamp}",
         "build_costs.progress_start": "Daten von {total} Strukturen werden geladen...",
         "build_costs.progress_fetching": "Lade {current} von {total} Strukturen: {structure}",
         "build_costs.no_results": (
-            "Keine Ergebnisse zuruckgegeben. Wahrscheinlich gibt es ein Problem mit der externen "
+            "Keine Ergebnisse zurückgegeben. Wahrscheinlich gibt es ein Problem mit der externen "
             "Industrie-API. Bitte spater erneut versuchen."
         ),
-        "build_costs.header": "Produktionskosten fur {item_name}",
+        "build_costs.header": "Produktionskosten für {item_name}",
         "build_costs.summary": (
-            "Produktionskosten fur {item_name} mit {runs} Laufen, {me} ME, {te} TE und "
+            "Produktionskosten für {item_name} mit {runs} Läufen, {me} ME, {te} TE und "
             "{price_source} als Materialpreisquelle (type_id: {type_id})"
         ),
         "build_costs.metric_build_cost_per_unit": "Baukosten pro Einheit",
-        "build_costs.metric_build_cost_per_unit_help": "Basierend auf der gunstigsten Struktur: {structure}",
+        "build_costs.metric_build_cost_per_unit_help": "Basierend auf der günstigsten Struktur: {structure}",
         "build_costs.metric_total_build_cost": "Gesamte Baukosten",
         "build_costs.materials_job_cost": "**Materialien:** {materials} ISK | **Jobkosten:** {job_cost} ISK",
         "build_costs.market_price_summary": (
             "**{market_name}-Preis:** <span style='color: orange;'>{price} ISK</span> "
             "(Gewinn: {profit} ISK | {margin}%)"
         ),
-        "build_costs.no_market_price": "Keine {market_name}-Preisdaten fur diesen Artikel gefunden",
+        "build_costs.no_market_price": "Keine {market_name}-Preisdaten für diesen Artikel gefunden",
         "build_costs.jita_price_summary": (
             "**Jita-Preis:** <span style='color: orange;'>{price} ISK</span> "
             "(Gewinn: {profit} ISK | {margin}%)"
         ),
-        "build_costs.no_jita_price": "Keine Jita-Preisdaten fur diesen Artikel gefunden",
+        "build_costs.no_jita_price": "Keine Jita-Preisdaten für diesen Artikel gefunden",
         "build_costs.super_note": (
             "<span style=\"font-weight: bold;\">Hinweis:</span> "
-            "<span style=\"color: orange;\">Es werden nur Strukturen fur Supercapital-Bau "
+            "<span style=\"color: orange;\">Es werden nur Strukturen für Supercapital-Bau "
             "angezeigt.</span>"
         ),
-        "build_costs.material_breakdown": "Materialaufschlusselung",
-        "build_costs.material_breakdown_for_structure": "Materialaufschlusselung: {structure}",
-        "build_costs.material_breakdown_selector": "Struktur fur Materialaufschlusselung auswahlen",
+        "build_costs.material_breakdown": "Materialaufschlüsselung",
+        "build_costs.material_breakdown_for_structure": "Materialaufschlüsselung: {structure}",
+        "build_costs.material_breakdown_selector": "Struktur für Materialaufschlüsselung auswählen",
         "build_costs.material_breakdown_selector_help": (
-            "Wahle eine Struktur, um detaillierte Materialkosten und Mengen anzuzeigen."
+            "Wähle eine Struktur, um detaillierte Materialkosten und Mengen anzuzeigen."
         ),
-        "build_costs.material_breakdown_missing": "Keine Daten fur Struktur gefunden: {structure}",
+        "build_costs.material_breakdown_missing": "Keine Daten für Struktur gefunden: {structure}",
         "build_costs.material_breakdown_summary": (
             "{item} Materialkosten: <span style='color: orange;'>**{cost} ISK**</span> "
             "(*{volume} m3*) - {price_source}"
         ),
         "build_costs.material_breakdown_tip": (
-            "💡 **Tipp:** Diese Daten konnen uber das Download-Symbol (⬇️) oben rechts in der Tabelle "
+            "💡 **Tipp:** Diese Daten können über das Download-Symbol (⬇️) oben rechts in der Tabelle "
             "als CSV heruntergeladen werden."
         ),
-        "build_costs.selected_structure": "Ausgewahlte Struktur",
+        "build_costs.selected_structure": "Ausgewählte Struktur",
         "build_costs.empty_subheader": "WC Markets Produktionskostenrechner",
         "build_costs.empty_description": (
-            "Wahle in der Seitenleiste Kategorie, Gruppe und Artikel aus, um Baukosten zu berechnen. "
-            "Die Kosten werden fur alle Strukturen in der Datenbank berechnet und nach Gesamtkosten "
+            "Wähle in der Seitenleiste Kategorie, Gruppe und Artikel aus, um Baukosten zu berechnen. "
+            "Die Kosten werden für alle Strukturen in der Datenbank berechnet und nach Gesamtkosten "
             "sortiert. Optional kann mit einer bestimmten Struktur verglichen und die "
-            "Materialaufschlusselung angezeigt werden."
+            "Materialaufschlüsselung angezeigt werden."
         ),
         "build_costs.tool_description": """
     - <span style="font-weight: bold; color: orange;">Laufe:</span> Anzahl der zu berechnenden Produktionslaufe.
@@ -1327,27 +1327,27 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     - <span style="font-weight: bold; color: orange;">Skills:</span> Alle Skills werden als Stufe 5 angenommen.
     """,
         "build_costs.no_buildable_items": (
-            "Keine herstellbaren Artikel fur Gruppe {group_name} gefunden. Moglicherweise fehlt "
-            "eine SDE-Tabelle wie `industryActivityProducts`. Versuche einen Sync oder wahle "
+            "Keine herstellbaren Artikel für Gruppe {group_name} gefunden. Möglicherweise fehlt "
+            "eine SDE-Tabelle wie `industryActivityProducts`. Versuche einen Sync oder wähle "
             "eine andere Gruppe."
         ),
-        "build_costs.load_items_error": "Artikel fur die Gruppe konnten nicht geladen werden: {error}",
-        "build_costs.invalid_selected_item": "Ausgewahlter Artikel {item_name} ist nicht herstellbar",
-        "build_costs.item_not_found": "Ausgewahlter Artikel {item_name} wurde in der Typdatenbank nicht gefunden",
-        "build_costs.invalid_item": "Ungueltiger Artikel: {error}",
+        "build_costs.load_items_error": "Artikel für die Gruppe konnten nicht geladen werden: {error}",
+        "build_costs.invalid_selected_item": "Ausgewählter Artikel {item_name} ist nicht herstellbar",
+        "build_costs.item_not_found": "Ausgewählter Artikel {item_name} wurde in der Typdatenbank nicht gefunden",
+        "build_costs.invalid_item": "Ungültiger Artikel: {error}",
         "build_costs.select_valid_item": (
-            "Ausgewahlter Artikel {item_name} ist nicht herstellbar. Bitte wahle einen gueltigen "
+            "Ausgewählter Artikel {item_name} ist nicht herstellbar. Bitte wähle einen gültigen "
             "Artikel in der Seitenleiste."
         ),
         "build_costs.unknown_type": "Unbekannt ({type_id})",
-        "build_costs.special_group_sovereignty_hub": "Souveranitats-Hub",
+        "build_costs.special_group_sovereignty_hub": "Souveränitäts-Hub",
         "build_costs.column_structure": "Struktur",
         "build_costs.column_structure_help": "Name der Struktur.",
         "build_costs.column_structure_type": "Typ",
         "build_costs.column_units": "Einheiten",
         "build_costs.column_units_help": "Anzahl der gebauten Einheiten.",
         "build_costs.column_total_cost": "Gesamtkosten",
-        "build_costs.column_total_cost_help": "Gesamtkosten fur die Produktion dieser Einheiten.",
+        "build_costs.column_total_cost_help": "Gesamtkosten für die Produktion dieser Einheiten.",
         "build_costs.column_cost_per_unit": "Kosten pro Einheit",
         "build_costs.column_cost_per_unit_help": "Baukosten pro Einheit des Artikels.",
         "build_costs.column_material_cost": "Materialkosten",
@@ -1364,12 +1364,12 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.column_rigs": "Rigs",
         "build_costs.column_rigs_help": "In der Struktur verbaute Rigs.",
         "build_costs.column_comparison_cost": "Vergleichskosten",
-        "build_costs.column_comparison_cost_help": "Differenz zu den Gesamtkosten der ausgewahlten Struktur.",
+        "build_costs.column_comparison_cost_help": "Differenz zu den Gesamtkosten der ausgewählten Struktur.",
         "build_costs.column_comparison_cost_per_unit": "Vergleichskosten pro Einheit",
         "build_costs.column_comparison_cost_per_unit_help": (
-            "Differenz zu den Kosten pro Einheit der ausgewahlten Struktur."
+            "Differenz zu den Kosten pro Einheit der ausgewählten Struktur."
         ),
-        "build_costs.column_material_help": "Name des benotigten Materials.",
+        "build_costs.column_material_help": "Name des benötigten Materials.",
         "build_costs.column_quantity": "Menge",
         "build_costs.column_quantity_help": "Benotigte Materialmenge.",
         "build_costs.column_volume_per_unit": "Volumen/Einheit",
@@ -1378,31 +1378,31 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.column_total_volume_help": "Gesamtvolumen dieses Materials (m3).",
         "build_costs.column_unit_price": "Einheitspreis",
         "build_costs.column_unit_price_help": "Kosten pro Materialeinheit (ISK).",
-        "build_costs.column_total_cost_materials_help": "Gesamtkosten fur dieses Material (ISK).",
+        "build_costs.column_total_cost_materials_help": "Gesamtkosten für dieses Material (ISK).",
         "build_costs.column_percent_total": "% des Gesamtwerts",
         "build_costs.column_percent_total_help": "Anteil an den gesamten Materialkosten.",
     },
     "fr": {
-        "app.page_title": "Marches WinterCo",
+        "app.page_title": "Marchés WinterCo",
         "app.language_label": "Langue",
-        "nav.section.market_stats": "Statistiques de marche",
+        "nav.section.market_stats": "Statistiques de marché",
         "nav.section.analysis_tools": "Outils d'analyse",
-        "nav.section.data": "Donnees",
-        "nav.page.market_stats": "📈Stats Marche",
+        "nav.section.data": "Données",
+        "nav.page.market_stats": "📈Stats Marché",
         "nav.page.low_stock": "⚠️Stock Faible",
         "nav.page.import_helper": "📦Aide Import",
-        "nav.page.doctrine_status": "⚔️Etat Doctrine",
+        "nav.page.doctrine_status": "⚔️État Doctrine",
         "nav.page.doctrine_report": "📝Rapport Doctrine",
-        "nav.page.build_costs": "🏗️Couts Production",
+        "nav.page.build_costs": "🏗️Coûts Production",
         "nav.page.pricer": "🏷️Tarificateur",
-        "nav.page.downloads": "📥Telechargements",
-        "doctrine_status.title": "Etat Doctrine {market_name}",
+        "nav.page.downloads": "📥Téléchargements",
+        "doctrine_status.title": "État Doctrine {market_name}",
         "doctrine_status.tab_market_stock": "Stock Marche",
         "doctrine_status.tab_fit_details": "Details du Fit",
-        "doctrine_status.low_stock_modules": "Modules a Stock Faible",
-        "doctrine_status.no_fits": "Aucun fit de doctrine trouve dans la base de donnees.",
-        "doctrine_report.subtitle": "Etat du marche de {market_name} par doctrine",
-        "doctrine_report.no_data": "Aucune donnee a afficher",
+        "doctrine_status.low_stock_modules": "Modules à Stock Faible",
+        "doctrine_status.no_fits": "Aucun fit de doctrine trouvé dans la base de données.",
+        "doctrine_report.subtitle": "État du marché de {market_name} par doctrine",
+        "doctrine_report.no_data": "Aucune donnée à afficher",
         "doctrine_report.metric_total_fits": "Total fits disponibles",
         "doctrine_report.metric_total_hulls": "Total coques",
         "doctrine_report.metric_avg_target_pct": "Moyenne objectif %",
@@ -1410,32 +1410,32 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_report.role_logi": "🏥 **Logi** - Vaisseaux logistiques",
         "doctrine_report.role_links": "📡 **Links** - Vaisseaux de commandement",
         "doctrine_report.role_support": "🛠️ **Support** - EWAR, tackle et autres soutiens",
-        "doctrine_report.stock_status": "Etat du stock",
+        "doctrine_report.stock_status": "État du stock",
         "doctrine_report.stock_status_summary": (
-            "*Resume de l'etat du stock des trois modules les plus faibles pour chaque vaisseau de la "
-            "doctrine selectionnee. Les nombres entre parentheses indiquent combien de fits sont "
-            "possibles avec le stock actuel. Utilisez les cases a cocher pour exporter en CSV.*"
+            "*Résumé de l'état du stock des trois modules les plus faibles pour chaque vaisseau de la "
+            "doctrine sélectionnée. Les nombres entre parenthèses indiquent combien de fits sont "
+            "possibles avec le stock actuel. Utilisez les cases à cocher pour exporter en CSV.*"
         ),
         "doctrine_report.fit_id": "ID Fit",
         "doctrine_report.target": "Cible",
-        "doctrine_report.no_target_found": "Aucune cible trouvee pour ce fit",
+        "doctrine_report.no_target_found": "Aucune cible trouvée pour ce fit",
         "doctrine_report.equivalent_stock_caption": "🔄 Le stock inclut des modules equivalents",
-        "doctrine_report.no_fits": "Aucun fit de doctrine trouve dans la base de donnees.",
-        "doctrine_report.select_doctrine": "Selectionner une doctrine",
+        "doctrine_report.no_fits": "Aucun fit de doctrine trouvé dans la base de données.",
+        "doctrine_report.select_doctrine": "Sélectionner une doctrine",
         "doctrine_report.target_multiplier": "Multiplicateur de cible",
         "doctrine_report.target_multiplier_help": (
-            "Ce multiplicateur s'applique a la cible de chaque fit pour la rendre plus ou moins agressive. "
-            "La valeur par defaut est 1.0."
+            "Ce multiplicateur s'applique à la cible de chaque fit pour la rendre plus ou moins agressive. "
+            "La valeur par défaut est 1.0."
         ),
         "doctrine_report.current_target_multiplier": "Multiplicateur de cible actuel : {value}",
         "doctrine_report.ship_image_not_available": "🚀 Image du vaisseau indisponible",
         "doctrine_report.doctrine_id": "Doctrine ID : {doctrine_id}",
-        "doctrine_report.selected_items": "Objets selectionnes",
+        "doctrine_report.selected_items": "Objets sélectionnés",
         "doctrine_report.modules_label": "Modules :",
-        "doctrine_report.no_items_selected": "Aucun objet selectionne",
+        "doctrine_report.no_items_selected": "Aucun objet sélectionné",
         "doctrine_report.export_options": "Options d'export",
-        "doctrine_report.download_csv": "📥 Telecharger CSV",
-        "doctrine_report.clear_selection": "🗑️ Effacer la selection",
+        "doctrine_report.download_csv": "📥 Télécharger CSV",
+        "doctrine_report.clear_selection": "🗑️ Effacer la sélection",
         "doctrine_report.column_target_pct": "Objectif %",
         "doctrine_report.column_target": "Cible",
         "doctrine_report.column_target_help": "Nombre de fits requis en stock.",
@@ -1448,13 +1448,13 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_report.column_fit_id": "ID Fit",
         "doctrine_report.column_fit_id_help": "ID du fit de doctrine.",
         "doctrine_report.column_price_help": "Prix du vaisseau.",
-        "doctrine_report.column_total_cost": "Cout total",
-        "doctrine_report.column_total_cost_help": "Cout total du fit.",
+        "doctrine_report.column_total_cost": "Coût total",
+        "doctrine_report.column_total_cost_help": "Coût total du fit.",
         "common.market_hub": "Hub de marche",
-        "common.select": "Selection",
+        "common.select": "Sélection",
         "common.type_id": "ID Type",
         "common.item": "Objet",
-        "common.category": "Categorie",
+        "common.category": "Catégorie",
         "common.group": "Groupe",
         "common.price": "Prix",
         "low_stock.title": "Outil Stock Faible {market_name}",
@@ -1464,7 +1464,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "**Used In Fits** montre les doctrines utilisant l'objet et le nombre de fits possibles."
         ),
         "low_stock.filters_header": "Filtres",
-        "low_stock.filters_help": "Utilisez les filtres ci-dessous pour personnaliser la vue.",
+        "low_stock.filters_help": "Utilisez les filtrés ci-dessous pour personnaliser la vue.",
         "low_stock.item_type_filters": "Filtres de type",
         "low_stock.doctrine_only": "Objets de doctrine uniquement",
         "low_stock.doctrine_only_help": "Afficher seulement les objets utilises dans une doctrine.",
@@ -1472,23 +1472,23 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.tech2_only_help": "Afficher seulement les objets Tech II (metaGroupID=2).",
         "low_stock.faction_only": "Objets faction uniquement",
         "low_stock.faction_only_help": "Afficher seulement les objets faction (metaGroupID=4).",
-        "low_stock.category_filter": "Filtre de categorie",
-        "low_stock.select_categories": "Selectionner des categories",
-        "low_stock.select_categories_help": "Selectionnez une ou plusieurs categories.",
+        "low_stock.category_filter": "Filtre de catégorie",
+        "low_stock.select_categories": "Sélectionner des catégories",
+        "low_stock.select_categories_help": "Sélectionnez une ou plusieurs catégories.",
         "low_stock.doctrine_fit_filter": "Filtre doctrine/fit",
-        "low_stock.select_doctrine": "Selectionner une doctrine",
-        "low_stock.select_doctrine_help": "N'afficher que les objets d'une doctrine specifique.",
-        "low_stock.select_fit": "Selectionner un fit",
-        "low_stock.select_fit_help": "N'afficher que les objets d'un fit specifique.",
+        "low_stock.select_doctrine": "Sélectionner une doctrine",
+        "low_stock.select_doctrine_help": "N'afficher que les objets d'une doctrine spécifique.",
+        "low_stock.select_fit": "Sélectionner un fit",
+        "low_stock.select_fit_help": "N'afficher que les objets d'un fit spécifique.",
         "low_stock.days_filter": "Filtre jours restants",
         "low_stock.max_days_remaining": "Jours restants maximum",
         "low_stock.max_days_remaining_help": "Afficher seulement les objets au-dessous de cette limite.",
         "low_stock.metric_critical": "Objets critiques (≤3 jours)",
         "low_stock.metric_low": "Objets faibles (3-7 jours)",
-        "low_stock.metric_total": "Total filtres",
+        "low_stock.metric_total": "Total filtrés",
         "low_stock.subheader_fit": "Stock faible : {ship_name}",
         "low_stock.subheader_doctrine": "Stock faible : {doctrine_name}",
-        "low_stock.subheader_all": "Objets a stock faible",
+        "low_stock.subheader_all": "Objets à stock faible",
         "low_stock.column_select_help": "Cochez les objets a inclure dans l'export CSV.",
         "low_stock.column_item_help": "Nom de l'objet.",
         "low_stock.column_volume_remaining": "Volume restant",
@@ -1501,77 +1501,77 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.column_avg_vol_help": "Volume moyen sur 30 jours.",
         "low_stock.column_used_in_fits": "Utilise dans les fits",
         "low_stock.column_used_in_fits_help": "Vaisseaux de doctrine utilisant cet objet.",
-        "low_stock.column_category_help": "Categorie de l'objet.",
+        "low_stock.column_category_help": "Catégorie de l'objet.",
         "low_stock.column_group_help": "Groupe de l'objet.",
-        "low_stock.selected_items": "{count} objets selectionnes. Consultez **Downloads** pour les exports CSV.",
+        "low_stock.selected_items": "{count} objets sélectionnés. Consultez **Downloads** pour les exports CSV.",
         "low_stock.chart_section": "Jours restants par objet",
         "low_stock.chart_title": "Jours de stock restants",
         "low_stock.chart_days_label": "Jours restants",
         "low_stock.chart_critical_level": "Niveau critique (3 jours)",
         "import_helper.title": "Aide Import {market_name}",
         "import_helper.description": (
-            "Trouvez les objets dont le prix local depasse nettement le prix de vente Jita. "
+            "Trouvez les objets dont le prix local dépasse nettement le prix de vente Jita. "
             "Le profit 30J utilise `(Prix local - Vente Jita) * Volume moyen quotidien * 30`, le RRP utilise "
             "`Vente Jita * (1 + marge)`."
         ),
         "import_helper.filters_header": "Filtres",
-        "import_helper.categories": "Categories",
-        "import_helper.categories_help": "Limiter le tableau a une ou plusieurs categories.",
+        "import_helper.categories": "Catégories",
+        "import_helper.categories_help": "Limiter le tableau a une ou plusieurs catégories.",
         "import_helper.search_items": "Rechercher des objets",
         "import_helper.search_items_help": "Filtre par nom sans tenir compte de la casse.",
         "import_helper.profitable_only": "Profit positif uniquement",
-        "import_helper.profitable_only_help": "Masquer les objets dont le prix local n'est pas superieur a Jita.",
+        "import_helper.profitable_only_help": "Masquer les objets dont le prix local n'est pas supérieur a Jita.",
         "import_helper.min_capital_utilis": "Capital Utilis minimum",
-        "import_helper.min_capital_utilis_help": "0,10 signifie au moins 10 % apres expedition.",
+        "import_helper.min_capital_utilis_help": "0,10 signifie au moins 10 % apres expédition.",
         "import_helper.min_turnover_30d": "CA minimum sur 30J",
         "import_helper.min_turnover_30d_help": "Masquer les objets sous ce chiffre d'affaires 30J.",
-        "import_helper.shipping_cost_per_m3": "Cout d'expedition par m3",
+        "import_helper.shipping_cost_per_m3": "Coût d'expédition par m3",
         "import_helper.shipping_cost_per_m3_help": (
-            "Utilise pour calculer l'expedition. La valeur par defaut vient de settings.toml."
+            "Utilise pour calculer l'expédition. La valeur par défaut vient de settings.toml."
         ),
         "import_helper.markup_margin": "Marge",
         "import_helper.markup_margin_help": "Utilisee pour le RRP. 0,20 signifie 20 % au-dessus de Jita.",
         "import_helper.metric_total_items": "Total objets",
         "import_helper.metric_profitable_items": "Objets profitables",
         "import_helper.metric_avg_capital_utilis": "Capital Utilis moyen",
-        "import_helper.column_item_help": "Nom localise si disponible.",
-        "import_helper.column_rrp_help": "Prix conseille base sur Jita et la marge.",
+        "import_helper.column_item_help": "Nom localisé si disponible.",
+        "import_helper.column_rrp_help": "Prix conseillé base sur Jita et la marge.",
         "import_helper.column_jita_sell_help": "Prix de vente Jita.",
         "import_helper.column_jita_buy_help": "Prix d'achat Jita.",
         "import_helper.column_shipping_help": (
-            "Calcule comme volume m3 multiplie par {shipping_cost_per_m3}."
+            "Calcule comme volume m3 multiplié par {shipping_cost_per_m3}."
         ),
         "import_helper.column_profit_30d_help": "Calcule a partir du profit unitaire et du volume moyen sur 30 jours.",
-        "import_helper.column_turnover_30d_help": "Unites vendues sur 30 jours multipliees par le prix Jita.",
-        "import_helper.column_volume_30d_help": "Volume moyen quotidien multiplie par 30.",
-        "import_helper.column_capital_utilis_help": "Efficacite du capital apres expedition.",
+        "import_helper.column_turnover_30d_help": "Unités vendues sur 30 jours multipliées par le prix Jita.",
+        "import_helper.column_volume_30d_help": "Volume moyen quotidien multiplié par 30.",
+        "import_helper.column_capital_utilis_help": "Efficacité du capital apres expédition.",
         "import_helper.column_rrp": "RRP",
         "import_helper.column_jita_sell": "Vente Jita",
         "import_helper.column_jita_buy": "Achat Jita",
-        "import_helper.column_shipping": "Expedition",
+        "import_helper.column_shipping": "Expédition",
         "import_helper.column_profit_30d": "Profit 30J",
         "import_helper.column_turnover_30d": "CA 30J",
         "import_helper.column_volume_30d": "Volume 30J",
         "import_helper.column_capital_utilis": "Capital Utilis",
-        "build_costs.title": "Outil de Cout de Production",
-        "build_costs.category_label": "Selectionner une categorie",
+        "build_costs.title": "Outil de Coût de Production",
+        "build_costs.category_label": "Sélectionner une catégorie",
         "build_costs.category_placeholder": "Vaisseau",
-        "build_costs.category_help": "Selectionnez une categorie pour filtrer les groupes et les objets.",
-        "build_costs.group_label": "Selectionner un groupe",
-        "build_costs.item_label": "Selectionner un objet",
+        "build_costs.category_help": "Sélectionnez une catégorie pour filtrer les groupes et les objets.",
+        "build_costs.group_label": "Sélectionner un groupe",
+        "build_costs.item_label": "Sélectionner un objet",
         "build_costs.runs_label": "Cycles",
         "build_costs.me_label": "ME",
         "build_costs.te_label": "TE",
-        "build_costs.material_price_source_label": "Selectionner une source de prix des materiaux",
+        "build_costs.material_price_source_label": "Sélectionner une source de prix des matériaux",
         "build_costs.material_price_source_help": (
-            "Source des prix materiaux utilisee pour le calcul. ESI Average est le prix moyen CCP "
+            "Source des prix matériaux utilisee pour le calcul. ESI Average est le prix moyen CCP "
             "de la fenetre industrielle, Jita Sell est le prix de vente minimum a Jita, et Jita "
             "Buy est le prix d'achat maximum a Jita."
         ),
         "build_costs.price_source_esi_average": "Moyenne ESI",
         "build_costs.price_source_jita_sell": "Vente Jita",
         "build_costs.price_source_jita_buy": "Achat Jita",
-        "build_costs.structure_compare_expander": "Selectionner une structure de comparaison (optionnel)",
+        "build_costs.structure_compare_expander": "Sélectionner une structure de comparaison (optionnel)",
         "build_costs.structure_compare_label": "Structures",
         "build_costs.structure_compare_placeholder": "Toutes les structures",
         "build_costs.structure_compare_help": (
@@ -1579,64 +1579,64 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "afficher toutes les structures."
         ),
         "build_costs.parameters_changed": (
-            "⚠️ Les parametres ont change. Cliquez sur 'Recalculer' pour mettre a jour les resultats."
+            "⚠️ Les parametres ont change. Cliquez sur 'Recalculer' pour mettre a jour les résultats."
         ),
         "build_costs.calculate": "Calculer",
         "build_costs.recalculate": "Recalculer",
-        "build_costs.calculate_help": "Cliquez pour calculer le cout de l'objet selectionne.",
-        "build_costs.industry_indexes_last_updated": "Indices industriels mis a jour le : {timestamp}",
-        "build_costs.progress_start": "Recuperation des donnees de {total} structures...",
-        "build_costs.progress_fetching": "Recuperation {current} sur {total} structures : {structure}",
+        "build_costs.calculate_help": "Cliquez pour calculer le coût de l'objet sélectionné.",
+        "build_costs.industry_indexes_last_updated": "Indices industriels mis à jour le : {timestamp}",
+        "build_costs.progress_start": "Récupération des données de {total} structures...",
+        "build_costs.progress_fetching": "Récupération {current} sur {total} structures : {structure}",
         "build_costs.no_results": (
-            "Aucun resultat retourne. Il s'agit probablement d'un probleme avec l'API industrielle "
-            "externe. Reessayez plus tard."
+            "Aucun résultat retourne. Il s'agit probablement d'un probleme avec l'API industrielle "
+            "externe. Réessayez plus tard."
         ),
-        "build_costs.header": "Cout de production pour {item_name}",
+        "build_costs.header": "Coût de production pour {item_name}",
         "build_costs.summary": (
-            "Cout de production pour {item_name} avec {runs} cycles, {me} ME, {te} TE et "
-            "{price_source} comme source de prix des materiaux (type_id : {type_id})"
+            "Coût de production pour {item_name} avec {runs} cycles, {me} ME, {te} TE et "
+            "{price_source} comme source de prix des matériaux (type_id : {type_id})"
         ),
-        "build_costs.metric_build_cost_per_unit": "Cout de production par unite",
-        "build_costs.metric_build_cost_per_unit_help": "Base sur la structure la moins chere : {structure}",
-        "build_costs.metric_total_build_cost": "Cout total de production",
-        "build_costs.materials_job_cost": "**Materiaux :** {materials} ISK | **Cout job :** {job_cost} ISK",
+        "build_costs.metric_build_cost_per_unit": "Coût de production par unite",
+        "build_costs.metric_build_cost_per_unit_help": "Base sur la structure la moins chère : {structure}",
+        "build_costs.metric_total_build_cost": "Coût total de production",
+        "build_costs.materials_job_cost": "**Matériaux :** {materials} ISK | **Cout job :** {job_cost} ISK",
         "build_costs.market_price_summary": (
             "**Prix {market_name} :** <span style='color: orange;'>{price} ISK</span> "
             "(profit : {profit} ISK | {margin}%)"
         ),
-        "build_costs.no_market_price": "Aucune donnee de prix {market_name} pour cet objet",
+        "build_costs.no_market_price": "Aucune donnée de prix {market_name} pour cet objet",
         "build_costs.jita_price_summary": (
             "**Prix Jita :** <span style='color: orange;'>{price} ISK</span> "
             "(profit : {profit} ISK | {margin}%)"
         ),
-        "build_costs.no_jita_price": "Aucune donnee de prix Jita pour cet objet",
+        "build_costs.no_jita_price": "Aucune donnée de prix Jita pour cet objet",
         "build_costs.super_note": (
             "<span style=\"font-weight: bold;\">Note :</span> "
             "<span style=\"color: orange;\">Seules les structures configurees pour la construction "
             "de supercapitaux sont affichees.</span>"
         ),
-        "build_costs.material_breakdown": "Detail des materiaux",
-        "build_costs.material_breakdown_for_structure": "Detail des materiaux : {structure}",
-        "build_costs.material_breakdown_selector": "Selectionner une structure pour voir le detail des materiaux",
+        "build_costs.material_breakdown": "Détail des matériaux",
+        "build_costs.material_breakdown_for_structure": "Détail des matériaux : {structure}",
+        "build_costs.material_breakdown_selector": "Sélectionner une structure pour voir le detail des matériaux",
         "build_costs.material_breakdown_selector_help": (
-            "Choisissez une structure pour afficher les quantites et couts detailles des materiaux."
+            "Choisissez une structure pour afficher les quantites et couts detailles des matériaux."
         ),
-        "build_costs.material_breakdown_missing": "Aucune donnee trouvee pour la structure : {structure}",
+        "build_costs.material_breakdown_missing": "Aucune donnee trouvée pour la structure : {structure}",
         "build_costs.material_breakdown_summary": (
-            "Cout materiaux de {item} : <span style='color: orange;'>**{cost} ISK**</span> "
+            "Cout matériaux de {item} : <span style='color: orange;'>**{cost} ISK**</span> "
             "(*{volume} m3*) - {price_source}"
         ),
         "build_costs.material_breakdown_tip": (
-            "💡 **Astuce :** Vous pouvez telecharger ces donnees en CSV via l'icone de telechargement "
-            "(⬇️) en haut a droite du tableau."
+            "💡 **Astuce :** Vous pouvez télécharger ces données en CSV via l'icone de telechargement "
+            "(⬇️) en haut à droite du tableau."
         ),
-        "build_costs.selected_structure": "Structure selectionnee",
-        "build_costs.empty_subheader": "Outil de Cout de Production WC Markets",
+        "build_costs.selected_structure": "Structure sélectionnée",
+        "build_costs.empty_subheader": "Outil de Coût de Production WC Markets",
         "build_costs.empty_description": (
-            "Selectionnez une categorie, un groupe et un objet dans la barre laterale pour calculer "
-            "le cout de production. Les resultats sont calcules pour toutes les structures de la base "
-            "et tries par cout total. Vous pouvez aussi comparer avec une structure precise et afficher "
-            "le detail des materiaux."
+            "Sélectionnez une catégorie, un groupe et un objet dans la barre latérale pour calculer "
+            "le coût de production. Les résultats sont calcules pour toutes les structures de la base "
+            "et triés par cout total. Vous pouvez aussi comparer avec une structure precise et afficher "
+            "le detail des matériaux."
         ),
         "build_costs.tool_description": """
     - <span style="font-weight: bold; color: orange;">Cycles :</span> Nombre de cycles a calculer.
@@ -1650,383 +1650,383 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
     - <span style="font-weight: bold; color: orange;">Competences :</span> Toutes les competences sont supposees au niveau 5.
     """,
         "build_costs.no_buildable_items": (
-            "Aucun objet constructible trouve pour le groupe {group_name}. Cela peut indiquer "
+            "Aucun objet constructible trouvé pour le groupe {group_name}. Cela peut indiquer "
             "qu'une table SDE comme `industryActivityProducts` manque. Essayez une synchronisation "
             "ou choisissez un autre groupe."
         ),
         "build_costs.load_items_error": "Impossible de charger les objets du groupe : {error}",
-        "build_costs.invalid_selected_item": "L'objet selectionne {item_name} n'est pas constructible",
-        "build_costs.item_not_found": "L'objet selectionne {item_name} est introuvable dans la base de types",
+        "build_costs.invalid_selected_item": "L'objet sélectionné {item_name} n'est pas constructible",
+        "build_costs.item_not_found": "L'objet sélectionné {item_name} est introuvable dans la base de types",
         "build_costs.invalid_item": "Objet invalide : {error}",
         "build_costs.select_valid_item": (
-            "L'objet selectionne {item_name} n'est pas constructible. Veuillez choisir un objet "
-            "valide dans la barre laterale."
+            "L'objet sélectionné {item_name} n'est pas constructible. Veuillez choisir un objet "
+            "valide dans la barre latérale."
         ),
         "build_costs.unknown_type": "Inconnu ({type_id})",
         "build_costs.special_group_sovereignty_hub": "Hub de souverainete",
         "build_costs.column_structure": "Structure",
         "build_costs.column_structure_help": "Nom de la structure.",
         "build_costs.column_structure_type": "Type",
-        "build_costs.column_units": "Unites",
-        "build_costs.column_units_help": "Nombre d'unites produites.",
-        "build_costs.column_total_cost": "Cout total",
-        "build_costs.column_total_cost_help": "Cout total pour produire ces unites.",
+        "build_costs.column_units": "Unités",
+        "build_costs.column_units_help": "Nombre d'unités produites.",
+        "build_costs.column_total_cost": "Coût total",
+        "build_costs.column_total_cost_help": "Coût total pour produire ces unités.",
         "build_costs.column_cost_per_unit": "Cout par unite",
-        "build_costs.column_cost_per_unit_help": "Cout de production par unite.",
-        "build_costs.column_material_cost": "Cout materiaux",
-        "build_costs.column_material_cost_help": "Cout total des materiaux.",
-        "build_costs.column_total_job_cost": "Cout total du job",
+        "build_costs.column_cost_per_unit_help": "Coût de production par unite.",
+        "build_costs.column_material_cost": "Cout matériaux",
+        "build_costs.column_material_cost_help": "Coût total des matériaux.",
+        "build_costs.column_total_job_cost": "Coût total du job",
         "build_costs.column_total_job_cost_help": (
-            "Cout total du job incluant taxe d'installation, surcharge SCC et indice systeme."
+            "Coût total du job incluant taxe d'installation, surcharge SCC et indice système."
         ),
         "build_costs.column_facility_tax": "Taxe d'installation",
-        "build_costs.column_facility_tax_help": "Cout de la taxe d'installation.",
+        "build_costs.column_facility_tax_help": "Coût de la taxe d'installation.",
         "build_costs.column_scc_surcharge": "Surcharge SCC",
-        "build_costs.column_scc_surcharge_help": "Cout de la surcharge SCC.",
+        "build_costs.column_scc_surcharge_help": "Coût de la surcharge SCC.",
         "build_costs.column_system_cost_index": "Indice de cout",
         "build_costs.column_rigs": "Rigs",
-        "build_costs.column_rigs_help": "Rigs installes sur la structure.",
-        "build_costs.column_comparison_cost": "Cout de comparaison",
-        "build_costs.column_comparison_cost_help": "Difference avec le cout total de la structure selectionnee.",
-        "build_costs.column_comparison_cost_per_unit": "Cout de comparaison par unite",
+        "build_costs.column_rigs_help": "Rigs installés sur la structure.",
+        "build_costs.column_comparison_cost": "Coût de comparaison",
+        "build_costs.column_comparison_cost_help": "Difference avec le cout total de la structure sélectionnée.",
+        "build_costs.column_comparison_cost_per_unit": "Coût de comparaison par unite",
         "build_costs.column_comparison_cost_per_unit_help": (
-            "Difference avec le cout par unite de la structure selectionnee."
+            "Difference avec le cout par unite de la structure sélectionnée."
         ),
-        "build_costs.column_material_help": "Nom du materiau requis.",
+        "build_costs.column_material_help": "Nom du matériau requis.",
         "build_costs.column_quantity": "Quantite",
-        "build_costs.column_quantity_help": "Quantite de materiau necessaire.",
+        "build_costs.column_quantity_help": "Quantite de matériau nécessaire.",
         "build_costs.column_volume_per_unit": "Volume/unite",
-        "build_costs.column_volume_per_unit_help": "Volume par unite de materiau (m3).",
+        "build_costs.column_volume_per_unit_help": "Volume par unite de matériau (m3).",
         "build_costs.column_total_volume": "Volume total",
-        "build_costs.column_total_volume_help": "Volume total de ce materiau (m3).",
+        "build_costs.column_total_volume_help": "Volume total de ce matériau (m3).",
         "build_costs.column_unit_price": "Prix unitaire",
-        "build_costs.column_unit_price_help": "Cout par unite de materiau (ISK).",
-        "build_costs.column_total_cost_materials_help": "Cout total pour ce materiau (ISK).",
+        "build_costs.column_unit_price_help": "Cout par unite de matériau (ISK).",
+        "build_costs.column_total_cost_materials_help": "Coût total pour ce matériau (ISK).",
         "build_costs.column_percent_total": "% du total",
-        "build_costs.column_percent_total_help": "Pourcentage du cout total des materiaux.",
+        "build_costs.column_percent_total_help": "Pourcentage du cout total des matériaux.",
     },
     "ru": {
-        "app.page_title": "Rynki WinterCo",
-        "app.language_label": "Yazyk",
-        "nav.section.market_stats": "Statistika rynka",
-        "nav.section.analysis_tools": "Instrumenty analiza",
-        "nav.section.data": "Dannye",
-        "nav.page.market_stats": "📈Statistika",
-        "nav.page.low_stock": "⚠️Nizkie zapasy",
-        "nav.page.import_helper": "📦Import pomoshchnik",
-        "nav.page.doctrine_status": "⚔️Status doktriny",
-        "nav.page.doctrine_report": "📝Otchet doktriny",
-        "nav.page.build_costs": "🏗️Stoimost proizvodstva",
-        "nav.page.pricer": "🏷️Ocenka",
-        "nav.page.downloads": "📥Zagruzki",
-        "doctrine_status.title": "Status doktriny {market_name}",
-        "doctrine_status.tab_market_stock": "Rynochnyy zapas",
-        "doctrine_status.tab_fit_details": "Detali fita",
-        "doctrine_status.low_stock_modules": "Moduli s nizkim zapasom",
-        "doctrine_status.no_fits": "V baze dannykh ne naideny fity doktriny.",
-        "doctrine_report.subtitle": "Status rynka {market_name} po doktrinam",
-        "doctrine_report.no_data": "Net dannykh dlya otobrazheniya",
-        "doctrine_report.metric_total_fits": "Vsego dostupnykh fitov",
-        "doctrine_report.metric_total_hulls": "Vsego korpusov",
-        "doctrine_report.metric_avg_target_pct": "Sredniy target %",
-        "doctrine_report.role_dps": "💥 **DPS** - Osnovnye DPS korabli",
-        "doctrine_report.role_logi": "🏥 **Logi** - Logisticheskie korabli",
-        "doctrine_report.role_links": "📡 **Links** - Komandnye korabli",
-        "doctrine_report.role_support": "🛠️ **Support** - EWAR, tackle i drugaya podderzhka",
-        "doctrine_report.stock_status": "Status zapasa",
+        "app.page_title": "Рынки WinterCo",
+        "app.language_label": "Язык",
+        "nav.section.market_stats": "Статистика рынка",
+        "nav.section.analysis_tools": "Инструменты анализа",
+        "nav.section.data": "Данные",
+        "nav.page.market_stats": "📈Статистика",
+        "nav.page.low_stock": "⚠️Низкие запасы",
+        "nav.page.import_helper": "📦Помощник импорта",
+        "nav.page.doctrine_status": "⚔️Статус доктрины",
+        "nav.page.doctrine_report": "📝Отчёт доктрины",
+        "nav.page.build_costs": "🏗️Стоимость производства",
+        "nav.page.pricer": "🏷️Оценка",
+        "nav.page.downloads": "📥Загрузки",
+        "doctrine_status.title": "Статус доктрины {market_name}",
+        "doctrine_status.tab_market_stock": "Рыночный запас",
+        "doctrine_status.tab_fit_details": "Детали фита",
+        "doctrine_status.low_stock_modules": "Модули с низким запасом",
+        "doctrine_status.no_fits": "В базе данных не найдены фиты доктрины.",
+        "doctrine_report.subtitle": "Статус рынка {market_name} по доктринам",
+        "doctrine_report.no_data": "Нет данных для отображения",
+        "doctrine_report.metric_total_fits": "Всего доступных фитов",
+        "doctrine_report.metric_total_hulls": "Всего корпусов",
+        "doctrine_report.metric_avg_target_pct": "Средний target %",
+        "doctrine_report.role_dps": "💥 **DPS** — Основные DPS корабли",
+        "doctrine_report.role_logi": "🏥 **Logi** — Логистические корабли",
+        "doctrine_report.role_links": "📡 **Links** — Командные корабли",
+        "doctrine_report.role_support": "🛠️ **Support** — EWAR, tackle и другая поддержка",
+        "doctrine_report.stock_status": "Статус запаса",
         "doctrine_report.stock_status_summary": (
-            "*Svodka po statusu trekh moduley s samym nizkim zapasom dlya kazhdogo korablya v vybrannoy "
-            "doktrine. Chisla v skobkakh pokazyvayut, skolko fitov podderzhivaet tekushchiy zapas. "
-            "Ispolzuyte flagi dlya vybora elementov dlya CSV.*"
+            "*Сводка по статусу трёх модулей с самым низким запасом для каждого корабля в выбранной "
+            "доктрине. Числа в скобках показывают, сколько фитов поддерживает текущий запас. "
+            "Используйте флажки для выбора элементов для CSV.*"
         ),
         "doctrine_report.fit_id": "Fit ID",
         "doctrine_report.target": "Target",
-        "doctrine_report.no_target_found": "Dlya etogo fita target ne naiden",
-        "doctrine_report.equivalent_stock_caption": "🔄 Zapas vklyuchaet ekvivalentnye moduli",
-        "doctrine_report.no_fits": "V baze dannykh ne naideny fity doktriny.",
-        "doctrine_report.select_doctrine": "Vyberite doktrinu",
-        "doctrine_report.target_multiplier": "Mnozhitel target",
+        "doctrine_report.no_target_found": "Для этого фита target не найден",
+        "doctrine_report.equivalent_stock_caption": "🔄 Запас включает эквивалентные модули",
+        "doctrine_report.no_fits": "В базе данных не найдены фиты доктрины.",
+        "doctrine_report.select_doctrine": "Выберите доктрину",
+        "doctrine_report.target_multiplier": "Множитель target",
         "doctrine_report.target_multiplier_help": (
-            "Etot mnozhitel primenyaetsya k target dlya kazhdogo fita, chtoby sdelat ego bolee ili menee agressivnym. "
-            "Znachenie po umolchaniyu 1.0."
+            "Этот множитель применяется к target для каждого фита, чтобы сделать его более или менее агрессивным. "
+            "Значение по умолчанию 1.0."
         ),
-        "doctrine_report.current_target_multiplier": "Tekushchiy mnozhitel target: {value}",
-        "doctrine_report.ship_image_not_available": "🚀 Izobrazhenie korablya nedostupno",
+        "doctrine_report.current_target_multiplier": "Текущий множитель target: {value}",
+        "doctrine_report.ship_image_not_available": "🚀 Изображение корабля недоступно",
         "doctrine_report.doctrine_id": "Doctrine ID: {doctrine_id}",
-        "doctrine_report.selected_items": "Vybrannye predmety",
-        "doctrine_report.modules_label": "Moduli:",
-        "doctrine_report.no_items_selected": "Net vybrannykh predmetov",
-        "doctrine_report.export_options": "Parametry eksporta",
-        "doctrine_report.download_csv": "📥 Skachat CSV",
-        "doctrine_report.clear_selection": "🗑️ Ochistit vybor",
+        "doctrine_report.selected_items": "Выбранные предметы",
+        "doctrine_report.modules_label": "Модули:",
+        "doctrine_report.no_items_selected": "Нет выбранных предметов",
+        "doctrine_report.export_options": "Параметры экспорта",
+        "doctrine_report.download_csv": "📥 Скачать CSV",
+        "doctrine_report.clear_selection": "🗑️ Очистить выбор",
         "doctrine_report.column_target_pct": "Target %",
         "doctrine_report.column_target": "Target",
-        "doctrine_report.column_target_help": "Kolichestvo fitov, neobkhodimykh v stock.",
-        "doctrine_report.column_daily_sales": "Dnevnye prodazhi",
-        "doctrine_report.column_daily_sales_help": "Srednie dnevnye prodazhi za poslednie 30 dney.",
-        "doctrine_report.column_group_help": "Gruppa korablya.",
-        "doctrine_report.column_ship": "Korabl",
-        "doctrine_report.column_ship_help": "Nazvanie korablya.",
-        "doctrine_report.column_ship_id_help": "ID tipa korablya.",
+        "doctrine_report.column_target_help": "Количество фитов, необходимых в stock.",
+        "doctrine_report.column_daily_sales": "Дневные продажи",
+        "doctrine_report.column_daily_sales_help": "Средние дневные продажи за последние 30 дней.",
+        "doctrine_report.column_group_help": "Группа корабля.",
+        "doctrine_report.column_ship": "Корабль",
+        "doctrine_report.column_ship_help": "Название корабля.",
+        "doctrine_report.column_ship_id_help": "ID типа корабля.",
         "doctrine_report.column_fit_id": "Fit ID",
-        "doctrine_report.column_fit_id_help": "ID fita doktriny.",
-        "doctrine_report.column_price_help": "Tsena korablya.",
-        "doctrine_report.column_total_cost": "Obshchaya stoimost",
-        "doctrine_report.column_total_cost_help": "Obshchaya stoimost fita.",
-        "common.market_hub": "Torgovyi uzel",
-        "common.select": "Vybor",
-        "common.type_id": "ID tipa",
-        "common.item": "Predmet",
-        "common.category": "Kategoriya",
-        "common.group": "Gruppa",
-        "common.price": "Cena",
-        "low_stock.title": "Nizkie zapasy {market_name}",
+        "doctrine_report.column_fit_id_help": "ID фита доктрины.",
+        "doctrine_report.column_price_help": "Цена корабля.",
+        "doctrine_report.column_total_cost": "Общая стоимость",
+        "doctrine_report.column_total_cost_help": "Общая стоимость фита.",
+        "common.market_hub": "Торговый узел",
+        "common.select": "Выбор",
+        "common.type_id": "ID типа",
+        "common.item": "Предмет",
+        "common.category": "Категория",
+        "common.group": "Группа",
+        "common.price": "Цена",
+        "low_stock.title": "Низкие запасы {market_name}",
         "low_stock.description": (
-            "Eta stranitsa pokazivaet predmety s nizkim zapasom na rynke. "
-            "**Days Remaining** pokazyvaet, na skolko dnei khvatit tekushchego zapasa. "
-            "**Used In Fits** pokazyvaet doktriny, ispolzuyushchie predmet."
+            "Эта страница показывает предметы с низким запасом на рынке. "
+            "**Days Remaining** показывает, на сколько дней хватит текущего запаса. "
+            "**Used In Fits** показывает доктрины, использующие предмет."
         ),
-        "low_stock.filters_header": "Filtry",
-        "low_stock.filters_help": "Ispolzuyte eti filtry dlya nastroiki vida.",
-        "low_stock.item_type_filters": "Filtry tipa predmeta",
-        "low_stock.doctrine_only": "Tolko predmety doktriny",
-        "low_stock.doctrine_only_help": "Pokazyvat tolko predmety, ispolzuemye v doktrine.",
-        "low_stock.tech2_only": "Tolko Tech II",
-        "low_stock.tech2_only_help": "Pokazyvat tolko predmety Tech II (metaGroupID=2).",
-        "low_stock.faction_only": "Tolko fraktsionnye",
-        "low_stock.faction_only_help": "Pokazyvat tolko fraktsionnye predmety (metaGroupID=4).",
-        "low_stock.category_filter": "Filtr kategorii",
-        "low_stock.select_categories": "Vyberite kategorii",
-        "low_stock.select_categories_help": "Vyberite odnu ili neskolko kategorii.",
-        "low_stock.doctrine_fit_filter": "Filtr doktriny/fita",
-        "low_stock.select_doctrine": "Vyberite doktrinu",
-        "low_stock.select_doctrine_help": "Pokazyvat tolko predmety opredelennoy doktriny.",
-        "low_stock.select_fit": "Vyberite fit",
-        "low_stock.select_fit_help": "Pokazyvat tolko predmety opredelennogo fita.",
-        "low_stock.days_filter": "Filtr ostavshikhsya dnei",
-        "low_stock.max_days_remaining": "Maksimum dnei",
-        "low_stock.max_days_remaining_help": "Pokazyvat tolko predmety s dnyami ne vyshe etogo znacheniya.",
-        "low_stock.metric_critical": "Kriticheskie predmety (≤3 dnya)",
-        "low_stock.metric_low": "Nizkiy zapas (3-7 dnei)",
-        "low_stock.metric_total": "Vsego posle filtra",
-        "low_stock.subheader_fit": "Nizkiy zapas: {ship_name}",
-        "low_stock.subheader_doctrine": "Nizkiy zapas: {doctrine_name}",
-        "low_stock.subheader_all": "Predmety s nizkim zapasom",
-        "low_stock.column_select_help": "Otmette predmety dlya CSV eksportа.",
-        "low_stock.column_item_help": "Nazvanie predmeta.",
-        "low_stock.column_volume_remaining": "Ostavshiysya obyem",
-        "low_stock.column_volume_remaining_help": "Obshchee kolichestvo, dostupnoe na rynke.",
-        "low_stock.column_fits": "Fity",
-        "low_stock.column_fits_help": "Skolko fitov mozhno sobrat iz etogo zapasa.",
-        "low_stock.column_days": "Dni",
-        "low_stock.column_days_help": "Ostavshiesya dni po istoricheskomu srednemu oborotu.",
-        "low_stock.column_avg_vol": "Sredniy obem",
-        "low_stock.column_avg_vol_help": "Sredniy oborot za 30 dnei.",
-        "low_stock.column_used_in_fits": "Ispolzuetsya v fitakh",
-        "low_stock.column_used_in_fits_help": "Doktrinnye korabli, ispolzuyushchie etot predmet.",
-        "low_stock.column_category_help": "Kategoriya predmeta.",
-        "low_stock.column_group_help": "Gruppa predmeta.",
-        "low_stock.selected_items": "Vybrano predmetov: {count}. Otkroyte **Downloads** dlya CSV eksportov.",
-        "low_stock.chart_section": "Ostavshiesya dni po predmetam",
-        "low_stock.chart_title": "Dni ostavshegosya zapasa",
-        "low_stock.chart_days_label": "Dni",
-        "low_stock.chart_critical_level": "Kriticheskiy uroven (3 dnya)",
-        "import_helper.title": "Pomoshchnik importa {market_name}",
+        "low_stock.filters_header": "Фильтры",
+        "low_stock.filters_help": "Используйте эти фильтры для настройки вида.",
+        "low_stock.item_type_filters": "Фильтры типа предмета",
+        "low_stock.doctrine_only": "Только предметы доктрины",
+        "low_stock.doctrine_only_help": "Показывать только предметы, используемые в доктрине.",
+        "low_stock.tech2_only": "Только Tech II",
+        "low_stock.tech2_only_help": "Показывать только предметы Tech II (metaGroupID=2).",
+        "low_stock.faction_only": "Только фракционные",
+        "low_stock.faction_only_help": "Показывать только фракционные предметы (metaGroupID=4).",
+        "low_stock.category_filter": "Фильтр категории",
+        "low_stock.select_categories": "Выберите категории",
+        "low_stock.select_categories_help": "Выберите одну или несколько категорий.",
+        "low_stock.doctrine_fit_filter": "Фильтр доктрины/фита",
+        "low_stock.select_doctrine": "Выберите доктрину",
+        "low_stock.select_doctrine_help": "Показывать только предметы определённой доктрины.",
+        "low_stock.select_fit": "Выберите фит",
+        "low_stock.select_fit_help": "Показывать только предметы определённого фита.",
+        "low_stock.days_filter": "Фильтр оставшихся дней",
+        "low_stock.max_days_remaining": "Максимум дней",
+        "low_stock.max_days_remaining_help": "Показывать только предметы с днями не выше этого значения.",
+        "low_stock.metric_critical": "Критические предметы (≤3 дня)",
+        "low_stock.metric_low": "Низкий запас (3-7 дней)",
+        "low_stock.metric_total": "Всего после фильтра",
+        "low_stock.subheader_fit": "Низкий запас: {ship_name}",
+        "low_stock.subheader_doctrine": "Низкий запас: {doctrine_name}",
+        "low_stock.subheader_all": "Предметы с низким запасом",
+        "low_stock.column_select_help": "Отметьте предметы для CSV экспорта.",
+        "low_stock.column_item_help": "Название предмета.",
+        "low_stock.column_volume_remaining": "Оставшийся объём",
+        "low_stock.column_volume_remaining_help": "Общее количество, доступное на рынке.",
+        "low_stock.column_fits": "Фиты",
+        "low_stock.column_fits_help": "Сколько фитов можно собрать из этого запаса.",
+        "low_stock.column_days": "Дни",
+        "low_stock.column_days_help": "Оставшиеся дни по историческому среднему обороту.",
+        "low_stock.column_avg_vol": "Средний объём",
+        "low_stock.column_avg_vol_help": "Средний оборот за 30 дней.",
+        "low_stock.column_used_in_fits": "Используется в фитах",
+        "low_stock.column_used_in_fits_help": "Доктринные корабли, использующие этот предмет.",
+        "low_stock.column_category_help": "Категория предмета.",
+        "low_stock.column_group_help": "Группа предмета.",
+        "low_stock.selected_items": "Выбрано предметов: {count}. Откройте **Downloads** для CSV экспортов.",
+        "low_stock.chart_section": "Оставшиеся дни по предметам",
+        "low_stock.chart_title": "Дни оставшегося запаса",
+        "low_stock.chart_days_label": "Дни",
+        "low_stock.chart_critical_level": "Критический уровень (3 дня)",
+        "import_helper.title": "Помощник импорта {market_name}",
         "import_helper.description": (
-            "Naydite predmety, gde lokalnaya tsena znachitelno vyshe Jita sell. "
-            "Pribyl za 30 dnei schitaetsya kak "
-            "`(Lokalnaya tsena - Jita Sell) * sredniy dnevnoi oborot * 30`."
+            "Найдите предметы, где локальная цена значительно выше Jita sell. "
+            "Прибыль за 30 дней считается как "
+            "`(Локальная цена - Jita Sell) * средний дневной оборот * 30`."
         ),
-        "import_helper.filters_header": "Filtry",
-        "import_helper.categories": "Kategorii",
-        "import_helper.categories_help": "Ogranichit tablitsu odnoi ili neskolkimi kategoriyami.",
-        "import_helper.search_items": "Poisk predmetov",
-        "import_helper.search_items_help": "Filtr po imeni bez ucheta registra.",
-        "import_helper.profitable_only": "Tolko s pribylyu",
-        "import_helper.profitable_only_help": "Skryt predmety, gde lokalnaya tsena ne vyshe Jita sell.",
-        "import_helper.min_capital_utilis": "Minimalnyy Capital Utilis",
-        "import_helper.min_capital_utilis_help": "0.10 oznachaet minimum 10% posle dostavki.",
-        "import_helper.min_turnover_30d": "Minimalnyy oborot za 30 dnei",
-        "import_helper.min_turnover_30d_help": "Skryt predmety s oborotom nizhe etogo znacheniya.",
-        "import_helper.shipping_cost_per_m3": "Stoimost dostavki za m3",
+        "import_helper.filters_header": "Фильтры",
+        "import_helper.categories": "Категории",
+        "import_helper.categories_help": "Ограничить таблицу одной или несколькими категориями.",
+        "import_helper.search_items": "Поиск предметов",
+        "import_helper.search_items_help": "Фильтр по имени без учёта регистра.",
+        "import_helper.profitable_only": "Только с прибылью",
+        "import_helper.profitable_only_help": "Скрыть предметы, где локальная цена не выше Jita sell.",
+        "import_helper.min_capital_utilis": "Минимальный Capital Utilis",
+        "import_helper.min_capital_utilis_help": "0.10 означает минимум 10% после доставки.",
+        "import_helper.min_turnover_30d": "Минимальный оборот за 30 дней",
+        "import_helper.min_turnover_30d_help": "Скрыть предметы с оборотом ниже этого значения.",
+        "import_helper.shipping_cost_per_m3": "Стоимость доставки за m3",
         "import_helper.shipping_cost_per_m3_help": (
-            "Ispolzuetsya dlya rascheta dostavki. Znachenie po umolchaniyu beretsya iz settings.toml."
+            "Используется для расчёта доставки. Значение по умолчанию берётся из settings.toml."
         ),
-        "import_helper.markup_margin": "Natsenka",
-        "import_helper.markup_margin_help": "Ispolzuetsya dlya RRP. 0.20 oznachaet 20% vyshe Jita sell.",
-        "import_helper.metric_total_items": "Vsego predmetov",
-        "import_helper.metric_profitable_items": "Pribylnye predmety",
-        "import_helper.metric_avg_capital_utilis": "Sredniy Capital Utilis",
-        "import_helper.column_item_help": "Lokalizovannoe nazvanie predmeta, esli dostupno.",
-        "import_helper.column_rrp_help": "Rekomenduemaya tsena na osnove Jita sell i natsenki.",
-        "import_helper.column_jita_sell_help": "Tsena prodazhi Jita.",
-        "import_helper.column_jita_buy_help": "Tsena pokupki Jita.",
+        "import_helper.markup_margin": "Наценка",
+        "import_helper.markup_margin_help": "Используется для RRP. 0.20 означает 20% выше Jita sell.",
+        "import_helper.metric_total_items": "Всего предметов",
+        "import_helper.metric_profitable_items": "Прибыльные предметы",
+        "import_helper.metric_avg_capital_utilis": "Средний Capital Utilis",
+        "import_helper.column_item_help": "Локализованное название предмета, если доступно.",
+        "import_helper.column_rrp_help": "Рекомендуемая цена на основе Jita sell и наценки.",
+        "import_helper.column_jita_sell_help": "Цена продажи Jita.",
+        "import_helper.column_jita_buy_help": "Цена покупки Jita.",
         "import_helper.column_shipping_help": (
-            "Schitaetsya kak obyem v m3 umnozhennyy na {shipping_cost_per_m3}."
+            "Считается как объём в m3 умноженный на {shipping_cost_per_m3}."
         ),
-        "import_helper.column_profit_30d_help": "Raschet pribyli za 30 dnei.",
-        "import_helper.column_turnover_30d_help": "Oborot za 30 dnei po tsene Jita sell.",
-        "import_helper.column_volume_30d_help": "Sredniy oborot v den, umnozhennyy na 30.",
-        "import_helper.column_capital_utilis_help": "Effektivnost ispolzovaniya kapitala posle dostavki.",
+        "import_helper.column_profit_30d_help": "Расчёт прибыли за 30 дней.",
+        "import_helper.column_turnover_30d_help": "Оборот за 30 дней по цене Jita sell.",
+        "import_helper.column_volume_30d_help": "Средний оборот в день, умноженный на 30.",
+        "import_helper.column_capital_utilis_help": "Эффективность использования капитала после доставки.",
         "import_helper.column_rrp": "RRP",
         "import_helper.column_jita_sell": "Jita Sell",
         "import_helper.column_jita_buy": "Jita Buy",
-        "import_helper.column_shipping": "Dostavka",
-        "import_helper.column_profit_30d": "Pribyl 30d",
-        "import_helper.column_turnover_30d": "Oborot 30d",
-        "import_helper.column_volume_30d": "Obem 30d",
+        "import_helper.column_shipping": "Доставка",
+        "import_helper.column_profit_30d": "Прибыль 30д",
+        "import_helper.column_turnover_30d": "Оборот 30д",
+        "import_helper.column_volume_30d": "Объём 30д",
         "import_helper.column_capital_utilis": "Capital Utilis",
-        "build_costs.title": "Instrument stoimosti proizvodstva",
-        "build_costs.category_label": "Vyberite kategoriyu",
-        "build_costs.category_placeholder": "Korabl",
-        "build_costs.category_help": "Vyberite kategoriyu dlya filtra grupp i predmetov.",
-        "build_costs.group_label": "Vyberite gruppu",
-        "build_costs.item_label": "Vyberite predmet",
-        "build_costs.runs_label": "Progonov",
+        "build_costs.title": "Инструмент стоимости производства",
+        "build_costs.category_label": "Выберите категорию",
+        "build_costs.category_placeholder": "Корабль",
+        "build_costs.category_help": "Выберите категорию для фильтра групп и предметов.",
+        "build_costs.group_label": "Выберите группу",
+        "build_costs.item_label": "Выберите предмет",
+        "build_costs.runs_label": "Прогонов",
         "build_costs.me_label": "ME",
         "build_costs.te_label": "TE",
-        "build_costs.material_price_source_label": "Vyberite istochnik tsen materialov",
+        "build_costs.material_price_source_label": "Выберите источник цен материалов",
         "build_costs.material_price_source_help": (
-            "Istochnik tsen materialov dlya rascheta. ESI Average eto srednyaya tsena CCP v "
-            "okne proizvodstva, Jita Sell eto minimalnaya tsena prodazhi v Jita, a Jita Buy "
-            "eto maksimalnaya tsena pokupki v Jita."
+            "Источник цен материалов для расчёта. ESI Average — это средняя цена CCP в "
+            "окне производства, Jita Sell — минимальная цена продажи в Jita, а Jita Buy "
+            "— максимальная цена покупки в Jita."
         ),
-        "build_costs.price_source_esi_average": "Srednyaya ESI",
-        "build_costs.price_source_jita_sell": "Prodazha Jita",
-        "build_costs.price_source_jita_buy": "Pokupka Jita",
-        "build_costs.structure_compare_expander": "Vyberite strukturu dlya sravneniya (neobyazatelno)",
-        "build_costs.structure_compare_label": "Struktury",
-        "build_costs.structure_compare_placeholder": "Vse struktury",
+        "build_costs.price_source_esi_average": "Средняя ESI",
+        "build_costs.price_source_jita_sell": "Продажа Jita",
+        "build_costs.price_source_jita_buy": "Покупка Jita",
+        "build_costs.structure_compare_expander": "Выберите структуру для сравнения (необязательно)",
+        "build_costs.structure_compare_label": "Структуры",
+        "build_costs.structure_compare_placeholder": "Все структуры",
         "build_costs.structure_compare_help": (
-            "Vyberite strukturu dlya sravneniya stoimosti proizvodstva. Ostavte pustym, chtoby "
-            "pokazat vse struktury."
+            "Выберите структуру для сравнения стоимости производства. Оставьте пустым, чтобы "
+            "показать все структуры."
         ),
         "build_costs.parameters_changed": (
-            "⚠️ Parametry izmenilis. Nazhmitie 'Pereschitat' obnovit rezultaty."
+            "⚠️ Параметры изменились. Нажмите «Пересчитать» для обновления результатов."
         ),
-        "build_costs.calculate": "Rasschitat",
-        "build_costs.recalculate": "Pereschitat",
-        "build_costs.calculate_help": "Nazhmitie rasschityvaet stoimost dlya vybrannogo predmeta.",
-        "build_costs.industry_indexes_last_updated": "Promyshlennye indeksy obnovleny: {timestamp}",
-        "build_costs.progress_start": "Poluchenie dannykh iz {total} struktur...",
-        "build_costs.progress_fetching": "Poluchenie {current} iz {total} struktur: {structure}",
+        "build_costs.calculate": "Рассчитать",
+        "build_costs.recalculate": "Пересчитать",
+        "build_costs.calculate_help": "Нажмите для расчёта стоимости выбранного предмета.",
+        "build_costs.industry_indexes_last_updated": "Промышленные индексы обновлены: {timestamp}",
+        "build_costs.progress_start": "Получение данных из {total} структур...",
+        "build_costs.progress_fetching": "Получение {current} из {total} структур: {structure}",
         "build_costs.no_results": (
-            "Rezultatov net. Veroyatno, est problema s vneshnim API promyshlennykh dannykh. "
-            "Poprobuyte pozzhe."
+            "Результатов нет. Вероятно, есть проблема с внешним API промышленных данных. "
+            "Попробуйте позже."
         ),
-        "build_costs.header": "Stoimost proizvodstva dlya {item_name}",
+        "build_costs.header": "Стоимость производства для {item_name}",
         "build_costs.summary": (
-            "Stoimost proizvodstva dlya {item_name}: {runs} progonov, {me} ME, {te} TE, "
-            "istochnik tsen materialov {price_source} (type_id: {type_id})"
+            "Стоимость производства для {item_name}: {runs} прогонов, {me} ME, {te} TE, "
+            "источник цен материалов {price_source} (type_id: {type_id})"
         ),
-        "build_costs.metric_build_cost_per_unit": "Stoimost za edinitsu",
-        "build_costs.metric_build_cost_per_unit_help": "Na osnove samoy deshevoy struktury: {structure}",
-        "build_costs.metric_total_build_cost": "Obshchaya stoimost proizvodstva",
-        "build_costs.materials_job_cost": "**Materialy:** {materials} ISK | **Stoimost raboty:** {job_cost} ISK",
+        "build_costs.metric_build_cost_per_unit": "Стоимость за единицу",
+        "build_costs.metric_build_cost_per_unit_help": "На основе самой дешёвой структуры: {structure}",
+        "build_costs.metric_total_build_cost": "Общая стоимость производства",
+        "build_costs.materials_job_cost": "**Материалы:** {materials} ISK | **Стоимость работы:** {job_cost} ISK",
         "build_costs.market_price_summary": (
-            "**Tsena {market_name}:** <span style='color: orange;'>{price} ISK</span> "
-            "(pribyl: {profit} ISK | {margin}%)"
+            "**Цена {market_name}:** <span style='color: orange;'>{price} ISK</span> "
+            "(прибыль: {profit} ISK | {margin}%)"
         ),
-        "build_costs.no_market_price": "Dannye o tsene {market_name} dlya etogo predmeta ne naideny",
+        "build_costs.no_market_price": "Данные о цене {market_name} для этого предмета не найдены",
         "build_costs.jita_price_summary": (
-            "**Tsena Jita:** <span style='color: orange;'>{price} ISK</span> "
-            "(pribyl: {profit} ISK | {margin}%)"
+            "**Цена Jita:** <span style='color: orange;'>{price} ISK</span> "
+            "(прибыль: {profit} ISK | {margin}%)"
         ),
-        "build_costs.no_jita_price": "Dannye o tsene Jita dlya etogo predmeta ne naideny",
+        "build_costs.no_jita_price": "Данные о цене Jita для этого предмета не найдены",
         "build_costs.super_note": (
-            "<span style=\"font-weight: bold;\">Primechanie:</span> "
-            "<span style=\"color: orange;\">Pokazany tolko struktury, nastroennye dlya "
-            "stroitelstva supercapital.</span>"
+            "<span style=\"font-weight: bold;\">Примечание:</span> "
+            "<span style=\"color: orange;\">Показаны только структуры, настроенные для "
+            "строительства supercapital.</span>"
         ),
-        "build_costs.material_breakdown": "Razbor materialov",
-        "build_costs.material_breakdown_for_structure": "Razbor materialov: {structure}",
-        "build_costs.material_breakdown_selector": "Vyberite strukturu dlya prosmotra materialov",
+        "build_costs.material_breakdown": "Разбор материалов",
+        "build_costs.material_breakdown_for_structure": "Разбор материалов: {structure}",
+        "build_costs.material_breakdown_selector": "Выберите структуру для просмотра материалов",
         "build_costs.material_breakdown_selector_help": (
-            "Vyberite strukturu, chtoby uvidet podrobnye kolichestva i stoimost materialov."
+            "Выберите структуру, чтобы увидеть подробные количества и стоимость материалов."
         ),
-        "build_costs.material_breakdown_missing": "Dannye po strukture ne naideny: {structure}",
+        "build_costs.material_breakdown_missing": "Данные по структуре не найдены: {structure}",
         "build_costs.material_breakdown_summary": (
-            "Stoimost materialov dlya {item}: <span style='color: orange;'>**{cost} ISK**</span> "
+            "Стоимость материалов для {item}: <span style='color: orange;'>**{cost} ISK**</span> "
             "(*{volume} m3*) - {price_source}"
         ),
         "build_costs.material_breakdown_tip": (
-            "💡 **Sovet:** Eti dannye mozhno skachat v CSV cherez ikonku zagruzki (⬇️) v pravom "
-            "verkhnem uglu tablitsy."
+            "💡 **Совет:** Эти данные можно скачать в CSV через иконку загрузки (⬇️) в правом "
+            "верхнем углу таблицы."
         ),
-        "build_costs.selected_structure": "Vybrannaya struktura",
-        "build_costs.empty_subheader": "Instrument stoimosti proizvodstva WC Markets",
+        "build_costs.selected_structure": "Выбранная структура",
+        "build_costs.empty_subheader": "Инструмент стоимости производства WC Markets",
         "build_costs.empty_description": (
-            "Vyberite kategoriyu, gruppu i predmet na bokovoy paneli, chtoby rasschitat stoimost "
-            "proizvodstva. Rezultaty schitayutsya dlya vsekh struktur v baze i sortiruyutsya po "
-            "obshchey stoimosti. Takzhe mozhno sravnit s konkretnoy strukturoy i posmotret razbor "
-            "materialov."
+            "Выберите категорию, группу и предмет на боковой панели, чтобы рассчитать стоимость "
+            "производства. Результаты считаются для всех структур в базе и сортируются по "
+            "общей стоимости. Также можно сравнить с конкретной структурой и посмотреть разбор "
+            "материалов."
         ),
         "build_costs.tool_description": """
-    - <span style="font-weight: bold; color: orange;">Progonov:</span> Kolichestvo progonov dlya rascheta.
-    - <span style="font-weight: bold; color: orange;">ME:</span> Materialnaya effektivnost chertezha. (po umolchaniyu 0)
-    - <span style="font-weight: bold; color: orange;">TE:</span> Vremennaya effektivnost chertezha. (po umolchaniyu 0)
-    - <span style="font-weight: bold; color: orange;">Istochnik tsen materialov:</span> Istochnik tsen, ispolzuemykh v raschetakh.
-        - *Srednyaya ESI* - srednyaya tsena CCP v okne proizvodstva.
-        - *Prodazha Jita* - minimalnaya tsena prodazhi v Jita.
-        - *Pokupka Jita* - maksimalnaya tsena pokupki v Jita.
-    - <span style="font-weight: bold; color: orange;">Struktura:</span> Struktura dlya sravneniya stoimosti. (neobyazatelno)
-    - <span style="font-weight: bold; color: orange;">Navyki:</span> Predpolagaetsya, chto vse navyki na urovne 5.
+    - <span style="font-weight: bold; color: orange;">Прогонов:</span> Количество прогонов для расчёта.
+    - <span style="font-weight: bold; color: orange;">ME:</span> Материальная эффективность чертежа. (по умолчанию 0)
+    - <span style="font-weight: bold; color: orange;">TE:</span> Временная эффективность чертежа. (по умолчанию 0)
+    - <span style="font-weight: bold; color: orange;">Источник цен материалов:</span> Источник цен, используемых в расчётах.
+        - *Средняя ESI* — средняя цена CCP в окне производства.
+        - *Продажа Jita* — минимальная цена продажи в Jita.
+        - *Покупка Jita* — максимальная цена покупки в Jita.
+    - <span style="font-weight: bold; color: orange;">Структура:</span> Структура для сравнения стоимости. (необязательно)
+    - <span style="font-weight: bold; color: orange;">Навыки:</span> Предполагается, что все навыки на уровне 5.
     """,
         "build_costs.no_buildable_items": (
-            "Dlya gruppy {group_name} ne naideno proizvodimykh predmetov. Vozmozhno, otsutstvuet "
-            "tablitsa SDE, naprimer `industryActivityProducts`. Poprobuyte sinkhronizatsiyu ili "
-            "vyberite druguyu gruppu."
+            "Для группы {group_name} не найдено производимых предметов. Возможно, отсутствует "
+            "таблица SDE, например `industryActivityProducts`. Попробуйте синхронизацию или "
+            "выберите другую группу."
         ),
-        "build_costs.load_items_error": "Ne udalos zagruzit predmety dlya gruppy: {error}",
-        "build_costs.invalid_selected_item": "Vybrannyy predmet {item_name} nelzya proizvodit",
-        "build_costs.item_not_found": "Vybrannyy predmet {item_name} ne naiden v baze tipov",
-        "build_costs.invalid_item": "Nekorrektnyy predmet: {error}",
+        "build_costs.load_items_error": "Не удалось загрузить предметы для группы: {error}",
+        "build_costs.invalid_selected_item": "Выбранный предмет {item_name} нельзя производить",
+        "build_costs.item_not_found": "Выбранный предмет {item_name} не найден в базе типов",
+        "build_costs.invalid_item": "Некорректный предмет: {error}",
         "build_costs.select_valid_item": (
-            "Vybrannyy predmet {item_name} nelzya proizvodit. Pozhaluysta, vyberite korrektnyy "
-            "predmet na bokovoy paneli."
+            "Выбранный предмет {item_name} нельзя производить. Пожалуйста, выберите корректный "
+            "предмет на боковой панели."
         ),
-        "build_costs.unknown_type": "Neizvestno ({type_id})",
-        "build_costs.special_group_sovereignty_hub": "Tsentr suvereniteta",
-        "build_costs.column_structure": "Struktura",
-        "build_costs.column_structure_help": "Nazvanie struktury.",
-        "build_costs.column_structure_type": "Tip",
-        "build_costs.column_units": "Edinitsy",
-        "build_costs.column_units_help": "Kolichestvo proizvedennykh edinits.",
-        "build_costs.column_total_cost": "Obshchaya stoimost",
-        "build_costs.column_total_cost_help": "Obshchaya stoimost proizvodstva etikh edinits.",
-        "build_costs.column_cost_per_unit": "Stoimost za edinitsu",
-        "build_costs.column_cost_per_unit_help": "Stoimost proizvodstva odnoi edinitsy.",
-        "build_costs.column_material_cost": "Stoimost materialov",
-        "build_costs.column_material_cost_help": "Obshchaya stoimost materialov.",
-        "build_costs.column_total_job_cost": "Obshchaya stoimost raboty",
+        "build_costs.unknown_type": "Неизвестно ({type_id})",
+        "build_costs.special_group_sovereignty_hub": "Центр суверенитета",
+        "build_costs.column_structure": "Структура",
+        "build_costs.column_structure_help": "Название структуры.",
+        "build_costs.column_structure_type": "Тип",
+        "build_costs.column_units": "Единицы",
+        "build_costs.column_units_help": "Количество произведённых единиц.",
+        "build_costs.column_total_cost": "Общая стоимость",
+        "build_costs.column_total_cost_help": "Общая стоимость производства этих единиц.",
+        "build_costs.column_cost_per_unit": "Стоимость за единицу",
+        "build_costs.column_cost_per_unit_help": "Стоимость производства одной единицы.",
+        "build_costs.column_material_cost": "Стоимость материалов",
+        "build_costs.column_material_cost_help": "Общая стоимость материалов.",
+        "build_costs.column_total_job_cost": "Общая стоимость работы",
         "build_costs.column_total_job_cost_help": (
-            "Obshchaya stoimost raboty, vklyuchaya nalog sooruzheniya, sbor SCC i indeks sistemy."
+            "Общая стоимость работы, включая налог сооружения, сбор SCC и индекс системы."
         ),
-        "build_costs.column_facility_tax": "Nalog sooruzheniya",
-        "build_costs.column_facility_tax_help": "Stoimost naloga sooruzheniya.",
-        "build_costs.column_scc_surcharge": "Sbor SCC",
-        "build_costs.column_scc_surcharge_help": "Stoimost sbora SCC.",
-        "build_costs.column_system_cost_index": "Indeks stoimosti",
-        "build_costs.column_rigs": "Rigi",
-        "build_costs.column_rigs_help": "Rigi, ustanovlennye na strukture.",
-        "build_costs.column_comparison_cost": "Sravnitelnaya stoimost",
-        "build_costs.column_comparison_cost_help": "Raznitsa s obshchey stoimostyu vybrannoy struktury.",
-        "build_costs.column_comparison_cost_per_unit": "Sravnitelnaya stoimost za edinitsu",
+        "build_costs.column_facility_tax": "Налог сооружения",
+        "build_costs.column_facility_tax_help": "Стоимость налога сооружения.",
+        "build_costs.column_scc_surcharge": "Сбор SCC",
+        "build_costs.column_scc_surcharge_help": "Стоимость сбора SCC.",
+        "build_costs.column_system_cost_index": "Индекс стоимости",
+        "build_costs.column_rigs": "Риги",
+        "build_costs.column_rigs_help": "Риги, установленные на структуре.",
+        "build_costs.column_comparison_cost": "Сравнительная стоимость",
+        "build_costs.column_comparison_cost_help": "Разница с общей стоимостью выбранной структуры.",
+        "build_costs.column_comparison_cost_per_unit": "Сравнительная стоимость за единицу",
         "build_costs.column_comparison_cost_per_unit_help": (
-            "Raznitsa so stoimostyu za edinitsu vybrannoy struktury."
+            "Разница со стоимостью за единицу выбранной структуры."
         ),
-        "build_costs.column_material_help": "Nazvanie trebuemogo materiala.",
-        "build_costs.column_quantity": "Kolichestvo",
-        "build_costs.column_quantity_help": "Trebuemoe kolichestvo materiala.",
-        "build_costs.column_volume_per_unit": "Obem/edinitsa",
-        "build_costs.column_volume_per_unit_help": "Obem na edinitsu materiala (m3).",
-        "build_costs.column_total_volume": "Obshchiy obem",
-        "build_costs.column_total_volume_help": "Obshchiy obem etogo materiala (m3).",
-        "build_costs.column_unit_price": "Tsena za edinitsu",
-        "build_costs.column_unit_price_help": "Stoimost edinitsy materiala (ISK).",
-        "build_costs.column_total_cost_materials_help": "Obshchaya stoimost etogo materiala (ISK).",
-        "build_costs.column_percent_total": "% ot itoga",
-        "build_costs.column_percent_total_help": "Dolya v obshchey stoimosti materialov.",
+        "build_costs.column_material_help": "Название требуемого материала.",
+        "build_costs.column_quantity": "Количество",
+        "build_costs.column_quantity_help": "Требуемое количество материала.",
+        "build_costs.column_volume_per_unit": "Объём/единица",
+        "build_costs.column_volume_per_unit_help": "Объём на единицу материала (m3).",
+        "build_costs.column_total_volume": "Общий объём",
+        "build_costs.column_total_volume_help": "Общий объём этого материала (m3).",
+        "build_costs.column_unit_price": "Цена за единицу",
+        "build_costs.column_unit_price_help": "Стоимость единицы материала (ISK).",
+        "build_costs.column_total_cost_materials_help": "Общая стоимость этого материала (ISK).",
+        "build_costs.column_percent_total": "% от итога",
+        "build_costs.column_percent_total_help": "Доля в общей стоимости материалов.",
     },
     "es": {
         "app.page_title": "Mercados WinterCo",
@@ -2295,7 +2295,29 @@ def get_language_label(language_code: str) -> str:
 
 
 def translate_text(language_code: str, key: str, **kwargs) -> str:
-    """Translate a UI string with English fallback."""
+    """Translate a UI string with English fallback.
+
+    Raises no exceptions — a typo in any translation template
+    falls back to the English template, then to the raw key.
+    """
     language_map = TRANSLATIONS.get(language_code, {})
-    template = language_map.get(key) or TRANSLATIONS[DEFAULT_LANGUAGE].get(key) or key
-    return template.format(**kwargs)
+    template = language_map.get(key)
+    if template is None:
+        template = TRANSLATIONS[DEFAULT_LANGUAGE].get(key)
+    if template is None:
+        template = key
+    try:
+        return template.format(**kwargs)
+    except (KeyError, IndexError):
+        import logging
+
+        logging.getLogger(__name__).debug(
+            "Translation format error for key=%r lang=%s, falling back to English",
+            key,
+            language_code,
+        )
+        en_template = TRANSLATIONS[DEFAULT_LANGUAGE].get(key, key)
+        try:
+            return en_template.format(**kwargs)
+        except (KeyError, IndexError):
+            return key
