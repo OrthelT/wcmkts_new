@@ -1,9 +1,11 @@
 import requests
-from state import ss_init
+from state import get_active_language, ss_init
 from ui.market_selector import render_market_selector
 from init_db import ensure_market_db_ready
 from ui.formatters import display_build_cost_tool_description
+from ui.i18n import translate_text
 from services import get_jita_price, get_type_resolution_service
+from services.type_name_localization import get_localized_name_map
 from repositories import get_sde_repository, get_market_repository
 from repositories.build_cost_repo import get_build_cost_repository
 from services.build_cost_service import (
@@ -26,6 +28,12 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 logger = setup_logging(__name__)
 
+PRICE_SOURCE_TRANSLATION_KEYS = {
+    "ESI Average": "build_costs.price_source_esi_average",
+    "Jita Sell": "build_costs.price_source_jita_sell",
+    "Jita Buy": "build_costs.price_source_jita_buy",
+}
+
 
 # =============================================================================
 # UI Helpers
@@ -44,7 +52,31 @@ def is_valid_image_url(url: str) -> bool:
         return False
 
 
-def display_data(df: pd.DataFrame, selected_structure: str | None = None):
+def _get_price_source_label(price_source: str, language_code: str) -> str:
+    key = PRICE_SOURCE_TRANSLATION_KEYS.get(price_source)
+    return translate_text(language_code, key) if key else price_source
+
+
+def _format_progress_text(current: int, total: int, message: str, language_code: str) -> str:
+    if current == 0:
+        return translate_text(language_code, "build_costs.progress_start", total=total)
+
+    if ": " in message:
+        _, structure_name = message.split(": ", 1)
+        return translate_text(
+            language_code,
+            "build_costs.progress_fetching",
+            current=current,
+            total=total,
+            structure=structure_name,
+        )
+
+    return message
+
+
+def display_data(
+    df: pd.DataFrame, language_code: str, selected_structure: str | None = None
+):
     if selected_structure:
         selected_structure_df = df[df.index == selected_structure]
         selected_total_cost = selected_structure_df["total_cost"].values[0]
@@ -52,13 +84,15 @@ def display_data(df: pd.DataFrame, selected_structure: str | None = None):
             "total_cost_per_unit"
         ].values[0]
         st.markdown(
-            f"**Selected structure:** <span style='color: orange;'>{
-                selected_structure
-            }</span> <br>    *Total cost:* <span style='color: orange;'>{
-                millify(selected_total_cost, precision=2)
-            }</span> <br>    *Cost per unit:* <span style='color: orange;'>{
-                millify(selected_total_cost_per_unit, precision=2)
-            }</span>",
+            (
+                f"**{translate_text(language_code, 'build_costs.selected_structure')}:** "
+                f"<span style='color: orange;'>{selected_structure}</span> <br>"
+                f"*{translate_text(language_code, 'build_costs.column_total_cost')}:* "
+                f"<span style='color: orange;'>{millify(selected_total_cost, precision=2)}</span> <br>"
+                f"*{translate_text(language_code, 'build_costs.column_cost_per_unit')}:* "
+                f"<span style='color: orange;'>"
+                f"{millify(selected_total_cost_per_unit, precision=2)}</span>"
+            ),
             unsafe_allow_html=True,
         )
 
@@ -87,43 +121,59 @@ def display_data(df: pd.DataFrame, selected_structure: str | None = None):
         col_order.insert(3, "comparison_cost_per_unit")
 
     col_config = {
-        "_index": st.column_config.TextColumn(label="structure", help="Structure Name"),
-        "structure_type": " type",
+        "_index": st.column_config.TextColumn(
+            label=translate_text(language_code, "build_costs.column_structure"),
+            help=translate_text(language_code, "build_costs.column_structure_help"),
+        ),
+        "structure_type": translate_text(language_code, "build_costs.column_structure_type"),
         "units": st.column_config.NumberColumn(
-            "units", help="Number of units built", width=60
+            translate_text(language_code, "build_costs.column_units"),
+            help=translate_text(language_code, "build_costs.column_units_help"),
+            width=60,
         ),
         "total_cost": st.column_config.NumberColumn(
-            "total cost",
-            help="Total cost of building the units",
+            translate_text(language_code, "build_costs.column_total_cost"),
+            help=translate_text(language_code, "build_costs.column_total_cost_help"),
             format="localized",
             step=1,
         ),
         "total_cost_per_unit": st.column_config.NumberColumn(
-            "cost per unit",
-            help="Cost per unit of the item",
+            translate_text(language_code, "build_costs.column_cost_per_unit"),
+            help=translate_text(language_code, "build_costs.column_cost_per_unit_help"),
             format="localized",
             step=1,
         ),
         "total_material_cost": st.column_config.NumberColumn(
-            "material cost", help="Total material cost", format="localized", step=1
+            translate_text(language_code, "build_costs.column_material_cost"),
+            help=translate_text(language_code, "build_costs.column_material_cost_help"),
+            format="localized",
+            step=1,
         ),
         "total_job_cost": st.column_config.NumberColumn(
-            "total job cost",
-            help="Total job cost, which includes the facility tax, SCC surcharge, and system cost index",
+            translate_text(language_code, "build_costs.column_total_job_cost"),
+            help=translate_text(language_code, "build_costs.column_total_job_cost_help"),
             format="compact",
         ),
         "facility_tax": st.column_config.NumberColumn(
-            "facility tax", help="Facility tax cost", format="compact", width="small"
+            translate_text(language_code, "build_costs.column_facility_tax"),
+            help=translate_text(language_code, "build_costs.column_facility_tax_help"),
+            format="compact",
+            width="small",
         ),
         "scc_surcharge": st.column_config.NumberColumn(
-            "scc surcharge", help="SCC surcharge cost", format="compact", width="small"
+            translate_text(language_code, "build_costs.column_scc_surcharge"),
+            help=translate_text(language_code, "build_costs.column_scc_surcharge_help"),
+            format="compact",
+            width="small",
         ),
         "system_cost_index": st.column_config.NumberColumn(
-            "cost index", format="compact", width="small"
+            translate_text(language_code, "build_costs.column_system_cost_index"),
+            format="compact",
+            width="small",
         ),
         "structure_rigs": st.column_config.ListColumn(
-            "rigs",
-            help="Rigs fitted to the structure",
+            translate_text(language_code, "build_costs.column_rigs"),
+            help=translate_text(language_code, "build_costs.column_rigs_help"),
         ),
     }
 
@@ -131,14 +181,18 @@ def display_data(df: pd.DataFrame, selected_structure: str | None = None):
         col_config.update(
             {
                 "comparison_cost": st.column_config.NumberColumn(
-                    "comparison cost",
-                    help="Comparison cost",
+                    translate_text(language_code, "build_costs.column_comparison_cost"),
+                    help=translate_text(language_code, "build_costs.column_comparison_cost_help"),
                     format="compact",
                     width="small",
                 ),
                 "comparison_cost_per_unit": st.column_config.NumberColumn(
-                    "comparison cost per unit",
-                    help="Comparison cost per unit",
+                    translate_text(
+                        language_code, "build_costs.column_comparison_cost_per_unit"
+                    ),
+                    help=translate_text(
+                        language_code, "build_costs.column_comparison_cost_per_unit_help"
+                    ),
                     format="compact",
                     width="small",
                 ),
@@ -215,7 +269,11 @@ def check_industry_index_expiry():
 
 @st.fragment()
 def display_material_costs(
-    results: dict, selected_structure: str, structure_names_for_materials: list
+    results: dict,
+    selected_structure: str,
+    structure_names_for_materials: list,
+    display_item_name: str,
+    language_code: str,
 ):
     """Display material costs for a selected structure with proper formatting."""
     default_index = 0
@@ -223,15 +281,21 @@ def display_material_costs(
         default_index = structure_names_for_materials.index(selected_structure)
 
     selected_structure_for_materials = st.selectbox(
-        "Select a structure to view material breakdown:",
+        translate_text(language_code, "build_costs.material_breakdown_selector"),
         structure_names_for_materials,
         index=default_index,
         key="material_structure_selector",
-        help="Choose a structure to see detailed material costs and quantities",
+        help=translate_text(language_code, "build_costs.material_breakdown_selector_help"),
     )
 
     if selected_structure_for_materials not in results:
-        st.error(f"No data found for structure: {selected_structure}")
+        st.error(
+            translate_text(
+                language_code,
+                "build_costs.material_breakdown_missing",
+                structure=selected_structure_for_materials,
+            )
+        )
         return
 
     materials_data = results[selected_structure_for_materials]["materials"]
@@ -239,11 +303,19 @@ def display_material_costs(
     type_ids = [int(k) for k in materials_data.keys()]
     type_names = get_type_resolution_service().resolve_type_names(type_ids)
     type_names_dict = {item["id"]: item["name"] for item in type_names}
+    sde_repo = get_sde_repository()
+    localized_type_names = get_localized_name_map(type_ids, sde_repo, language_code, logger)
 
     materials_list = []
     for type_id_str, material_info in materials_data.items():
         type_id = int(type_id_str)
-        type_name = type_names_dict.get(type_id, f"Unknown ({type_id})")
+        type_name = localized_type_names.get(
+            type_id,
+            type_names_dict.get(
+                type_id,
+                translate_text(language_code, "build_costs.unknown_type", type_id=type_id),
+            ),
+        )
 
         materials_list.append(
             {
@@ -266,55 +338,64 @@ def display_material_costs(
 
     df["cost_percentage"] = df["cost"] / total_material_cost
 
-    st.subheader(f"Material Breakdown {selected_structure_for_materials}")
+    st.subheader(
+        translate_text(
+            language_code,
+            "build_costs.material_breakdown_for_structure",
+            structure=selected_structure_for_materials,
+        )
+    )
     st.markdown(
-        f"{
-            st.session_state.selected_item_for_display
-        } Material Cost: <span style='color: orange;'>**{
-            millify(total_material_cost, precision=2)
-        } ISK**</span> (*{millify(total_material_volume, precision=2)} m³*) - {
-            material_price_source
-        }",
+        translate_text(
+            language_code,
+            "build_costs.material_breakdown_summary",
+            item=display_item_name,
+            cost=millify(total_material_cost, precision=2),
+            volume=millify(total_material_volume, precision=2),
+            price_source=material_price_source,
+        ),
         unsafe_allow_html=True,
     )
 
     column_config = {
         "type_name": st.column_config.TextColumn(
-            "Material", help="The name of the material required", width="medium"
+            translate_text(language_code, "common.item"),
+            help=translate_text(language_code, "build_costs.column_material_help"),
+            width="medium",
         ),
         "quantity": st.column_config.NumberColumn(
-            "Quantity",
-            help="Amount of material needed",
+            translate_text(language_code, "build_costs.column_quantity"),
+            help=translate_text(language_code, "build_costs.column_quantity_help"),
             format="localized",
             width="small",
         ),
         "volume_per_unit": st.column_config.NumberColumn(
-            "Volume/Unit",
-            help="Volume per unit of material (m³)",
+            translate_text(language_code, "build_costs.column_volume_per_unit"),
+            help=translate_text(language_code, "build_costs.column_volume_per_unit_help"),
             format="localized",
             width="small",
         ),
         "volume": st.column_config.NumberColumn(
-            "Total Volume",
-            help="Total volume of this material (m³)",
+            translate_text(language_code, "build_costs.column_total_volume"),
+            help=translate_text(language_code, "build_costs.column_total_volume_help"),
             format="localized",
             width="small",
         ),
         "cost_per_unit": st.column_config.NumberColumn(
-            "Unit Price",
-            help="Cost per unit of material (ISK)",
+            translate_text(language_code, "build_costs.column_unit_price"),
+            help=translate_text(language_code, "build_costs.column_unit_price_help"),
             format="localized",
             width="small",
         ),
         "cost": st.column_config.NumberColumn(
-            "Total Cost",
-            help="Total cost for this material (ISK)",
+            translate_text(language_code, "build_costs.column_total_cost"),
+            help=translate_text(language_code, "build_costs.column_total_cost_materials_help"),
             format="compact",
             width="small",
         ),
         "cost_percentage": st.column_config.NumberColumn(
-            "% of Total",
-            help="Percentage of total material cost",
+            translate_text(language_code, "build_costs.column_percent_total"),
+            help=translate_text(language_code, "build_costs.column_percent_total_help"),
             format="percent",
             width="small",
         ),
@@ -348,9 +429,7 @@ def display_material_costs(
             height=310,
         )
 
-    st.info(
-        "💡 **Tip:** You can download this data as CSV using the download icon (⬇️) in the top-right corner of the table above."
-    )
+    st.info(translate_text(language_code, "build_costs.material_breakdown_tip"))
 
 
 # =============================================================================
@@ -359,6 +438,7 @@ def display_material_costs(
 
 
 def main():
+    language_code = get_active_language()
     market = render_market_selector()
 
     if not ensure_market_db_ready(market.database_alias):
@@ -388,7 +468,7 @@ def main():
         if image_path.exists():
             st.image(str(image_path), width=150)
     with col2:
-        st.title("Build Cost Tool")
+        st.title(translate_text(language_code, "build_costs.title"))
 
     df = pd.read_csv("csvfiles/build_catagories.csv")
     df = df.sort_values(by="category")
@@ -396,11 +476,11 @@ def main():
     index = categories.index("Ship")
 
     selected_category = st.sidebar.selectbox(
-        "Select a category",
+        translate_text(language_code, "build_costs.category_label"),
         categories,
         index=index,
-        placeholder="Ship",
-        help="Select a category to filter the groups and items by.",
+        placeholder=translate_text(language_code, "build_costs.category_placeholder"),
+        help=translate_text(language_code, "build_costs.category_help"),
     )
     category_df = df[df["category"] == selected_category]
     category_id = category_df["id"].values[0]
@@ -408,35 +488,63 @@ def main():
 
     if category_id == 40:
         groups = ["Sovereignty Hub"]
-        selected_group = st.sidebar.selectbox("Select a group", groups)
+        selected_group = st.sidebar.selectbox(
+            translate_text(language_code, "build_costs.group_label"),
+            groups,
+            format_func=lambda group: (
+                translate_text(language_code, "build_costs.special_group_sovereignty_hub")
+                if group == "Sovereignty Hub"
+                else group
+            ),
+        )
         group_id = 1012
     else:
         groups = get_sde_repository().get_groups_for_category(category_id)
         groups = groups.sort_values(by="groupName")
         groups = groups.drop(groups[groups["groupName"] == "Abyssal Modules"].index)
         group_names = groups["groupName"].unique()
-        selected_group = st.sidebar.selectbox("Select a group", group_names)
+        selected_group = st.sidebar.selectbox(
+            translate_text(language_code, "build_costs.group_label"), group_names
+        )
         group_id = groups[groups["groupName"] == selected_group]["groupID"].values[0]
         logger.info(f"Selected group: {selected_group} ({group_id})")
 
     try:
-        types_df = get_sde_repository().get_types_for_group(group_id)
+        sde_repo = get_sde_repository()
+        types_df = sde_repo.get_types_for_group(group_id)
         types_df = types_df.sort_values(by="typeName")
 
         if len(types_df) == 0:
             st.warning(
-                f"No buildable items found for group: {selected_group}. "
-                "This may indicate a missing SDE table (e.g. industryActivityProducts). "
-                "Try syncing the database or selecting a different group."
+                translate_text(
+                    language_code,
+                    "build_costs.no_buildable_items",
+                    group_name=selected_group,
+                )
             )
             logger.warning(f"No types returned for group {group_id} — possible missing SDE table")
             st.stop()
         else:
-            type_names = types_df["typeName"].unique()
-            selected_item = st.sidebar.selectbox("Select an item", type_names)
-            type_names_list = type_names.tolist()
+            types_df = types_df.drop_duplicates(subset=["typeID"], keep="first")
+            type_id_options = types_df["typeID"].astype(int).tolist()
+            type_name_map = dict(zip(type_id_options, types_df["typeName"], strict=False))
+            localized_type_names = get_localized_name_map(
+                type_id_options, sde_repo, language_code, logger
+            )
+            selected_type_id = st.sidebar.selectbox(
+                translate_text(language_code, "build_costs.item_label"),
+                type_id_options,
+                format_func=lambda item_type_id: localized_type_names.get(
+                    item_type_id, type_name_map[item_type_id]
+                ),
+            )
+            selected_item = type_name_map[selected_type_id]
+            selected_item_display = localized_type_names.get(selected_type_id, selected_item)
+            type_names_list = list(type_name_map.values())
     except Exception as e:
-        st.error(f"Failed to load items for group: {e}")
+        st.error(
+            translate_text(language_code, "build_costs.load_items_error", error=str(e))
+        )
         logger.error(f"Exception loading types for group {group_id}: {e}")
         st.stop()
 
@@ -448,46 +556,67 @@ def main():
     ):
         try:
             if selected_item not in type_names_list:
-                st.warning(f"Selected item: {selected_item} not a buildable item")
+                st.warning(
+                    translate_text(
+                        language_code,
+                        "build_costs.invalid_selected_item",
+                        item_name=selected_item,
+                    )
+                )
                 selected_item = None
             else:
                 filtered_df = types_df[types_df["typeName"] == selected_item]
                 if len(filtered_df) == 0:
                     st.warning(
-                        f"Selected item: {selected_item} not found in types database"
+                        translate_text(
+                            language_code, "build_costs.item_not_found", item_name=selected_item
+                        )
                     )
                     selected_item = None
                 else:
                     type_id = filtered_df["typeID"].values[0]
         except Exception as e:
-            st.warning(f"invalid item: {e}")
+            st.warning(translate_text(language_code, "build_costs.invalid_item", error=str(e)))
             logger.error(f"Exception selecting item: {e}")
             selected_item = None
     else:
         selected_item = None
+        selected_item_display = None
         type_id = None
 
     if "type_id" not in locals() or type_id is None:
         st.warning(
-            f"Selected item: {
-                selected_item if 'selected_item' in locals() else 'None'
-            } not a buildable item. Please select a valid item from the sidebar."
+            translate_text(
+                language_code,
+                "build_costs.select_valid_item",
+                item_name=selected_item if "selected_item" in locals() else "None",
+            )
         )
         st.stop()
 
-    runs = st.sidebar.number_input("Runs", min_value=1, max_value=100000, value=1)
-    me = st.sidebar.number_input("ME", min_value=0, max_value=10, value=0)
-    te = st.sidebar.number_input("TE", min_value=0, max_value=20, value=0)
+    runs = st.sidebar.number_input(
+        translate_text(language_code, "build_costs.runs_label"),
+        min_value=1,
+        max_value=100000,
+        value=1,
+    )
+    me = st.sidebar.number_input(
+        translate_text(language_code, "build_costs.me_label"), min_value=0, max_value=10, value=0
+    )
+    te = st.sidebar.number_input(
+        translate_text(language_code, "build_costs.te_label"), min_value=0, max_value=20, value=0
+    )
 
     st.sidebar.divider()
 
     price_source = st.sidebar.selectbox(
-        "Select a material price source",
+        translate_text(language_code, "build_costs.material_price_source_label"),
         list(PRICE_SOURCE_MAP.keys()),
-        help="This is the source of the material prices used in the calculations. ESI Average is the CCP average price used in the in-game industry window, Jita Sell is the minimum price of sale orders in Jita, and Jita Buy is the maximum price of buy orders in Jita.",
+        format_func=lambda source: _get_price_source_label(source, language_code),
+        help=translate_text(language_code, "build_costs.material_price_source_help"),
     )
     price_source_id = PRICE_SOURCE_MAP[price_source]
-    st.session_state.price_source_name = price_source
+    st.session_state.price_source_name = _get_price_source_label(price_source, language_code)
     st.session_state.price_source = price_source_id
     logger.info(f"Selected price source: {price_source} ({price_source_id})")
 
@@ -503,13 +632,13 @@ def main():
     all_structures = repo.get_all_structures(is_super=st.session_state.super)
     structure_names = sorted([structure.structure for structure in all_structures])
 
-    with st.sidebar.expander("Select a structure to compare (optional)"):
+    with st.sidebar.expander(translate_text(language_code, "build_costs.structure_compare_expander")):
         selected_structure = st.selectbox(
-            "Structures:",
+            translate_text(language_code, "build_costs.structure_compare_label"),
             structure_names,
             index=None,
-            placeholder="All Structures",
-            help="Select a structure to compare the cost to build versus this structure. This is optional and will default to all structures.",
+            placeholder=translate_text(language_code, "build_costs.structure_compare_placeholder"),
+            help=translate_text(language_code, "build_costs.structure_compare_help"),
         )
 
     current_job_params = {
@@ -528,18 +657,16 @@ def main():
         and st.session_state.current_job_params != current_job_params
     )
     if params_changed:
-        st.session_state.button_label = "Recalculate"
-        st.toast(
-            "⚠️ Parameters have changed. Click 'Recalculate' to get updated results."
-        )
+        st.session_state.button_label = translate_text(language_code, "build_costs.recalculate")
+        st.toast(translate_text(language_code, "build_costs.parameters_changed"))
         logger.info("Parameters changed")
     else:
-        st.session_state.button_label = "Calculate"
+        st.session_state.button_label = translate_text(language_code, "build_costs.calculate")
 
     calculate_clicked = st.sidebar.button(
         st.session_state.button_label,
         type="primary",
-        help="Click to calculate the cost for the selected item.",
+        help=translate_text(language_code, "build_costs.calculate_help"),
     )
 
     if calculate_clicked:
@@ -549,9 +676,7 @@ def main():
     if st.session_state.sci_last_modified:
         st.sidebar.markdown("---")
         st.sidebar.markdown(
-            f"*Industry indexes last updated: {
-                st.session_state.sci_last_modified.strftime('%Y-%m-%d %H:%M:%S UTC')
-            }*"
+            f"*{translate_text(language_code, 'build_costs.industry_indexes_last_updated', timestamp=st.session_state.sci_last_modified.strftime('%Y-%m-%d %H:%M:%S UTC'))}*"
         )
 
     if st.session_state.calculate_clicked:
@@ -569,11 +694,14 @@ def main():
         )
         logger.info("=" * 80)
 
-        progress_bar = st.progress(0, text="Fetching...")
+        progress_bar = st.progress(
+            0, text=translate_text(language_code, "build_costs.progress_start", total=0)
+        )
         results, status_log = service.get_costs(
             job,
             progress_callback=lambda c, t, m: progress_bar.progress(
-                c / t if t > 0 else 0, text=m
+                c / t if t > 0 else 0,
+                text=_format_progress_text(c, t, m, language_code),
             ),
         )
         logger.debug(
@@ -583,9 +711,7 @@ def main():
         )
 
         if not results:
-            st.error(
-                "No results returned. This is likely due to problems with the external industry data API. Please try again later."
-            )
+            st.error(translate_text(language_code, "build_costs.no_results"))
             return
 
         st.session_state.cost_results = results
@@ -606,6 +732,7 @@ def main():
             vale_price = float(vale_price)
 
         results = st.session_state.cost_results
+        selected_item_display = selected_item_display or selected_item
 
         build_cost_df = pd.DataFrame.from_dict(results, orient="index")
 
@@ -637,34 +764,56 @@ def main():
             else:
                 st.image(alt_url, width="stretch")
         with col2:
-            st.header(f"Build cost for {selected_item}", divider="violet")
+            st.header(
+                translate_text(
+                    language_code, "build_costs.header", item_name=selected_item_display
+                ),
+                divider="violet",
+            )
             st.write(
-                f"Build cost for {selected_item} with {runs} runs, {me} ME, {te} TE, {
-                    price_source
-                } material price (type_id: {type_id})"
+                translate_text(
+                    language_code,
+                    "build_costs.summary",
+                    item_name=selected_item_display,
+                    runs=runs,
+                    me=me,
+                    te=te,
+                    price_source=_get_price_source_label(price_source, language_code),
+                    type_id=type_id,
+                )
             )
 
             col1, col2 = st.columns([0.5, 0.5])
             with col1:
                 st.metric(
-                    label="Build cost per unit",
+                    label=translate_text(language_code, "build_costs.metric_build_cost_per_unit"),
                     value=f"{millify(low_cost, precision=2)} ISK",
-                    help=f"Based on the lowest cost structure: {low_cost_structure}",
+                    help=translate_text(
+                        language_code,
+                        "build_costs.metric_build_cost_per_unit_help",
+                        structure=low_cost_structure,
+                    ),
                 )
                 st.markdown(
-                    f"**Materials:** {
-                        millify(material_cost_per_unit, precision=2)
-                    } ISK | **Job cost:** {millify(job_cost_per_unit, precision=2)} ISK"
+                    translate_text(
+                        language_code,
+                        "build_costs.materials_job_cost",
+                        materials=millify(material_cost_per_unit, precision=2),
+                        job_cost=millify(job_cost_per_unit, precision=2),
+                    )
                 )
             with col2:
                 st.metric(
-                    label="Total Build Cost",
+                    label=translate_text(language_code, "build_costs.metric_total_build_cost"),
                     value=f"{millify(total_cost, precision=2)} ISK",
                 )
                 st.markdown(
-                    f"**Materials:** {
-                        millify(material_cost, precision=2)
-                    } ISK | **Job cost:** {millify(job_cost, precision=2)} ISK"
+                    translate_text(
+                        language_code,
+                        "build_costs.materials_job_cost",
+                        materials=millify(material_cost, precision=2),
+                        job_cost=millify(job_cost, precision=2),
+                    )
                 )
 
         if vale_price:
@@ -672,32 +821,41 @@ def main():
             percent_profit_vale = ((vale_price - low_cost) / vale_price) * 100
 
             st.markdown(
-                f"**{market.short_name} price:** <span style='color: orange;'>{
-                    millify(vale_price, precision=2)
-                } ISK</span> ( profit: {
-                    millify(profit_per_unit_vale, precision=2)
-                } ISK |  {percent_profit_vale:.2f}%",
+                translate_text(
+                    language_code,
+                    "build_costs.market_price_summary",
+                    market_name=market.short_name,
+                    price=millify(vale_price, precision=2),
+                    profit=millify(profit_per_unit_vale, precision=2),
+                    margin=f"{percent_profit_vale:.2f}",
+                ),
                 unsafe_allow_html=True,
             )
         else:
-            st.write("No Vale price data found for this item")
+            st.write(
+                translate_text(
+                    language_code, "build_costs.no_market_price", market_name=market.short_name
+                )
+            )
 
         if jita_price:
             profit_per_unit_jita = jita_price - low_cost
             percent_profit_jita = ((jita_price - low_cost) / jita_price) * 100
             st.markdown(
-                f"**Jita price:** <span style='color: orange;'>{
-                    millify(jita_price, precision=2)
-                } ISK</span> (profit: {
-                    millify(profit_per_unit_jita, precision=2)
-                } ISK | {percent_profit_jita:.2f}%)",
+                translate_text(
+                    language_code,
+                    "build_costs.jita_price_summary",
+                    price=millify(jita_price, precision=2),
+                    profit=millify(profit_per_unit_jita, precision=2),
+                    margin=f"{percent_profit_jita:.2f}",
+                ),
                 unsafe_allow_html=True,
             )
         else:
-            st.write("No price data found for this item")
+            st.write(translate_text(language_code, "build_costs.no_jita_price"))
 
         display_df, col_config, col_order = display_data(
-            build_cost_df, selected_structure
+            build_cost_df, language_code, selected_structure
         )
         st.dataframe(
             display_df,
@@ -706,38 +864,24 @@ def main():
             width="stretch",
         )
         if st.session_state.super:
-            st.markdown(
-                """
-            <span style="font-weight: bold;">Note:
-            </span> <span style="color: orange;">
-            Only structures configured for supercapital construction displayed.
-            </span>
-            """,
-                unsafe_allow_html=True,
-            )
+            st.markdown(translate_text(language_code, "build_costs.super_note"), unsafe_allow_html=True)
 
-        st.subheader("Material Breakdown")
+        st.subheader(translate_text(language_code, "build_costs.material_breakdown"))
         results = st.session_state.cost_results
         structure_names_for_materials = sorted(list(results.keys()))
         display_material_costs(
-            results, selected_structure, structure_names_for_materials
+            results,
+            selected_structure,
+            structure_names_for_materials,
+            selected_item_display,
+            language_code,
         )
 
     else:
-        st.subheader("WC Markets Build Cost Tool", divider="violet")
-        st.write(
-            """
-            Find a build cost for an item by selecting a category, group, and
-            item in the sidebar. The build cost will be calculated for all
-            structures in the database, ordered by cost (lowest to highest)
-            along with a table of materials required and their costs for a
-            selected structure. You can also select a structure to compare the
-            cost to build versus this structure. When you're ready, click the
-            'Calculate' button.
-            """
-        )
+        st.subheader(translate_text(language_code, "build_costs.empty_subheader"), divider="violet")
+        st.write(translate_text(language_code, "build_costs.empty_description"))
         st.markdown(
-            display_build_cost_tool_description(),
+            display_build_cost_tool_description(language_code),
             unsafe_allow_html=True,
         )
 
