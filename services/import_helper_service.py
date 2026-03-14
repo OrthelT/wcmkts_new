@@ -101,7 +101,10 @@ def _apply_packaged_ship_volumes(
         return volume_df
 
     result = volume_df.copy()
-    result["raw_volume_m3"] = pd.to_numeric(result.get("raw_volume_m3"), errors="coerce").fillna(0.0)
+    if "raw_volume_m3" not in result.columns:
+        result["raw_volume_m3"] = 0.0
+    else:
+        result["raw_volume_m3"] = pd.to_numeric(result["raw_volume_m3"], errors="coerce").fillna(0.0)
 
     if "category_name" not in result.columns or "group_name" not in result.columns:
         result["volume_m3"] = result["raw_volume_m3"]
