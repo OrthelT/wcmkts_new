@@ -6,7 +6,50 @@ Last analysis: 2026-03-14
 ---
 
 ## Previously Implemented Changes
-None yet.
+
+### P1-A: Moved _drop_localized_backup_columns to ui/formatters.py
+- Implemented: 2026-03-14
+- Consolidated all 4 page-local copies into `drop_localized_backup_columns()` in `ui/formatters.py`
+- Handles all known backup column names: type_name_en, ship_name_en, Item_en
+
+### P1-B: Removed sys.path.append hacks from 6 pages
+- Implemented: 2026-03-14
+- Removed from: market_stats.py, doctrine_status.py, doctrine_report.py, build_costs.py, pricer.py, downloads.py
+- Also cleaned up unused `import os, sys` in those files
+
+### P1-C: Removed double-computed shipping_cost from fetch_base_data
+- Implemented: 2026-03-14
+- Removed shipping_cost, profit_jita_sell, profit_jita_sell_30d, and capital_utilis from fetch_base_data
+- These are now only computed in get_import_items where the user's filter value is available
+- Kept turnover_30d and volume_30d (independent of shipping cost)
+
+### P1-D: Cleaned up wcmkt alias handling (partial — per user review)
+- Implemented: 2026-03-14
+- Removed wcmkt2/wcmkt3 deprecated aliases; kept wcmkt resolution to active market
+
+### P2-A: Consolidated create_default alias resolution
+- Implemented: 2026-03-14
+- Added `resolve_db_alias()` to settings_service.py
+- Updated 6 services: DoctrineService, LowStockService, ModuleEquivalentsService, PricerService, ImportHelperService, get_price_service()
+
+### P2-B: Refactored market_repo _impl functions to use BaseRepository.read_df
+- Implemented: 2026-03-14
+- _get_all_stats_impl, _get_all_orders_impl, _get_all_history_impl now use BaseRepository.read_df()
+- Eliminated ~60 lines of duplicated try/sync/retry/remote-fallback logic
+
+### P2-C: Fixed SQL injection in _get_history_by_type_ids_impl
+- Implemented: 2026-03-14
+- Replaced string-formatted IN clause with bindparam(..., expanding=True)
+
+### P2-D: Moved dead helpers.py to dev_files/
+- Implemented: 2026-03-14
+- File imported deleted modules (db_handler, type_info) and was not used by any active code path
+
+### P2-E: Consolidated DEFAULT_LANGUAGE via settings.toml
+- Implemented: 2026-03-14
+- Added [i18n] section with default_language to settings.toml
+- Added default_language property to SettingsService
+- Updated ui/i18n.py and state/language_state.py to read from settings_service
 
 ---
 
@@ -17,7 +60,7 @@ None yet.
 ----------------------------------------------
 
 ### P1-A: Move _drop_localized_backup_columns to ui/formatters.py
-- Status: RECOMMENDED
+- Status: IMPLEMENTED
 - Added: 2026-03-14
 - What: The four-line helper `_drop_localized_backup_columns` is defined identically in four page files: `pages/market_stats.py`, `pages/doctrine_status.py`, `pages/doctrine_report.py`, and `pages/pricer.py`. Move it once to `ui/formatters.py` and import it in each page.
 - Why: Pure dead duplication, zero behavioral variation. The function is a one-liner (drop two columns with errors="ignore").
@@ -25,7 +68,7 @@ None yet.
 - Validation: Run existing test suite, verify pages still render.
 
 ### P1-B: Remove sys.path.append hacks from pages
-- Status: RECOMMENDED
+- Status: IMPLEMENTED
 - Added: 2026-03-14
 - What: Six page files (`market_stats.py`, `doctrine_status.py`, `doctrine_report.py`, `build_costs.py`, `pricer.py`, `downloads.py`) contain `sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))`. The project has a proper `pyproject.toml` and is installed as a package; these are no-ops in normal execution.
 - Why: Dead code noise, misleads readers into thinking path manipulation is necessary.
@@ -33,7 +76,7 @@ None yet.
 - Validation: Run app and all tests. All imports work without these lines.
 
 ### P1-C: SHIPPING_COST_PER_M3 double-computed in fetch_base_data and get_import_items
-- Status: RECOMMENDED
+- Status: IMPLEMENTED
 - Added: 2026-03-14
 - What: In `services/import_helper_service.py`, `fetch_base_data()` (line 327) computes `df["shipping_cost"] = df["volume_m3"] * SHIPPING_COST_PER_M3` using the module-level constant, then `get_import_items()` (line 366) immediately recomputes `df["shipping_cost"] = df["volume_m3"] * filters.shipping_cost_per_m3`. The first calculation is always thrown away by the second when called from the page. The first calculation (in fetch_base_data) should be removed; shipping should only be calculated in get_import_items where the filter value is available.
 - Why: Wasteful computation; also misleadingly calculates profit/capital_utilis with the wrong (default) shipping rate in fetch_base_data, making those columns inaccurate unless the user uses the exact default value.
@@ -55,7 +98,7 @@ REJECTED: "wcmkt" is no longer deprecated. It is resolved to the active db alias
 - Validation: Grep for "wcmkt" as a string literal, update fallbacks, run tests.
 
 ### P2-A: Consolidate duplicated create_default market-alias resolution across services
-- Status: RECOMMENDED
+- Status: IMPLEMENTED
 - Added: 2026-03-14
 - What: The pattern "if db_alias is None: try: from state.market_state import get_active_market; db_alias = get_active_market().database_alias; except (ImportError, Exception): db_alias = 'wcmkt'" appears verbatim in six service create_default methods: `DoctrineService`, `LowStockService`, `ModuleEquivalentsService`, `PricerService`, `ImportHelperService`, and in `price_service.py`'s `get_price_service()`. Extract a small helper function `_resolve_db_alias(fallback: str = "wcmktprod") -> str` in a shared location (e.g. `settings_service.py` or a new `services/_utils.py`) and have each service call it.
 - Why: Six copies of identical error-handling logic that must be updated together if the fallback alias or error handling changes.
@@ -63,7 +106,7 @@ REJECTED: "wcmkt" is no longer deprecated. It is resolved to the active db alias
 - Validation: All service create_default tests should continue to pass.
 
 ### P2-B: market_repo.py _impl functions duplicate BaseRepository.read_df pattern
-- Status: RECOMMENDED
+- Status: IMPLEMENTED
 - Added: 2026-03-14
 - What: `_get_all_stats_impl`, `_get_all_orders_impl`, and `_get_all_history_impl` in `repositories/market_repo.py` each manually implement the try/sync/retry/remote-fallback pattern that is already centralized in `BaseRepository.read_df()`. Each is 20-30 lines of near-identical error handling. These should call `BaseRepository.read_df()` instead.
 - Why: `BaseRepository.read_df()` was explicitly created to eliminate this duplication. Having three copies outside it defeats the purpose.
@@ -72,7 +115,7 @@ REJECTED: "wcmkt" is no longer deprecated. It is resolved to the active db alias
 - Validation: Run tests; confirm malformed-DB recovery path still works.
 
 ### P2-C: Market repo _get_history_by_type_ids_impl uses string-formatting for SQL IN clause
-- Status: RECOMMENDED
+- Status: IMPLEMENTED
 - Added: 2026-03-14
 - What: In `repositories/market_repo.py` line 143, `_get_history_by_type_ids_impl` builds the SQL IN clause by string-joining quoted type_id values: `type_ids_joined = ','.join(f"'{tid}'" for tid in type_ids_str)`. This bypasses parameterization. It should use SQLAlchemy's `bindparam(..., expanding=True)` pattern, which is already used in other queries in the same codebase (see `_get_sde_info_impl`).
 - Why: The string-formatting approach is a potential SQL injection vector, even though type_ids are nominally integers. The pattern is already solved correctly elsewhere.
@@ -80,7 +123,7 @@ REJECTED: "wcmkt" is no longer deprecated. It is resolved to the active db alias
 - Validation: Test history queries, confirm results unchanged.
 
 ### P2-D: helpers.py imports deleted modules (db_handler, type_info)
-- Status: RECOMMENDED — MANUAL TOOL CANDIDATE
+- Status: IMPLEMENTED (moved to dev_files/)
 - Added: 2026-03-14
 - What: `helpers.py` at the project root imports `from db_handler import build_cost_url, request_type_names` and `from type_info import get_backup_type_id` (lines 6 and 9). These modules no longer exist in the codebase. The file also contains `pass`-body stubs (`add_item_to_watchlist`, `remove_item_from_watchlist`, `get_watchlist`, `clear_watchlist`) and print statements.
 - Why: This file will crash on import. It's not imported by any active code path, but is a maintenance hazard.
@@ -91,7 +134,7 @@ REJECTED: "wcmkt" is no longer deprecated. It is resolved to the active db alias
 **USER COMMENT**
 I agree with consolidating these centrally. But, we already have settings.toml and a settings_service to call it. I think we should use the existing settings infrastructure rather than creating a new one. In fact, we should make this a rule and something we explicitly look for in code simplification reviews: For global configuration parameters always use the settings.toml --> settings_service path unless there is a strong reason to configure it separately. 
 
-- Status: ~~RECOMMENDED~~ MODIFIED
+- Status: IMPLEMENTED (via settings.toml per user directive)
 - Added: 2026-03-14
 - What: `DEFAULT_LANGUAGE = "en"` is defined independently in both `ui/i18n.py` (line 9) and `state/language_state.py` (line 9). The `state` layer cannot import from `ui`, so `language_state.py` cannot reuse the `ui/i18n.py` constant. However, both could import from `domain/` or from a new thin `constants.py` file at root.
 - Why: If the default language ever changes, two places must be updated in sync.

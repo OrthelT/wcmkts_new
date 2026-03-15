@@ -1,8 +1,5 @@
-import os
-import sys
 import time
 from datetime import datetime, timedelta
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 import pandas as pd
 from logging_config import setup_logging
@@ -34,6 +31,7 @@ from repositories import get_sde_repository, invalidate_market_caches
 from ui.i18n import translate_text
 from ui.market_selector import render_market_selector
 from ui.sync_display import display_sync_status  # noqa: F401
+from ui.formatters import drop_localized_backup_columns
 # Backwards-compatible alias for pages that may import from here
 new_display_sync_status = display_sync_status
 
@@ -42,10 +40,6 @@ env = settings['env']['env']
 header_env = f"[{env.upper()}]" if env != "prod" else ""
 
 logger = setup_logging(__name__)
-
-def _drop_localized_backup_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Remove helper columns that should not appear in display tables."""
-    return df.drop(columns=["type_name_en", "ship_name_en"], errors="ignore")
 
 logger.info("Application started")
 logger.info(f"streamlit version: {st.__version__}")
@@ -611,7 +605,7 @@ def main():
                                 english_name_column="ship_name_en",
                             )
                             st.write(
-                                _drop_localized_backup_columns(
+                                drop_localized_backup_columns(
                                     module_fits[['fit_id', 'ship_name', 'fit_qty']].drop_duplicates()
                                 )
                             )
@@ -674,7 +668,7 @@ def main():
         if 'is_buy_order' in display_df.columns:
             display_df.drop(columns='is_buy_order', inplace=True)
         st.dataframe(
-            _drop_localized_backup_columns(display_df),
+            drop_localized_backup_columns(display_df),
             hide_index=True,
             column_config=display_formats,
         )
@@ -722,7 +716,7 @@ def main():
         if 'is_buy_order' in buy_display_df.columns:
             buy_display_df.drop(columns='is_buy_order', inplace=True)
         st.dataframe(
-            _drop_localized_backup_columns(buy_display_df),
+            drop_localized_backup_columns(buy_display_df),
             hide_index=True,
             column_config=display_formats,
         )
@@ -820,7 +814,7 @@ def main():
         if isship:
             column_config = get_fitting_col_config(language_code)
             st.dataframe(
-                _drop_localized_backup_columns(display_fit_df),
+                drop_localized_backup_columns(display_fit_df),
                 hide_index=True,
                 column_config=column_config,
                 width='content',

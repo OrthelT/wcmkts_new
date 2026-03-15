@@ -84,9 +84,7 @@ class DatabaseConfig:
             return DatabaseConfig.wcdbmap
 
     def __init__(self, alias: str, dialect: str = "sqlite+libsql"):
-        if alias in ("wcmkt", "wcmkt2", "wcmkt3"):
-            if alias != "wcmkt":
-                logger.warning(f"Alias {alias} is deprecated, resolving to active market")
+        if alias == "wcmkt":
             alias = self._resolve_active_alias()
 
         if alias not in self._db_paths:

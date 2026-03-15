@@ -32,30 +32,9 @@ logger = setup_logging(__name__, log_file="market_repo.log")
 
 def _get_all_stats_impl(db_alias: str = "wcmkt") -> pd.DataFrame:
     """Fetch all rows from marketstats with malformed-DB recovery."""
-    db = DatabaseConfig(db_alias)
     start = time.perf_counter()
-    query = "SELECT * FROM marketstats"
-
-    def _read_local():
-        with db.engine.connect() as conn:
-            return pd.read_sql_query(query, conn)
-
-    try:
-        df = _read_local()
-    except Exception as e:
-        msg = str(e).lower()
-        if "malform" in msg or "database disk image is malformed" in msg or "no such table" in msg:
-            logger.error(f"DB error during stats read ('{msg}'); syncing and retrying...")
-            try:
-                db.sync()
-                df = _read_local()
-            except Exception:
-                logger.error("Retry after sync failed; falling back to remote read.")
-                with db.remote_engine.connect() as conn:
-                    df = pd.read_sql_query(query, conn)
-        else:
-            raise
-
+    repo = BaseRepository(DatabaseConfig(db_alias), logger)
+    df = repo.read_df("SELECT * FROM marketstats")
     elapsed = round((time.perf_counter() - start) * 1000, 2)
     logger.info(f"TIME get_all_stats() = {elapsed} ms")
     return df.reset_index(drop=True)
@@ -63,30 +42,9 @@ def _get_all_stats_impl(db_alias: str = "wcmkt") -> pd.DataFrame:
 
 def _get_all_orders_impl(db_alias: str = "wcmkt") -> pd.DataFrame:
     """Fetch all rows from marketorders with malformed-DB recovery."""
-    db = DatabaseConfig(db_alias)
     start = time.perf_counter()
-    query = "SELECT * FROM marketorders"
-
-    def _read_local():
-        with db.engine.connect() as conn:
-            return pd.read_sql_query(query, conn)
-
-    try:
-        df = _read_local()
-    except Exception as e:
-        msg = str(e).lower()
-        if "malform" in msg or "database disk image is malformed" in msg or "no such table" in msg:
-            logger.error(f"DB error during orders read ('{msg}'); syncing and retrying...")
-            try:
-                db.sync()
-                df = _read_local()
-            except Exception as e2:
-                logger.error(f"Retry after sync failed: {e2}. Falling back to remote read.")
-                with db.remote_engine.connect() as conn:
-                    df = pd.read_sql_query(query, conn)
-        else:
-            raise
-
+    repo = BaseRepository(DatabaseConfig(db_alias), logger)
+    df = repo.read_df("SELECT * FROM marketorders")
     elapsed = round((time.perf_counter() - start) * 1000, 2)
     logger.info(f"TIME get_all_orders() = {elapsed} ms")
     return df.reset_index(drop=True)
@@ -94,25 +52,8 @@ def _get_all_orders_impl(db_alias: str = "wcmkt") -> pd.DataFrame:
 
 def _get_all_history_impl(db_alias: str = "wcmkt") -> pd.DataFrame:
     """Fetch all rows from market_history with malformed-DB recovery."""
-    db = DatabaseConfig(db_alias)
-    query = "SELECT * FROM market_history"
-
-    def _read_local():
-        with db.engine.connect() as conn:
-            return pd.read_sql_query(query, conn)
-
-    try:
-        df = _read_local()
-    except Exception as e:
-        logger.error(f"Failed to get market history: {e}")
-        try:
-            db.sync()
-            df = _read_local()
-        except Exception as e2:
-            logger.error(f"Failed after sync: {e2}. Falling back to remote.")
-            with db.remote_engine.connect() as conn:
-                df = pd.read_sql_query(query, conn)
-
+    repo = BaseRepository(DatabaseConfig(db_alias), logger)
+    df = repo.read_df("SELECT * FROM market_history")
     return df.reset_index(drop=True)
 
 
@@ -134,16 +75,11 @@ def _get_history_by_type_ids_impl(type_ids: list, db_alias: str = "wcmkt") -> pd
     if not type_ids:
         return pd.DataFrame()
     db = DatabaseConfig(db_alias)
-    type_ids_str = [str(tid) for tid in type_ids]
-    if len(type_ids_str) == 1:
-        query = text("SELECT * FROM market_history WHERE type_id = :type_id")
-        with db.engine.connect() as conn:
-            return pd.read_sql_query(query, conn, params={"type_id": type_ids_str[0]})
-    else:
-        type_ids_joined = ','.join(f"'{tid}'" for tid in type_ids_str)
-        query = text(f"SELECT * FROM market_history WHERE type_id IN ({type_ids_joined})")
-        with db.engine.connect() as conn:
-            return pd.read_sql_query(query, conn)
+    query = text(
+        "SELECT * FROM market_history WHERE type_id IN :type_ids"
+    ).bindparams(bindparam("type_ids", expanding=True))
+    with db.engine.connect() as conn:
+        return pd.read_sql_query(query, conn, params={"type_ids": [int(tid) for tid in type_ids]})
 
 
 def _get_category_type_ids_impl(category_name: str) -> list:

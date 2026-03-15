@@ -11,10 +11,20 @@ Design Principles:
 - Return simple types (str, tuple) for flexibility
 """
 
+import pandas as pd
 import streamlit as st
 
 from domain.enums import ShipRole, StockStatus
 from ui.i18n import translate_text
+
+# Columns added by the localization system as English-fallback backups.
+# These must be stripped before displaying DataFrames in the UI.
+_LOCALIZED_BACKUP_COLUMNS = ["type_name_en", "ship_name_en", "Item_en"]
+
+
+def drop_localized_backup_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Remove localization helper columns that should not appear in display tables."""
+    return df.drop(columns=_LOCALIZED_BACKUP_COLUMNS, errors="ignore")
 
 def format_module_list(modules_list: list[str]) -> str:
     """

@@ -6,7 +6,9 @@ Keeps lightweight frontend copy translations in one place.
 
 from typing import Final
 
-DEFAULT_LANGUAGE: Final = "en"
+from settings_service import SettingsService
+
+DEFAULT_LANGUAGE: Final = SettingsService().default_language
 
 LANGUAGE_OPTIONS: Final[dict[str, str]] = {
     "en": "🇬🇧 EN",
