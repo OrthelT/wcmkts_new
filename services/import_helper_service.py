@@ -15,6 +15,7 @@ from sqlalchemy import bindparam, text
 from config import DatabaseConfig
 from logging_config import setup_logging
 from repositories import get_sde_repository
+from repositories.market_repo import MarketRepository
 from repositories.sde_repo import SDERepository
 from services.price_service import PriceResult, PriceService, get_price_service
 from services.type_name_localization import apply_localized_type_names
@@ -169,11 +170,13 @@ class ImportHelperService:
         mkt_db: DatabaseConfig,
         sde_repo: SDERepository,
         price_service: PriceService,
+        market_repo: MarketRepository,
         logger_instance: Optional[logging.Logger] = None,
     ):
         self._mkt_db = mkt_db
         self._sde_repo = sde_repo
         self._price_service = price_service
+        self._market_repo = market_repo
         self._logger = logger_instance or logger
 
     @classmethod
@@ -201,7 +204,8 @@ class ImportHelperService:
             db_alias=db_alias,
             janice_api_key=janice_api_key,
         )
-        return cls(market_db, sde_repo, price_service)
+        market_repo = MarketRepository(market_db)
+        return cls(market_db, sde_repo, price_service, market_repo)
 
     def _get_import_candidates(self) -> pd.DataFrame:
         """Fetch marketstats rows merged with SDE item volume.
@@ -215,7 +219,6 @@ class ImportHelperService:
                 ms.type_id,
                 ms.type_name,
                 sell_orders.price,
-                ms.avg_volume,
                 ms.category_id,
                 ms.category_name,
                 ms.group_id,
@@ -306,10 +309,17 @@ class ImportHelperService:
             return df
 
         df["type_id"] = pd.to_numeric(df["type_id"], errors="coerce").astype("Int64")
-        df["avg_volume"] = pd.to_numeric(df.get("avg_volume"), errors="coerce").fillna(0.0)
         df["volume_m3"] = pd.to_numeric(df.get("volume_m3"), errors="coerce").fillna(0.0)
 
         type_ids = df["type_id"].dropna().astype(int).tolist()
+        history_metrics = self._market_repo.get_30day_volume_metrics(type_ids)
+        if not history_metrics.empty:
+            df = df.merge(history_metrics[["type_id", "volume_30d"]], on="type_id", how="left")
+        else:
+            df["volume_30d"] = 0.5
+        df["volume_30d"] = pd.to_numeric(df.get("volume_30d"), errors="coerce").fillna(0.5)
+        df.loc[df["volume_30d"] < 0.5, "volume_30d"] = 0.5
+
         try:
             jita_prices = self._price_service.get_jita_price_data_map(type_ids)
         except Exception as e:
@@ -325,8 +335,7 @@ class ImportHelperService:
         df["price"] = pd.to_numeric(df["price"], errors="coerce")
         df["price"] = df["price"].fillna(df["jita_sell_price"])
 
-        df["turnover_30d"] = df["avg_volume"] * 30 * df["jita_sell_price"]
-        df["volume_30d"] = df["avg_volume"] * 30
+        df["turnover_30d"] = df["volume_30d"] * df["jita_sell_price"]
 
         return df
 
@@ -356,7 +365,7 @@ class ImportHelperService:
         df = apply_localized_type_names(df, self._sde_repo, language_code, self._logger)
         df["shipping_cost"] = df["volume_m3"] * filters.shipping_cost_per_m3
         df["profit_jita_sell"] = df["price"] - (df["jita_sell_price"] + df["shipping_cost"])
-        df["profit_jita_sell_30d"] = df["profit_jita_sell"] * 30 * df["avg_volume"]
+        df["profit_jita_sell_30d"] = df["profit_jita_sell"] * df["volume_30d"]
         df["capital_utilis"] = 0.0
         nonzero_jita = df["jita_sell_price"] > 0
         df.loc[nonzero_jita, "capital_utilis"] = (
@@ -365,7 +374,7 @@ class ImportHelperService:
         )
         df["rrp"] = df["jita_sell_price"] * (1 + filters.markup_margin) + df["shipping_cost"]
 
-        df = df[df["avg_volume"] > 0]
+        df = df[df["volume_30d"] > 0]
 
         if filters.doctrine_only:
             df = df[df.get("is_doctrine", 0) == 1]

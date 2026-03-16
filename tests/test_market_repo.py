@@ -110,6 +110,33 @@ class TestMarketRepositoryCachedFunctions:
         call_args = mock_read_sql.call_args
         assert call_args[1]["params"]["type_id"] == 34
 
+    @patch("repositories.market_repo.DatabaseConfig")
+    @patch("pandas.read_sql_query")
+    def test_get_30day_volume_metrics_returns_dataframe(self, mock_read_sql, mock_db_cls):
+        """_get_30day_volume_metrics returns summed 30-day volume metrics."""
+        expected = pd.DataFrame(
+            {
+                "type_id": [34],
+                "volume_30d": [19],
+                "avg_volume_30d": [19 / 30],
+            }
+        )
+        mock_read_sql.return_value = expected
+        mock_engine, _ = self._mock_engine()
+        mock_db = Mock()
+        type(mock_db).engine = PropertyMock(return_value=mock_engine)
+        mock_db_cls.return_value = mock_db
+
+        from repositories.market_repo import _get_30day_volume_metrics_impl
+        result = _get_30day_volume_metrics_impl([34])
+
+        assert isinstance(result, pd.DataFrame)
+        assert result.iloc[0]["volume_30d"] == 19
+        assert result.iloc[0]["avg_volume_30d"] == pytest.approx(19 / 30)
+        call_args = mock_read_sql.call_args
+        assert call_args[1]["params"]["type_ids"] == [34]
+        assert "cutoff" in call_args[1]["params"]
+
 
 class TestMarketRepositoryMalformedRecovery:
     """Test malformed DB recovery in cached functions."""
@@ -234,6 +261,19 @@ class TestMarketRepositoryClass:
         assert result is expected
         mock_cached.assert_called_once_with(34, mock_db.alias)
 
+    @patch("repositories.market_repo._get_30day_volume_metrics_cached")
+    def test_get_30day_volume_metrics_delegates(self, mock_cached):
+        expected = pd.DataFrame({"type_id": [34], "avg_volume_30d": [0.5], "volume_30d": [15.0]})
+        mock_cached.return_value = expected
+
+        from repositories.market_repo import MarketRepository
+        mock_db = Mock()
+        repo = MarketRepository(mock_db)
+        result = repo.get_30day_volume_metrics([34])
+
+        assert result is expected
+        mock_cached.assert_called_once_with((34,), mock_db.alias)
+
 
 class TestGetUpdateTime:
     """Test get_update_time utility."""
@@ -268,10 +308,11 @@ class TestInvalidateMarketCaches:
     @patch("repositories.market_repo._get_all_orders_cached")
     @patch("repositories.market_repo._get_all_history_cached")
     @patch("repositories.market_repo._get_history_by_type_cached")
+    @patch("repositories.market_repo._get_30day_volume_metrics_cached")
     def test_invalidate_clears_all_market_caches(
-        self, mock_history_type, mock_history, mock_orders, mock_stats
+        self, mock_volume_metrics, mock_history_type, mock_history, mock_orders, mock_stats
     ):
-        """invalidate_market_caches clears all four market cache functions."""
+        """invalidate_market_caches clears market cache functions."""
         from repositories.market_repo import invalidate_market_caches
 
         invalidate_market_caches()
@@ -280,6 +321,7 @@ class TestInvalidateMarketCaches:
         mock_orders.clear.assert_called_once()
         mock_history.clear.assert_called_once()
         mock_history_type.clear.assert_called_once()
+        mock_volume_metrics.clear.assert_called_once()
 
 
 class TestGetLocalPrice:

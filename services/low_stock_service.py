@@ -20,6 +20,7 @@ from sqlalchemy import text
 from config import DatabaseConfig
 from logging_config import setup_logging
 from repositories import get_sde_repository
+from repositories.market_repo import MarketRepository
 from repositories.sde_repo import SDERepository
 from services.type_name_localization import apply_localized_type_names
 
@@ -55,6 +56,7 @@ class LowStockFilters:
     faction_only: bool = False
     fit_ids: list[int] = field(default_factory=list)
     type_ids: list[int] = field(default_factory=list)
+    show_zero_volume_items: bool = False
 
 
 @dataclass(frozen=True)
@@ -176,6 +178,7 @@ class LowStockService:
         self,
         mkt_db: DatabaseConfig,
         sde_repo: SDERepository,
+        market_repo: MarketRepository,
         logger_instance: Optional[logging.Logger] = None,
     ):
         """
@@ -188,6 +191,7 @@ class LowStockService:
         """
         self._mkt_db = mkt_db
         self._sde_repo = sde_repo
+        self._market_repo = market_repo
         self._logger = logger_instance or logger
 
     @classmethod
@@ -200,7 +204,8 @@ class LowStockService:
 
         mkt_db = DatabaseConfig(db_alias)
         sde_repo = get_sde_repository()
-        return cls(mkt_db, sde_repo)
+        market_repo = MarketRepository(mkt_db)
+        return cls(mkt_db, sde_repo, market_repo)
 
     # -------------------------------------------------------------------------
     # Filter Options
@@ -412,6 +417,28 @@ class LowStockService:
 
             if df.empty:
                 return df
+
+            type_ids = pd.to_numeric(df["type_id"], errors="coerce").dropna().astype(int).tolist()
+            history_metrics = self._market_repo.get_30day_volume_metrics(type_ids)
+            avg_volume_map = (
+                history_metrics.set_index("type_id")["avg_volume_30d"].to_dict()
+                if not history_metrics.empty
+                else {}
+            )
+            df["avg_volume"] = pd.to_numeric(df["type_id"].map(avg_volume_map), errors="coerce").fillna(0.0)
+
+            df["total_volume_remain"] = pd.to_numeric(
+                df.get("total_volume_remain"), errors="coerce"
+            ).fillna(0.0)
+            df["days_remaining"] = 0.0
+            nonzero_avg_volume = df["avg_volume"] > 0
+            df.loc[nonzero_avg_volume, "days_remaining"] = (
+                df.loc[nonzero_avg_volume, "total_volume_remain"]
+                / df.loc[nonzero_avg_volume, "avg_volume"]
+            )
+
+            if not filters.show_zero_volume_items:
+                df = df[df["avg_volume"] >= 0.05]
 
             from settings_service import SettingsService
 

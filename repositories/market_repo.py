@@ -14,6 +14,7 @@ Design Principles:
 from typing import Optional
 import logging
 import time
+from datetime import datetime, timedelta
 
 import pandas as pd
 import streamlit as st
@@ -80,6 +81,42 @@ def _get_history_by_type_ids_impl(type_ids: list, db_alias: str = "wcmkt") -> pd
     ).bindparams(bindparam("type_ids", expanding=True))
     with db.engine.connect() as conn:
         return pd.read_sql_query(query, conn, params={"type_ids": [int(tid) for tid in type_ids]})
+
+
+def _get_30day_volume_metrics_impl(type_ids: list[int], db_alias: str = "wcmkt") -> pd.DataFrame:
+    """Fetch 30-day volume totals and average daily volume from market_history."""
+    if not type_ids:
+        return pd.DataFrame(columns=["type_id", "volume_30d", "avg_volume_30d"])
+
+    db = DatabaseConfig(db_alias)
+    cutoff = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
+    query = text(
+        """
+        SELECT
+            CAST(type_id AS INTEGER) AS type_id,
+            COALESCE(SUM(volume), 0) AS volume_30d,
+            COALESCE(SUM(volume), 0) / 30.0 AS avg_volume_30d
+        FROM market_history
+        WHERE CAST(type_id AS INTEGER) IN :type_ids
+          AND date >= :cutoff
+        GROUP BY CAST(type_id AS INTEGER)
+        """
+    ).bindparams(bindparam("type_ids", expanding=True))
+
+    with db.engine.connect() as conn:
+        df = pd.read_sql_query(
+            query,
+            conn,
+            params={"type_ids": [int(tid) for tid in type_ids], "cutoff": cutoff},
+        )
+
+    if df.empty:
+        return pd.DataFrame(columns=["type_id", "volume_30d", "avg_volume_30d"])
+
+    df["type_id"] = pd.to_numeric(df["type_id"], errors="coerce").astype("Int64")
+    df["volume_30d"] = pd.to_numeric(df["volume_30d"], errors="coerce").fillna(0.0)
+    df["avg_volume_30d"] = pd.to_numeric(df["avg_volume_30d"], errors="coerce").fillna(0.0)
+    return df
 
 
 def _get_category_type_ids_impl(category_name: str) -> list:
@@ -193,6 +230,11 @@ def _get_history_by_type_ids_cached(type_ids: tuple, db_alias: str = "wcmkt") ->
     return _get_history_by_type_ids_impl(list(type_ids), db_alias)
 
 
+@st.cache_data(ttl=1800)
+def _get_30day_volume_metrics_cached(type_ids: tuple, db_alias: str = "wcmkt") -> pd.DataFrame:
+    return _get_30day_volume_metrics_impl(list(type_ids), db_alias)
+
+
 @st.cache_data(ttl=3600)
 def _get_category_type_ids_cached(category_name: str) -> list:
     return _get_category_type_ids_impl(category_name)
@@ -237,6 +279,7 @@ def invalidate_market_caches():
     _get_all_history_cached.clear()
     _get_history_by_type_cached.clear()
     _get_history_by_type_ids_cached.clear()
+    _get_30day_volume_metrics_cached.clear()
     _get_market_type_ids_cached.clear()
     _get_local_price_cached.clear()
     logger.info("Market caches invalidated")
@@ -329,6 +372,10 @@ class MarketRepository(BaseRepository):
     def get_history_by_type_ids(self, type_ids: list) -> pd.DataFrame:
         """Get market history for multiple type_ids (cached, TTL=1800s)."""
         return _get_history_by_type_ids_cached(tuple(type_ids), self.db.alias)
+
+    def get_30day_volume_metrics(self, type_ids: list[int]) -> pd.DataFrame:
+        """Get 30-day total volume and average daily volume for type_ids."""
+        return _get_30day_volume_metrics_cached(tuple(type_ids), self.db.alias)
 
     def get_category_type_ids(
         self,

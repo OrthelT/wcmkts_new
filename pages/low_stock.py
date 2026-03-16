@@ -303,6 +303,12 @@ def main():
         help=translate_text(language_code, "low_stock.max_days_remaining_help"),
     )
     ss_set("ls_max_days", max_days_remaining)
+    show_zero_volume_items = st.sidebar.checkbox(
+        translate_text(language_code, "low_stock.show_zero_volume_items"),
+        value=ss_get("ls_show_zero_volume_items", False),
+        help=translate_text(language_code, "low_stock.show_zero_volume_items_help"),
+    )
+    ss_set("ls_show_zero_volume_items", show_zero_volume_items)
 
     # Build filters
     filters = LowStockFilters(
@@ -312,6 +318,7 @@ def main():
         tech2_only=tech2_only,
         faction_only=faction_only,
         fit_ids=fit_ids,
+        show_zero_volume_items=show_zero_volume_items,
     )
 
     # Get filtered data using service
@@ -457,13 +464,13 @@ def main():
             ),
             "days_remaining": st.column_config.NumberColumn(
                 translate_text(language_code, "low_stock.column_days"),
-                format="localized",
+                format="%.1f",
                 help=translate_text(language_code, "low_stock.column_days_help"),
                 width="small",
             ),
             "avg_volume": st.column_config.NumberColumn(
                 translate_text(language_code, "low_stock.column_avg_vol"),
-                format="localized",
+                format="%.1f",
                 help=translate_text(language_code, "low_stock.column_avg_vol_help"),
                 width="small",
             ),

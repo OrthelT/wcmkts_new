@@ -17,6 +17,22 @@ class DummyPriceService:
         }
 
 
+def _mock_market_repo(volume_map: dict[int, float] | None = None):
+    mock_repo = Mock()
+    volume_map = volume_map or {}
+
+    def _get_30day_volume_metrics(type_ids: list[int]) -> pd.DataFrame:
+        rows = [
+            {"type_id": type_id, "volume_30d": volume_map[type_id]}
+            for type_id in type_ids
+            if type_id in volume_map
+        ]
+        return pd.DataFrame(rows)
+
+    mock_repo.get_30day_volume_metrics.side_effect = _get_30day_volume_metrics
+    return mock_repo
+
+
 class TestImportHelperService:
     def test_apply_packaged_ship_volumes_uses_packaged_ship_sizes(self):
         from services.import_helper_service import _apply_packaged_ship_volumes
@@ -77,17 +93,107 @@ class TestImportHelperService:
 
         first_market_db = Mock()
         first_market_db.alias = "wcmkt"
-        first_service = ImportHelperService(first_market_db, Mock(), provider)
+        first_service = ImportHelperService(first_market_db, Mock(), provider, _mock_market_repo())
         with patch.object(first_service, "_get_import_candidates", return_value=candidate_df) as fetch_candidates:
             first_service.fetch_base_data()
             first_service.fetch_base_data()
 
         assert fetch_candidates.call_count == 2
 
+    def test_fetch_base_data_uses_30day_history_volume_metrics_when_available(self):
+        from services.import_helper_service import ImportHelperService
+
+        provider = DummyPriceService(
+            {
+                34: PriceResult.success_result(
+                    type_id=34,
+                    sell_price=20.0,
+                    buy_price=18.0,
+                    source=PriceSource.JITA_FUZZWORK,
+                )
+            }
+        )
+        market_repo = Mock()
+        market_repo.get_30day_volume_metrics.return_value = pd.DataFrame(
+            {
+                "type_id": [34],
+                "volume_30d": [15.0],
+            }
+        )
+        service = ImportHelperService(Mock(), Mock(), provider, market_repo)
+
+        with patch.object(
+            service,
+            "_get_import_candidates",
+            return_value=pd.DataFrame(
+                {
+                    "type_id": [34],
+                    "type_name": ["Tritanium"],
+                    "price": [30.0],
+                    "volume_m3": [0.01],
+                    "category_name": ["Mineral"],
+                    "group_name": ["Mineral"],
+                }
+            ),
+        ):
+            result = service.fetch_base_data()
+
+        row = result.iloc[0]
+        assert row["volume_30d"] == 15.0
+        assert row["turnover_30d"] == 300.0
+
+    def test_fetch_base_data_floors_missing_or_tiny_30day_volume_to_point_five(self):
+        from services.import_helper_service import ImportHelperService
+
+        provider = DummyPriceService(
+            {
+                34: PriceResult.success_result(
+                    type_id=34,
+                    sell_price=20.0,
+                    buy_price=18.0,
+                    source=PriceSource.JITA_FUZZWORK,
+                ),
+                35: PriceResult.success_result(
+                    type_id=35,
+                    sell_price=20.0,
+                    buy_price=18.0,
+                    source=PriceSource.JITA_FUZZWORK,
+                ),
+            }
+        )
+        market_repo = Mock()
+        market_repo.get_30day_volume_metrics.return_value = pd.DataFrame(
+            {
+                "type_id": [35],
+                "volume_30d": [0.2],
+            }
+        )
+        service = ImportHelperService(Mock(), Mock(), provider, market_repo)
+
+        with patch.object(
+            service,
+            "_get_import_candidates",
+            return_value=pd.DataFrame(
+                {
+                    "type_id": [34, 35],
+                    "type_name": ["Tritanium", "Pyerite"],
+                    "price": [30.0, 25.0],
+                    "volume_m3": [0.01, 0.02],
+                    "category_name": ["Mineral", "Mineral"],
+                    "group_name": ["Mineral", "Mineral"],
+                }
+            ),
+        ):
+            result = service.fetch_base_data()
+
+        assert result["volume_30d"].tolist() == [0.5, 0.5]
+
     def test_get_import_items_calculates_requested_metrics(self):
         from services.import_helper_service import ImportHelperService
 
-        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}))
+        service = ImportHelperService(
+            Mock(), Mock(), DummyPriceService({}), _mock_market_repo({34: 150.0})
+        )
         provider = DummyPriceService(
             {
                 34: PriceResult.success_result(
@@ -136,7 +242,9 @@ class TestImportHelperService:
     def test_get_import_items_calculates_rrp_with_custom_markup_margin(self):
         from services.import_helper_service import ImportHelperFilters, ImportHelperService
 
-        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}))
+        service = ImportHelperService(
+            Mock(), Mock(), DummyPriceService({}), _mock_market_repo({34: 150.0})
+        )
         provider = DummyPriceService(
             {
                 34: PriceResult.success_result(
@@ -220,7 +328,7 @@ class TestImportHelperService:
         sde_repo = Mock()
         sde_repo.db.engine = mock_sde_engine
 
-        service = ImportHelperService(mkt_db, sde_repo, DummyPriceService({}))
+        service = ImportHelperService(mkt_db, sde_repo, DummyPriceService({}), _mock_market_repo())
         result = service._get_import_candidates()
         market_query = str(mock_read_sql.call_args_list[0].args[0])
 
@@ -236,7 +344,9 @@ class TestImportHelperService:
     def test_fetch_base_data_fills_null_price_from_jita_sell_when_no_sell_orders_exist(self):
         from services.import_helper_service import ImportHelperService
 
-        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}))
+        service = ImportHelperService(
+            Mock(), Mock(), DummyPriceService({}), _mock_market_repo({34: 150.0})
+        )
         provider = DummyPriceService(
             {
                 34: PriceResult.success_result(
@@ -273,7 +383,7 @@ class TestImportHelperService:
     def test_get_import_items_uses_custom_shipping_cost_per_m3(self):
         from services.import_helper_service import ImportHelperFilters, ImportHelperService
 
-        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}))
+        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}), _mock_market_repo())
         base_df = pd.DataFrame(
             {
                 "type_id": [34],
@@ -310,7 +420,7 @@ class TestImportHelperService:
     def test_disabling_profitable_only_allows_negative_profit_items_with_default_capital_filter(self):
         from services.import_helper_service import ImportHelperFilters, ImportHelperService
 
-        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}))
+        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}), _mock_market_repo())
         base_df = pd.DataFrame(
             {
                 "type_id": [34, 35],
@@ -338,10 +448,12 @@ class TestImportHelperService:
         assert result["type_id"].tolist() == [35, 34]
         assert (result["profit_jita_sell"] < 0).any()
 
-    def test_get_import_items_applies_filters_using_avg_volume(self):
+    def test_get_import_items_applies_filters_using_30day_volume(self):
         from services.import_helper_service import ImportHelperFilters, ImportHelperService
 
-        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}))
+        service = ImportHelperService(
+            Mock(), Mock(), DummyPriceService({}), _mock_market_repo({34: 120.0, 35: 60.0})
+        )
         provider = DummyPriceService(
             {
                 34: PriceResult.success_result(
@@ -394,7 +506,9 @@ class TestImportHelperService:
     def test_get_import_items_filters_by_minimum_30d_turnover(self):
         from services.import_helper_service import ImportHelperFilters, ImportHelperService
 
-        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}))
+        service = ImportHelperService(
+            Mock(), Mock(), DummyPriceService({}), _mock_market_repo({34: 150.0, 35: 60.0})
+        )
         provider = DummyPriceService(
             {
                 34: PriceResult.success_result(
@@ -449,7 +563,7 @@ class TestImportHelperService:
         mock_sde_repo.get_tech2_type_ids.return_value = [35]
         mock_sde_repo.get_faction_type_ids.return_value = {36}
 
-        service = ImportHelperService(Mock(), mock_sde_repo, DummyPriceService({}))
+        service = ImportHelperService(Mock(), mock_sde_repo, DummyPriceService({}), _mock_market_repo())
         base_df = pd.DataFrame(
             {
                 "type_id": [34, 35, 36],
@@ -495,7 +609,7 @@ class TestImportHelperService:
     ):
         from services.import_helper_service import ImportHelperFilters, ImportHelperService
 
-        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}))
+        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}), _mock_market_repo())
 
         base_df = pd.DataFrame(
             {
@@ -535,7 +649,7 @@ class TestImportHelperService:
     def test_get_summary_stats_returns_counts_and_average(self):
         from services.import_helper_service import ImportHelperService
 
-        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}))
+        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}), _mock_market_repo())
         df = pd.DataFrame(
             {
                 "profit_jita_sell": [10.0, -1.0, 5.0],
@@ -552,7 +666,7 @@ class TestImportHelperService:
     def test_fetch_base_data_returns_empty_when_no_candidates(self):
         from services.import_helper_service import ImportHelperService
 
-        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}))
+        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}), _mock_market_repo())
         with patch.object(service, "_get_import_candidates", return_value=pd.DataFrame()):
             result = service.fetch_base_data()
             assert result.empty
@@ -575,7 +689,7 @@ class TestImportHelperService:
         mkt_db = Mock()
         type(mkt_db).engine = mock_engine
 
-        service = ImportHelperService(mkt_db, Mock(), DummyPriceService({}))
+        service = ImportHelperService(mkt_db, Mock(), DummyPriceService({}), _mock_market_repo())
         result = service.get_category_options()
 
         assert result["category_id"].tolist() == [4, 7]
