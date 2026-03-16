@@ -222,12 +222,53 @@ class TestImportHelperService:
 
         service = ImportHelperService(mkt_db, sde_repo, DummyPriceService({}))
         result = service._get_import_candidates()
+        market_query = str(mock_read_sql.call_args_list[0].args[0])
 
         assert result.iloc[0]["volume_m3"] == 10000.0
+        assert result.iloc[0]["price"] == 2_000_000.0
         assert "category_name" in result.columns
         assert "group_name" in result.columns
         assert "category_name_x" not in result.columns
         assert "group_name_x" not in result.columns
+        assert "FROM marketorders" in market_query
+        assert "MIN(price) AS price" in market_query
+
+    def test_fetch_base_data_fills_null_price_from_jita_sell_when_no_sell_orders_exist(self):
+        from services.import_helper_service import ImportHelperService
+
+        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}))
+        provider = DummyPriceService(
+            {
+                34: PriceResult.success_result(
+                    type_id=34,
+                    sell_price=20.0,
+                    buy_price=18.0,
+                    source=PriceSource.JITA_FUZZWORK,
+                )
+            }
+        )
+        service._price_service = provider
+
+        with patch.object(
+            service,
+            "_get_import_candidates",
+            return_value=pd.DataFrame(
+                {
+                    "type_id": [34],
+                    "type_name": ["Tritanium"],
+                    "price": [None],
+                    "avg_volume": [5.0],
+                    "volume_m3": [0.01],
+                    "category_name": ["Mineral"],
+                    "group_name": ["Mineral"],
+                }
+            ),
+        ):
+            result = service.fetch_base_data()
+
+        assert result.iloc[0]["price"] == 20.0
+        assert result.iloc[0]["jita_sell_price"] == 20.0
+        assert result.iloc[0]["turnover_30d"] == 3000.0
 
     def test_get_import_items_uses_custom_shipping_cost_per_m3(self):
         from services.import_helper_service import ImportHelperFilters, ImportHelperService

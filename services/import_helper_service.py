@@ -214,7 +214,7 @@ class ImportHelperService:
             SELECT
                 ms.type_id,
                 ms.type_name,
-                ms.price,
+                sell_orders.price,
                 ms.avg_volume,
                 ms.category_id,
                 ms.category_name,
@@ -222,6 +222,14 @@ class ImportHelperService:
                 ms.group_name,
                 CASE WHEN d.type_id IS NOT NULL THEN 1 ELSE 0 END AS is_doctrine
             FROM marketstats ms
+            LEFT JOIN (
+                SELECT
+                    type_id,
+                    MIN(price) AS price
+                FROM marketorders
+                WHERE is_buy_order = 0
+                GROUP BY type_id
+            ) sell_orders ON ms.type_id = sell_orders.type_id
             LEFT JOIN (
                 SELECT DISTINCT type_id
                 FROM doctrines
@@ -298,7 +306,6 @@ class ImportHelperService:
             return df
 
         df["type_id"] = pd.to_numeric(df["type_id"], errors="coerce").astype("Int64")
-        df["price"] = pd.to_numeric(df["price"], errors="coerce").fillna(0.0)
         df["avg_volume"] = pd.to_numeric(df.get("avg_volume"), errors="coerce").fillna(0.0)
         df["volume_m3"] = pd.to_numeric(df.get("volume_m3"), errors="coerce").fillna(0.0)
 
@@ -315,6 +322,8 @@ class ImportHelperService:
         df["jita_buy_price"] = df["type_id"].map(
             lambda tid: _get_jita_buy_price(jita_prices, tid)
         )
+        df["price"] = pd.to_numeric(df["price"], errors="coerce")
+        df["price"] = df["price"].fillna(df["jita_sell_price"])
 
         df["turnover_30d"] = df["avg_volume"] * 30 * df["jita_sell_price"]
         df["volume_30d"] = df["avg_volume"] * 30
