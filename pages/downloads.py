@@ -363,6 +363,8 @@ def sde_downloads_section():
         st.warning("No SDE tables available.")
         return
 
+    tables = sorted(tables, key=str.casefold)
+
     default_index = tables.index("sdetypes") if "sdetypes" in tables else 0
 
     selected_table = st.selectbox(
