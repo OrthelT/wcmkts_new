@@ -103,12 +103,16 @@ def _get_30day_volume_metrics_impl(type_ids: list[int], db_alias: str = "wcmkt")
         """
     ).bindparams(bindparam("type_ids", expanding=True))
 
-    with db.engine.connect() as conn:
-        df = pd.read_sql_query(
-            query,
-            conn,
-            params={"type_ids": [int(tid) for tid in type_ids], "cutoff": cutoff},
-        )
+    try:
+        with db.engine.connect() as conn:
+            df = pd.read_sql_query(
+                query,
+                conn,
+                params={"type_ids": [int(tid) for tid in type_ids], "cutoff": cutoff},
+            )
+    except Exception as e:
+        logger.error(f"Failed to fetch 30-day volume metrics: {e}")
+        return pd.DataFrame(columns=["type_id", "volume_30d", "avg_volume_30d"])
 
     if df.empty:
         return pd.DataFrame(columns=["type_id", "volume_30d", "avg_volume_30d"])
@@ -374,7 +378,11 @@ class MarketRepository(BaseRepository):
         return _get_history_by_type_ids_cached(tuple(type_ids), self.db.alias)
 
     def get_30day_volume_metrics(self, type_ids: list[int]) -> pd.DataFrame:
-        """Get 30-day total volume and average daily volume for type_ids."""
+        """Get 30-day total volume and average daily volume for type_ids (cached, TTL=1800s).
+
+        The average is computed as total volume divided by 30 (a fixed window),
+        not by the number of days with recorded history.
+        """
         return _get_30day_volume_metrics_cached(tuple(type_ids), self.db.alias)
 
     def get_category_type_ids(

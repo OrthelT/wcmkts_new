@@ -1,4 +1,4 @@
-"""Tests for LowStockService localization behavior."""
+"""Tests for LowStockService."""
 
 import pandas as pd
 from unittest.mock import Mock, patch
@@ -15,9 +15,21 @@ def _mock_db():
     return mock_db
 
 
-def _mock_market_repo():
+def _mock_market_repo(volume_map: dict[int, tuple[float, float]] | None = None):
+    """Create a mock MarketRepository.
+
+    Args:
+        volume_map: {type_id: (volume_30d, avg_volume_30d)} mapping.
+    """
     mock_repo = Mock()
-    mock_repo.get_30day_volume_metrics.return_value = pd.DataFrame()
+    volume_map = volume_map or {}
+    rows = [
+        {"type_id": tid, "volume_30d": v30, "avg_volume_30d": avg}
+        for tid, (v30, avg) in volume_map.items()
+    ]
+    mock_repo.get_30day_volume_metrics.return_value = pd.DataFrame(
+        rows or [], columns=["type_id", "volume_30d", "avg_volume_30d"]
+    )
     return mock_repo
 
 
@@ -58,7 +70,7 @@ class TestLowStockService:
             {
                 "type_id": [34, 36],
                 "volume_30d": [15.0, 1.5],
-                "avg_volume_30d": [0.5, 0.05],
+                "avg_volume_30d": [0.5, 0.04],
             }
         )
 

@@ -312,7 +312,13 @@ class TestInvalidateMarketCaches:
     def test_invalidate_clears_all_market_caches(
         self, mock_volume_metrics, mock_history_type, mock_history, mock_orders, mock_stats
     ):
-        """invalidate_market_caches clears market cache functions."""
+        """invalidate_market_caches clears market cache functions.
+
+        Note: this test patches 5 of 8 cached functions. The remaining 3
+        (_get_history_by_type_ids_cached, _get_market_type_ids_cached,
+        _get_local_price_cached) are not patched here but are cleared
+        by the real invalidate_market_caches().
+        """
         from repositories.market_repo import invalidate_market_caches
 
         invalidate_market_caches()

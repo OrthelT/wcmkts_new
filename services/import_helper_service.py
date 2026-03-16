@@ -208,10 +208,10 @@ class ImportHelperService:
         return cls(market_db, sde_repo, price_service, market_repo)
 
     def _get_import_candidates(self) -> pd.DataFrame:
-        """Fetch marketstats rows merged with SDE item volume.
+        """Fetch marketstats rows with lowest sell order price and SDE item volume.
 
-        Raises:
-            RuntimeError: If the market database query fails.
+        The price column comes from the minimum sell order in marketorders,
+        returning NULL when no sell orders exist for a type.
         """
         market_query = text(
             """
@@ -296,13 +296,18 @@ class ImportHelperService:
             return pd.DataFrame(columns=["category_id", "category_name"])
 
     def fetch_base_data(self) -> pd.DataFrame:
-        """Fetch candidates from DB and Jita prices. Jita Price caching is handled inside PriceService.
+        """Fetch candidates from DB and enrich with Jita prices and volume metrics.
+
+        Price defaults to the lowest current sell order; if no sell orders exist,
+        falls back to 120% of Jita sell price (marked via ``price_source`` column).
+        Volume metrics (volume_30d) are sourced from market_history, with a floor
+        of 0.5 to prevent division-by-zero (marked via ``volume_floored`` column).
 
         Returns a DataFrame with all computed columns (jita prices, shipping,
         profit, capital_utilis) but no filters applied.
 
         Raises:
-            RuntimeError: If Jita price fetch fails.
+            RuntimeError: If Jita price fetch fails or history data is unavailable.
         """
         df = self._get_import_candidates().copy()
         if df.empty:
@@ -313,12 +318,22 @@ class ImportHelperService:
 
         type_ids = df["type_id"].dropna().astype(int).tolist()
         history_metrics = self._market_repo.get_30day_volume_metrics(type_ids)
-        if not history_metrics.empty:
-            df = df.merge(history_metrics[["type_id", "volume_30d"]], on="type_id", how="left")
-        else:
-            df["volume_30d"] = 0.5
-        df["volume_30d"] = pd.to_numeric(df.get("volume_30d"), errors="coerce").fillna(0.5)
-        df.loc[df["volume_30d"] < 0.5, "volume_30d"] = 0.5
+        if history_metrics.empty:
+            raise RuntimeError("history_data_unavailable")
+        df = df.merge(
+            history_metrics[["type_id", "volume_30d"]], on="type_id", how="left"
+        )
+        df["volume_30d"] = pd.to_numeric(
+            df.get("volume_30d"), errors="coerce"
+        ).fillna(0.0)
+        volume_floored = df["volume_30d"] < 0.5
+        if volume_floored.any():
+            self._logger.info(
+                "Flooring volume_30d to 0.5 for %d items with insufficient history",
+                volume_floored.sum(),
+            )
+        df.loc[volume_floored, "volume_30d"] = 0.5
+        df["volume_floored"] = volume_floored
 
         try:
             jita_prices = self._price_service.get_jita_price_data_map(type_ids)
@@ -333,7 +348,15 @@ class ImportHelperService:
             lambda tid: _get_jita_buy_price(jita_prices, tid)
         )
         df["price"] = pd.to_numeric(df["price"], errors="coerce")
-        df["price"] = df["price"].fillna(df["jita_sell_price"])
+        price_missing = df["price"].isna()
+        if price_missing.any():
+            self._logger.info(
+                "Using 1.2x Jita sell fallback for %d items with no sell orders",
+                price_missing.sum(),
+            )
+        df["price_source"] = "market"
+        df.loc[price_missing, "price_source"] = "estimated"
+        df["price"] = df["price"].fillna(df["jita_sell_price"] * 1.2)
 
         df["turnover_30d"] = df["volume_30d"] * df["jita_sell_price"]
 

@@ -322,7 +322,17 @@ def main():
     )
 
     # Get filtered data using service
-    df = service.get_low_stock_items(filters, language_code=language_code)
+    try:
+        df = service.get_low_stock_items(filters, language_code=language_code)
+    except RuntimeError as e:
+        if "history_data_unavailable" in str(e):
+            st.error("History data currently unavailable, try again later.")
+        else:
+            logger.error(f"Low stock data load failed: {e}")
+            st.error("Failed to load low stock data. Check database connectivity.")
+        st.sidebar.markdown("---")
+        display_sync_status(language_code=language_code)
+        return
 
     if not df.empty:
         # Sort by days_remaining (ascending) to show most critical items first

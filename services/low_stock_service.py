@@ -46,6 +46,7 @@ class LowStockFilters:
         faction_only: Only show faction items (metaGroupID=4)
         fit_ids: Filter by specific fit IDs (for doctrine/fit filtering)
         type_ids: Filter by specific type IDs
+        show_zero_volume_items: Include items with zero 30-day average volume (default: False)
     """
 
     category_ids: list[int] = field(default_factory=list)
@@ -187,6 +188,7 @@ class LowStockService:
         Args:
             mkt_db: DatabaseConfig for market database (wcmkt)
             sde_repo: Repository for SDE lookups and reads
+            market_repo: MarketRepository for 30-day volume lookups
             logger_instance: Optional logger instance
         """
         self._mkt_db = mkt_db
@@ -418,14 +420,24 @@ class LowStockService:
             if df.empty:
                 return df
 
-            type_ids = pd.to_numeric(df["type_id"], errors="coerce").dropna().astype(int).tolist()
-            history_metrics = self._market_repo.get_30day_volume_metrics(type_ids)
+            type_ids = (
+                pd.to_numeric(df["type_id"], errors="coerce")
+                .dropna()
+                .astype(int)
+                .tolist()
+            )
+            history_metrics = self._market_repo.get_30day_volume_metrics(
+                type_ids
+            )
+            if history_metrics.empty:
+                raise RuntimeError("history_data_unavailable")
             avg_volume_map = (
                 history_metrics.set_index("type_id")["avg_volume_30d"].to_dict()
-                if not history_metrics.empty
-                else {}
             )
-            df["avg_volume"] = pd.to_numeric(df["type_id"].map(avg_volume_map), errors="coerce").fillna(0.0)
+            mapped = df["type_id"].map(avg_volume_map)
+            df["avg_volume"] = pd.to_numeric(
+                mapped, errors="coerce"
+            ).fillna(0.0)
 
             df["total_volume_remain"] = pd.to_numeric(
                 df.get("total_volume_remain"), errors="coerce"
@@ -511,6 +523,8 @@ class LowStockService:
 
             return df
 
+        except RuntimeError:
+            raise
         except Exception as e:
             self._logger.error(f"Failed to get low stock items: {e}")
             return pd.DataFrame()

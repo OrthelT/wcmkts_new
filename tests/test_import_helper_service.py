@@ -84,7 +84,6 @@ class TestImportHelperService:
                 "type_id": [34],
                 "type_name": ["Tritanium"],
                 "price": [30.0],
-                "avg_volume": [5.0],
                 "volume_m3": [0.01],
                 "category_name": ["Mineral"],
                 "group_name": ["Mineral"],
@@ -93,7 +92,7 @@ class TestImportHelperService:
 
         first_market_db = Mock()
         first_market_db.alias = "wcmkt"
-        first_service = ImportHelperService(first_market_db, Mock(), provider, _mock_market_repo())
+        first_service = ImportHelperService(first_market_db, Mock(), provider, _mock_market_repo({34: 150.0}))
         with patch.object(first_service, "_get_import_candidates", return_value=candidate_df) as fetch_candidates:
             first_service.fetch_base_data()
             first_service.fetch_base_data()
@@ -214,7 +213,6 @@ class TestImportHelperService:
                     "type_id": [34],
                     "type_name": ["Tritanium"],
                     "price": [30.0],
-                    "avg_volume": [5.0],
                     "volume_m3": [0.01],
                     "category_name": ["Mineral"],
                     "group_name": ["Mineral"],
@@ -231,7 +229,7 @@ class TestImportHelperService:
         row = result.iloc[0]
         assert row["shipping_cost"] == expected_shipping
         assert abs(row["profit_jita_sell"] - expected_profit) < 1e-9
-        assert abs(row["profit_jita_sell_30d"] - expected_profit * 30 * 5.0) < 1e-9
+        assert abs(row["profit_jita_sell_30d"] - expected_profit * 150.0) < 1e-9  # volume_30d from mock
         assert row["turnover_30d"] == 3000.0
         assert row["volume_30d"] == 150.0
         expected_rrp = 20.0 * 1.2 + expected_shipping  # jita * (1 + margin) + shipping
@@ -267,7 +265,6 @@ class TestImportHelperService:
                     "type_id": [34],
                     "type_name": ["Tritanium"],
                     "price": [30.0],
-                    "avg_volume": [5.0],
                     "volume_m3": [0.01],
                     "category_name": ["Mineral"],
                     "group_name": ["Mineral"],
@@ -293,7 +290,6 @@ class TestImportHelperService:
                 "type_id": [620],
                 "type_name": ["Osprey"],
                 "price": [2_000_000.0],
-                "avg_volume": [1.0],
                 "category_id": [6],
                 "category_name": ["Ship"],
                 "group_id": [26],
@@ -367,7 +363,6 @@ class TestImportHelperService:
                     "type_id": [34],
                     "type_name": ["Tritanium"],
                     "price": [None],
-                    "avg_volume": [5.0],
                     "volume_m3": [0.01],
                     "category_name": ["Mineral"],
                     "group_name": ["Mineral"],
@@ -376,7 +371,8 @@ class TestImportHelperService:
         ):
             result = service.fetch_base_data()
 
-        assert result.iloc[0]["price"] == 20.0
+        assert result.iloc[0]["price"] == 24.0  # 1.2 * jita_sell(20.0)
+        assert result.iloc[0]["price_source"] == "estimated"
         assert result.iloc[0]["jita_sell_price"] == 20.0
         assert result.iloc[0]["turnover_30d"] == 3000.0
 
@@ -389,7 +385,6 @@ class TestImportHelperService:
                 "type_id": [34],
                 "type_name": ["Tritanium"],
                 "price": [30.0],
-                "avg_volume": [5.0],
                 "volume_m3": [2.0],
                 "jita_sell_price": [20.0],
                 "jita_buy_price": [18.0],
@@ -426,7 +421,6 @@ class TestImportHelperService:
                 "type_id": [34, 35],
                 "type_name": ["Loss Item", "Profit Item"],
                 "price": [10.0, 30.0],
-                "avg_volume": [5.0, 5.0],
                 "volume_m3": [1.0, 0.01],
                 "jita_sell_price": [20.0, 20.0],
                 "jita_buy_price": [18.0, 18.0],
@@ -487,7 +481,6 @@ class TestImportHelperService:
                     "type_id": [34, 35],
                     "type_name": ["Tritanium", "Pyerite"],
                     "price": [30.0, 15.0],
-                    "avg_volume": [4.0, 2.0],
                     "volume_m3": [0.01, 0.02],
                     "category_name": ["Mineral", "Mineral"],
                     "group_name": ["Mineral", "Mineral"],
@@ -540,7 +533,6 @@ class TestImportHelperService:
                     "type_id": [34, 35],
                     "type_name": ["Tritanium", "Pyerite"],
                     "price": [30.0, 25.0],
-                    "avg_volume": [5.0, 2.0],
                     "volume_m3": [0.01, 0.02],
                     "category_name": ["Mineral", "Mineral"],
                     "group_name": ["Mineral", "Mineral"],
@@ -569,7 +561,6 @@ class TestImportHelperService:
                 "type_id": [34, 35, 36],
                 "type_name": ["Tritanium", "Tech Item", "Faction Item"],
                 "price": [30.0, 40.0, 50.0],
-                "avg_volume": [5.0, 5.0, 5.0],
                 "volume_m3": [0.01, 0.01, 0.01],
                 "jita_sell_price": [20.0, 20.0, 20.0],
                 "jita_buy_price": [18.0, 18.0, 18.0],
@@ -616,7 +607,6 @@ class TestImportHelperService:
                 "type_id": [34],
                 "type_name": ["Tritanium"],
                 "price": [30.0],
-                "avg_volume": [5.0],
                 "volume_m3": [0.01],
                 "jita_sell_price": [20.0],
                 "jita_buy_price": [18.0],
