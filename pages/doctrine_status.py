@@ -1,9 +1,4 @@
-import sys
-import os
 import pathlib
-
-# Add the parent directory to the Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 import pandas as pd
 from millify import millify
@@ -25,14 +20,10 @@ from ui.market_selector import render_market_selector
 from init_db import ensure_market_db_ready
 from ui.sync_display import display_sync_status
 from services.module_equivalents_service import get_module_equivalents_service
+from ui.formatters import drop_localized_backup_columns
 
 # Insert centralized logging configuration
 logger = setup_logging(__name__, log_file="doctrine_status.log")
-
-
-def _drop_localized_backup_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Remove helper columns that should not appear in display tables."""
-    return df.drop(columns=["type_name_en", "ship_name_en"], errors="ignore")
 
 
 def _localize_summary_df(
@@ -661,7 +652,7 @@ def main():
                                 )
                                 col_config = get_fitting_column_config(language_code)
                                 st.dataframe(
-                                    _drop_localized_backup_columns(fit_detail_df),
+                                    drop_localized_backup_columns(fit_detail_df),
                                     hide_index=True,
                                     column_config=col_config,
                                     width="stretch",

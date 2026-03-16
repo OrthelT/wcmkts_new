@@ -1,12 +1,8 @@
 
-import os
 import pathlib
-import sys
 
 import pandas as pd
 import streamlit as st
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from domain import StockStatus
 from logging_config import setup_logging
@@ -27,14 +23,11 @@ from ui.i18n import translate_text
 from ui.market_selector import render_market_selector
 from init_db import ensure_market_db_ready
 from ui.sync_display import display_sync_status
+from ui.formatters import drop_localized_backup_columns
 logger = setup_logging(__name__, log_file="doctrine_report.log")
 
 icon_id = 0
 icon_url = f"https://images.evetech.net/types/{icon_id}/render?size=64"
-
-def _drop_localized_backup_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Remove helper columns that should not appear in display tables."""
-    return df.drop(columns=["type_name_en", "ship_name_en"], errors="ignore")
 
 
 def _localize_doctrine_df(
@@ -175,7 +168,7 @@ def display_categorized_doctrine_data(selected_data, language_code: str):
             static_height = len(df) * 40 + 50 if len(df) < 10 else 'auto'
 
             st.dataframe(
-                _drop_localized_backup_columns(df),
+                drop_localized_backup_columns(df),
                 column_config=get_doctrine_report_column_config(language_code),
                 width='content',
                 hide_index=True,

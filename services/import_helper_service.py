@@ -183,16 +183,8 @@ class ImportHelperService:
         janice_api_key: Optional[str] = None,
     ) -> "ImportHelperService":
         """Create the default service for the active market."""
-        if db_alias is None:
-            try:
-                from state.market_state import get_active_market
-
-                db_alias = get_active_market().database_alias
-            except ImportError:
-                db_alias = "wcmkt"
-            except Exception as e:
-                logger.error(f"Failed to get active market, falling back to 'wcmkt': {e}")
-                db_alias = "wcmkt"
+        from settings_service import resolve_db_alias
+        db_alias = resolve_db_alias(db_alias)
 
         if janice_api_key is None:
             try:
@@ -324,18 +316,8 @@ class ImportHelperService:
             lambda tid: _get_jita_buy_price(jita_prices, tid)
         )
 
-        df["shipping_cost"] = df["volume_m3"] * SHIPPING_COST_PER_M3
-        df["profit_jita_sell"] = df["price"] - (df["jita_sell_price"] + df["shipping_cost"])
-        df["profit_jita_sell_30d"] = df["profit_jita_sell"] * 30 * df["avg_volume"]
         df["turnover_30d"] = df["avg_volume"] * 30 * df["jita_sell_price"]
         df["volume_30d"] = df["avg_volume"] * 30
-
-        df["capital_utilis"] = 0.0
-        nonzero_jita = df["jita_sell_price"] > 0
-        df.loc[nonzero_jita, "capital_utilis"] = (
-            df.loc[nonzero_jita, "profit_jita_sell"]
-            / df.loc[nonzero_jita, "jita_sell_price"]
-        )
 
         return df
 

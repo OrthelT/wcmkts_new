@@ -1010,12 +1010,8 @@ class DoctrineService:
         """
         from config import DatabaseConfig
 
-        if db_alias is None:
-            try:
-                from state.market_state import get_active_market
-                db_alias = get_active_market().database_alias
-            except (ImportError, Exception):
-                db_alias = "wcmkt"
+        from settings_service import resolve_db_alias
+        db_alias = resolve_db_alias(db_alias)
 
         db = DatabaseConfig(db_alias)
         repository = DoctrineRepository(db)

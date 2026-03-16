@@ -112,5 +112,8 @@
 [import_helper]
     default_shipping_cost = 445
 
+[i18n]
+    default_language = "en"
+
 [module_strategy]
   use_equivalent = true

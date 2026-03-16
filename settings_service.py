@@ -81,3 +81,22 @@ class SettingsService:
     @property
     def default_shipping_cost(self) -> float:
         return float(self.settings.get("import_helper", {}).get("default_shipping_cost", 445))
+
+    @property
+    def default_language(self) -> str:
+        return self.settings.get("i18n", {}).get("default_language", "en")
+
+
+def resolve_db_alias(db_alias: str | None = None, fallback: str = "wcmkt") -> str:
+    """Resolve a database alias, falling back to the active market hub.
+
+    Shared helper for service factory methods that all need the same
+    "use active market if no alias given, fall back to a safe default" logic.
+    """
+    if db_alias is not None:
+        return db_alias
+    try:
+        from state.market_state import get_active_market
+        return get_active_market().database_alias
+    except (ImportError, Exception):
+        return fallback

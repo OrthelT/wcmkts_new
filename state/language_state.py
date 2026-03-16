@@ -6,7 +6,9 @@ Stores the current UI language in Streamlit session state and URL query params.
 
 import streamlit as st
 
-DEFAULT_LANGUAGE = "en"
+from settings_service import SettingsService
+
+DEFAULT_LANGUAGE = SettingsService().default_language
 LANGUAGE_STATE_KEY = "active_language"
 LANGUAGE_QUERY_PARAM_KEY = "lang"
 

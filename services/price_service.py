@@ -884,15 +884,9 @@ def get_price_service(
         service = get_price_service()
         prices = service.get_jita_prices([34, 35, 36])
     """
-    resolved_db_alias = db_alias
+    from settings_service import resolve_db_alias
+    resolved_db_alias = resolve_db_alias(db_alias)
     resolved_market_key = market_key
-
-    if resolved_db_alias is None:
-        try:
-            from state.market_state import get_active_market
-            resolved_db_alias = get_active_market().database_alias
-        except (ImportError, Exception):
-            resolved_db_alias = "wcmkt"
 
     if resolved_market_key is None:
         try:

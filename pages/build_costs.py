@@ -15,15 +15,11 @@ from services.build_cost_service import (
     PRICE_SOURCE_MAP,
 )
 from logging_config import setup_logging
-import os
-import sys
 import pathlib
 
 import pandas as pd
 import streamlit as st
 from millify import millify
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 logger = setup_logging(__name__)
