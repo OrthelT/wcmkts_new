@@ -37,6 +37,7 @@ VALID_SDE_TABLES = frozenset({
     "certCerts",
     "certMasteries",
     "dgmTypeAttributes",
+    "industryActivityProducts",
     "industryBlueprints",
     "invCategories",
     "invGroups",
