@@ -20,6 +20,7 @@ from sqlalchemy import text
 from config import DatabaseConfig
 from logging_config import setup_logging
 from repositories import get_sde_repository
+from repositories.market_repo import MarketRepository
 from repositories.sde_repo import SDERepository
 from services.type_name_localization import apply_localized_type_names
 
@@ -45,6 +46,7 @@ class LowStockFilters:
         faction_only: Only show faction items (metaGroupID=4)
         fit_ids: Filter by specific fit IDs (for doctrine/fit filtering)
         type_ids: Filter by specific type IDs
+        show_zero_volume_items: Include items with zero 30-day average volume (default: False)
     """
 
     category_ids: list[int] = field(default_factory=list)
@@ -55,6 +57,7 @@ class LowStockFilters:
     faction_only: bool = False
     fit_ids: list[int] = field(default_factory=list)
     type_ids: list[int] = field(default_factory=list)
+    show_zero_volume_items: bool = False
 
 
 @dataclass(frozen=True)
@@ -176,6 +179,7 @@ class LowStockService:
         self,
         mkt_db: DatabaseConfig,
         sde_repo: SDERepository,
+        market_repo: MarketRepository,
         logger_instance: Optional[logging.Logger] = None,
     ):
         """
@@ -184,10 +188,12 @@ class LowStockService:
         Args:
             mkt_db: DatabaseConfig for market database (wcmkt)
             sde_repo: Repository for SDE lookups and reads
+            market_repo: MarketRepository for 30-day volume lookups
             logger_instance: Optional logger instance
         """
         self._mkt_db = mkt_db
         self._sde_repo = sde_repo
+        self._market_repo = market_repo
         self._logger = logger_instance or logger
 
     @classmethod
@@ -200,7 +206,8 @@ class LowStockService:
 
         mkt_db = DatabaseConfig(db_alias)
         sde_repo = get_sde_repository()
-        return cls(mkt_db, sde_repo)
+        market_repo = MarketRepository(mkt_db)
+        return cls(mkt_db, sde_repo, market_repo)
 
     # -------------------------------------------------------------------------
     # Filter Options
@@ -413,6 +420,38 @@ class LowStockService:
             if df.empty:
                 return df
 
+            type_ids = (
+                pd.to_numeric(df["type_id"], errors="coerce")
+                .dropna()
+                .astype(int)
+                .tolist()
+            )
+            history_metrics = self._market_repo.get_30day_volume_metrics(
+                type_ids
+            )
+            if history_metrics.empty:
+                raise RuntimeError("history_data_unavailable")
+            avg_volume_map = (
+                history_metrics.set_index("type_id")["avg_volume_30d"].to_dict()
+            )
+            mapped = df["type_id"].map(avg_volume_map)
+            df["avg_volume"] = pd.to_numeric(
+                mapped, errors="coerce"
+            ).fillna(0.0)
+
+            df["total_volume_remain"] = pd.to_numeric(
+                df.get("total_volume_remain"), errors="coerce"
+            ).fillna(0.0)
+            df["days_remaining"] = 0.0
+            nonzero_avg_volume = df["avg_volume"] > 0
+            df.loc[nonzero_avg_volume, "days_remaining"] = (
+                df.loc[nonzero_avg_volume, "total_volume_remain"]
+                / df.loc[nonzero_avg_volume, "avg_volume"]
+            )
+
+            if not filters.show_zero_volume_items:
+                df = df[df["avg_volume"] >= 0.05]
+
             from settings_service import SettingsService
 
             use_equivalents_setting = SettingsService().use_equivalents
@@ -484,6 +523,8 @@ class LowStockService:
 
             return df
 
+        except RuntimeError:
+            raise
         except Exception as e:
             self._logger.error(f"Failed to get low stock items: {e}")
             return pd.DataFrame()

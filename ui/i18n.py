@@ -128,6 +128,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.max_days_remaining_help": (
             "Show only items with days remaining less than or equal to this value."
         ),
+        "low_stock.show_zero_volume_items": "Show 0 Volume Items",
+        "low_stock.show_zero_volume_items_help": (
+            "Include items whose 30-day average volume is zero."
+        ),
         "low_stock.metric_critical": "Critical Items (≤3 days)",
         "low_stock.metric_low": "Low Stock Items (3-7 days)",
         "low_stock.metric_total": "Total Filtered Items",
@@ -136,7 +140,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.subheader_all": "Low Stock Items",
         "low_stock.column_select_help": "Check items you want to include in the CSV download.",
         "low_stock.column_item_help": "Name of the item.",
-        "low_stock.column_volume_remaining": "Volume Remaining",
+        "low_stock.column_volume_remaining": "Remaining",
         "low_stock.column_volume_remaining_help": "Total items currently available on the market.",
         "low_stock.column_fits": "Fits",
         "low_stock.column_fits_help": "Total fits that can be built from the stock of this item.",
@@ -158,7 +162,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.title": "{market_name} Import Helper",
         "import_helper.description": (
             "Discover items where the local market price sits well above Jita sell. "
-            "30D Profit uses `(Local Price - Jita Sell) * Avg Daily Volume * 30`, "
+            "30D Profit uses `(Local Price - Jita Sell) * 30D Volume`, "
             "RRP uses `Jita Sell * (1 + Markup Margin)`, and Cap Utilis uses "
             "`((Local Price - Jita Sell) - Shipping Cost) / Jita Sell`."
         ),
@@ -194,10 +198,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "Calculated as item size in m3 multiplied by {shipping_cost_per_m3}."
         ),
         "import_helper.column_profit_30d_help": (
-            "Calculated as (local price - Jita sell price) multiplied by average daily volume and 30."
+            "Calculated as (local price - Jita sell price) multiplied by traded volume over 30 days."
         ),
-        "import_helper.column_turnover_30d_help": "30-day units sold multiplied by Jita sell price.",
-        "import_helper.column_volume_30d_help": "Calculated as average daily volume multiplied by 30.",
+        "import_helper.column_turnover_30d_help": "30-day traded volume multiplied by Jita sell price.",
+        "import_helper.column_volume_30d_help": "Total traded volume over the past 30 days.",
         "import_helper.column_capital_utilis_help": (
             "Calculated as ((local price - Jita sell price) - shipping cost) divided by Jita sell."
         ),
@@ -665,6 +669,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.days_filter": "剩余天数筛选",
         "low_stock.max_days_remaining": "最大剩余天数",
         "low_stock.max_days_remaining_help": "仅显示剩余天数小于或等于该值的物品。",
+        "low_stock.show_zero_volume_items": "显示 0 销量物品",
+        "low_stock.show_zero_volume_items_help": "包含过去 30 天平均销量为 0 的物品。",
         "low_stock.metric_critical": "严重短缺（≤3 天）",
         "low_stock.metric_low": "低库存（3-7 天）",
         "low_stock.metric_total": "筛选后总数",
@@ -673,7 +679,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.subheader_all": "低库存物品",
         "low_stock.column_select_help": "勾选要包含在 CSV 下载中的物品。",
         "low_stock.column_item_help": "物品名称。",
-        "low_stock.column_volume_remaining": "剩余数量",
+        "low_stock.column_volume_remaining": "剩余",
         "low_stock.column_volume_remaining_help": "当前市场中可用的总数量。",
         "low_stock.column_fits": "可配数量",
         "low_stock.column_fits_help": "按该物品库存可组装的总配置数。",
@@ -1166,7 +1172,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.subheader_all": "Artikel mit niedrigem Bestand",
         "low_stock.column_select_help": "Markiere Artikel für den CSV-Download.",
         "low_stock.column_item_help": "Name des Artikels.",
-        "low_stock.column_volume_remaining": "Verbleibende Menge",
+        "low_stock.column_volume_remaining": "Rest",
         "low_stock.column_volume_remaining_help": "Aktuell verfügbare Gesamtmenge auf dem Markt.",
         "low_stock.column_fits": "Fits",
         "low_stock.column_fits_help": "Gesamtzahl der Fits, die mit diesem Bestand gebaut werden können.",
@@ -1493,7 +1499,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.subheader_all": "Objets à stock faible",
         "low_stock.column_select_help": "Cochez les objets a inclure dans l'export CSV.",
         "low_stock.column_item_help": "Nom de l'objet.",
-        "low_stock.column_volume_remaining": "Volume restant",
+        "low_stock.column_volume_remaining": "Restant",
         "low_stock.column_volume_remaining_help": "Quantite totale actuellement disponible.",
         "low_stock.column_fits": "Fits",
         "low_stock.column_fits_help": "Nombre total de fits possibles avec ce stock.",
@@ -1816,7 +1822,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.subheader_all": "Предметы с низким запасом",
         "low_stock.column_select_help": "Отметьте предметы для CSV экспорта.",
         "low_stock.column_item_help": "Название предмета.",
-        "low_stock.column_volume_remaining": "Оставшийся объём",
+        "low_stock.column_volume_remaining": "Остаток",
         "low_stock.column_volume_remaining_help": "Общее количество, доступное на рынке.",
         "low_stock.column_fits": "Фиты",
         "low_stock.column_fits_help": "Сколько фитов можно собрать из этого запаса.",

@@ -187,7 +187,6 @@ def get_import_helper_column_config(
         "type_name": st.column_config.TextColumn(
             translate_text(language_code, "common.item"),
             help=translate_text(language_code, "import_helper.column_item_help"),
-            width="large",
         ),
         "price": st.column_config.NumberColumn(
             translate_text(language_code, "common.price"),
@@ -222,20 +221,24 @@ def get_import_helper_column_config(
             translate_text(language_code, "import_helper.column_profit_30d"),
             help=translate_text(language_code, "import_helper.column_profit_30d_help"),
             format="compact",
+            width="small",
         ),
         "turnover_30d": st.column_config.NumberColumn(
             translate_text(language_code, "import_helper.column_turnover_30d"),
             help=translate_text(language_code, "import_helper.column_turnover_30d_help"),
             format="compact",
+            width="small",
         ),
         "volume_30d": st.column_config.NumberColumn(
             translate_text(language_code, "import_helper.column_volume_30d"),
             help=translate_text(language_code, "import_helper.column_volume_30d_help"),
             format="localized",
+            width="small",
         ),
         "capital_utilis": st.column_config.NumberColumn(
             translate_text(language_code, "import_helper.column_capital_utilis"),
             help=translate_text(language_code, "import_helper.column_capital_utilis_help"),
             format="percent",
+            width="small",
         ),
     }

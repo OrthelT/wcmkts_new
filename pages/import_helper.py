@@ -4,6 +4,7 @@ Import Helper Page
 Shows local market items with Jita comparison data for import decisions.
 """
 
+import pandas as pd
 import streamlit as st
 
 from init_db import ensure_market_db_ready
@@ -130,6 +131,13 @@ def main():
 
     try:
         base_df = service.fetch_base_data()
+    except RuntimeError as e:
+        if "history_data_unavailable" in str(e):
+            st.error("History data currently unavailable, try again later.")
+        else:
+            logger.error(f"Import helper data load failed: {e}")
+            st.error("Failed to load market data. Check database connectivity and try refreshing.")
+        st.stop()
     except Exception as e:
         logger.error(f"Import helper data load failed: {e}")
         st.error("Failed to load market data. Check database connectivity and try refreshing.")
@@ -172,6 +180,13 @@ def main():
             "capital_utilis",
         ]
     ].copy()
+
+    # Track estimated/floored cells for grey-background styling
+    price_estimated = df["price_source"].eq("estimated").values
+    volume_floored = df["volume_floored"].values
+    has_estimated = price_estimated.any()
+    has_floored = volume_floored.any()
+
     money_columns = [
         "price",
         "rrp",
@@ -184,10 +199,32 @@ def main():
     display_df[money_columns] = display_df[money_columns].round().astype("Int64")
     display_df["volume_30d"] = display_df["volume_30d"].round().astype("Int64")
 
+    def _highlight_estimated(data):
+        """Apply grey background to estimated prices and floored volumes."""
+        styles = pd.DataFrame("", index=data.index, columns=data.columns)
+        grey = "background-color: #555555"
+        if "price" in styles.columns:
+            styles.loc[price_estimated, "price"] = grey
+        if "volume_30d" in styles.columns:
+            styles.loc[volume_floored, "volume_30d"] = grey
+        return styles
+
+    styled_df = display_df.style.apply(_highlight_estimated, axis=None)
+
+    if has_estimated or has_floored:
+        parts = []
+        if has_estimated:
+            parts.append("prices shown at 120% of Jita sell (no local sell orders)")
+        if has_floored:
+            parts.append("30D volume floored to 1 (insufficient history)")
+        st.caption(
+            f"Grey cells indicate estimated values: {'; '.join(parts)}."
+        )
+
     st.dataframe(
-        display_df,
+        styled_df,
         hide_index=True,
-        width="content",
+        width="stretch",
         column_config=get_import_helper_column_config(
             language_code=language_code,
             shipping_cost_per_m3=float(shipping_cost_per_m3),

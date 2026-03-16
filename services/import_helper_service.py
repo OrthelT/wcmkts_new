@@ -15,6 +15,7 @@ from sqlalchemy import bindparam, text
 from config import DatabaseConfig
 from logging_config import setup_logging
 from repositories import get_sde_repository
+from repositories.market_repo import MarketRepository
 from repositories.sde_repo import SDERepository
 from services.price_service import PriceResult, PriceService, get_price_service
 from services.type_name_localization import apply_localized_type_names
@@ -169,11 +170,13 @@ class ImportHelperService:
         mkt_db: DatabaseConfig,
         sde_repo: SDERepository,
         price_service: PriceService,
+        market_repo: MarketRepository,
         logger_instance: Optional[logging.Logger] = None,
     ):
         self._mkt_db = mkt_db
         self._sde_repo = sde_repo
         self._price_service = price_service
+        self._market_repo = market_repo
         self._logger = logger_instance or logger
 
     @classmethod
@@ -201,27 +204,35 @@ class ImportHelperService:
             db_alias=db_alias,
             janice_api_key=janice_api_key,
         )
-        return cls(market_db, sde_repo, price_service)
+        market_repo = MarketRepository(market_db)
+        return cls(market_db, sde_repo, price_service, market_repo)
 
     def _get_import_candidates(self) -> pd.DataFrame:
-        """Fetch marketstats rows merged with SDE item volume.
+        """Fetch marketstats rows with lowest sell order price and SDE item volume.
 
-        Raises:
-            RuntimeError: If the market database query fails.
+        The price column comes from the minimum sell order in marketorders,
+        returning NULL when no sell orders exist for a type.
         """
         market_query = text(
             """
             SELECT
                 ms.type_id,
                 ms.type_name,
-                ms.price,
-                ms.avg_volume,
+                sell_orders.price,
                 ms.category_id,
                 ms.category_name,
                 ms.group_id,
                 ms.group_name,
                 CASE WHEN d.type_id IS NOT NULL THEN 1 ELSE 0 END AS is_doctrine
             FROM marketstats ms
+            LEFT JOIN (
+                SELECT
+                    type_id,
+                    MIN(price) AS price
+                FROM marketorders
+                WHERE is_buy_order = 0
+                GROUP BY type_id
+            ) sell_orders ON ms.type_id = sell_orders.type_id
             LEFT JOIN (
                 SELECT DISTINCT type_id
                 FROM doctrines
@@ -285,24 +296,45 @@ class ImportHelperService:
             return pd.DataFrame(columns=["category_id", "category_name"])
 
     def fetch_base_data(self) -> pd.DataFrame:
-        """Fetch candidates from DB and Jita prices. Jita Price caching is handled inside PriceService.
+        """Fetch candidates from DB and enrich with Jita prices and volume metrics.
+
+        Price defaults to the lowest current sell order; if no sell orders exist,
+        falls back to 120% of Jita sell price (marked via ``price_source`` column).
+        Volume metrics (volume_30d) are sourced from market_history, with a floor
+        of 0.5 to prevent division-by-zero (marked via ``volume_floored`` column).
 
         Returns a DataFrame with all computed columns (jita prices, shipping,
         profit, capital_utilis) but no filters applied.
 
         Raises:
-            RuntimeError: If Jita price fetch fails.
+            RuntimeError: If Jita price fetch fails or history data is unavailable.
         """
         df = self._get_import_candidates().copy()
         if df.empty:
             return df
 
         df["type_id"] = pd.to_numeric(df["type_id"], errors="coerce").astype("Int64")
-        df["price"] = pd.to_numeric(df["price"], errors="coerce").fillna(0.0)
-        df["avg_volume"] = pd.to_numeric(df.get("avg_volume"), errors="coerce").fillna(0.0)
         df["volume_m3"] = pd.to_numeric(df.get("volume_m3"), errors="coerce").fillna(0.0)
 
         type_ids = df["type_id"].dropna().astype(int).tolist()
+        history_metrics = self._market_repo.get_30day_volume_metrics(type_ids)
+        if history_metrics.empty:
+            raise RuntimeError("history_data_unavailable")
+        df = df.merge(
+            history_metrics[["type_id", "volume_30d"]], on="type_id", how="left"
+        )
+        df["volume_30d"] = pd.to_numeric(
+            df.get("volume_30d"), errors="coerce"
+        ).fillna(0.0)
+        volume_floored = df["volume_30d"] < 0.5
+        if volume_floored.any():
+            self._logger.info(
+                "Flooring volume_30d to 0.5 for %d items with insufficient history",
+                volume_floored.sum(),
+            )
+        df.loc[volume_floored, "volume_30d"] = 0.5
+        df["volume_floored"] = volume_floored
+
         try:
             jita_prices = self._price_service.get_jita_price_data_map(type_ids)
         except Exception as e:
@@ -315,9 +347,18 @@ class ImportHelperService:
         df["jita_buy_price"] = df["type_id"].map(
             lambda tid: _get_jita_buy_price(jita_prices, tid)
         )
+        df["price"] = pd.to_numeric(df["price"], errors="coerce")
+        price_missing = df["price"].isna()
+        if price_missing.any():
+            self._logger.info(
+                "Using 1.2x Jita sell fallback for %d items with no sell orders",
+                price_missing.sum(),
+            )
+        df["price_source"] = "market"
+        df.loc[price_missing, "price_source"] = "estimated"
+        df["price"] = df["price"].fillna(df["jita_sell_price"] * 1.2)
 
-        df["turnover_30d"] = df["avg_volume"] * 30 * df["jita_sell_price"]
-        df["volume_30d"] = df["avg_volume"] * 30
+        df["turnover_30d"] = df["volume_30d"] * df["jita_sell_price"]
 
         return df
 
@@ -347,7 +388,7 @@ class ImportHelperService:
         df = apply_localized_type_names(df, self._sde_repo, language_code, self._logger)
         df["shipping_cost"] = df["volume_m3"] * filters.shipping_cost_per_m3
         df["profit_jita_sell"] = df["price"] - (df["jita_sell_price"] + df["shipping_cost"])
-        df["profit_jita_sell_30d"] = df["profit_jita_sell"] * 30 * df["avg_volume"]
+        df["profit_jita_sell_30d"] = df["profit_jita_sell"] * df["volume_30d"]
         df["capital_utilis"] = 0.0
         nonzero_jita = df["jita_sell_price"] > 0
         df.loc[nonzero_jita, "capital_utilis"] = (
@@ -356,7 +397,7 @@ class ImportHelperService:
         )
         df["rrp"] = df["jita_sell_price"] * (1 + filters.markup_margin) + df["shipping_cost"]
 
-        df = df[df["avg_volume"] > 0]
+        df = df[df["volume_30d"] > 0]
 
         if filters.doctrine_only:
             df = df[df.get("is_doctrine", 0) == 1]

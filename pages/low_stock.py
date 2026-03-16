@@ -303,6 +303,12 @@ def main():
         help=translate_text(language_code, "low_stock.max_days_remaining_help"),
     )
     ss_set("ls_max_days", max_days_remaining)
+    show_zero_volume_items = st.sidebar.checkbox(
+        translate_text(language_code, "low_stock.show_zero_volume_items"),
+        value=ss_get("ls_show_zero_volume_items", False),
+        help=translate_text(language_code, "low_stock.show_zero_volume_items_help"),
+    )
+    ss_set("ls_show_zero_volume_items", show_zero_volume_items)
 
     # Build filters
     filters = LowStockFilters(
@@ -312,10 +318,21 @@ def main():
         tech2_only=tech2_only,
         faction_only=faction_only,
         fit_ids=fit_ids,
+        show_zero_volume_items=show_zero_volume_items,
     )
 
     # Get filtered data using service
-    df = service.get_low_stock_items(filters, language_code=language_code)
+    try:
+        df = service.get_low_stock_items(filters, language_code=language_code)
+    except RuntimeError as e:
+        if "history_data_unavailable" in str(e):
+            st.error("History data currently unavailable, try again later.")
+        else:
+            logger.error(f"Low stock data load failed: {e}")
+            st.error("Failed to load low stock data. Check database connectivity.")
+        st.sidebar.markdown("---")
+        display_sync_status(language_code=language_code)
+        return
 
     if not df.empty:
         # Sort by days_remaining (ascending) to show most critical items first
@@ -457,13 +474,13 @@ def main():
             ),
             "days_remaining": st.column_config.NumberColumn(
                 translate_text(language_code, "low_stock.column_days"),
-                format="localized",
+                format="%.1f",
                 help=translate_text(language_code, "low_stock.column_days_help"),
                 width="small",
             ),
             "avg_volume": st.column_config.NumberColumn(
                 translate_text(language_code, "low_stock.column_avg_vol"),
-                format="localized",
+                format="%.1f",
                 help=translate_text(language_code, "low_stock.column_avg_vol_help"),
                 width="small",
             ),
