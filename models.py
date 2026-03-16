@@ -185,6 +185,20 @@ class UpdateLog(Base):
         return f"updatelog(id={self.id!r}, table_name={self.table_name!r}, timestamp={self.timestamp!r})"
 
 
+class JitaPrices(Base):
+    __tablename__ = "jita_prices"
+    type_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    sell_price: Mapped[float] = mapped_column(Float)
+    buy_price: Mapped[float] = mapped_column(Float)
+    last_updated: Mapped[str] = mapped_column(String)
+
+    def __repr__(self) -> str:
+        return (
+            f"jita_prices(type_id={self.type_id!r}, sell_price={self.sell_price!r}, "
+            f"buy_price={self.buy_price!r}, last_updated={self.last_updated!r})"
+        )
+
+
 class ModuleEquivalents(Base):
     """
     Maps equivalent faction modules that can be used interchangeably.
