@@ -187,7 +187,7 @@ def main():
     st.dataframe(
         display_df,
         hide_index=True,
-        width="content",
+        width="stretch",
         column_config=get_import_helper_column_config(
             language_code=language_code,
             shipping_cost_per_m3=float(shipping_cost_per_m3),
