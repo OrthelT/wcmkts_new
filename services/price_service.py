@@ -420,6 +420,77 @@ class JaniceProvider:
         )
 
 
+class DatabasePriceProvider:
+    """Reads Jita prices from the jita_prices table (populated by backend pipeline)."""
+
+    def __init__(self, db_config, logger: Optional[logging.Logger] = None):
+        self._db = db_config
+        self._logger = logger or logging.getLogger(__name__)
+
+    @property
+    def name(self) -> str:
+        return "DatabaseJitaCache"
+
+    def get_price(self, type_id: TypeID) -> PriceResult:
+        result = self.get_prices([type_id])
+        return result.prices.get(type_id, PriceResult.failure_result(type_id, "Not found"))
+
+    def get_prices(self, type_ids: list[TypeID]) -> BatchPriceResult:
+        if not type_ids:
+            return BatchPriceResult(source=PriceSource.JITA_FUZZWORK)
+
+        try:
+            placeholders = ','.join(['?'] * len(type_ids))
+            query = f"SELECT type_id, sell_price, buy_price, last_updated FROM jita_prices WHERE type_id IN ({placeholders})"
+
+            with self._db.engine.connect() as conn:
+                df = pd.read_sql_query(query, conn, params=tuple(type_ids))
+
+            if not df.empty:
+                max_updated = df['last_updated'].max()
+                # Warn if data is older than 4 hours
+                try:
+                    from datetime import datetime, timezone
+                    updated_dt = datetime.fromisoformat(max_updated)
+                    age_hours = (datetime.now(timezone.utc) - updated_dt).total_seconds() / 3600
+                    if age_hours > 4:
+                        self._logger.warning(
+                            "jita_prices data is %.1f hours old (last_updated: %s)",
+                            age_hours, max_updated,
+                        )
+                except (ValueError, TypeError):
+                    pass
+
+            prices = {}
+            found_ids = set()
+
+            for _, row in df.iterrows():
+                type_id = int(row['type_id'])
+                found_ids.add(type_id)
+                sell_price = float(row.get('sell_price', 0) or 0)
+                buy_price = float(row.get('buy_price', 0) or 0)
+
+                if sell_price > 0 or buy_price > 0:
+                    prices[type_id] = PriceResult.success_result(
+                        type_id=type_id,
+                        sell_price=sell_price,
+                        buy_price=buy_price,
+                        source=PriceSource.JITA_FUZZWORK,
+                    )
+
+            failed = [tid for tid in type_ids if tid not in prices]
+
+            return BatchPriceResult(
+                prices=prices,
+                source=PriceSource.JITA_FUZZWORK,
+                failed_ids=failed,
+            )
+
+        except Exception as e:
+            self._logger.debug(f"jita_prices table query failed (may not exist yet): {e}")
+            return BatchPriceResult(failed_ids=list(type_ids), source=PriceSource.JITA_FUZZWORK)
+
+
 class LocalMarketProvider:
     """
     Price provider using local market database.
@@ -634,8 +705,13 @@ class PriceService:
         """
         logger = logging.getLogger(__name__)
 
-        # Build provider chain: Fuzzwork -> Janice
-        providers = [FuzzworkProvider(logger)]
+        # Build provider chain: DB cache (fast) -> Fuzzwork -> Janice
+        providers = []
+
+        if db_config:
+            providers.append(DatabasePriceProvider(db_config, logger))
+
+        providers.append(FuzzworkProvider(logger))
 
         if janice_api_key:
             providers.append(JaniceProvider(janice_api_key, logger))
