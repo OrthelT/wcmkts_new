@@ -20,6 +20,7 @@ from services.doctrine_service import format_doctrine_name
 from state import get_active_language, ss_init, ss_get, ss_set
 from ui.market_selector import render_market_selector
 from ui.i18n import translate_text
+from ui.column_definitions import get_low_stock_column_config
 from init_db import ensure_market_db_ready
 from ui.sync_display import display_sync_status
 logger = setup_logging(__name__, log_file="low_stock.log")
@@ -437,67 +438,7 @@ def main():
         if ss_get("single_fit"):
             display_df.sort_values("fits_on_mkt", ascending=True, inplace=True)
 
-        # Column configuration
-        column_config = {
-            "select": st.column_config.CheckboxColumn(
-                translate_text(language_code, "common.select"),
-                help=translate_text(language_code, "low_stock.column_select_help"),
-                default=False,
-                width="small",
-            ),
-            "type_id": st.column_config.NumberColumn(
-                translate_text(language_code, "common.type_id"),
-                help="Type ID of the item",
-                width="small",
-            ),
-            "type_name": st.column_config.TextColumn(
-                translate_text(language_code, "common.item"),
-                help=translate_text(language_code, "low_stock.column_item_help"),
-                width="medium",
-            ),
-            "total_volume_remain": st.column_config.NumberColumn(
-                translate_text(language_code, "low_stock.column_volume_remaining"),
-                format="localized",
-                help=translate_text(language_code, "low_stock.column_volume_remaining_help"),
-                width="small",
-            ),
-            "fits_on_mkt": st.column_config.NumberColumn(
-                translate_text(language_code, "low_stock.column_fits"),
-                format="localized",
-                help=translate_text(language_code, "low_stock.column_fits_help"),
-                width="small",
-            ),
-            "price": st.column_config.NumberColumn(
-                translate_text(language_code, "common.price"),
-                format="localized",
-                help="Lowest 5-percentile price of current sell orders",
-            ),
-            "days_remaining": st.column_config.NumberColumn(
-                translate_text(language_code, "low_stock.column_days"),
-                format="%.1f",
-                help=translate_text(language_code, "low_stock.column_days_help"),
-                width="small",
-            ),
-            "avg_volume": st.column_config.NumberColumn(
-                translate_text(language_code, "low_stock.column_avg_vol"),
-                format="%.1f",
-                help=translate_text(language_code, "low_stock.column_avg_vol_help"),
-                width="small",
-            ),
-            "ships": st.column_config.ListColumn(
-                translate_text(language_code, "low_stock.column_used_in_fits"),
-                help=translate_text(language_code, "low_stock.column_used_in_fits_help"),
-                width="large",
-            ),
-            "category_name": st.column_config.TextColumn(
-                translate_text(language_code, "common.category"),
-                help=translate_text(language_code, "low_stock.column_category_help"),
-            ),
-            "group_name": st.column_config.TextColumn(
-                translate_text(language_code, "common.group"),
-                help=translate_text(language_code, "low_stock.column_group_help"),
-            ),
-        }
+        column_config = get_low_stock_column_config(language_code)
 
         # Apply styling
         style_paramater = "fits_on_mkt" if ss_get("single_fit") else "days_remaining"

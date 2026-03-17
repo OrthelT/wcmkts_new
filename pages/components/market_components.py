@@ -652,7 +652,7 @@ def get_fitting_col_config(language_code: str = "en") -> dict:
     return {
         "fit_id": st.column_config.NumberColumn(translate_text(language_code, "doctrine_report.column_fit_id")),
         "ship_name": st.column_config.TextColumn(translate_text(language_code, "doctrine_report.column_ship"), width="medium"),
-        "type_id": st.column_config.NumberColumn(translate_text(language_code, "common.type_id")),
+        "type_id": st.column_config.NumberColumn("ID"),
         "type_name": st.column_config.TextColumn(translate_text(language_code, "common.item"), width="medium"),
         "hulls": st.column_config.NumberColumn(translate_text(language_code, "doctrine_report.metric_total_hulls"), width="small"),
         "fit_qty": st.column_config.NumberColumn(translate_text(language_code, "doctrine_status.column_qty_per_fit"), format="localized", width="small"),
@@ -669,7 +669,7 @@ def get_fitting_col_config(language_code: str = "en") -> dict:
 def get_display_formats(language_code: str = "en") -> dict:
     """Get column configuration for order data display."""
     return {
-        "type_id": st.column_config.NumberColumn(translate_text(language_code, "common.type_id"), width="small"),
+        "type_id": st.column_config.NumberColumn("ID", width="small"),
         "order_id": st.column_config.NumberColumn(translate_text(language_code, "market_stats.order_id"), width="small"),
         "type_name": st.column_config.TextColumn(translate_text(language_code, "common.item"), width="medium"),
         "volume_remain": st.column_config.NumberColumn(translate_text(language_code, "pricer.column_qty"), format="localized", width="small"),

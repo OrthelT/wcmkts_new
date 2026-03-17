@@ -53,7 +53,7 @@ def get_pricer_column_config(short_name: str = "4H", language_code: str = "en") 
             width="small",
         ),
         "type_id": st.column_config.NumberColumn(
-            translate_text(language_code, "common.type_id"),
+            "ID",
             help=translate_text(language_code, "pricer.column_type_id_help"),
             width="small",
         ),
