@@ -160,6 +160,7 @@ class ImportHelperFilters:
     min_turnover_30d: Optional[float] = None
     markup_margin: float = 0.2
     shipping_cost_per_m3: float = SHIPPING_COST_PER_M3
+    show_zero_volume_items: bool = False
 
 
 class ImportHelperService:
@@ -299,7 +300,7 @@ class ImportHelperService:
         """Fetch candidates from DB and enrich with Jita prices and volume metrics.
 
         Price defaults to the lowest current sell order; if no sell orders exist,
-        falls back to 120% of Jita sell price (marked via ``price_source`` column).
+        falls back to 140% of Jita sell price (marked via ``price_source`` column).
         Volume metrics (volume_30d) are sourced from market_history, with a floor
         of 0.5 to prevent division-by-zero (marked via ``volume_floored`` column).
 
@@ -351,12 +352,12 @@ class ImportHelperService:
         price_missing = df["price"].isna()
         if price_missing.any():
             self._logger.info(
-                "Using 1.2x Jita sell fallback for %d items with no sell orders",
+                "Using 1.4x Jita sell fallback for %d items with no sell orders",
                 price_missing.sum(),
             )
         df["price_source"] = "market"
         df.loc[price_missing, "price_source"] = "estimated"
-        df["price"] = df["price"].fillna(df["jita_sell_price"] * 1.2)
+        df["price"] = df["price"].fillna(df["jita_sell_price"] * 1.4)
 
         df["turnover_30d"] = df["volume_30d"] * df["jita_sell_price"]
 
@@ -397,7 +398,10 @@ class ImportHelperService:
         )
         df["rrp"] = df["jita_sell_price"] * (1 + filters.markup_margin) + df["shipping_cost"]
 
-        df = df[df["volume_30d"] > 0]
+        if not filters.show_zero_volume_items:
+            df = df[df["volume_30d"] > 0.5]
+        else:
+            df = df[df["volume_30d"] >= 0]
 
         if filters.doctrine_only:
             df = df[df.get("is_doctrine", 0) == 1]
