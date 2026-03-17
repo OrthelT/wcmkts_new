@@ -6,12 +6,16 @@ from state.session_state import ss_set
 from state.market_state import get_active_market
 logger = setup_logging(__name__)
 
-def update_wcmkt_state(db_alias: str = None)-> None:
-    """
-    updates the sessions state with the remote and local state of the market database using the marketstats table last_update column.
+def update_wcmkt_state(db_alias: str = None, skip_remote: bool = False) -> None:
+    """Update session state with local (and optionally remote) DB update times.
+
+    Uses the updatelog table to determine when each database was last refreshed.
 
     Args:
         db_alias: Database alias to check. If None, uses the active market.
+        skip_remote: If True, skip the remote timestamp query to avoid
+            network latency on cold start. The remote state will be
+            populated later by check_db() / validate_sync().
     """
     if db_alias is None:
         try:
@@ -30,7 +34,7 @@ def update_wcmkt_state(db_alias: str = None)-> None:
 
     now = datetime.now(timezone.utc)
 
-    local_update = db.get_most_recent_update("marketstats",remote=False)
+    local_update = db.get_most_recent_update("marketstats", remote=False)
     local_update_status['updated'] = local_update
     if local_update is not None:
         local_update_status['time_since'] = now - local_update
@@ -38,9 +42,9 @@ def update_wcmkt_state(db_alias: str = None)-> None:
             local_update_status['time_since'] > timedelta(hours=2)
         )
 
-    if db.has_remote_credentials:
+    if not skip_remote and db.has_remote_credentials:
         try:
-            remote_update = db.get_most_recent_update("marketstats",remote=True)
+            remote_update = db.get_most_recent_update("marketstats", remote=True)
             remote_update_status['updated'] = remote_update
             if remote_update is not None:
                 remote_update_status['time_since'] = now - remote_update
@@ -49,6 +53,8 @@ def update_wcmkt_state(db_alias: str = None)-> None:
                 )
         except Exception as e:
             logger.warning(f"Skipping remote sync state for {db.alias}: {e}")
+    elif skip_remote:
+        logger.info(f"Skipping remote check for {db_alias} (deferred to check_db)")
     else:
         logger.info(f"No remote credentials for {db.alias}; using local-only sync state")
     logger.info("-"*60)
@@ -57,12 +63,12 @@ def update_wcmkt_state(db_alias: str = None)-> None:
     active_market = get_active_market()
     logger.info(f"Active market: {active_market.database_alias}")
     logger.info("--------------------------------")
-    for k,v in local_update_status.items():
+    for k, v in local_update_status.items():
         logger.info(f"{k}: {v}")
     logger.info("-"*60)
     ss_set('remote_update_status', remote_update_status)
     logger.info("remote_status saved to session state:")
-    for k,v in remote_update_status.items():
+    for k, v in remote_update_status.items():
         logger.info(f"{k}: {v}")
     logger.info("-"*60)
     end_time = perf_counter()

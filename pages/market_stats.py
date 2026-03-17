@@ -389,7 +389,7 @@ def main():
         st.stop()
 
     if init_result:
-        update_wcmkt_state()
+        update_wcmkt_state(skip_remote=True)
 
     maybe_run_check()
     render_title_headers(market.name, language_code)
@@ -531,24 +531,6 @@ def main():
                 fits_on_mkt = None
             if cat_id == 6:
                 isship = True
-        display_sell_data = apply_localized_type_names(
-            sell_data,
-            sde_repo,
-            language_code,
-            logger,
-        )
-        display_buy_data = apply_localized_type_names(
-            buy_data,
-            sde_repo,
-            language_code,
-            logger,
-        )
-        display_stats = apply_localized_type_names(
-            stats,
-            sde_repo,
-            language_code,
-            logger,
-        )
         display_fit_df = apply_localized_type_names(
             fit_df,
             sde_repo,

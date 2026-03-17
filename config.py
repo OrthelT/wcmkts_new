@@ -381,7 +381,7 @@ class DatabaseConfig:
             # Read remote via Turso
             with self.remote_engine.connect() as conn:
                 row = conn.execute(
-                    text("SELECT MAX(last_update) FROM marketstats")
+                    text("SELECT timestamp FROM updatelog WHERE table_name = 'marketstats'")
                 ).fetchone()
                 remote_ts = row[0] if row else None
 
@@ -389,7 +389,7 @@ class DatabaseConfig:
             local_conn = sql.connect(f"file:{self.path}?mode=ro", uri=True)
             try:
                 row = local_conn.execute(
-                    "SELECT MAX(last_update) FROM marketstats"
+                    "SELECT timestamp FROM updatelog WHERE table_name = 'marketstats'"
                 ).fetchone()
                 local_ts = row[0] if row else None
             finally:
@@ -417,7 +417,7 @@ class DatabaseConfig:
         alias = self.alias
         with self.remote_engine.connect() as conn:
             result = conn.execute(
-                text("SELECT MAX(last_update) FROM marketstats")
+                text("SELECT timestamp FROM updatelog WHERE table_name = 'marketstats'")
             ).fetchone()
             remote_last_update = datetime.strptime(
                 result[0], "%Y-%m-%d %H:%M:%S.%f"
@@ -425,7 +425,7 @@ class DatabaseConfig:
             conn.close()
         with self.engine.connect() as conn:
             result = conn.execute(
-                text("SELECT MAX(last_update) FROM marketstats")
+                text("SELECT timestamp FROM updatelog WHERE table_name = 'marketstats'")
             ).fetchone()
             local_last_update = datetime.strptime(
                 result[0], "%Y-%m-%d %H:%M:%S.%f"
