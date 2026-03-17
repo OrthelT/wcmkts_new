@@ -76,11 +76,7 @@ def main():
         value="",
         help=translate_text(language_code, "import_helper.search_items_help"),
     )
-    profitable_only = st.sidebar.checkbox(
-        translate_text(language_code, "import_helper.profitable_only"),
-        value=True,
-        help=translate_text(language_code, "import_helper.profitable_only_help"),
-    )
+
     min_capital_utilis = st.sidebar.number_input(
         translate_text(language_code, "import_helper.min_capital_utilis"),
         min_value=0.0,
@@ -114,6 +110,17 @@ def main():
         help=translate_text(language_code, "import_helper.markup_margin_help"),
     )
 
+    profitable_only = st.sidebar.checkbox(
+        translate_text(language_code, "import_helper.profitable_only"),
+        value=True,
+        help=translate_text(language_code, "import_helper.profitable_only_help"),
+    )
+    show_zero_volume_items = st.sidebar.checkbox(
+        translate_text(language_code, "low_stock.show_zero_volume_items"),
+        value=False,
+        help=translate_text(language_code, "low_stock.show_zero_volume_items_help"),
+    )
+
     st.markdown(translate_text(language_code, "import_helper.description"))
 
     filters = ImportHelperFilters(
@@ -123,6 +130,7 @@ def main():
         tech2_only=tech2_only,
         faction_only=faction_only,
         profitable_only=profitable_only,
+        show_zero_volume_items=show_zero_volume_items,
         min_capital_utilis=min_capital_utilis,
         min_turnover_30d=float(min_turnover_30d),
         markup_margin=float(markup_margin),
@@ -202,9 +210,10 @@ def main():
     def _highlight_estimated(data):
         """Apply grey background to estimated prices and floored volumes."""
         styles = pd.DataFrame("", index=data.index, columns=data.columns)
-        grey = "background-color: #555555"
+        grey = "background-color: #d3d3d3"
+        light_green = "background-color: #d9f2d9"
         if "price" in styles.columns:
-            styles.loc[price_estimated, "price"] = grey
+            styles.loc[price_estimated, "price"] = light_green
         if "volume_30d" in styles.columns:
             styles.loc[volume_floored, "volume_30d"] = grey
         return styles
@@ -214,11 +223,34 @@ def main():
     if has_estimated or has_floored:
         parts = []
         if has_estimated:
-            parts.append("prices shown at 120% of Jita sell (no local sell orders)")
+            green_label = (
+                "<span style='color: #6aa56a; font-weight: 600;'>"
+                f"{translate_text(language_code, 'import_helper.caption_green')}"
+                "</span>"
+            )
+            parts.append(
+                translate_text(
+                    language_code,
+                    "import_helper.caption_estimated_price",
+                    color_label=green_label,
+                )
+            )
         if has_floored:
-            parts.append("30D volume floored to 1 (insufficient history)")
-        st.caption(
-            f"Grey cells indicate estimated values: {'; '.join(parts)}."
+            grey_label = (
+                "<span style='color: #9a9a9a; font-weight: 600;'>"
+                f"{translate_text(language_code, 'import_helper.caption_grey')}"
+                "</span>"
+            )
+            parts.append(
+                translate_text(
+                    language_code,
+                    "import_helper.caption_floored_volume",
+                    color_label=grey_label,
+                )
+            )
+        st.markdown(
+            f"<p style='font-size: 0.875rem; color: rgb(49, 51, 63);'>{'; '.join(parts)}.</p>",
+            unsafe_allow_html=True,
         )
 
     st.dataframe(

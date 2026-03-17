@@ -166,6 +166,15 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "RRP uses `Jita Sell * (1 + Markup Margin)`, and Cap Utilis uses "
             "`((Local Price - Jita Sell) - Shipping Cost) / Jita Sell`."
         ),
+        "import_helper.caption_green": "Green",
+        "import_helper.caption_grey": "Grey",
+        "import_helper.caption_estimated_price": (
+            "{color_label} cells show estimated local prices at 140% of Jita sell "
+            "(no local sell orders)"
+        ),
+        "import_helper.caption_floored_volume": (
+            "{color_label} cells show 30D volume floored to 0.5 (insufficient history)"
+        ),
         "import_helper.filters_header": "Filters",
         "import_helper.categories": "Categories",
         "import_helper.categories_help": "Limit the table to one or more item categories.",
@@ -702,6 +711,14 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "`(本地价格 - 吉他卖价) * 日均销量 * 30`，RRP 使用 `吉他卖价 * (1 + 加价率)`，"
             "资本利用率使用 `((本地价格 - 吉他卖价) - 运费) / 吉他卖价`。"
         ),
+        "import_helper.caption_green": "绿色",
+        "import_helper.caption_grey": "灰色",
+        "import_helper.caption_estimated_price": (
+            "{color_label}背景表示按吉他卖价140%估算的本地价格（无本地卖单）"
+        ),
+        "import_helper.caption_floored_volume": (
+            "{color_label}背景表示 30 天成交量因历史不足而按0计算"
+        ),
         "import_helper.filters_header": "筛选",
         "import_helper.categories": "类别",
         "import_helper.categories_help": "将表格限制为一个或多个物品类别。",
@@ -1199,6 +1216,16 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "`Jita Sell * (1 + Aufschlag)` und Cap Utilis verwendet "
             "`((Lokaler Preis - Jita Sell) - Versandkosten) / Jita Sell`."
         ),
+        "import_helper.caption_green": "Gruen",
+        "import_helper.caption_grey": "Grau",
+        "import_helper.caption_estimated_price": (
+            "{color_label} markierte Zellen zeigen geschaetzte lokale Preise mit 120 % "
+            "des Jita-Sell-Preises (keine lokalen Verkaufsorders)"
+        ),
+        "import_helper.caption_floored_volume": (
+            "{color_label} markierte Zellen zeigen auf 0.5 gesetztes 30D-Volumen "
+            "(unzureichende Historie)"
+        ),
         "import_helper.filters_header": "Filter",
         "import_helper.categories": "Kategorien",
         "import_helper.categories_help": "Die Tabelle auf eine oder mehrere Kategorien beschränken.",
@@ -1521,6 +1548,16 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "Trouvez les objets dont le prix local dépasse nettement le prix de vente Jita. "
             "Le profit 30J utilise `(Prix local - Vente Jita) * Volume moyen quotidien * 30`, le RRP utilise "
             "`Vente Jita * (1 + marge)`."
+        ),
+        "import_helper.caption_green": "Vert",
+        "import_helper.caption_grey": "Gris",
+        "import_helper.caption_estimated_price": (
+            "Les cellules {color_label} indiquent des prix locaux estimes a 120 % "
+            "de la vente Jita (aucun ordre de vente local)"
+        ),
+        "import_helper.caption_floored_volume": (
+            "Les cellules {color_label} indiquent un volume 30J force a 0.5 "
+            "(historique insuffisant)"
         ),
         "import_helper.filters_header": "Filtres",
         "import_helper.categories": "Catégories",
@@ -1845,6 +1882,16 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "Прибыль за 30 дней считается как "
             "`(Локальная цена - Jita Sell) * средний дневной оборот * 30`."
         ),
+        "import_helper.caption_green": "Зелёные",
+        "import_helper.caption_grey": "Серые",
+        "import_helper.caption_estimated_price": (
+            "{color_label} ячейки показывают оценочные локальные цены на уровне 140% "
+            "от Jita sell (нет локальных sell-ордеров)"
+        ),
+        "import_helper.caption_floored_volume": (
+            "{color_label} ячейки показывают объём за 30 дней, принудительно установленный "
+            "на 0.5 (недостаточно истории)"
+        ),
         "import_helper.filters_header": "Фильтры",
         "import_helper.categories": "Категории",
         "import_helper.categories_help": "Ограничить таблицу одной или несколькими категориями.",
@@ -2083,6 +2130,16 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "El beneficio de 30D usa `(Precio local - Jita Sell) * volumen diario medio * 30`, el RRP usa "
             "`Jita Sell * (1 + margen)` y Cap Utilis usa "
             "`((Precio local - Jita Sell) - envio) / Jita Sell`."
+        ),
+        "import_helper.caption_green": "Verde",
+        "import_helper.caption_grey": "Gris",
+        "import_helper.caption_estimated_price": (
+            "Las celdas {color_label} muestran precios locales estimados al 120 % "
+            "del Jita sell (sin ordenes locales de venta)"
+        ),
+        "import_helper.caption_floored_volume": (
+            "Las celdas {color_label} muestran volumen 30D ajustado a 0.5 "
+            "(historial insuficiente)"
         ),
         "import_helper.filters_header": "Filtros",
         "import_helper.categories": "Categorias",
