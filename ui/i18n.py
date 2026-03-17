@@ -93,7 +93,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_report.column_total_cost_help": "Total cost of the fit.",
         "common.market_hub": "Market Hub",
         "common.select": "Select",
-        "common.type_id": "Type ID",
         "common.item": "Item",
         "common.category": "Category",
         "common.group": "Group",
@@ -165,6 +164,15 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "30D Profit uses `(Local Price - Jita Sell) * 30D Volume`, "
             "RRP uses `Jita Sell * (1 + Markup Margin)`, and Cap Utilis uses "
             "`((Local Price - Jita Sell) - Shipping Cost) / Jita Sell`."
+        ),
+        "import_helper.caption_green": "Green",
+        "import_helper.caption_grey": "Grey",
+        "import_helper.caption_estimated_price": (
+            "{color_label} cells show estimated local prices at 140% of Jita sell "
+            "(no local sell orders)"
+        ),
+        "import_helper.caption_floored_volume": (
+            "{color_label} cells show 30D volume floored to 0.5 (insufficient history)"
         ),
         "import_helper.filters_header": "Filters",
         "import_helper.categories": "Categories",
@@ -323,6 +331,9 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "market_stats.delta_vs_jita": "{value}% Jita",
         "market_stats.jita_sell_price": "Jita Sell Price",
         "market_stats.market_stock": "Market Stock",
+        "market_stats.mineral_price_comparison": "Basic Minerals",
+        "market_stats.isotope_and_fuel_block_comparison": "Isotopes and Fuel Blocks",
+        "market_stats.delta_vs_jita_sell_column": "% vs Jita",
         "market_stats.sell_orders_value": "Sell Orders Value",
         "market_stats.total_sell_orders": "Total Sell Orders",
         "market_stats.fits_on_market": "Fits on Market",
@@ -639,7 +650,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_report.column_total_cost_help": "该建制的总成本。",
         "common.market_hub": "市场中心",
         "common.select": "选择",
-        "common.type_id": "类型 ID",
         "common.item": "物品",
         "common.category": "类别",
         "common.group": "分组",
@@ -701,6 +711,14 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "查找本地市场价格明显高于吉他卖价的物品。30 天利润使用 "
             "`(本地价格 - 吉他卖价) * 日均销量 * 30`，RRP 使用 `吉他卖价 * (1 + 加价率)`，"
             "资本利用率使用 `((本地价格 - 吉他卖价) - 运费) / 吉他卖价`。"
+        ),
+        "import_helper.caption_green": "绿色",
+        "import_helper.caption_grey": "灰色",
+        "import_helper.caption_estimated_price": (
+            "{color_label}背景表示按吉他卖价140%估算的本地价格（无本地卖单）"
+        ),
+        "import_helper.caption_floored_volume": (
+            "{color_label}背景表示 30 天成交量因历史不足而按0计算"
         ),
         "import_helper.filters_header": "筛选",
         "import_helper.categories": "类别",
@@ -837,12 +855,14 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "market_stats.total_value_30d": "30日总价值",
         "market_stats.total_volume_30d": "30日总销量",
         "market_stats.current_market_status": "当前市场状态",
-        "market_stats.sell_price": "卖出价格",
+        "market_stats.sell_price": "售价",
         "market_stats.delta_vs_jita": "相对吉他 {value}%",
         "market_stats.jita_sell_price": "吉他卖价",
         "market_stats.market_stock": "市场库存",
+        "market_stats.mineral_price_comparison": "基础矿物",
+        "market_stats.isotope_and_fuel_block_comparison": "同位素与燃料块",
         "market_stats.sell_orders_value": "卖单总价值",
-        "market_stats.total_sell_orders": "卖单总数",
+        "market_stats.total_sell_orders": "卖单量",
         "market_stats.fits_on_market": "市场可装配数",
         "market_stats.fit_target_delta": "装配: {fit_id}, 目标: {target}, 市场装配数: {fits_on_market}, 差值: {delta}",
         "market_stats.target_value": "目标: {target}",
@@ -1132,7 +1152,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_report.column_total_cost_help": "Gesamtkosten des Fits.",
         "common.market_hub": "Markthub",
         "common.select": "Auswählen",
-        "common.type_id": "Typ-ID",
         "common.item": "Artikel",
         "common.category": "Kategorie",
         "common.group": "Gruppe",
@@ -1199,6 +1218,16 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "`Jita Sell * (1 + Aufschlag)` und Cap Utilis verwendet "
             "`((Lokaler Preis - Jita Sell) - Versandkosten) / Jita Sell`."
         ),
+        "import_helper.caption_green": "Gruen",
+        "import_helper.caption_grey": "Grau",
+        "import_helper.caption_estimated_price": (
+            "{color_label} markierte Zellen zeigen geschaetzte lokale Preise mit 120 % "
+            "des Jita-Sell-Preises (keine lokalen Verkaufsorders)"
+        ),
+        "import_helper.caption_floored_volume": (
+            "{color_label} markierte Zellen zeigen auf 0.5 gesetztes 30D-Volumen "
+            "(unzureichende Historie)"
+        ),
         "import_helper.filters_header": "Filter",
         "import_helper.categories": "Kategorien",
         "import_helper.categories_help": "Die Tabelle auf eine oder mehrere Kategorien beschränken.",
@@ -1256,6 +1285,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.price_source_esi_average": "ESI Durchschnitt",
         "build_costs.price_source_jita_sell": "Jita Verkauf",
         "build_costs.price_source_jita_buy": "Jita Ankauf",
+        "market_stats.mineral_price_comparison": "Mineralpreisvergleich",
+        "market_stats.isotope_and_fuel_block_comparison": "Isotope und Treibstoffblöcke",
         "build_costs.structure_compare_expander": "Struktur zum Vergleich auswählen (optional)",
         "build_costs.structure_compare_label": "Strukturen",
         "build_costs.structure_compare_placeholder": "Alle Strukturen",
@@ -1460,7 +1491,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_report.column_total_cost_help": "Coût total du fit.",
         "common.market_hub": "Hub de marche",
         "common.select": "Sélection",
-        "common.type_id": "ID Type",
         "common.item": "Objet",
         "common.category": "Catégorie",
         "common.group": "Groupe",
@@ -1522,6 +1552,16 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "Le profit 30J utilise `(Prix local - Vente Jita) * Volume moyen quotidien * 30`, le RRP utilise "
             "`Vente Jita * (1 + marge)`."
         ),
+        "import_helper.caption_green": "Vert",
+        "import_helper.caption_grey": "Gris",
+        "import_helper.caption_estimated_price": (
+            "Les cellules {color_label} indiquent des prix locaux estimes a 120 % "
+            "de la vente Jita (aucun ordre de vente local)"
+        ),
+        "import_helper.caption_floored_volume": (
+            "Les cellules {color_label} indiquent un volume 30J force a 0.5 "
+            "(historique insuffisant)"
+        ),
         "import_helper.filters_header": "Filtres",
         "import_helper.categories": "Catégories",
         "import_helper.categories_help": "Limiter le tableau a une ou plusieurs catégories.",
@@ -1579,6 +1619,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.price_source_esi_average": "Moyenne ESI",
         "build_costs.price_source_jita_sell": "Vente Jita",
         "build_costs.price_source_jita_buy": "Achat Jita",
+        "market_stats.mineral_price_comparison": "Comparaison des prix des mineraux",
+        "market_stats.isotope_and_fuel_block_comparison": "Isotopes et blocs de carburant",
         "build_costs.structure_compare_expander": "Sélectionner une structure de comparaison (optionnel)",
         "build_costs.structure_compare_label": "Structures",
         "build_costs.structure_compare_placeholder": "Toutes les structures",
@@ -1783,7 +1825,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_report.column_total_cost_help": "Общая стоимость фита.",
         "common.market_hub": "Торговый узел",
         "common.select": "Выбор",
-        "common.type_id": "ID типа",
         "common.item": "Предмет",
         "common.category": "Категория",
         "common.group": "Группа",
@@ -1845,6 +1886,16 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "Прибыль за 30 дней считается как "
             "`(Локальная цена - Jita Sell) * средний дневной оборот * 30`."
         ),
+        "import_helper.caption_green": "Зелёные",
+        "import_helper.caption_grey": "Серые",
+        "import_helper.caption_estimated_price": (
+            "{color_label} ячейки показывают оценочные локальные цены на уровне 140% "
+            "от Jita sell (нет локальных sell-ордеров)"
+        ),
+        "import_helper.caption_floored_volume": (
+            "{color_label} ячейки показывают объём за 30 дней, принудительно установленный "
+            "на 0.5 (недостаточно истории)"
+        ),
         "import_helper.filters_header": "Фильтры",
         "import_helper.categories": "Категории",
         "import_helper.categories_help": "Ограничить таблицу одной или несколькими категориями.",
@@ -1902,6 +1953,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.price_source_esi_average": "Средняя ESI",
         "build_costs.price_source_jita_sell": "Продажа Jita",
         "build_costs.price_source_jita_buy": "Покупка Jita",
+        "market_stats.mineral_price_comparison": "Сравнение цен на минералы",
+        "market_stats.isotope_and_fuel_block_comparison": "Изотопы и топливные блоки",
         "build_costs.structure_compare_expander": "Выберите структуру для сравнения (необязательно)",
         "build_costs.structure_compare_label": "Структуры",
         "build_costs.structure_compare_placeholder": "Все структуры",
@@ -2065,7 +2118,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_report.select_doctrine": "Selecciona una doctrina",
         "common.market_hub": "Hub de mercado",
         "common.select": "Seleccionar",
-        "common.type_id": "ID de tipo",
         "common.item": "Articulo",
         "common.category": "Categoria",
         "common.group": "Grupo",
@@ -2083,6 +2135,16 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "El beneficio de 30D usa `(Precio local - Jita Sell) * volumen diario medio * 30`, el RRP usa "
             "`Jita Sell * (1 + margen)` y Cap Utilis usa "
             "`((Precio local - Jita Sell) - envio) / Jita Sell`."
+        ),
+        "import_helper.caption_green": "Verde",
+        "import_helper.caption_grey": "Gris",
+        "import_helper.caption_estimated_price": (
+            "Las celdas {color_label} muestran precios locales estimados al 120 % "
+            "del Jita sell (sin ordenes locales de venta)"
+        ),
+        "import_helper.caption_floored_volume": (
+            "Las celdas {color_label} muestran volumen 30D ajustado a 0.5 "
+            "(historial insuficiente)"
         ),
         "import_helper.filters_header": "Filtros",
         "import_helper.categories": "Categorias",
@@ -2155,6 +2217,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.price_source_esi_average": "Media ESI",
         "build_costs.price_source_jita_sell": "Venta Jita",
         "build_costs.price_source_jita_buy": "Compra Jita",
+        "market_stats.mineral_price_comparison": "Comparacion de precios de minerales",
+        "market_stats.isotope_and_fuel_block_comparison": "Isotopos y bloques de combustible",
         "build_costs.structure_compare_expander": "Selecciona una estructura para comparar (opcional)",
         "build_costs.structure_compare_label": "Estructuras",
         "build_costs.structure_compare_placeholder": "Todas las estructuras",
