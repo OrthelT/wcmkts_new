@@ -7,6 +7,9 @@ CONTRIBUTING: Contributors welcome. This project is fully open source under MIT 
 
 
 # UPDATES:
+## version 0.4.2
+- performance improvements to Jita price fetching, UI updates to import helper to indicate derived estimated values and refinement of calculations. Various other improvements to code quality, testing, and performance. 
+
 ## version 0.4.0 / 0.4.1
 ### New Features
 - **8-Language UI Translation**: Full UI translation in EN, ZH, DE, FR, RU, ES, JP, and KR via `ui/i18n.py`; ~132 translation keys covering navigation, labels, tooltips, and column headers
