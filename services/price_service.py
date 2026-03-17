@@ -7,6 +7,7 @@ with TTL-based expiry.
 """
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Protocol, Optional, Iterable
 from enum import Enum, auto
 import logging
@@ -14,6 +15,7 @@ import threading
 import time
 import requests
 import pandas as pd
+from sqlalchemy.exc import OperationalError
 from config import DatabaseConfig
 from logging_config import setup_logging
 
@@ -49,6 +51,7 @@ class PriceSource(Enum):
     LOCAL_MARKET = auto()
     JITA_FUZZWORK = auto()
     JITA_JANICE = auto()
+    JITA_DATABASE = auto()
     MARKET_AVERAGE = auto()
     FALLBACK_ZERO = auto()
 
@@ -423,7 +426,7 @@ class JaniceProvider:
 class DatabasePriceProvider:
     """Reads Jita prices from the jita_prices table (populated by backend pipeline)."""
 
-    def __init__(self, db_config, logger: Optional[logging.Logger] = None):
+    def __init__(self, db_config: DatabaseConfig, logger: Optional[logging.Logger] = None):
         self._db = db_config
         self._logger = logger or logging.getLogger(__name__)
 
@@ -437,7 +440,7 @@ class DatabasePriceProvider:
 
     def get_prices(self, type_ids: list[TypeID]) -> BatchPriceResult:
         if not type_ids:
-            return BatchPriceResult(source=PriceSource.JITA_FUZZWORK)
+            return BatchPriceResult(source=PriceSource.JITA_DATABASE)
 
         try:
             placeholders = ','.join(['?'] * len(type_ids))
@@ -448,9 +451,7 @@ class DatabasePriceProvider:
 
             if not df.empty:
                 max_updated = df['last_updated'].max()
-                # Warn if data is older than 4 hours
                 try:
-                    from datetime import datetime, timezone
                     updated_dt = datetime.fromisoformat(max_updated)
                     age_hours = (datetime.now(timezone.utc) - updated_dt).total_seconds() / 3600
                     if age_hours > 4:
@@ -459,36 +460,48 @@ class DatabasePriceProvider:
                             age_hours, max_updated,
                         )
                 except (ValueError, TypeError):
-                    pass
+                    self._logger.warning(
+                        "Could not parse last_updated value: %r", max_updated,
+                    )
 
             prices = {}
-            found_ids = set()
 
             for _, row in df.iterrows():
-                type_id = int(row['type_id'])
-                found_ids.add(type_id)
-                sell_price = float(row.get('sell_price', 0) or 0)
-                buy_price = float(row.get('buy_price', 0) or 0)
+                tid = int(row['type_id'])
+                try:
+                    sell_price = float(row.get('sell_price') or 0)
+                    buy_price = float(row.get('buy_price') or 0)
+                except (ValueError, TypeError) as e:
+                    self._logger.warning(
+                        "Non-numeric price for type_id %s: %s", tid, e,
+                    )
+                    continue
 
                 if sell_price > 0 or buy_price > 0:
-                    prices[type_id] = PriceResult.success_result(
-                        type_id=type_id,
+                    prices[tid] = PriceResult.success_result(
+                        type_id=tid,
                         sell_price=sell_price,
                         buy_price=buy_price,
-                        source=PriceSource.JITA_FUZZWORK,
+                        source=PriceSource.JITA_DATABASE,
                     )
 
             failed = [tid for tid in type_ids if tid not in prices]
 
             return BatchPriceResult(
                 prices=prices,
-                source=PriceSource.JITA_FUZZWORK,
+                source=PriceSource.JITA_DATABASE,
                 failed_ids=failed,
             )
 
+        except OperationalError as e:
+            if "no such table" in str(e):
+                self._logger.debug("jita_prices table not available yet: %s", e)
+            else:
+                self._logger.error("Database error querying jita_prices: %s", e)
+            return BatchPriceResult(failed_ids=list(type_ids), source=PriceSource.JITA_DATABASE)
         except Exception as e:
-            self._logger.debug(f"jita_prices table query failed (may not exist yet): {e}")
-            return BatchPriceResult(failed_ids=list(type_ids), source=PriceSource.JITA_FUZZWORK)
+            self._logger.error("Unexpected error querying jita_prices: %s", e)
+            return BatchPriceResult(failed_ids=list(type_ids), source=PriceSource.JITA_DATABASE)
 
 
 class LocalMarketProvider:

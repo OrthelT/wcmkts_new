@@ -190,7 +190,7 @@ class JitaPrices(Base):
     type_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     sell_price: Mapped[float] = mapped_column(Float)
     buy_price: Mapped[float] = mapped_column(Float)
-    last_updated: Mapped[str] = mapped_column(String)
+    last_updated: Mapped[DateTime] = mapped_column(DateTime)
 
     def __repr__(self) -> str:
         return (
