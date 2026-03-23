@@ -78,14 +78,14 @@ def _render_kpi_bar(market_service, language_code: str):
 
 def _navigate_to_market_stats(type_id: int):
     """Navigate to market stats page with the given item pre-selected."""
-    st.query_params["item_id"] = str(type_id)
-    st.switch_page("pages/market_stats.py")
+    # st.query_params["item_id"] = str(type_id)
+    st.switch_page("pages/market_stats.py", query_params={"item_id": str(type_id)})
 
 
 def _navigate_to_doctrine_status(type_id: int):
     """Navigate to doctrine status page with the given ship pre-selected."""
-    st.query_params["ship_id"] = str(type_id)
-    st.switch_page("pages/doctrine_status.py")
+    # st.query_params["ship_id"] = str(type_id)
+    st.switch_page("pages/doctrine_status.py", query_params={"ship_id": str(type_id)})
 
 
 def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_repo, language_code):
@@ -103,6 +103,7 @@ def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_rep
         )
         if selected:
             _navigate_to_market_stats(selected)
+
     with top_row[1]:
         selected = render_comparison_table(
             market_service=market_service,
@@ -127,6 +128,7 @@ def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_rep
             dataframe_key="dash_doctrine_ships",
         )
         if selected:
+            logger.info(selected)
             _navigate_to_doctrine_status(selected)
     with bottom_row[1]:
         selected = render_popular_modules_table(

@@ -25,12 +25,12 @@ from services.type_name_localization import (
     apply_localized_type_names,
     get_localized_name,
 )
-from state import get_active_language, ss_has, ss_get
+from state import get_active_language, ss_has, ss_get, ss_set
 from repositories import get_sde_repository
 from ui.i18n import translate_text
 from ui.formatters import drop_localized_backup_columns
 from ui.market_selector import render_market_selector
-from ui.sync_display import display_sync_status  # noqa: F401
+from ui.sync_display import display_sync_status  # noqa: F401:wclogo
 # Backwards-compatible alias for pages that may import from here
 new_display_sync_status = display_sync_status
 
@@ -272,7 +272,7 @@ def main():
         try:
             qp_item_id = int(st.query_params["item_id"])
             # Clear query param after reading so it doesn't persist on rerun
-            del st.query_params["item_id"]
+            # del st.query_params["item_id"]
         except (ValueError, TypeError):
             pass
 
