@@ -97,6 +97,36 @@ def _get_selected_type_id(event, source_df: pd.DataFrame) -> int | None:
     return int(source_df.iloc[row_idx]["type_id"])
 
 
+def _status_cell_style(status_label: str) -> str:
+    """Return CSS style for doctrine status cell background color."""
+    if isinstance(status_label, str):
+        if status_label.startswith("🟡"):
+            return "background-color: #fff3cd"
+        if status_label.startswith("🔴"):
+            return "background-color: #f8d7da"
+    return ""
+
+
+def _fits_avail_column_style(column: pd.Series, status_labels: pd.Series) -> list[str]:
+    """Style only fits_on_mkt cells using status labels."""
+    if column.name != "fits_on_mkt":
+        return [""] * len(column)
+    return [_status_cell_style(status_labels.get(idx, "")) for idx in column.index]
+
+
+def _jita_diff_cell_style(diff_value: float) -> str:
+    """Return CSS text color style for % vs Jita cell based on threshold."""
+    try:
+        value = float(diff_value)
+    except (TypeError, ValueError):
+        return ""
+    if value > 5:
+        return "color: #2e7d32"
+    if value < 5:
+        return "color: #c62828"
+    return ""
+
+
 # =========================================================================
 # Comparison Table (minerals, isotopes, popular modules)
 # =========================================================================
@@ -146,13 +176,17 @@ def render_comparison_table(
         "jita_sell_price", "jita_buy_price", "pct_diff_vs_jita_sell",
     ]
     display_df = comparison_df[display_cols].copy()
+    table_df = drop_localized_backup_columns(display_df)
+    styled_table = table_df.style.applymap(
+        _jita_diff_cell_style, subset=["pct_diff_vs_jita_sell"]
+    )
 
     st.subheader(translate_text(language_code, title_key), divider="gray")
 
     if dataframe_key:
         st.caption(translate_text(language_code, "dashboard.hint_click_market_stats"))
         event = st.dataframe(
-            drop_localized_backup_columns(display_df),
+            styled_table,
             hide_index=True,
             column_config=get_market_comparison_column_config(language_code),
             width="stretch",
@@ -163,7 +197,7 @@ def render_comparison_table(
         return _get_selected_type_id(event, comparison_df)
     else:
         st.dataframe(
-            drop_localized_backup_columns(display_df),
+            styled_table,
             hide_index=True,
             column_config=get_market_comparison_column_config(language_code),
             width="stretch",
@@ -232,6 +266,10 @@ def render_popular_modules_table(
         "jita_sell_price", "jita_buy_price", "pct_diff_vs_jita_sell",
     ]
     display_df = snapshot[display_cols].copy()
+    table_df = drop_localized_backup_columns(display_df)
+    styled_table = table_df.style.applymap(
+        _jita_diff_cell_style, subset=["pct_diff_vs_jita_sell"]
+    )
 
     st.subheader(
         translate_text(language_code, "dashboard.popular_modules"), divider="gray",
@@ -240,7 +278,7 @@ def render_popular_modules_table(
     if dataframe_key:
         st.caption(translate_text(language_code, "dashboard.hint_click_market_stats"))
         event = st.dataframe(
-            drop_localized_backup_columns(display_df),
+            styled_table,
             hide_index=True,
             column_config=get_market_comparison_column_config(
                 language_code, price_format="compact",
@@ -253,7 +291,7 @@ def render_popular_modules_table(
         return _get_selected_type_id(event, snapshot)
     else:
         st.dataframe(
-            drop_localized_backup_columns(display_df),
+            styled_table,
             hide_index=True,
             column_config=get_market_comparison_column_config(
                 language_code, price_format="compact",
@@ -353,8 +391,7 @@ def render_doctrine_ships_table(
 
     display_cols = [
         "image_url", "type_name", "current_sell_price", "order_volume",
-        "jita_sell_price", "ship_target", "fits_on_mkt", "status",
-        "_mkt", "_doc",
+        "jita_sell_price", "ship_target", "fits_on_mkt", "_mkt", "_doc",
     ]
     display_df = result_df[display_cols].copy()
 
@@ -369,8 +406,13 @@ def render_doctrine_ships_table(
             + "  ·  ⚔️ = "
             + translate_text(language_code, "dashboard.hint_click_doctrine_status")
         )
+        table_df = drop_localized_backup_columns(display_df)
+        status_labels = result_df["status"]
+        styled_table = table_df.style.apply(
+            lambda col: _fits_avail_column_style(col, status_labels), axis=0
+        )
         edited_df = st.data_editor(
-            drop_localized_backup_columns(display_df),
+            styled_table,
             hide_index=True,
             column_config=get_doctrine_ships_column_config(language_code),
             disabled=[c for c in display_cols if c not in ("_mkt", "_doc")],
@@ -385,10 +427,13 @@ def render_doctrine_ships_table(
                 return int(result_df.iloc[idx]["type_id"]), "doctrine_status"
         return None, None
     else:
+        table_df = drop_localized_backup_columns(result_df[display_cols[:7]].copy())
+        status_labels = result_df["status"]
+        styled_table = table_df.style.apply(
+            lambda col: _fits_avail_column_style(col, status_labels), axis=0
+        )
         st.dataframe(
-            drop_localized_backup_columns(
-                result_df[display_cols[:8]].copy()  # exclude checkbox cols
-            ),
+            styled_table,
             hide_index=True,
             column_config=get_doctrine_ships_column_config(language_code),
             width="stretch",
