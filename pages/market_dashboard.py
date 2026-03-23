@@ -65,10 +65,8 @@ def _render_kpi_bar(market_service, language_code: str):
             f"{kpis['items_listed']:,}",
         )
     with cols[4]:
-        st.metric(
-            translate_text(language_code, "dashboard.kpi_last_updated"),
-            kpis["last_updated"] or "N/A",
-        )
+        st.write(translate_text(language_code, "dashboard.kpi_last_updated"))
+        st.write(kpis["last_updated"] or "N/A")
 
 
 # =============================================================================
