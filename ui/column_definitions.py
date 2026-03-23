@@ -283,6 +283,47 @@ def get_market_comparison_column_config(language_code: str = "en") -> dict:
     }
 
 
+def get_doctrine_ships_column_config(language_code: str = "en") -> dict:
+    """Get column configuration for the dashboard doctrine ships table."""
+    return {
+        "image_url": st.column_config.ImageColumn(
+            "",
+            width=40,
+        ),
+        "type_name": st.column_config.TextColumn(
+            translate_text(language_code, "common.item"),
+            width=135,
+        ),
+        "current_sell_price": st.column_config.NumberColumn(
+            translate_text(language_code, "market_stats.sell_price"),
+            format="%.2f",
+            width=88,
+        ),
+        "order_volume": st.column_config.NumberColumn(
+            translate_text(language_code, "market_stats.market_stock"),
+            format="compact",
+            width=70,
+        ),
+        "jita_sell_price": st.column_config.NumberColumn(
+            translate_text(language_code, "import_helper.column_jita_sell"),
+            format="%.2f",
+            width=88,
+        ),
+        "ship_target": st.column_config.NumberColumn(
+            translate_text(language_code, "dashboard.column_target"),
+            width=60,
+        ),
+        "fits_on_mkt": st.column_config.NumberColumn(
+            translate_text(language_code, "dashboard.column_fits_available"),
+            width=70,
+        ),
+        "status": st.column_config.TextColumn(
+            translate_text(language_code, "dashboard.column_status"),
+            width=80,
+        ),
+    }
+
+
 def get_low_stock_column_config(language_code: str = "en") -> dict:
     """Get column configuration for the Low Stock page table."""
     return {
