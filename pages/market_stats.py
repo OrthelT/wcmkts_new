@@ -29,10 +29,15 @@ from services.type_name_localization import (
 from state import get_active_language, ss_has, ss_get
 from repositories import get_sde_repository, invalidate_market_caches
 from ui.i18n import translate_text
-from ui.column_definitions import get_market_comparison_column_config
+from ui.column_definitions import get_market_comparison_column_config  # noqa: F401
 from ui.market_selector import render_market_selector
 from ui.sync_display import display_sync_status  # noqa: F401
-from ui.formatters import drop_localized_backup_columns
+from ui.formatters import drop_localized_backup_columns  # noqa: F401
+from pages.components.dashboard_components import (
+    MINERAL_TYPE_IDS,
+    ISOTOPE_AND_FUEL_BLOCK_TYPE_IDS,
+    render_comparison_table,
+)
 # Backwards-compatible alias for pages that may import from here
 new_display_sync_status = display_sync_status
 
@@ -46,8 +51,6 @@ logger.info("Application started")
 logger.info(f"streamlit version: {st.__version__}")
 logger.info("-" * 100)
 
-MINERAL_TYPE_IDS: tuple[int, ...] = (34, 35, 36, 37, 38, 39, 40, 11399, 81143)
-ISOTOPE_AND_FUEL_BLOCK_TYPE_IDS: tuple[int, ...] = (16274, 17887, 17888, 17889, 4247, 4312, 4051, 4246, 16273, 16275)
 
 # =============================================================================
 # Filter Options
@@ -365,110 +368,6 @@ def render_title_headers(market_name: str, language_code: str):
                 header_env=header_env,
             ).strip()
         )
-
-
-def _get_price_result_value(price_result, field_name: str) -> float:
-    """Return a numeric price field from a PriceResult-like object."""
-    if price_result is None:
-        return 0.0
-    try:
-        return float(getattr(price_result, field_name) or 0.0)
-    except (AttributeError, TypeError, ValueError):
-        return 0.0
-
-
-def _get_eve_icon_url(type_id: int) -> str:
-    """Return the EVE icon URL for an item type."""
-    return f"https://images.evetech.net/types/{int(type_id)}/icon?size=32"
-
-
-def render_comparison_table(
-    market_service,
-    price_service,
-    sde_repo,
-    type_ids: list[int],
-    title_key: str,
-    language_code: str,
-) -> None:
-    """Render a fixed item price comparison table for the active market."""
-    comparison_df = market_service.get_current_market_snapshot(type_ids)
-    if comparison_df.empty:
-        return
-
-    jita_price_map = price_service.get_jita_price_data_map(type_ids)
-    comparison_df["jita_sell_price"] = comparison_df["type_id"].map(
-        lambda type_id: _get_price_result_value(jita_price_map.get(int(type_id)), "sell_price")
-    )
-    comparison_df["jita_buy_price"] = comparison_df["type_id"].map(
-        lambda type_id: _get_price_result_value(jita_price_map.get(int(type_id)), "buy_price")
-    )
-    comparison_df["pct_diff_vs_jita_sell"] = 0.0
-
-    has_jita_sell = comparison_df["jita_sell_price"] > 0
-    comparison_df.loc[has_jita_sell, "pct_diff_vs_jita_sell"] = (
-        (
-            comparison_df.loc[has_jita_sell, "current_sell_price"]
-            - comparison_df.loc[has_jita_sell, "jita_sell_price"]
-        )
-        / comparison_df.loc[has_jita_sell, "jita_sell_price"]
-    ) * 100
-
-    comparison_df["order_volume"] = (
-        pd.to_numeric(comparison_df["order_volume"], errors="coerce").fillna(0).round().astype(int)
-    )
-    comparison_df = apply_localized_type_names(
-        comparison_df,
-        sde_repo,
-        language_code,
-        logger,
-    )
-    comparison_df["type_name"] = comparison_df["type_name"].fillna(
-        comparison_df["type_id"].astype(str)
-    )
-    comparison_df["image_url"] = comparison_df["type_id"].map(_get_eve_icon_url)
-    comparison_df["current_sell_price"] = pd.to_numeric(
-        comparison_df["current_sell_price"],
-        errors="coerce",
-    ).fillna(0.0)
-    comparison_df["order_volume"] = pd.to_numeric(
-        comparison_df["order_volume"],
-        errors="coerce",
-    ).fillna(0.0)
-    comparison_df["jita_sell_price"] = pd.to_numeric(
-        comparison_df["jita_sell_price"],
-        errors="coerce",
-    ).fillna(0.0)
-    comparison_df["jita_buy_price"] = pd.to_numeric(
-        comparison_df["jita_buy_price"],
-        errors="coerce",
-    ).fillna(0.0)
-    comparison_df["pct_diff_vs_jita_sell"] = pd.to_numeric(
-        comparison_df["pct_diff_vs_jita_sell"],
-        errors="coerce",
-    ).fillna(0.0)
-
-    display_df = comparison_df[
-        [
-            "image_url",
-            "type_name",
-            "current_sell_price",
-            "order_volume",
-            "jita_sell_price",
-            "jita_buy_price",
-            "pct_diff_vs_jita_sell",
-        ]
-    ].copy()
-
-    st.subheader(
-        translate_text(language_code, title_key),
-        divider="gray",
-    )
-    st.dataframe(
-        drop_localized_backup_columns(display_df),
-        hide_index=True,
-        column_config=get_market_comparison_column_config(language_code),
-        width="stretch",
-    )
 
 
 # =============================================================================

@@ -36,6 +36,11 @@ if selected_language != current_language:
 pages = {
     translate_text(current_language, "nav.section.market_stats"): [
         st.Page(
+            "pages/market_dashboard.py",
+            title=translate_text(current_language, "nav.page.market_dashboard"),
+            default=True,
+        ),
+        st.Page(
             "pages/market_stats.py",
             title=translate_text(current_language, "nav.page.market_stats"),
         ),
