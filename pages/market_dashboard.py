@@ -119,7 +119,7 @@ def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_rep
 
     bottom_row = st.columns(2, gap="small")
     with bottom_row[0]:
-        selected = render_doctrine_ships_table(
+        ship_id, target = render_doctrine_ships_table(
             doctrine_repo=doctrine_repo,
             market_service=market_service,
             price_service=price_service,
@@ -127,9 +127,10 @@ def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_rep
             language_code=language_code,
             dataframe_key="dash_doctrine_ships",
         )
-        if selected:
-            logger.info(selected)
-            _navigate_to_doctrine_status(selected)
+        if ship_id and target == "market_stats":
+            _navigate_to_market_stats(ship_id)
+        elif ship_id and target == "doctrine_status":
+            _navigate_to_doctrine_status(ship_id)
     with bottom_row[1]:
         selected = render_popular_modules_table(
             market_service=market_service,

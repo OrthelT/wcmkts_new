@@ -25,12 +25,12 @@ from services.type_name_localization import (
     apply_localized_type_names,
     get_localized_name,
 )
-from state import get_active_language, ss_has, ss_get, ss_set
+from state import get_active_language, ss_has, ss_get
 from repositories import get_sde_repository
 from ui.i18n import translate_text
 from ui.formatters import drop_localized_backup_columns
 from ui.market_selector import render_market_selector
-from ui.sync_display import display_sync_status  # noqa: F401:wclogo
+from ui.sync_display import display_sync_status  # noqa: F401
 # Backwards-compatible alias for pages that may import from here
 new_display_sync_status = display_sync_status
 
@@ -266,21 +266,21 @@ def main():
     market_service = get_market_service()
     sde_repo = get_sde_repository()
 
-    # Read query params for deep-link navigation from dashboard
+    # Read query params for deep-link navigation from dashboard.
+    # Consume the param so it doesn't persist across reruns.
     qp_item_id = None
     if "item_id" in st.query_params:
         try:
             qp_item_id = int(st.query_params["item_id"])
-            # Clear query param after reading so it doesn't persist on rerun
-            # del st.query_params["item_id"]
         except (ValueError, TypeError):
             pass
+        del st.query_params["item_id"]
 
     # Sidebar filters
     st.sidebar.header(translate_text(language_code, "low_stock.filters_header"))
     show_all = st.sidebar.checkbox(
         translate_text(language_code, "market_stats.show_all_data"),
-        value=bool(qp_item_id),  # auto-enable "show all" when deep-linking
+        value=False,
     )
 
     category_options_df, all_items_df, _ = get_filter_options()
@@ -466,42 +466,43 @@ def main():
                 image_id = None
                 type_name = None
 
-            st.subheader(f"{type_name}", divider="blue")
-            col1, col2 = st.columns(2)
-            with col1:
+            img_col, name_col = st.columns([0.08, 0.92], vertical_alignment="center")
+            with img_col:
                 if image_id:
                     if isship:
                         st.image(f'https://images.evetech.net/types/{image_id}/render?size=64')
                     else:
-                        st.image(f'https://images.evetech.net/types/{image_id}/icon')
-            with col2:
-                try:
-                    if fits_on_mkt is not None and fits_on_mkt:
-                        st.subheader(
-                            translate_text(language_code, "market_stats.winter_co_doctrine"),
-                            divider="orange",
+                        st.image(f'https://images.evetech.net/types/{image_id}/icon?size=64')
+            with name_col:
+                st.subheader(f"{type_name}", divider="blue")
+
+            try:
+                if fits_on_mkt is not None and fits_on_mkt:
+                    st.subheader(
+                        translate_text(language_code, "market_stats.winter_co_doctrine"),
+                        divider="orange",
+                    )
+                    if cat_id in [7, 8, 18]:
+                        all_fits = service.repository.get_all_fits()
+                        module_fits = all_fits[all_fits['type_id'] == selected_item_id]
+                        module_fits = apply_localized_names(
+                            module_fits,
+                            sde_repo,
+                            language_code,
+                            id_column="ship_id",
+                            name_column="ship_name",
+                            logger=logger,
+                            english_name_column="ship_name_en",
                         )
-                        if cat_id in [7, 8, 18]:
-                            all_fits = service.repository.get_all_fits()
-                            module_fits = all_fits[all_fits['type_id'] == selected_item_id]
-                            module_fits = apply_localized_names(
-                                module_fits,
-                                sde_repo,
-                                language_code,
-                                id_column="ship_id",
-                                name_column="ship_name",
-                                logger=logger,
-                                english_name_column="ship_name_en",
+                        st.write(
+                            drop_localized_backup_columns(
+                                module_fits[['fit_id', 'ship_name', 'fit_qty']].drop_duplicates()
                             )
-                            st.write(
-                                drop_localized_backup_columns(
-                                    module_fits[['fit_id', 'ship_name', 'fit_qty']].drop_duplicates()
-                                )
-                            )
-                        else:
-                            st.write(fit_df[fit_df['type_id'] == selected_item_id]['group_name'].iloc[0])
-                except Exception as e:
-                    logger.error(f"Error: {e}")
+                        )
+                    else:
+                        st.write(fit_df[fit_df['type_id'] == selected_item_id]['group_name'].iloc[0])
+            except Exception as e:
+                logger.error(f"Error: {e}")
         elif ss_has('selected_category'):
             st.header(
                 translate_text(

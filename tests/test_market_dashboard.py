@@ -83,18 +83,18 @@ class TestGetMarketOverviewKpis:
 class TestGetPopularModuleTypeIds:
     """Tests for get_popular_module_type_ids()."""
 
-    def test_excludes_ship_hulls(self):
+    def test_excludes_ship_hulls_and_non_modules(self):
         from pages.components.dashboard_components import get_popular_module_type_ids
 
         repo = MagicMock()
         repo.get_all_fits.return_value = pd.DataFrame({
-            "type_id": [100, 200, 200],
+            "type_id": [100, 200, 300],
             "ship_id": [200, 200, 200],
-            "avg_vol": [50.0, 30.0, 30.0],
+            "category_id": [7, 7, 8],  # 300 is category 8 (Charge), not Module
+            "avg_vol": [50.0, 30.0, 40.0],
         })
         result = get_popular_module_type_ids(repo, n=10)
-        # type_id 200 == ship_id 200, so it's a hull → excluded
-        # type_id 100 != ship_id 200, so it's a module → included
+        # 200 excluded (hull), 300 excluded (category 8), only 100 remains
         assert result == [100]
 
     def test_returns_top_n(self):
@@ -104,6 +104,7 @@ class TestGetPopularModuleTypeIds:
         repo.get_all_fits.return_value = pd.DataFrame({
             "type_id": [100, 101, 102],
             "ship_id": [999, 999, 999],
+            "category_id": [7, 7, 7],
             "avg_vol": [10.0, 30.0, 20.0],
         })
         result = get_popular_module_type_ids(repo, n=2)
@@ -127,6 +128,7 @@ class TestGetPopularModuleTypeIds:
         repo.get_all_fits.return_value = pd.DataFrame({
             "type_id": [100, 100, 101],
             "ship_id": [999, 998, 999],
+            "category_id": [7, 7, 7],
             "avg_vol": [50.0, 30.0, 40.0],
         })
         result = get_popular_module_type_ids(repo, n=10)
@@ -180,5 +182,6 @@ class TestDoctrineShipsColumnConfig:
         expected_keys = {
             "image_url", "type_name", "current_sell_price", "order_volume",
             "jita_sell_price", "ship_target", "fits_on_mkt", "status",
+            "_mkt", "_doc",
         }
         assert set(config.keys()) == expected_keys

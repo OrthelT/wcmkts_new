@@ -150,6 +150,7 @@ def render_comparison_table(
     st.subheader(translate_text(language_code, title_key), divider="gray")
 
     if dataframe_key:
+        st.caption(translate_text(language_code, "dashboard.hint_click_market_stats"))
         event = st.dataframe(
             drop_localized_backup_columns(display_df),
             hide_index=True,
@@ -176,11 +177,16 @@ def render_comparison_table(
 
 
 def get_popular_module_type_ids(doctrine_repo, n: int = 10) -> list[int]:
-    """Return top N module type_ids by avg_vol from doctrines (excluding ship hulls)."""
+    """Return top N module type_ids by avg_vol from doctrines.
+
+    Filters to category_id 7 (Modules) and excludes ship hull rows.
+    """
     fits_df = doctrine_repo.get_all_fits()
     if fits_df.empty:
         return []
-    modules = fits_df[fits_df["type_id"] != fits_df["ship_id"]].copy()
+    modules = fits_df[
+        (fits_df["type_id"] != fits_df["ship_id"]) & (fits_df["category_id"] == 7)
+    ].copy()
     modules = modules.sort_values("avg_vol", ascending=False).drop_duplicates(
         subset=["type_id"], keep="first"
     )
@@ -232,10 +238,13 @@ def render_popular_modules_table(
     )
 
     if dataframe_key:
+        st.caption(translate_text(language_code, "dashboard.hint_click_market_stats"))
         event = st.dataframe(
             drop_localized_backup_columns(display_df),
             hide_index=True,
-            column_config=get_market_comparison_column_config(language_code),
+            column_config=get_market_comparison_column_config(
+                language_code, price_format="compact",
+            ),
             width="stretch",
             on_select="rerun",
             selection_mode="single-row",
@@ -246,7 +255,9 @@ def render_popular_modules_table(
         st.dataframe(
             drop_localized_backup_columns(display_df),
             hide_index=True,
-            column_config=get_market_comparison_column_config(language_code),
+            column_config=get_market_comparison_column_config(
+                language_code, price_format="compact",
+            ),
             width="stretch",
         )
         return None
@@ -264,23 +275,24 @@ def render_doctrine_ships_table(
     sde_repo,
     language_code: str,
     dataframe_key: str | None = None,
-) -> int | None:
-    """Render doctrine ships stock vs targets table.
+) -> tuple[int | None, str | None]:
+    """Render doctrine ships stock vs targets table with dual navigation.
 
     Returns:
-        Selected ship type_id if a row was clicked, None otherwise.
+        (type_id, target) where target is "market_stats" or "doctrine_status",
+        or (None, None) if nothing was clicked.
     """
     from ui.column_definitions import get_doctrine_ships_column_config
 
     fits_df = doctrine_repo.get_all_fits()
     if fits_df.empty:
-        return None
+        return None, None
 
     # Unique ships: rows where type_id == ship_id (hull rows)
     ships = fits_df[fits_df["type_id"] == fits_df["ship_id"]].copy()
     ships = ships.drop_duplicates(subset=["ship_id"], keep="first")
     if ships.empty:
-        return None
+        return None, None
 
     ship_type_ids = ships["ship_id"].tolist()
 
@@ -331,39 +343,54 @@ def render_doctrine_ships_table(
             "ship_target": target,
             "fits_on_mkt": fits_on_mkt,
             "status": f"{status_icons.get(status, '')} {status.display_name}",
+            "_mkt": False,
+            "_doc": False,
         })
 
     result_df = pd.DataFrame(rows)
     result_df = apply_localized_type_names(result_df, sde_repo, language_code, logger)
     result_df["type_name"] = result_df["type_name"].fillna(result_df["type_id"].astype(str))
 
-    display_df = result_df[
-        [
-            "image_url", "type_name", "current_sell_price", "order_volume",
-            "jita_sell_price", "ship_target", "fits_on_mkt", "status",
-        ]
-    ].copy()
+    display_cols = [
+        "image_url", "type_name", "current_sell_price", "order_volume",
+        "jita_sell_price", "ship_target", "fits_on_mkt", "status",
+        "_mkt", "_doc",
+    ]
+    display_df = result_df[display_cols].copy()
 
     st.subheader(
         translate_text(language_code, "dashboard.doctrine_ships"), divider="gray",
     )
 
     if dataframe_key:
-        event = st.dataframe(
+        st.caption(
+            "📈 = "
+            + translate_text(language_code, "dashboard.hint_click_market_stats")
+            + "  ·  ⚔️ = "
+            + translate_text(language_code, "dashboard.hint_click_doctrine_status")
+        )
+        edited_df = st.data_editor(
             drop_localized_backup_columns(display_df),
             hide_index=True,
             column_config=get_doctrine_ships_column_config(language_code),
+            disabled=[c for c in display_cols if c not in ("_mkt", "_doc")],
             width="stretch",
-            on_select="rerun",
-            selection_mode="single-row",
             key=dataframe_key,
         )
-        return _get_selected_type_id(event, result_df)
+        # Detect which checkbox was clicked
+        for idx in range(len(edited_df)):
+            if edited_df.iloc[idx]["_mkt"]:
+                return int(result_df.iloc[idx]["type_id"]), "market_stats"
+            if edited_df.iloc[idx]["_doc"]:
+                return int(result_df.iloc[idx]["type_id"]), "doctrine_status"
+        return None, None
     else:
         st.dataframe(
-            drop_localized_backup_columns(display_df),
+            drop_localized_backup_columns(
+                result_df[display_cols[:8]].copy()  # exclude checkbox cols
+            ),
             hide_index=True,
             column_config=get_doctrine_ships_column_config(language_code),
             width="stretch",
         )
-        return None
+        return None, None
