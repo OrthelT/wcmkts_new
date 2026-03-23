@@ -181,7 +181,56 @@ class TestDoctrineShipsColumnConfig:
         config = get_doctrine_ships_column_config("en")
         expected_keys = {
             "image_url", "type_name", "current_sell_price", "order_volume",
-            "jita_sell_price", "ship_target", "fits_on_mkt", "status",
+            "jita_sell_price", "ship_target", "fits_on_mkt",
             "_mkt", "_doc",
         }
         assert set(config.keys()) == expected_keys
+
+
+class TestDoctrineStatusCellStyle:
+    """Tests for doctrine status cell styling helper."""
+
+    def test_good_status_has_no_background(self):
+        from pages.components.dashboard_components import _status_cell_style
+
+        assert _status_cell_style("🟢 Good") == ""
+
+    def test_needs_attention_status_gets_yellow_background(self):
+        from pages.components.dashboard_components import _status_cell_style
+
+        assert _status_cell_style("🟡 Needs Attention") == "background-color: #fff3cd"
+
+    def test_critical_status_gets_red_background(self):
+        from pages.components.dashboard_components import _status_cell_style
+
+        assert _status_cell_style("🔴 Critical") == "background-color: #f8d7da"
+
+    def test_fits_avail_style_applies_only_to_fits_column(self):
+        from pages.components.dashboard_components import _fits_avail_column_style
+
+        fits_column = pd.Series([10, 5, 1], name="fits_on_mkt", index=[0, 1, 2])
+        status_labels = pd.Series(["🟢 Good", "🟡 Needs Attention", "🔴 Critical"], index=[0, 1, 2])
+        styles = _fits_avail_column_style(fits_column, status_labels)
+        assert styles == ["", "background-color: #fff3cd", "background-color: #f8d7da"]
+
+        other_column = pd.Series(["A", "B", "C"], name="type_name", index=[0, 1, 2])
+        assert _fits_avail_column_style(other_column, status_labels) == ["", "", ""]
+
+
+class TestJitaDiffCellStyle:
+    """Tests for % vs Jita conditional styling helper."""
+
+    def test_greater_than_five_is_green(self):
+        from pages.components.dashboard_components import _jita_diff_cell_style
+
+        assert _jita_diff_cell_style(5.01) == "color: #2e7d32"
+
+    def test_less_than_five_is_red(self):
+        from pages.components.dashboard_components import _jita_diff_cell_style
+
+        assert _jita_diff_cell_style(4.99) == "color: #c62828"
+
+    def test_exactly_five_has_no_background(self):
+        from pages.components.dashboard_components import _jita_diff_cell_style
+
+        assert _jita_diff_cell_style(5.0) == ""
