@@ -244,8 +244,16 @@ def get_import_helper_column_config(
     }
 
 
-def get_market_comparison_column_config(language_code: str = "en") -> dict:
-    """Get column configuration for market comparison tables."""
+def get_market_comparison_column_config(
+    language_code: str = "en",
+    price_format: str = "%,.2f",
+) -> dict:
+    """Get column configuration for market comparison tables.
+
+    Args:
+        price_format: Number format for price columns.
+            "%,.2f" for localized (comma-separated), "compact" for abbreviated.
+    """
     return {
         "image_url": st.column_config.ImageColumn(
             "",
@@ -257,7 +265,7 @@ def get_market_comparison_column_config(language_code: str = "en") -> dict:
         ),
         "current_sell_price": st.column_config.NumberColumn(
             translate_text(language_code, "market_stats.sell_price"),
-            format="%.2f",
+            format=price_format,
             width=88,
         ),
         "order_volume": st.column_config.NumberColumn(
@@ -267,12 +275,12 @@ def get_market_comparison_column_config(language_code: str = "en") -> dict:
         ),
         "jita_sell_price": st.column_config.NumberColumn(
             translate_text(language_code, "import_helper.column_jita_sell"),
-            format="%.2f",
+            format=price_format,
             width=88,
         ),
         "jita_buy_price": st.column_config.NumberColumn(
             translate_text(language_code, "import_helper.column_jita_buy"),
-            format="%.2f",
+            format=price_format,
             width=88,
         ),
         "pct_diff_vs_jita_sell": st.column_config.NumberColumn(
@@ -296,7 +304,7 @@ def get_doctrine_ships_column_config(language_code: str = "en") -> dict:
         ),
         "current_sell_price": st.column_config.NumberColumn(
             translate_text(language_code, "market_stats.sell_price"),
-            format="%.2f",
+            format="compact",
             width=88,
         ),
         "order_volume": st.column_config.NumberColumn(
@@ -306,7 +314,7 @@ def get_doctrine_ships_column_config(language_code: str = "en") -> dict:
         ),
         "jita_sell_price": st.column_config.NumberColumn(
             translate_text(language_code, "import_helper.column_jita_sell"),
-            format="%.2f",
+            format="compact",
             width=88,
         ),
         "ship_target": st.column_config.NumberColumn(
@@ -320,6 +328,18 @@ def get_doctrine_ships_column_config(language_code: str = "en") -> dict:
         "status": st.column_config.TextColumn(
             translate_text(language_code, "dashboard.column_status"),
             width=80,
+        ),
+        "_mkt": st.column_config.CheckboxColumn(
+            "📈",
+            help=translate_text(language_code, "dashboard.hint_click_market_stats"),
+            width=40,
+            default=False,
+        ),
+        "_doc": st.column_config.CheckboxColumn(
+            "⚔️",
+            help=translate_text(language_code, "dashboard.hint_click_doctrine_status"),
+            width=40,
+            default=False,
         ),
     }
 
