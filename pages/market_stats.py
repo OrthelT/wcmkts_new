@@ -1,14 +1,13 @@
 import time
-from datetime import datetime, timedelta
 import streamlit as st
 import pandas as pd
 from logging_config import setup_logging
 import millify
-from config import DatabaseConfig, get_settings
-from services import get_doctrine_service, get_price_service
+from config import get_settings
+from services import get_doctrine_service
 from services.market_service import get_market_service
-from init_db import init_db, ensure_market_db_ready
-from state.sync_state import update_wcmkt_state
+from init_db import ensure_market_db_ready
+from pages.components.db_refresh import ensure_init_and_check, check_db
 from pages.components.market_components import (
     render_isk_volume_chart_ui,
     render_isk_volume_table_ui,
@@ -27,17 +26,11 @@ from services.type_name_localization import (
     get_localized_name,
 )
 from state import get_active_language, ss_has, ss_get
-from repositories import get_sde_repository, invalidate_market_caches
+from repositories import get_sde_repository
 from ui.i18n import translate_text
-from ui.column_definitions import get_market_comparison_column_config  # noqa: F401
+from ui.formatters import drop_localized_backup_columns
 from ui.market_selector import render_market_selector
 from ui.sync_display import display_sync_status  # noqa: F401
-from ui.formatters import drop_localized_backup_columns  # noqa: F401
-from pages.components.dashboard_components import (
-    MINERAL_TYPE_IDS,
-    ISOTOPE_AND_FUEL_BLOCK_TYPE_IDS,
-    render_comparison_table,
-)
 # Backwards-compatible alias for pages that may import from here
 new_display_sync_status = display_sync_status
 
@@ -225,128 +218,6 @@ def check_selected_category(
         return None
 
 
-# =============================================================================
-# Database Initialization & Sync
-# =============================================================================
-
-def initialize_main_function():
-    """Initialize all databases (primary + deployment + shared).
-
-    Only sets ``db_initialized`` to True once *every* database has been
-    verified to contain tables.  If a previous attempt partially failed,
-    init_db() is re-run on the next rerun so the missing databases get
-    another chance to sync.
-    """
-    logger.info("*" * 60)
-    logger.info("Starting main function")
-    logger.info("*" * 60)
-
-    if not st.session_state.get('db_initialized'):
-        logger.info("-" * 30)
-        logger.info("Initializing databases (all markets + shared)")
-        result = init_db()
-        if result:
-            st.session_state.db_initialized = True
-        else:
-            st.toast("One or more databases failed to initialize", icon="❌")
-            # Leave db_initialized unset so the next rerun retries
-    else:
-        logger.info("Databases already initialized in session state")
-    logger.info("*" * 60)
-    st.session_state.db_init_time = datetime.now()
-    return st.session_state.get('db_initialized', False)
-
-
-@st.cache_data(ttl=600)
-def check_for_db_updates(db_alias: str) -> tuple[bool, datetime]:
-    """Check whether local and remote databases are in sync.
-
-    The db_alias must be an explicit alias (e.g. "wcmktprod", "wcmktnorth")
-    so the cache key correctly distinguishes between markets.
-    """
-    db = DatabaseConfig(db_alias)
-    if not db.has_remote_credentials:
-        logger.info(f"check_for_db_updates(): skipping remote validation for {db_alias}")
-        local_time = datetime.now()
-        return True, local_time
-    check = db.validate_sync()
-    local_time = datetime.now()
-    return check, local_time
-
-
-def check_db(manual_override: bool = False):
-    """Check for database updates on *all* markets and sync any that are stale.
-
-    Both market databases receive ESI updates at the same time, so we check
-    all of them regardless of which market is currently active.
-    """
-    from state.market_state import get_active_market
-    from settings_service import get_all_market_configs
-
-    active_alias = get_active_market().database_alias
-    all_aliases = [cfg.database_alias for cfg in get_all_market_configs().values()]
-
-    if manual_override:
-        check_for_db_updates.clear()
-        logger.info("*" * 60)
-        logger.info("check_for_db_updates() cache cleared for manual override")
-        logger.info("*" * 60)
-
-    synced_any = False
-    any_stale = False
-    local_only_mode = False
-    for alias in all_aliases:
-        db = DatabaseConfig(alias)
-        if not db.has_remote_credentials:
-            logger.info(f"check_db(): skipping {alias}; no remote credentials configured")
-            local_only_mode = True
-            continue
-        check, local_time = check_for_db_updates(alias)
-        now = time.time()
-        logger.info(f"check_db() check: {check}, time: {local_time}, alias: {alias}")
-        logger.info(f"last_check: {round(now - st.session_state.get('last_check', 0), 2)} seconds ago")
-
-        if not check:
-            any_stale = True
-            logger.info(f"check_db() {alias} is stale, syncing")
-            db.sync()
-
-            if db.validate_sync():
-                logger.info(f"{alias} synced and validated")
-                synced_any = True
-            else:
-                logger.info(f"{alias} sync failed validation")
-                st.toast(f"Sync failed for {alias}", icon="❌")
-
-    if synced_any:
-        invalidate_market_caches()
-        update_wcmkt_state()
-        st.toast("Database synced successfully", icon="✅")
-    elif local_only_mode and not any_stale and manual_override:
-        st.toast("Local-only mode: remote sync checks skipped", icon="ℹ️")
-    elif not any_stale:
-        if 'local_update_status' in st.session_state:
-            time_since = st.session_state.local_update_status["time_since"]
-            if time_since is not None:
-                local_update_since = f"{int(time_since.total_seconds() // 60)} mins"
-            else:
-                local_update_since = "unknown"
-            st.toast(f"DB updated: {local_update_since} ago", icon="✅")
-        else:
-            local_update_since = DatabaseConfig(active_alias).get_time_since_update("marketstats", remote=False)
-            local_update_since = f"{local_update_since} mins"
-            st.toast(f"DB updated: {local_update_since} ago", icon="✅")
-
-def maybe_run_check():
-    now = time.time()
-    if "last_check" not in st.session_state:
-        logger.info("last_check not in st.session_state, setting to now")
-        check_db()
-        st.session_state["last_check"] = now
-    elif now - st.session_state.get("last_check", 0) > 600:
-        logger.info(f"now - last_check={now - st.session_state.get('last_check', 0)}, running check_db()")
-        check_db()
-        st.session_state["last_check"] = now
 
 
 
@@ -379,15 +250,9 @@ def main():
     language_code = get_active_language()
     market = render_market_selector()
 
-    # Initialize databases if needed
-    if 'db_init_time' not in st.session_state:
-        init_result = initialize_main_function()
-    elif datetime.now() - st.session_state.db_init_time > timedelta(hours=1):
-        init_result = initialize_main_function()
-    else:
-        init_result = True
-    # Ensure the active market's database is synced before any queries.
-    # On cold start or after a market switch, the target db may not exist yet.
+    # Initialize databases and run periodic staleness checks
+    ensure_init_and_check()
+
     if not ensure_market_db_ready(market.database_alias):
         st.error(
             f"Database for **{market.name}** is not available. "
@@ -395,23 +260,28 @@ def main():
         )
         st.stop()
 
-    if init_result:
-        update_wcmkt_state(skip_remote=True)
-
-    maybe_run_check()
     render_title_headers(market.name, language_code)
 
     # Get service
     market_service = get_market_service()
-    price_service = get_price_service(
-        db_alias=market.database_alias,
-        market_key=market.key,
-    )
     sde_repo = get_sde_repository()
+
+    # Read query params for deep-link navigation from dashboard
+    qp_item_id = None
+    if "item_id" in st.query_params:
+        try:
+            qp_item_id = int(st.query_params["item_id"])
+            # Clear query param after reading so it doesn't persist on rerun
+            del st.query_params["item_id"]
+        except (ValueError, TypeError):
+            pass
 
     # Sidebar filters
     st.sidebar.header(translate_text(language_code, "low_stock.filters_header"))
-    show_all = st.sidebar.checkbox(translate_text(language_code, "market_stats.show_all_data"), value=False)
+    show_all = st.sidebar.checkbox(
+        translate_text(language_code, "market_stats.show_all_data"),
+        value=bool(qp_item_id),  # auto-enable "show all" when deep-linking
+    )
 
     category_options_df, all_items_df, _ = get_filter_options()
     category_name_map = {
@@ -440,10 +310,18 @@ def main():
     )
     item_ids = sorted(item_label_map, key=lambda tid: item_label_map[tid].lower())
 
+    # Determine initial selection index (0 = "All Items", or the deep-linked item)
+    item_select_index = 0
+    if qp_item_id and qp_item_id in item_label_map:
+        try:
+            item_select_index = item_ids.index(qp_item_id) + 1  # +1 for the None entry
+        except ValueError:
+            item_select_index = 0
+
     selected_item_id = st.sidebar.selectbox(
         translate_text(language_code, "market_stats.select_item"),
         options=[None] + item_ids,
-        index=0,
+        index=item_select_index,
         format_func=lambda tid: "All Items" if tid is None else item_label_map[tid],
     )
     selected_item_id = check_selected_item(
@@ -501,26 +379,6 @@ def main():
             sde_repo,
             language_code,
             logger,
-        )
-
-    table_col1, table_col2 = st.columns(2, gap="small")
-    with table_col1:
-        render_comparison_table(
-            market_service=market_service,
-            price_service=price_service,
-            sde_repo=sde_repo,
-            type_ids=list(MINERAL_TYPE_IDS),
-            title_key="market_stats.mineral_price_comparison",
-            language_code=language_code,
-        )
-    with table_col2:
-        render_comparison_table(
-            market_service=market_service,
-            price_service=price_service,
-            sde_repo=sde_repo,
-            type_ids=list(ISOTOPE_AND_FUEL_BLOCK_TYPE_IDS),
-            title_key="market_stats.isotope_and_fuel_block_comparison",
-            language_code=language_code,
         )
 
     if not sell_data.empty:

@@ -2,6 +2,10 @@
 
 Extracted from market_stats.py so both the dashboard and market stats pages
 can render mineral/isotope/doctrine/module comparison tables.
+
+When a ``dataframe_key`` is passed, tables become selectable: clicking a row
+returns the selected ``type_id`` so the calling page can navigate to a detail
+page via ``st.switch_page()``.
 """
 
 import pandas as pd
@@ -72,6 +76,27 @@ def _coerce_numeric(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     return df
 
 
+def _get_selected_type_id(event, source_df: pd.DataFrame) -> int | None:
+    """Extract the type_id from a dataframe selection event.
+
+    Args:
+        event: The return value from st.dataframe(on_select="rerun").
+        source_df: The full DataFrame (with type_id column) that was displayed.
+
+    Returns:
+        The selected type_id, or None if nothing was selected.
+    """
+    if event is None:
+        return None
+    rows = event.selection.get("rows", [])
+    if not rows:
+        return None
+    row_idx = rows[0]
+    if row_idx < 0 or row_idx >= len(source_df):
+        return None
+    return int(source_df.iloc[row_idx]["type_id"])
+
+
 # =========================================================================
 # Comparison Table (minerals, isotopes, popular modules)
 # =========================================================================
@@ -84,11 +109,20 @@ def render_comparison_table(
     type_ids: list[int],
     title_key: str,
     language_code: str,
-) -> None:
-    """Render a fixed item price comparison table for the active market."""
+    dataframe_key: str | None = None,
+) -> int | None:
+    """Render a fixed item price comparison table for the active market.
+
+    Args:
+        dataframe_key: If provided, enables row selection and returns
+            the selected type_id when a row is clicked.
+
+    Returns:
+        Selected type_id if a row was clicked, None otherwise.
+    """
     comparison_df = market_service.get_current_market_snapshot(type_ids)
     if comparison_df.empty:
-        return
+        return None
 
     comparison_df = _add_jita_prices(comparison_df, price_service, type_ids)
 
@@ -107,20 +141,33 @@ def render_comparison_table(
         "jita_sell_price", "jita_buy_price", "pct_diff_vs_jita_sell",
     ])
 
-    display_df = comparison_df[
-        [
-            "image_url", "type_name", "current_sell_price", "order_volume",
-            "jita_sell_price", "jita_buy_price", "pct_diff_vs_jita_sell",
-        ]
-    ].copy()
+    display_cols = [
+        "image_url", "type_name", "current_sell_price", "order_volume",
+        "jita_sell_price", "jita_buy_price", "pct_diff_vs_jita_sell",
+    ]
+    display_df = comparison_df[display_cols].copy()
 
     st.subheader(translate_text(language_code, title_key), divider="gray")
-    st.dataframe(
-        drop_localized_backup_columns(display_df),
-        hide_index=True,
-        column_config=get_market_comparison_column_config(language_code),
-        width="stretch",
-    )
+
+    if dataframe_key:
+        event = st.dataframe(
+            drop_localized_backup_columns(display_df),
+            hide_index=True,
+            column_config=get_market_comparison_column_config(language_code),
+            width="stretch",
+            on_select="rerun",
+            selection_mode="single-row",
+            key=dataframe_key,
+        )
+        return _get_selected_type_id(event, comparison_df)
+    else:
+        st.dataframe(
+            drop_localized_backup_columns(display_df),
+            hide_index=True,
+            column_config=get_market_comparison_column_config(language_code),
+            width="stretch",
+        )
+        return None
 
 
 # =========================================================================
@@ -147,15 +194,20 @@ def render_popular_modules_table(
     sde_repo,
     language_code: str,
     n: int = 10,
-) -> None:
-    """Render popular modules demand & pricing table."""
+    dataframe_key: str | None = None,
+) -> int | None:
+    """Render popular modules demand & pricing table.
+
+    Returns:
+        Selected type_id if a row was clicked, None otherwise.
+    """
     type_ids = get_popular_module_type_ids(doctrine_repo, n)
     if not type_ids:
-        return
+        return None
 
     snapshot = market_service.get_current_market_snapshot(type_ids)
     if snapshot.empty:
-        return
+        return None
 
     snapshot = _add_jita_prices(snapshot, price_service, type_ids)
     snapshot["order_volume"] = (
@@ -169,22 +221,35 @@ def render_popular_modules_table(
         "jita_sell_price", "jita_buy_price", "pct_diff_vs_jita_sell",
     ])
 
-    display_df = snapshot[
-        [
-            "image_url", "type_name", "current_sell_price", "order_volume",
-            "jita_sell_price", "jita_buy_price", "pct_diff_vs_jita_sell",
-        ]
-    ].copy()
+    display_cols = [
+        "image_url", "type_name", "current_sell_price", "order_volume",
+        "jita_sell_price", "jita_buy_price", "pct_diff_vs_jita_sell",
+    ]
+    display_df = snapshot[display_cols].copy()
 
     st.subheader(
         translate_text(language_code, "dashboard.popular_modules"), divider="gray",
     )
-    st.dataframe(
-        drop_localized_backup_columns(display_df),
-        hide_index=True,
-        column_config=get_market_comparison_column_config(language_code),
-        width="stretch",
-    )
+
+    if dataframe_key:
+        event = st.dataframe(
+            drop_localized_backup_columns(display_df),
+            hide_index=True,
+            column_config=get_market_comparison_column_config(language_code),
+            width="stretch",
+            on_select="rerun",
+            selection_mode="single-row",
+            key=dataframe_key,
+        )
+        return _get_selected_type_id(event, snapshot)
+    else:
+        st.dataframe(
+            drop_localized_backup_columns(display_df),
+            hide_index=True,
+            column_config=get_market_comparison_column_config(language_code),
+            width="stretch",
+        )
+        return None
 
 
 # =========================================================================
@@ -198,19 +263,24 @@ def render_doctrine_ships_table(
     price_service,
     sde_repo,
     language_code: str,
-) -> None:
-    """Render doctrine ships stock vs targets table."""
+    dataframe_key: str | None = None,
+) -> int | None:
+    """Render doctrine ships stock vs targets table.
+
+    Returns:
+        Selected ship type_id if a row was clicked, None otherwise.
+    """
     from ui.column_definitions import get_doctrine_ships_column_config
 
     fits_df = doctrine_repo.get_all_fits()
     if fits_df.empty:
-        return
+        return None
 
     # Unique ships: rows where type_id == ship_id (hull rows)
     ships = fits_df[fits_df["type_id"] == fits_df["ship_id"]].copy()
     ships = ships.drop_duplicates(subset=["ship_id"], keep="first")
     if ships.empty:
-        return
+        return None
 
     ship_type_ids = ships["ship_id"].tolist()
 
@@ -277,9 +347,23 @@ def render_doctrine_ships_table(
     st.subheader(
         translate_text(language_code, "dashboard.doctrine_ships"), divider="gray",
     )
-    st.dataframe(
-        drop_localized_backup_columns(display_df),
-        hide_index=True,
-        column_config=get_doctrine_ships_column_config(language_code),
-        width="stretch",
-    )
+
+    if dataframe_key:
+        event = st.dataframe(
+            drop_localized_backup_columns(display_df),
+            hide_index=True,
+            column_config=get_doctrine_ships_column_config(language_code),
+            width="stretch",
+            on_select="rerun",
+            selection_mode="single-row",
+            key=dataframe_key,
+        )
+        return _get_selected_type_id(event, result_df)
+    else:
+        st.dataframe(
+            drop_localized_backup_columns(display_df),
+            hide_index=True,
+            column_config=get_doctrine_ships_column_config(language_code),
+            width="stretch",
+        )
+        return None

@@ -7,16 +7,14 @@ Sections:
 4. 30-Day Summary + Top Items
 """
 
-from datetime import datetime, timedelta
-
 import streamlit as st
 import millify
 
 from logging_config import setup_logging
 from services import get_price_service
 from services.market_service import get_market_service
-from init_db import init_db, ensure_market_db_ready
-from state.sync_state import update_wcmkt_state
+from init_db import ensure_market_db_ready
+from pages.components.db_refresh import ensure_init_and_check, check_db
 from pages.components.market_components import (
     render_isk_volume_chart_ui,
     render_30day_metrics_ui,
@@ -35,24 +33,6 @@ from ui.market_selector import render_market_selector
 from ui.sync_display import display_sync_status  # noqa: F401
 
 logger = setup_logging(__name__)
-
-
-# =============================================================================
-# Initialization
-# =============================================================================
-
-
-def _initialize_databases():
-    """Initialize databases, returning True on success."""
-    if not st.session_state.get("db_initialized"):
-        result = init_db()
-        if result:
-            st.session_state.db_initialized = True
-        else:
-            st.toast("One or more databases failed to initialize", icon="❌")
-            return False
-    st.session_state.db_init_time = datetime.now()
-    return True
 
 
 # =============================================================================
@@ -96,45 +76,69 @@ def _render_kpi_bar(market_service, language_code: str):
 # =============================================================================
 
 
+def _navigate_to_market_stats(type_id: int):
+    """Navigate to market stats page with the given item pre-selected."""
+    st.query_params["item_id"] = str(type_id)
+    st.switch_page("pages/market_stats.py")
+
+
+def _navigate_to_doctrine_status(type_id: int):
+    """Navigate to doctrine status page with the given ship pre-selected."""
+    st.query_params["ship_id"] = str(type_id)
+    st.switch_page("pages/doctrine_status.py")
+
+
 def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_repo, language_code):
-    """Render the 2x2 commodity table grid."""
+    """Render the 2x2 commodity table grid with clickable rows."""
     top_row = st.columns(2, gap="small")
     with top_row[0]:
-        render_comparison_table(
+        selected = render_comparison_table(
             market_service=market_service,
             price_service=price_service,
             sde_repo=sde_repo,
             type_ids=list(MINERAL_TYPE_IDS),
             title_key="market_stats.mineral_price_comparison",
             language_code=language_code,
+            dataframe_key="dash_minerals",
         )
+        if selected:
+            _navigate_to_market_stats(selected)
     with top_row[1]:
-        render_comparison_table(
+        selected = render_comparison_table(
             market_service=market_service,
             price_service=price_service,
             sde_repo=sde_repo,
             type_ids=list(ISOTOPE_AND_FUEL_BLOCK_TYPE_IDS),
             title_key="market_stats.isotope_and_fuel_block_comparison",
             language_code=language_code,
+            dataframe_key="dash_isotopes",
         )
+        if selected:
+            _navigate_to_market_stats(selected)
 
     bottom_row = st.columns(2, gap="small")
     with bottom_row[0]:
-        render_doctrine_ships_table(
+        selected = render_doctrine_ships_table(
             doctrine_repo=doctrine_repo,
             market_service=market_service,
             price_service=price_service,
             sde_repo=sde_repo,
             language_code=language_code,
+            dataframe_key="dash_doctrine_ships",
         )
+        if selected:
+            _navigate_to_doctrine_status(selected)
     with bottom_row[1]:
-        render_popular_modules_table(
+        selected = render_popular_modules_table(
             market_service=market_service,
             price_service=price_service,
             doctrine_repo=doctrine_repo,
             sde_repo=sde_repo,
             language_code=language_code,
+            dataframe_key="dash_popular_modules",
         )
+        if selected:
+            _navigate_to_market_stats(selected)
 
 
 # =============================================================================
@@ -147,13 +151,8 @@ def main():
     language_code = get_active_language()
     market = render_market_selector()
 
-    # Initialize databases
-    if "db_init_time" not in st.session_state:
-        init_result = _initialize_databases()
-    elif datetime.now() - st.session_state.db_init_time > timedelta(hours=1):
-        init_result = _initialize_databases()
-    else:
-        init_result = True
+    # Initialize databases and run periodic staleness checks
+    ensure_init_and_check()
 
     if not ensure_market_db_ready(market.database_alias):
         st.error(
@@ -161,9 +160,6 @@ def main():
             "Check Turso credentials and network connectivity."
         )
         st.stop()
-
-    if init_result:
-        update_wcmkt_state()
 
     # Title
     st.title(
@@ -202,6 +198,16 @@ def main():
     st.session_state["selected_item_id"] = None
     st.session_state["selected_category"] = None
     render_30day_metrics_ui(market_service, language_code)
+
+    # Sidebar: sync status + manual DB check
+    with st.sidebar:
+        display_sync_status(language_code)
+        st.sidebar.divider()
+        db_check = st.sidebar.button(
+            translate_text(language_code, "market_stats.check_db_state"), width="content"
+        )
+        if db_check:
+            check_db(manual_override=True)
 
 
 main()
