@@ -16,6 +16,7 @@ import httpx
 import pandas as pd
 
 from logging_config import setup_logging
+from services.type_name_localization import get_localized_name_map
 
 logger = setup_logging(__name__, log_file="builder_helper_service.log")
 
@@ -110,14 +111,19 @@ class BuilderHelperService:
     Args:
         market_repo: MarketRepository for local prices and SDE info.
         price_service: PriceService for Jita price lookups.
+        sde_repo: SDERepository for type name localization.
     """
 
-    def __init__(self, market_repo, price_service):
+    def __init__(self, market_repo, price_service, sde_repo=None):
         self._market_repo = market_repo
         self._price_service = price_service
+        self._sde_repo = sde_repo
 
-    def get_builder_data(self) -> pd.DataFrame:
+    def get_builder_data(self, language_code: str = "en") -> pd.DataFrame:
         """Fetch and combine all builder helper data into a single DataFrame.
+
+        Args:
+            language_code: Language code for localizing item names (default "en").
 
         Returns:
             DataFrame with columns:
@@ -213,7 +219,20 @@ class BuilderHelperService:
                 }
             )
 
-        return pd.DataFrame(rows)
+        df = pd.DataFrame(rows)
+
+        # Apply item name localization if SDE repo is available and not English
+        if self._sde_repo is not None and language_code != "en" and not df.empty:
+            type_ids = pd.to_numeric(df["type_id"], errors="coerce").dropna().astype(int).unique().tolist()
+            localized_names = get_localized_name_map(type_ids, self._sde_repo, language_code, logger)
+            if localized_names:
+                df["item_name"] = df["type_id"].map(
+                    lambda value: localized_names.get(int(value))
+                    if pd.notna(value) and int(value) in localized_names
+                    else None
+                ).fillna(df["item_name"])
+
+        return df
 
     # ------------------------------------------------------------------
     # Async EverRef fetching
@@ -302,11 +321,13 @@ def get_builder_helper_service() -> BuilderHelperService:
 
     def _create() -> BuilderHelperService:
         from repositories.market_repo import get_market_repository
+        from repositories.sde_repo import get_sde_repository
         from services.price_service import get_price_service
 
         return BuilderHelperService(
             market_repo=get_market_repository(),
             price_service=get_price_service(),
+            sde_repo=get_sde_repository(),
         )
 
     try:
