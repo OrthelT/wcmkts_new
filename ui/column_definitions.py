@@ -402,3 +402,61 @@ def get_low_stock_column_config(language_code: str = "en") -> dict:
             help=translate_text(language_code, "low_stock.column_group_help"),
         ),
     }
+
+
+def get_builder_helper_column_config(language_code: str = "en") -> dict:
+    """Get column configuration for Builder Helper table display."""
+    return {
+        "type_id": st.column_config.NumberColumn(
+            "ID",
+            format="%d",
+            width=50,
+        ),
+        "item_name": st.column_config.TextColumn(
+            translate_text(language_code, "builder_helper.column_item_name"),
+            help=translate_text(language_code, "builder_helper.column_item_name_help"),
+        ),
+        "category": st.column_config.TextColumn(
+            translate_text(language_code, "builder_helper.column_category"),
+            help=translate_text(language_code, "builder_helper.column_category_help"),
+        ),
+        "group": st.column_config.TextColumn(
+            translate_text(language_code, "builder_helper.column_group"),
+            help=translate_text(language_code, "builder_helper.column_group_help"),
+        ),
+        "market_sell_price": st.column_config.NumberColumn(
+            translate_text(language_code, "builder_helper.column_market_sell_price"),
+            help=translate_text(language_code, "builder_helper.column_market_sell_price_help"),
+            format="localized",
+        ),
+        "jita_sell_price": st.column_config.NumberColumn(
+            translate_text(language_code, "builder_helper.column_jita_sell_price"),
+            help=translate_text(language_code, "builder_helper.column_jita_sell_price_help"),
+            format="localized",
+        ),
+        "build_cost": st.column_config.NumberColumn(
+            translate_text(language_code, "builder_helper.column_build_cost"),
+            help=translate_text(language_code, "builder_helper.column_build_cost_help"),
+            format="localized",
+        ),
+        "cap_utils": st.column_config.NumberColumn(
+            translate_text(language_code, "builder_helper.column_cap_utils"),
+            help=translate_text(language_code, "builder_helper.column_cap_utils_help"),
+            format="%.2f%%",
+        ),
+        "profit_30d": st.column_config.NumberColumn(
+            translate_text(language_code, "builder_helper.column_profit_30d"),
+            help=translate_text(language_code, "builder_helper.column_profit_30d_help"),
+            format="compact",
+        ),
+        "turnover_30d": st.column_config.NumberColumn(
+            translate_text(language_code, "builder_helper.column_turnover_30d"),
+            help=translate_text(language_code, "builder_helper.column_turnover_30d_help"),
+            format="compact",
+        ),
+        "volume_30d": st.column_config.NumberColumn(
+            translate_text(language_code, "builder_helper.column_volume_30d"),
+            help=translate_text(language_code, "builder_helper.column_volume_30d_help"),
+            format="localized",
+        ),
+    }

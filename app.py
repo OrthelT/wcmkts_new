@@ -52,6 +52,10 @@ pages = {
             title=translate_text(current_language, "nav.page.import_helper"),
         ),
         st.Page(
+            "pages/builder_helper.py",
+            title=translate_text(current_language, "nav.page.builder_helper"),
+        ),
+        st.Page(
             "pages/doctrine_status.py",
             title=translate_text(current_language, "nav.page.doctrine_status"),
         ),
