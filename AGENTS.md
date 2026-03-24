@@ -89,7 +89,7 @@ All pages follow consistent patterns with Streamlit best practices:
   - Uses `_SYNC_LOCK` to serialize sync operations; SQLite handles reader concurrency
   - Manages 3 databases: wcmktprod (market), sdelite (static data), buildcost (manufacturing)
   - `sync()` returns bool -- callers handle UI feedback and targeted cache invalidation
-  - Methods: `integrity_check()`, `sync()`, `validate_sync()`, `get_most_recent_update()`
+  - Methods: `integrity_check()`, `sync()`, `local_matches_remote()`, `get_most_recent_update()`
 - **`models.py`**: SQLAlchemy ORM models using modern `mapped_column()` syntax
   - MarketStats, MarketOrders, MarketHistory, Doctrines, ShipTargets, DoctrineFits, ModuleEquivalents, etc.
 - **`sdemodels.py`**: SDE (Static Data Export) ORM models for InvTypes, InvGroups, InvCategories, Localization

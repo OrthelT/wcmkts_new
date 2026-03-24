@@ -35,7 +35,7 @@ class DatabaseConfig:
     # Methods
     def sync() -> bool
     def integrity_check() -> bool
-    def validate_sync() -> bool
+    def local_matches_remote() -> bool
     def get_most_recent_update(table_name: str, remote: bool = False) -> datetime
     def get_time_since_update(table_name: str, remote: bool = False)
     def get_table_list(local_only: bool = True) -> list[str]
@@ -198,9 +198,9 @@ Runs `PRAGMA integrity_check` on the local database.
 ok = mkt_db.integrity_check()  # True if result is "ok"
 ```
 
-### `validate_sync() -> bool`
+### `local_matches_remote() -> bool`
 
-Validates sync by comparing `MAX(last_update)` from `marketstats` between local and remote databases. Logs detailed timing information.
+Validates sync by comparing `updatelog` timestamps between local and remote databases. Uses a plain sqlite3 read-only connection for the local read to avoid SQLAlchemy caching issues.
 
 ### `get_most_recent_update(table_name: str, remote: bool = False) -> datetime`
 
@@ -336,8 +336,8 @@ if ok:
 else:
     st.toast("Sync failed", icon="!")
 
-# Separate validation (detailed logging)
-if mkt_db.validate_sync():
+# Separate validation
+if mkt_db.local_matches_remote():
     print("Sync validated")
 ```
 

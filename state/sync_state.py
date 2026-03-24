@@ -15,7 +15,7 @@ def update_wcmkt_state(db_alias: str = None, skip_remote: bool = False) -> None:
         db_alias: Database alias to check. If None, uses the active market.
         skip_remote: If True, skip the remote timestamp query to avoid
             network latency on cold start. The remote state will be
-            populated later by check_db() / validate_sync().
+            populated later by check_db() / local_matches_remote().
     """
     if db_alias is None:
         try:

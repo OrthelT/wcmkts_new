@@ -64,7 +64,7 @@ def check_for_db_updates(db_alias: str) -> tuple[bool, datetime]:
         logger.info(f"check_for_db_updates(): skipping remote validation for {db_alias}")
         local_time = datetime.now()
         return True, local_time
-    check = db.validate_sync()
+    check = db.local_matches_remote()
     local_time = datetime.now()
     return check, local_time
 
@@ -108,7 +108,7 @@ def check_db(manual_override: bool = False):
             logger.info(f"check_db() {alias} is stale, syncing")
             try:
                 db.sync()
-                if db.validate_sync():
+                if db.local_matches_remote():
                     logger.info(f"{alias} synced and validated")
                     synced_any = True
                 else:

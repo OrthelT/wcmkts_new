@@ -404,7 +404,7 @@ sqlite_conn = mkt_db.sqlite_local_connect
 mkt_db.sync()
 
 # Validate sync was successful
-is_valid = mkt_db.validate_sync()
+is_valid = mkt_db.local_matches_remote()
 ```
 
 #### Database Inspection
@@ -446,10 +446,10 @@ Synchronizes the local database with the remote Turso database using LibSQL's em
 - Validates sync success for market databases
 - Updates saved sync state
 
-#### `validate_sync() -> bool`
-Validates that the sync was successful by comparing the `last_update` timestamp between local and remote databases.
+#### `local_matches_remote() -> bool`
+Validates that the local updatelog timestamp matches the remote after sync. Uses a plain sqlite3 read-only connection for the local read to avoid SQLAlchemy connection pool caching issues.
 
-**Returns:** `True` if sync was successful, `False` otherwise
+**Returns:** `True` if timestamps match, `False` otherwise or on error
 
 #### `get_table_list(local_only: bool = True) -> list[str]`
 Retrieves a list of table names from the database.

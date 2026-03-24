@@ -319,7 +319,7 @@ class DatabaseConfig:
             # Verify local data matches remote.  If it doesn't, the local
             # file likely has replica metadata from a different Turso DB
             # (e.g. the old static wcdbmap).  Delete and retry from scratch.
-            if not self._local_matches_remote():
+            if not self.local_matches_remote():
                 logger.warning(
                     f"Post-sync data mismatch for {self.alias} — "
                     "local file may have stale replica metadata. "
@@ -329,7 +329,7 @@ class DatabaseConfig:
                 self._cleanup_empty_db_file()
                 self._sync_once()
 
-                if not self._local_matches_remote():
+                if not self.local_matches_remote():
                     logger.error(
                         f"Fresh sync for {self.alias} still has data mismatch"
                     )
@@ -360,23 +360,13 @@ class DatabaseConfig:
         except Exception:
             return False
 
-    def _local_matches_remote(self) -> bool:
-        """Check if local MAX(last_update) matches remote after sync.
+    def local_matches_remote(self) -> bool:
+        """Check if local updatelog timestamp matches remote after sync.
 
         Uses a plain sqlite3 read-only connection for the local read to
-        avoid any libsql driver caching or replica-state issues.
-
-        Only meaningful for databases that contain a ``marketstats`` table.
-        Returns True unconditionally for databases without one (e.g. sde,
-        build_cost) since there is no market timestamp to compare.
+        avoid any SQLAlchemy connection pool caching or replica-state issues.
+        Returns False on any error (missing table, connection failure, etc.).
         """
-        if not self._has_marketstats_table():
-            logger.debug(
-                f"_local_matches_remote({self.alias}): skipped — "
-                "no marketstats table"
-            )
-            return True
-
         try:
             # Read remote via Turso
             with self.remote_engine.connect() as conn:
@@ -396,12 +386,12 @@ class DatabaseConfig:
                 local_conn.close()
 
             logger.info(
-                f"_local_matches_remote({self.alias}): "
+                f"local_matches_remote({self.alias}): "
                 f"remote={remote_ts}, local={local_ts}"
             )
             return remote_ts is not None and remote_ts == local_ts
         except Exception as e:
-            logger.warning(f"_local_matches_remote check failed: {e}")
+            logger.warning(f"local_matches_remote check failed: {e}")
             return False
 
     def _cleanup_empty_db_file(self):
@@ -412,52 +402,6 @@ class DatabaseConfig:
                 with suppress(OSError):
                     os.remove(file_path)
                     logger.info(f"Removed {file_path} created during failed sync")
-
-    def validate_sync(self) -> bool:
-        alias = self.alias
-        with self.remote_engine.connect() as conn:
-            result = conn.execute(
-                text("SELECT timestamp FROM updatelog WHERE table_name = 'marketstats'")
-            ).fetchone()
-            remote_last_update = datetime.strptime(
-                result[0], "%Y-%m-%d %H:%M:%S.%f"
-            ).replace(tzinfo=timezone.utc)
-            conn.close()
-        with self.engine.connect() as conn:
-            result = conn.execute(
-                text("SELECT timestamp FROM updatelog WHERE table_name = 'marketstats'")
-            ).fetchone()
-            local_last_update = datetime.strptime(
-                result[0], "%Y-%m-%d %H:%M:%S.%f"
-            ).replace(tzinfo=timezone.utc)
-            conn.close()
-        logger.info("-" * 40)
-        logger.info(f"alias: {alias} validate_sync()")
-        timestamp = datetime.now(tz=timezone.utc)
-        local_timestamp = datetime.now(tz=ZoneInfo("US/Eastern"))
-        logger.info(
-            f"time: {local_timestamp.strftime('%Y-%m-%d %H:%M:%S')} (local); {
-                timestamp.strftime('%Y-%m-%d %H:%M:%S')
-            } (utc)"
-        )
-        logger.info(
-            f"REMOTE LAST UPDATE: {
-                remote_last_update.strftime('%Y-%m-%d %H:%M')
-            } | Minutes ago: {
-                round((timestamp - remote_last_update).total_seconds() / 60, 0)
-            }"
-        )
-        logger.info(
-            f"LOCAL LAST UPDATE: {
-                local_last_update.strftime('%Y-%m-%d %H:%M')
-            } | Minutes ago: {
-                round((timestamp - local_last_update).total_seconds() / 60, 0)
-            }"
-        )
-        logger.info("-" * 40)
-        validation_test = remote_last_update == local_last_update
-        logger.info(f"validation_test: {validation_test}")
-        return validation_test
 
     def get_table_list(self, local_only: bool = True) -> list[tuple]:
         if local_only:
