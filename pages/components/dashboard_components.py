@@ -177,7 +177,7 @@ def render_comparison_table(
     ]
     display_df = comparison_df[display_cols].copy()
     table_df = drop_localized_backup_columns(display_df)
-    styled_table = table_df.style.applymap(
+    styled_table = table_df.style.map(
         _jita_diff_cell_style, subset=["pct_diff_vs_jita_sell"]
     )
 
@@ -267,7 +267,7 @@ def render_popular_modules_table(
     ]
     display_df = snapshot[display_cols].copy()
     table_df = drop_localized_backup_columns(display_df)
-    styled_table = table_df.style.applymap(
+    styled_table = table_df.style.map(
         _jita_diff_cell_style, subset=["pct_diff_vs_jita_sell"]
     )
 

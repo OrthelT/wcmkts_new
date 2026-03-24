@@ -10,7 +10,7 @@ from datetime import datetime
 import streamlit as st
 
 from config import DatabaseConfig
-from init_db import init_db
+from init_db import ensure_market_db_ready, init_db
 from logging_config import setup_logging
 from repositories import invalidate_market_caches
 from state.sync_state import update_wcmkt_state
@@ -162,7 +162,23 @@ def ensure_init_and_check() -> bool:
     else:
         init_result = True
 
-    if init_result:
-        update_wcmkt_state()
+    if not init_result:
+        return False
+
+    # Guard against querying a market DB that has no tables yet.
+    # update_wcmkt_state() and maybe_run_check() open DatabaseConfig.engine
+    # and query marketstats — on an empty/missing replica this would create
+    # an empty .db file and raise "no such table: marketstats".
+    from state.market_state import get_active_market
+
+    active_alias = get_active_market().database_alias
+    if not ensure_market_db_ready(active_alias):
+        logger.warning(
+            f"Active market DB '{active_alias}' not ready; "
+            "skipping state update and staleness check"
+        )
+        return False
+
+    update_wcmkt_state()
     maybe_run_check()
-    return init_result
+    return True
