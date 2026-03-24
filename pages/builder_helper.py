@@ -42,7 +42,7 @@ def main():
 
     with st.spinner(translate_text(language_code, "builder_helper.loading")):
         try:
-            df = service.get_builder_data()
+            df = service.get_builder_data(language_code=language_code)
         except Exception as exc:
             logger.error("Builder helper data load failed: %s", exc)
             st.error(translate_text(language_code, "builder_helper.error_loading_data"))
