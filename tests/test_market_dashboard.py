@@ -198,12 +198,12 @@ class TestDoctrineStatusCellStyle:
     def test_needs_attention_status_gets_yellow_background(self):
         from pages.components.dashboard_components import _status_cell_style
 
-        assert _status_cell_style("🟡 Needs Attention") == "background-color: #fff3cd"
+        assert _status_cell_style("🟡 Needs Attention") == "background-color: rgba(220, 250, 60, 0.25)"
 
     def test_critical_status_gets_red_background(self):
         from pages.components.dashboard_components import _status_cell_style
 
-        assert _status_cell_style("🔴 Critical") == "background-color: #f8d7da"
+        assert _status_cell_style("🔴 Critical") == "background-color: rgba(239, 83, 80, 0.28)"
 
     def test_fits_avail_style_applies_only_to_fits_column(self):
         from pages.components.dashboard_components import _fits_avail_column_style
@@ -211,7 +211,7 @@ class TestDoctrineStatusCellStyle:
         fits_column = pd.Series([10, 5, 1], name="fits_on_mkt", index=[0, 1, 2])
         status_labels = pd.Series(["🟢 Good", "🟡 Needs Attention", "🔴 Critical"], index=[0, 1, 2])
         styles = _fits_avail_column_style(fits_column, status_labels)
-        assert styles == ["", "background-color: #fff3cd", "background-color: #f8d7da"]
+        assert styles == ["", "background-color: rgba(220, 250, 60, 0.25)", "background-color: rgba(239, 83, 80, 0.28)"]
 
         other_column = pd.Series(["A", "B", "C"], name="type_name", index=[0, 1, 2])
         assert _fits_avail_column_style(other_column, status_labels) == ["", "", ""]
@@ -223,12 +223,12 @@ class TestJitaDiffCellStyle:
     def test_greater_than_five_is_green(self):
         from pages.components.dashboard_components import _jita_diff_cell_style
 
-        assert _jita_diff_cell_style(5.01) == "color: #2e7d32"
+        assert _jita_diff_cell_style(5.01) == "color: #66bb6a"
 
     def test_less_than_five_is_red(self):
         from pages.components.dashboard_components import _jita_diff_cell_style
 
-        assert _jita_diff_cell_style(4.99) == "color: #c62828"
+        assert _jita_diff_cell_style(4.99) == "color: #ef5350"
 
     def test_exactly_five_has_no_background(self):
         from pages.components.dashboard_components import _jita_diff_cell_style

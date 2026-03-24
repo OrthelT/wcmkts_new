@@ -98,12 +98,16 @@ def _get_selected_type_id(event, source_df: pd.DataFrame) -> int | None:
 
 
 def _status_cell_style(status_label: str) -> str:
-    """Return CSS style for doctrine status cell background color."""
+    """Return CSS style for doctrine status cell background color.
+
+    Uses translucent backgrounds so the tint adapts to both light and dark
+    Streamlit themes — a soft glow rather than an opaque swatch.
+    """
     if isinstance(status_label, str):
         if status_label.startswith("🟡"):
-            return "background-color: #fff3cd"
+            return "background-color: rgba(220, 250, 60, 0.25)"
         if status_label.startswith("🔴"):
-            return "background-color: #f8d7da"
+            return "background-color: rgba(239, 83, 80, 0.28)"
     return ""
 
 
@@ -115,15 +119,19 @@ def _fits_avail_column_style(column: pd.Series, status_labels: pd.Series) -> lis
 
 
 def _jita_diff_cell_style(diff_value: float) -> str:
-    """Return CSS text color style for % vs Jita cell based on threshold."""
+    """Return CSS text color style for % vs Jita cell based on threshold.
+
+    Uses mid-luminance tones that stay readable on both light and dark
+    Streamlit themes.
+    """
     try:
         value = float(diff_value)
     except (TypeError, ValueError):
         return ""
     if value > 5:
-        return "color: #2e7d32"
+        return "color: #66bb6a"
     if value < 5:
-        return "color: #c62828"
+        return "color: #ef5350"
     return ""
 
 
