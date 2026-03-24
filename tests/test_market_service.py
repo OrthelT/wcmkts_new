@@ -445,3 +445,59 @@ class TestGetMarketData:
 
         assert sell.empty
         assert buy.empty
+
+
+class TestGetCurrentMarketSnapshot:
+    """Test fixed-item current market snapshot aggregation."""
+
+    def test_prefers_live_sell_orders_for_price_and_volume(self, mock_repo):
+        mock_repo.get_all_stats.return_value = pd.DataFrame(
+            {
+                "type_id": [34],
+                "type_name": ["Tritanium"],
+                "min_price": [5.5],
+                "total_volume_remain": [1000],
+            }
+        )
+        mock_repo.get_all_orders.return_value = pd.DataFrame(
+            {
+                "type_id": [34, 34, 34],
+                "type_name": ["Tritanium", "Tritanium", "Tritanium"],
+                "price": [5.0, 5.2, 4.8],
+                "volume_remain": [100, 200, 300],
+                "is_buy_order": [0, 0, 1],
+            }
+        )
+
+        from services.market_service import MarketService
+
+        service = MarketService(mock_repo)
+        result = service.get_current_market_snapshot([34])
+
+        assert result.iloc[0]["type_name"] == "Tritanium"
+        assert result.iloc[0]["current_sell_price"] == pytest.approx(5.0)
+        assert result.iloc[0]["order_volume"] == pytest.approx(300.0)
+
+    def test_falls_back_to_marketstats_when_no_sell_orders_exist(self, mock_repo):
+        mock_repo.get_all_stats.return_value = pd.DataFrame(
+            {
+                "type_id": [34, 35],
+                "type_name": ["Tritanium", "Pyerite"],
+                "min_price": [5.5, 12.0],
+                "total_volume_remain": [1000, 2000],
+            }
+        )
+        mock_repo.get_all_orders.return_value = pd.DataFrame(
+            columns=["type_id", "type_name", "price", "volume_remain", "is_buy_order"]
+        )
+
+        from services.market_service import MarketService
+
+        service = MarketService(mock_repo)
+        result = service.get_current_market_snapshot([35, 34])
+
+        assert result["type_id"].tolist() == [35, 34]
+        assert result.iloc[0]["current_sell_price"] == pytest.approx(12.0)
+        assert result.iloc[0]["order_volume"] == pytest.approx(2000.0)
+        assert result.iloc[1]["current_sell_price"] == pytest.approx(5.5)
+        assert result.iloc[1]["order_volume"] == pytest.approx(1000.0)

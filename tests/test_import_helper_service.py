@@ -371,7 +371,7 @@ class TestImportHelperService:
         ):
             result = service.fetch_base_data()
 
-        assert result.iloc[0]["price"] == 24.0  # 1.2 * jita_sell(20.0)
+        assert result.iloc[0]["price"] == 28.0  # 1.4 * jita_sell(20.0)
         assert result.iloc[0]["price_source"] == "estimated"
         assert result.iloc[0]["jita_sell_price"] == 20.0
         assert result.iloc[0]["turnover_30d"] == 3000.0
@@ -495,6 +495,58 @@ class TestImportHelperService:
         assert row["type_id"] == 34
         assert row["turnover_30d"] == 2400.0
         assert row["volume_30d"] == 120.0
+
+    def test_get_import_items_hides_zero_volume_items_by_default(self):
+        from services.import_helper_service import ImportHelperFilters, ImportHelperService
+
+        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}), _mock_market_repo())
+        base_df = pd.DataFrame(
+            {
+                "type_id": [34, 35],
+                "type_name": ["Tritanium", "Pyerite"],
+                "price": [30.0, 25.0],
+                "volume_m3": [0.01, 0.02],
+                "jita_sell_price": [20.0, 20.0],
+                "jita_buy_price": [18.0, 18.0],
+                "turnover_30d": [3000.0, 10.0],
+                "volume_30d": [150.0, 0.5],
+                "category_name": ["Mineral", "Mineral"],
+                "group_name": ["Mineral", "Mineral"],
+            }
+        )
+
+        result = service.get_import_items(
+            base_df,
+            ImportHelperFilters(profitable_only=False),
+        )
+
+        assert result["type_id"].tolist() == [34]
+
+    def test_get_import_items_can_show_zero_volume_items(self):
+        from services.import_helper_service import ImportHelperFilters, ImportHelperService
+
+        service = ImportHelperService(Mock(), Mock(), DummyPriceService({}), _mock_market_repo())
+        base_df = pd.DataFrame(
+            {
+                "type_id": [34, 35],
+                "type_name": ["Tritanium", "Pyerite"],
+                "price": [30.0, 25.0],
+                "volume_m3": [0.01, 0.02],
+                "jita_sell_price": [20.0, 20.0],
+                "jita_buy_price": [18.0, 18.0],
+                "turnover_30d": [3000.0, 10.0],
+                "volume_30d": [150.0, 0.5],
+                "category_name": ["Mineral", "Mineral"],
+                "group_name": ["Mineral", "Mineral"],
+            }
+        )
+
+        result = service.get_import_items(
+            base_df,
+            ImportHelperFilters(profitable_only=False, show_zero_volume_items=True),
+        )
+
+        assert result["type_id"].tolist() == [34, 35]
 
     def test_get_import_items_filters_by_minimum_30d_turnover(self):
         from services.import_helper_service import ImportHelperFilters, ImportHelperService

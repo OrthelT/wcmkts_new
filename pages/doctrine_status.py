@@ -156,6 +156,15 @@ def main():
     market = render_market_selector()
     sde_repo = get_sde_repository()
 
+    # Read deep-link query param from dashboard
+    qp_ship_id = None
+    if "ship_id" in st.query_params:
+        try:
+            qp_ship_id = int(st.query_params["ship_id"])
+        except (ValueError, TypeError):
+            logger.warning("Invalid ship_id query param: %s", st.query_params["ship_id"])
+        del st.query_params["ship_id"]
+
     if not ensure_market_db_ready(market.database_alias):
         st.error(
             f"Database for **{market.name}** is not available. "
@@ -321,6 +330,12 @@ def main():
             doctrine_comps["doctrine_id"] == selected_doctrine_id
         ]["fit_id"].unique()
         filtered_df = filtered_df[filtered_df["fit_id"].isin(doctrine_fit_ids)]
+
+    # Apply deep-link filter from dashboard (show only the linked ship)
+    if qp_ship_id is not None and "ship_id" in filtered_df.columns:
+        ship_match = filtered_df[filtered_df["ship_id"] == qp_ship_id]
+        if not ship_match.empty:
+            filtered_df = ship_match
 
     # Update the displayed ships based on filters
     st.session_state.displayed_ships = filtered_df["ship_name"].unique().tolist()

@@ -34,6 +34,17 @@ def test_translate_text_formats_spanish_shipping_cost_copy():
     assert "m3" in result
 
 
+def test_translate_text_formats_import_helper_caption_copy():
+    result = translate_text(
+        "en",
+        "import_helper.caption_estimated_price",
+        color_label="<span>Green</span>",
+    )
+
+    assert "Green" in result
+    assert "140%" in result
+
+
 def test_translate_text_formats_build_cost_market_summary():
     result = translate_text(
         "en",

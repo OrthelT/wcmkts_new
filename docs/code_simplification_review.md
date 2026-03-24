@@ -228,11 +228,10 @@ This doesn't require new modules — just functions within the same file.
 Four separate locations extract and format database timestamps:
 
 - `_sync_once()` (lines 254-265)
-- `_local_matches_remote()` (lines 380-391)
-- `validate_sync()` (lines 417-429)
+- `local_matches_remote()` (lines 380-391)
 - `get_most_recent_update()` (lines 524-553)
 
-**Fix:** Extract a `_get_timestamp(engine_or_conn, local=True) -> datetime` utility used by all four.
+**Fix:** Extract a `_get_timestamp(engine_or_conn, local=True) -> datetime` utility used by all three.
 
 ### 5.3 init_db.py String-Based Status
 

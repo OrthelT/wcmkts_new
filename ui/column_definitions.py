@@ -44,8 +44,8 @@ def get_fitting_column_config(language_code: str = "en") -> dict:
             help=translate_text(language_code, "doctrine_report.column_ship_help"),
         ),
         'type_id': st.column_config.NumberColumn(
-            translate_text(language_code, "common.type_id"),
-            help=translate_text(language_code, "doctrine_report.column_ship_id_help")
+            "ID",
+            help=translate_text(language_code, "doctrine_report.column_ship_id_help"),
         ),
         'type_name': st.column_config.TextColumn(
             translate_text(language_code, "common.item"),
@@ -180,9 +180,9 @@ def get_import_helper_column_config(
     """Get column configuration for Import Helper table display."""
     return {
         "type_id": st.column_config.NumberColumn(
-            translate_text(language_code, "common.type_id"),
+            "ID",
             help="EVE type ID.",
-            width="small",
+            width=40,
         ),
         "type_name": st.column_config.TextColumn(
             translate_text(language_code, "common.item"),
@@ -221,7 +221,7 @@ def get_import_helper_column_config(
             translate_text(language_code, "import_helper.column_profit_30d"),
             help=translate_text(language_code, "import_helper.column_profit_30d_help"),
             format="compact",
-            width="small",
+            width=50,
         ),
         "turnover_30d": st.column_config.NumberColumn(
             translate_text(language_code, "import_helper.column_turnover_30d"),
@@ -240,5 +240,165 @@ def get_import_helper_column_config(
             help=translate_text(language_code, "import_helper.column_capital_utilis_help"),
             format="percent",
             width="small",
+        ),
+    }
+
+
+def get_market_comparison_column_config(
+    language_code: str = "en",
+    price_format: str = "%,.2f",
+) -> dict:
+    """Get column configuration for market comparison tables.
+
+    Args:
+        price_format: Number format for price columns.
+            "%,.2f" for localized (comma-separated), "compact" for abbreviated.
+    """
+    return {
+        "image_url": st.column_config.ImageColumn(
+            "",
+            width=30,
+        ),
+        "type_name": st.column_config.TextColumn(
+            translate_text(language_code, "common.item"),
+
+        ),
+        "current_sell_price": st.column_config.NumberColumn(
+            translate_text(language_code, "market_stats.sell_price"),
+            format=price_format,
+            width=65,
+        ),
+        "order_volume": st.column_config.NumberColumn(
+            translate_text(language_code, "market_stats.market_stock"),
+            format="compact",
+            width=50,
+        ),
+        "jita_sell_price": st.column_config.NumberColumn(
+            translate_text(language_code, "import_helper.column_jita_sell"),
+            format=price_format,
+            width=65,
+        ),
+        "jita_buy_price": st.column_config.NumberColumn(
+            translate_text(language_code, "import_helper.column_jita_buy"),
+            format=price_format,
+            width=65,
+        ),
+        "pct_diff_vs_jita_sell": st.column_config.NumberColumn(
+            translate_text(language_code, "market_stats.delta_vs_jita_sell_column"),
+            format="%.2f%%",
+            width=60,
+        ),
+    }
+
+
+def get_doctrine_ships_column_config(language_code: str = "en") -> dict:
+    """Get column configuration for the dashboard doctrine ships table."""
+    return {
+        "image_url": st.column_config.ImageColumn(
+            "",
+            width=40,
+        ),
+        "type_name": st.column_config.TextColumn(
+            translate_text(language_code, "common.item"),
+            width=135,
+        ),
+        "current_sell_price": st.column_config.NumberColumn(
+            translate_text(language_code, "market_stats.sell_price"),
+            format="compact",
+            width=55,
+        ),
+        "order_volume": st.column_config.NumberColumn(
+            translate_text(language_code, "market_stats.market_stock"),
+            format="compact",
+            width=40,
+        ),
+        "jita_sell_price": st.column_config.NumberColumn(
+            translate_text(language_code, "import_helper.column_jita_sell"),
+            format="compact",
+            width=55,
+        ),
+        "ship_target": st.column_config.NumberColumn(
+            translate_text(language_code, "dashboard.column_target"),
+            width=50,
+        ),
+        "fits_on_mkt": st.column_config.NumberColumn(
+            translate_text(language_code, "dashboard.column_fits_available"),
+            width=70,
+        ),
+        "_mkt": st.column_config.CheckboxColumn(
+            "📈",
+            help=translate_text(language_code, "dashboard.hint_click_market_stats"),
+            width=40,
+            default=False,
+        ),
+        "_doc": st.column_config.CheckboxColumn(
+            "⚔️",
+            help=translate_text(language_code, "dashboard.hint_click_doctrine_status"),
+            width=40,
+            default=False,
+        ),
+    }
+
+
+def get_low_stock_column_config(language_code: str = "en") -> dict:
+    """Get column configuration for the Low Stock page table."""
+    return {
+        "select": st.column_config.CheckboxColumn(
+            translate_text(language_code, "common.select"),
+            help=translate_text(language_code, "low_stock.column_select_help"),
+            default=False,
+            width="small",
+        ),
+        "type_id": st.column_config.NumberColumn(
+            "ID",
+            help="Type ID of the item",
+            width=50,
+        ),
+        "type_name": st.column_config.TextColumn(
+            translate_text(language_code, "common.item"),
+            help=translate_text(language_code, "low_stock.column_item_help"),
+            width="medium",
+        ),
+        "total_volume_remain": st.column_config.NumberColumn(
+            translate_text(language_code, "low_stock.column_volume_remaining"),
+            format="localized",
+            help=translate_text(language_code, "low_stock.column_volume_remaining_help"),
+            width="small",
+        ),
+        "fits_on_mkt": st.column_config.NumberColumn(
+            translate_text(language_code, "low_stock.column_fits"),
+            format="localized",
+            help=translate_text(language_code, "low_stock.column_fits_help"),
+            width="small",
+        ),
+        "price": st.column_config.NumberColumn(
+            translate_text(language_code, "common.price"),
+            format="localized",
+            help="Lowest 5-percentile price of current sell orders",
+        ),
+        "days_remaining": st.column_config.NumberColumn(
+            translate_text(language_code, "low_stock.column_days"),
+            format="%.1f",
+            help=translate_text(language_code, "low_stock.column_days_help"),
+            width="small",
+        ),
+        "avg_volume": st.column_config.NumberColumn(
+            translate_text(language_code, "low_stock.column_avg_vol"),
+            format="%.1f",
+            help=translate_text(language_code, "low_stock.column_avg_vol_help"),
+            width="small",
+        ),
+        "ships": st.column_config.ListColumn(
+            translate_text(language_code, "low_stock.column_used_in_fits"),
+            help=translate_text(language_code, "low_stock.column_used_in_fits_help"),
+            width="large",
+        ),
+        "category_name": st.column_config.TextColumn(
+            translate_text(language_code, "common.category"),
+            help=translate_text(language_code, "low_stock.column_category_help"),
+        ),
+        "group_name": st.column_config.TextColumn(
+            translate_text(language_code, "common.group"),
+            help=translate_text(language_code, "low_stock.column_group_help"),
         ),
     }

@@ -36,6 +36,23 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "nav.page.build_costs": "🏗️Build Costs",
         "nav.page.pricer": "🏷️Pricer",
         "nav.page.downloads": "📥Downloads",
+        "nav.page.market_dashboard": "📊 Dashboard",
+        "dashboard.title": "{market_name} Market Dashboard",
+        "dashboard.market_overview": "Market Overview",
+        "dashboard.commodity_tables": "Commodity Tables",
+        "dashboard.market_activity": "Market Activity",
+        "dashboard.kpi_total_market_value": "Total Market Value",
+        "dashboard.kpi_active_sell_orders": "Active Sell Orders",
+        "dashboard.kpi_active_buy_orders": "Active Buy Orders",
+        "dashboard.kpi_items_listed": "Items Listed",
+        "dashboard.kpi_last_updated": "Last Updated",
+        "dashboard.doctrine_ships": "Doctrine Ships \u2014 Stock vs Targets",
+        "dashboard.popular_modules": "Popular Modules \u2014 Demand & Pricing",
+        "dashboard.column_target": "Target",
+        "dashboard.column_fits_available": "Fits Avail",
+        "dashboard.column_status": "Status",
+        "dashboard.hint_click_market_stats": "Select a row to view market details",
+        "dashboard.hint_click_doctrine_status": "Select a row to view doctrine details",
         "doctrine_status.title": "{market_name} Doctrine Status",
         "doctrine_status.tab_market_stock": "Market Stock",
         "doctrine_status.tab_fit_details": "Fit Details",
@@ -93,7 +110,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_report.column_total_cost_help": "Total cost of the fit.",
         "common.market_hub": "Market Hub",
         "common.select": "Select",
-        "common.type_id": "Type ID",
         "common.item": "Item",
         "common.category": "Category",
         "common.group": "Group",
@@ -165,6 +181,15 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "30D Profit uses `(Local Price - Jita Sell) * 30D Volume`, "
             "RRP uses `Jita Sell * (1 + Markup Margin)`, and Cap Utilis uses "
             "`((Local Price - Jita Sell) - Shipping Cost) / Jita Sell`."
+        ),
+        "import_helper.caption_green": "Green",
+        "import_helper.caption_grey": "Grey",
+        "import_helper.caption_estimated_price": (
+            "{color_label} cells show estimated local prices at 140% of Jita sell "
+            "(no local sell orders)"
+        ),
+        "import_helper.caption_floored_volume": (
+            "{color_label} cells show 30D volume floored to 0.5 (insufficient history)"
         ),
         "import_helper.filters_header": "Filters",
         "import_helper.categories": "Categories",
@@ -322,7 +347,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "market_stats.sell_price": "Sell Price",
         "market_stats.delta_vs_jita": "{value}% Jita",
         "market_stats.jita_sell_price": "Jita Sell Price",
-        "market_stats.market_stock": "Market Stock",
+        "market_stats.market_stock": "Stock",
+        "market_stats.mineral_price_comparison": "Basic Minerals",
+        "market_stats.isotope_and_fuel_block_comparison": "Isotopes and Fuel Blocks",
+        "market_stats.delta_vs_jita_sell_column": "% vs Jita",
         "market_stats.sell_orders_value": "Sell Orders Value",
         "market_stats.total_sell_orders": "Total Sell Orders",
         "market_stats.fits_on_market": "Fits on Market",
@@ -587,6 +615,23 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "nav.page.build_costs": "🏗️制造成本",
         "nav.page.pricer": "🏷️估价器",
         "nav.page.downloads": "📥下载",
+        "nav.page.market_dashboard": "📊 仪表盘",
+        "dashboard.title": "{market_name} 市场仪表盘",
+        "dashboard.market_overview": "市场概览",
+        "dashboard.commodity_tables": "商品表格",
+        "dashboard.market_activity": "市场活动",
+        "dashboard.kpi_total_market_value": "市场总值",
+        "dashboard.kpi_active_sell_orders": "卖单数量",
+        "dashboard.kpi_active_buy_orders": "买单数量",
+        "dashboard.kpi_items_listed": "上架物品",
+        "dashboard.kpi_last_updated": "最近更新",
+        "dashboard.doctrine_ships": "建制舰船 \u2014 库存与目标",
+        "dashboard.popular_modules": "热门装备 \u2014 需求与价格",
+        "dashboard.column_target": "目标",
+        "dashboard.column_fits_available": "可用装配",
+        "dashboard.column_status": "状态",
+        "dashboard.hint_click_market_stats": "选择一行查看市场详情",
+        "dashboard.hint_click_doctrine_status": "选择一行查看建制详情",
         "doctrine_status.title": "{market_name} 建制状态",
         "doctrine_status.tab_market_stock": "市场库存",
         "doctrine_status.tab_fit_details": "装配详情",
@@ -639,7 +684,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_report.column_total_cost_help": "该建制的总成本。",
         "common.market_hub": "市场中心",
         "common.select": "选择",
-        "common.type_id": "类型 ID",
         "common.item": "物品",
         "common.category": "类别",
         "common.group": "分组",
@@ -701,6 +745,14 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "查找本地市场价格明显高于吉他卖价的物品。30 天利润使用 "
             "`(本地价格 - 吉他卖价) * 日均销量 * 30`，RRP 使用 `吉他卖价 * (1 + 加价率)`，"
             "资本利用率使用 `((本地价格 - 吉他卖价) - 运费) / 吉他卖价`。"
+        ),
+        "import_helper.caption_green": "绿色",
+        "import_helper.caption_grey": "灰色",
+        "import_helper.caption_estimated_price": (
+            "{color_label}背景表示按吉他卖价140%估算的本地价格（无本地卖单）"
+        ),
+        "import_helper.caption_floored_volume": (
+            "{color_label}背景表示 30 天成交量因历史不足而按0计算"
         ),
         "import_helper.filters_header": "筛选",
         "import_helper.categories": "类别",
@@ -837,12 +889,14 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "market_stats.total_value_30d": "30日总价值",
         "market_stats.total_volume_30d": "30日总销量",
         "market_stats.current_market_status": "当前市场状态",
-        "market_stats.sell_price": "卖出价格",
+        "market_stats.sell_price": "售价",
         "market_stats.delta_vs_jita": "相对吉他 {value}%",
         "market_stats.jita_sell_price": "吉他卖价",
-        "market_stats.market_stock": "市场库存",
+        "market_stats.market_stock": "库存",
+        "market_stats.mineral_price_comparison": "基础矿物",
+        "market_stats.isotope_and_fuel_block_comparison": "同位素与燃料块",
         "market_stats.sell_orders_value": "卖单总价值",
-        "market_stats.total_sell_orders": "卖单总数",
+        "market_stats.total_sell_orders": "卖单量",
         "market_stats.fits_on_market": "市场可装配数",
         "market_stats.fit_target_delta": "装配: {fit_id}, 目标: {target}, 市场装配数: {fits_on_market}, 差值: {delta}",
         "market_stats.target_value": "目标: {target}",
@@ -1076,6 +1130,23 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "nav.page.build_costs": "🏗️Produktionskosten",
         "nav.page.pricer": "🏷️Preisrechner",
         "nav.page.downloads": "📥Downloads",
+        "nav.page.market_dashboard": "📊 Dashboard",
+        "dashboard.title": "{market_name} Markt-Dashboard",
+        "dashboard.market_overview": "Markt\u00fcbersicht",
+        "dashboard.commodity_tables": "Rohstofftabellen",
+        "dashboard.market_activity": "Marktaktivit\u00e4t",
+        "dashboard.kpi_total_market_value": "Gesamtmarktwert",
+        "dashboard.kpi_active_sell_orders": "Aktive Verkaufsauftr\u00e4ge",
+        "dashboard.kpi_active_buy_orders": "Aktive Kaufauftr\u00e4ge",
+        "dashboard.kpi_items_listed": "Gelistete Artikel",
+        "dashboard.kpi_last_updated": "Zuletzt aktualisiert",
+        "dashboard.doctrine_ships": "Doktrin-Schiffe \u2014 Bestand vs Ziel",
+        "dashboard.popular_modules": "Beliebte Module \u2014 Nachfrage & Preise",
+        "dashboard.column_target": "Ziel",
+        "dashboard.column_fits_available": "Fits verf.",
+        "dashboard.column_status": "Status",
+        "dashboard.hint_click_market_stats": "Zeile ausw\u00e4hlen f\u00fcr Marktdetails",
+        "dashboard.hint_click_doctrine_status": "Zeile ausw\u00e4hlen f\u00fcr Doktrindetails",
         "doctrine_status.title": "Doktrinstatus von {market_name}",
         "doctrine_status.tab_market_stock": "Marktbestand",
         "doctrine_status.tab_fit_details": "Fit-Details",
@@ -1132,7 +1203,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_report.column_total_cost_help": "Gesamtkosten des Fits.",
         "common.market_hub": "Markthub",
         "common.select": "Auswählen",
-        "common.type_id": "Typ-ID",
         "common.item": "Artikel",
         "common.category": "Kategorie",
         "common.group": "Gruppe",
@@ -1199,6 +1269,16 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "`Jita Sell * (1 + Aufschlag)` und Cap Utilis verwendet "
             "`((Lokaler Preis - Jita Sell) - Versandkosten) / Jita Sell`."
         ),
+        "import_helper.caption_green": "Gruen",
+        "import_helper.caption_grey": "Grau",
+        "import_helper.caption_estimated_price": (
+            "{color_label} markierte Zellen zeigen geschaetzte lokale Preise mit 140 % "
+            "des Jita-Sell-Preises (keine lokalen Verkaufsorders)"
+        ),
+        "import_helper.caption_floored_volume": (
+            "{color_label} markierte Zellen zeigen auf 0.5 gesetztes 30D-Volumen "
+            "(unzureichende Historie)"
+        ),
         "import_helper.filters_header": "Filter",
         "import_helper.categories": "Kategorien",
         "import_helper.categories_help": "Die Tabelle auf eine oder mehrere Kategorien beschränken.",
@@ -1256,6 +1336,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.price_source_esi_average": "ESI Durchschnitt",
         "build_costs.price_source_jita_sell": "Jita Verkauf",
         "build_costs.price_source_jita_buy": "Jita Ankauf",
+        "market_stats.mineral_price_comparison": "Mineralpreisvergleich",
+        "market_stats.isotope_and_fuel_block_comparison": "Isotope und Treibstoffblöcke",
         "build_costs.structure_compare_expander": "Struktur zum Vergleich auswählen (optional)",
         "build_costs.structure_compare_label": "Strukturen",
         "build_costs.structure_compare_placeholder": "Alle Strukturen",
@@ -1403,8 +1485,25 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "nav.page.doctrine_report": "📝Rapport Doctrine",
         "nav.page.build_costs": "🏗️Coûts Production",
         "nav.page.pricer": "🏷️Tarificateur",
-        "nav.page.downloads": "📥Téléchargements",
-        "doctrine_status.title": "État Doctrine {market_name}",
+        "nav.page.downloads": "📥T\u00e9l\u00e9chargements",
+        "nav.page.market_dashboard": "📊 Tableau de bord",
+        "dashboard.title": "Tableau de bord march\u00e9 {market_name}",
+        "dashboard.market_overview": "Aper\u00e7u du march\u00e9",
+        "dashboard.commodity_tables": "Tableaux des mati\u00e8res premi\u00e8res",
+        "dashboard.market_activity": "Activit\u00e9 du march\u00e9",
+        "dashboard.kpi_total_market_value": "Valeur totale du march\u00e9",
+        "dashboard.kpi_active_sell_orders": "Ordres de vente actifs",
+        "dashboard.kpi_active_buy_orders": "Ordres d\u0027achat actifs",
+        "dashboard.kpi_items_listed": "Articles list\u00e9s",
+        "dashboard.kpi_last_updated": "Derni\u00e8re mise \u00e0 jour",
+        "dashboard.doctrine_ships": "Vaisseaux doctrine \u2014 Stock vs Objectif",
+        "dashboard.popular_modules": "Modules populaires \u2014 Demande & Prix",
+        "dashboard.column_target": "Objectif",
+        "dashboard.column_fits_available": "Fits dispo.",
+        "dashboard.column_status": "Statut",
+        "dashboard.hint_click_market_stats": "S\u00e9lectionnez une ligne pour les d\u00e9tails du march\u00e9",
+        "dashboard.hint_click_doctrine_status": "S\u00e9lectionnez une ligne pour les d\u00e9tails de doctrine",
+        "doctrine_status.title": "\u00c9tat Doctrine {market_name}",
         "doctrine_status.tab_market_stock": "Stock Marche",
         "doctrine_status.tab_fit_details": "Details du Fit",
         "doctrine_status.low_stock_modules": "Modules à Stock Faible",
@@ -1460,7 +1559,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_report.column_total_cost_help": "Coût total du fit.",
         "common.market_hub": "Hub de marche",
         "common.select": "Sélection",
-        "common.type_id": "ID Type",
         "common.item": "Objet",
         "common.category": "Catégorie",
         "common.group": "Groupe",
@@ -1522,6 +1620,16 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "Le profit 30J utilise `(Prix local - Vente Jita) * Volume moyen quotidien * 30`, le RRP utilise "
             "`Vente Jita * (1 + marge)`."
         ),
+        "import_helper.caption_green": "Vert",
+        "import_helper.caption_grey": "Gris",
+        "import_helper.caption_estimated_price": (
+            "Les cellules {color_label} indiquent des prix locaux estimes a 140 % "
+            "de la vente Jita (aucun ordre de vente local)"
+        ),
+        "import_helper.caption_floored_volume": (
+            "Les cellules {color_label} indiquent un volume 30J force a 0.5 "
+            "(historique insuffisant)"
+        ),
         "import_helper.filters_header": "Filtres",
         "import_helper.categories": "Catégories",
         "import_helper.categories_help": "Limiter le tableau a une ou plusieurs catégories.",
@@ -1579,6 +1687,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.price_source_esi_average": "Moyenne ESI",
         "build_costs.price_source_jita_sell": "Vente Jita",
         "build_costs.price_source_jita_buy": "Achat Jita",
+        "market_stats.mineral_price_comparison": "Comparaison des prix des mineraux",
+        "market_stats.isotope_and_fuel_block_comparison": "Isotopes et blocs de carburant",
         "build_costs.structure_compare_expander": "Sélectionner une structure de comparaison (optionnel)",
         "build_costs.structure_compare_label": "Structures",
         "build_costs.structure_compare_placeholder": "Toutes les structures",
@@ -1727,6 +1837,23 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "nav.page.build_costs": "🏗️Стоимость производства",
         "nav.page.pricer": "🏷️Оценка",
         "nav.page.downloads": "📥Загрузки",
+        "nav.page.market_dashboard": "📊 Панель",
+        "dashboard.title": "Панель рынка {market_name}",
+        "dashboard.market_overview": "Обзор рынка",
+        "dashboard.commodity_tables": "Таблицы товаров",
+        "dashboard.market_activity": "Активность рынка",
+        "dashboard.kpi_total_market_value": "Общая стоимость рынка",
+        "dashboard.kpi_active_sell_orders": "Активные ордера продажи",
+        "dashboard.kpi_active_buy_orders": "Активные ордера покупки",
+        "dashboard.kpi_items_listed": "Товаров на рынке",
+        "dashboard.kpi_last_updated": "Последнее обновление",
+        "dashboard.doctrine_ships": "Корабли доктрины \u2014 Запас vs Цель",
+        "dashboard.popular_modules": "Популярные модули \u2014 Спрос и цены",
+        "dashboard.column_target": "Цель",
+        "dashboard.column_fits_available": "Фитов",
+        "dashboard.column_status": "Статус",
+        "dashboard.hint_click_market_stats": "Выберите строку для просмотра деталей рынка",
+        "dashboard.hint_click_doctrine_status": "Выберите строку для просмотра деталей доктрины",
         "doctrine_status.title": "Статус доктрины {market_name}",
         "doctrine_status.tab_market_stock": "Рыночный запас",
         "doctrine_status.tab_fit_details": "Детали фита",
@@ -1783,7 +1910,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_report.column_total_cost_help": "Общая стоимость фита.",
         "common.market_hub": "Торговый узел",
         "common.select": "Выбор",
-        "common.type_id": "ID типа",
         "common.item": "Предмет",
         "common.category": "Категория",
         "common.group": "Группа",
@@ -1845,6 +1971,16 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "Прибыль за 30 дней считается как "
             "`(Локальная цена - Jita Sell) * средний дневной оборот * 30`."
         ),
+        "import_helper.caption_green": "Зелёные",
+        "import_helper.caption_grey": "Серые",
+        "import_helper.caption_estimated_price": (
+            "{color_label} ячейки показывают оценочные локальные цены на уровне 140% "
+            "от Jita sell (нет локальных sell-ордеров)"
+        ),
+        "import_helper.caption_floored_volume": (
+            "{color_label} ячейки показывают объём за 30 дней, принудительно установленный "
+            "на 0.5 (недостаточно истории)"
+        ),
         "import_helper.filters_header": "Фильтры",
         "import_helper.categories": "Категории",
         "import_helper.categories_help": "Ограничить таблицу одной или несколькими категориями.",
@@ -1902,6 +2038,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.price_source_esi_average": "Средняя ESI",
         "build_costs.price_source_jita_sell": "Продажа Jita",
         "build_costs.price_source_jita_buy": "Покупка Jita",
+        "market_stats.mineral_price_comparison": "Сравнение цен на минералы",
+        "market_stats.isotope_and_fuel_block_comparison": "Изотопы и топливные блоки",
         "build_costs.structure_compare_expander": "Выберите структуру для сравнения (необязательно)",
         "build_costs.structure_compare_label": "Структуры",
         "build_costs.structure_compare_placeholder": "Все структуры",
@@ -2050,6 +2188,23 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "nav.page.build_costs": "🏗️Costes de Fabricacion",
         "nav.page.pricer": "🏷️Calculadora",
         "nav.page.downloads": "📥Descargas",
+        "nav.page.market_dashboard": "📊 Panel",
+        "dashboard.title": "Panel de mercado {market_name}",
+        "dashboard.market_overview": "Resumen del mercado",
+        "dashboard.commodity_tables": "Tablas de materias primas",
+        "dashboard.market_activity": "Actividad del mercado",
+        "dashboard.kpi_total_market_value": "Valor total del mercado",
+        "dashboard.kpi_active_sell_orders": "\u00d3rdenes de venta activas",
+        "dashboard.kpi_active_buy_orders": "\u00d3rdenes de compra activas",
+        "dashboard.kpi_items_listed": "Art\u00edculos listados",
+        "dashboard.kpi_last_updated": "\u00daltima actualizaci\u00f3n",
+        "dashboard.doctrine_ships": "Naves de doctrina \u2014 Stock vs Objetivo",
+        "dashboard.popular_modules": "M\u00f3dulos populares \u2014 Demanda y precios",
+        "dashboard.column_target": "Objetivo",
+        "dashboard.column_fits_available": "Fits disp.",
+        "dashboard.column_status": "Estado",
+        "dashboard.hint_click_market_stats": "Seleccione una fila para ver detalles del mercado",
+        "dashboard.hint_click_doctrine_status": "Seleccione una fila para ver detalles de doctrina",
         "doctrine_status.title": "Estado de Doctrina de {market_name}",
         "doctrine_status.tab_market_stock": "Stock de Mercado",
         "doctrine_status.tab_fit_details": "Detalles del Fit",
@@ -2065,7 +2220,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_report.select_doctrine": "Selecciona una doctrina",
         "common.market_hub": "Hub de mercado",
         "common.select": "Seleccionar",
-        "common.type_id": "ID de tipo",
         "common.item": "Articulo",
         "common.category": "Categoria",
         "common.group": "Grupo",
@@ -2083,6 +2237,16 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "El beneficio de 30D usa `(Precio local - Jita Sell) * volumen diario medio * 30`, el RRP usa "
             "`Jita Sell * (1 + margen)` y Cap Utilis usa "
             "`((Precio local - Jita Sell) - envio) / Jita Sell`."
+        ),
+        "import_helper.caption_green": "Verde",
+        "import_helper.caption_grey": "Gris",
+        "import_helper.caption_estimated_price": (
+            "Las celdas {color_label} muestran precios locales estimados al 140 % "
+            "del Jita sell (sin ordenes locales de venta)"
+        ),
+        "import_helper.caption_floored_volume": (
+            "Las celdas {color_label} muestran volumen 30D ajustado a 0.5 "
+            "(historial insuficiente)"
         ),
         "import_helper.filters_header": "Filtros",
         "import_helper.categories": "Categorias",
@@ -2155,6 +2319,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.price_source_esi_average": "Media ESI",
         "build_costs.price_source_jita_sell": "Venta Jita",
         "build_costs.price_source_jita_buy": "Compra Jita",
+        "market_stats.mineral_price_comparison": "Comparacion de precios de minerales",
+        "market_stats.isotope_and_fuel_block_comparison": "Isotopos y bloques de combustible",
         "build_costs.structure_compare_expander": "Selecciona una estructura para comparar (opcional)",
         "build_costs.structure_compare_label": "Estructuras",
         "build_costs.structure_compare_placeholder": "Todas las estructuras",

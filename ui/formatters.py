@@ -233,7 +233,7 @@ def get_doctrine_report_column_config(language_code: str = "en") -> dict:
                 help=translate_text(language_code, "doctrine_report.column_ship_help")
             ),
             'ship_id': st.column_config.Column(
-                translate_text(language_code, "common.type_id"),
+                "type_id",
                 help=translate_text(language_code, "doctrine_report.column_ship_id_help")
             ),
             'fit_id': st.column_config.Column(
