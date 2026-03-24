@@ -208,7 +208,7 @@ def main():
     display_df["volume_30d"] = display_df["volume_30d"].round().astype("Int64")
 
     def _highlight_estimated(data):
-        """Apply grey background to estimated prices and floored volumes."""
+        """Apply green background to estimated prices and grey background to floored volumes."""
         styles = pd.DataFrame("", index=data.index, columns=data.columns)
         grey = "background-color: #d3d3d3"
         light_green = "background-color: #d9f2d9"

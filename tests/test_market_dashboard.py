@@ -225,12 +225,17 @@ class TestJitaDiffCellStyle:
 
         assert _jita_diff_cell_style(5.01) == "color: #66bb6a"
 
-    def test_less_than_five_is_red(self):
+    def test_positive_below_threshold_is_neutral(self):
         from pages.components.dashboard_components import _jita_diff_cell_style
 
-        assert _jita_diff_cell_style(4.99) == "color: #ef5350"
+        assert _jita_diff_cell_style(4.99) == "color: #728049"
 
-    def test_exactly_five_has_no_background(self):
+    def test_negative_is_red(self):
         from pages.components.dashboard_components import _jita_diff_cell_style
 
-        assert _jita_diff_cell_style(5.0) == ""
+        assert _jita_diff_cell_style(-0.01) == "color: #ef5350"
+
+    def test_exactly_zero_is_neutral(self):
+        from pages.components.dashboard_components import _jita_diff_cell_style
+
+        assert _jita_diff_cell_style(0.0) == "color: #728049"

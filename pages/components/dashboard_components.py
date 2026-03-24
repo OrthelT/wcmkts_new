@@ -1,7 +1,7 @@
 """Shared dashboard components for market comparison tables.
 
-Extracted from market_stats.py so both the dashboard and market stats pages
-can render mineral/isotope/doctrine/module comparison tables.
+Extracted from market_stats.py so the dashboard page can render
+mineral/isotope/doctrine/module comparison tables.
 
 When a ``dataframe_key`` is passed, tables become selectable: clicking a row
 returns the selected ``type_id`` so the calling page can navigate to a detail
@@ -40,6 +40,7 @@ def _get_price_result_value(price_result, field_name: str) -> float:
     try:
         return float(getattr(price_result, field_name) or 0.0)
     except (AttributeError, TypeError, ValueError):
+        logger.debug("Failed to extract %s from price result: %r", field_name, price_result)
         return 0.0
 
 
@@ -219,7 +220,7 @@ def render_comparison_table(
 
 
 def get_popular_module_type_ids(doctrine_repo, n: int = 10) -> list[int]:
-    """Return top N module type_ids by avg_vol from doctrines.
+    """Return top N module type_ids by avg_vol from doctrine fits.
 
     Filters to category_id 7 (Modules) and excludes ship hull rows.
     """

@@ -1272,7 +1272,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.caption_green": "Gruen",
         "import_helper.caption_grey": "Grau",
         "import_helper.caption_estimated_price": (
-            "{color_label} markierte Zellen zeigen geschaetzte lokale Preise mit 120 % "
+            "{color_label} markierte Zellen zeigen geschaetzte lokale Preise mit 140 % "
             "des Jita-Sell-Preises (keine lokalen Verkaufsorders)"
         ),
         "import_helper.caption_floored_volume": (
@@ -1623,7 +1623,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.caption_green": "Vert",
         "import_helper.caption_grey": "Gris",
         "import_helper.caption_estimated_price": (
-            "Les cellules {color_label} indiquent des prix locaux estimes a 120 % "
+            "Les cellules {color_label} indiquent des prix locaux estimes a 140 % "
             "de la vente Jita (aucun ordre de vente local)"
         ),
         "import_helper.caption_floored_volume": (
@@ -2241,7 +2241,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.caption_green": "Verde",
         "import_helper.caption_grey": "Gris",
         "import_helper.caption_estimated_price": (
-            "Las celdas {color_label} muestran precios locales estimados al 120 % "
+            "Las celdas {color_label} muestran precios locales estimados al 140 % "
             "del Jita sell (sin ordenes locales de venta)"
         ),
         "import_helper.caption_floored_volume": (

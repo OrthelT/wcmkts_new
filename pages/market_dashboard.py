@@ -1,7 +1,7 @@
 """Market Dashboard — at-a-glance overview of the entire market.
 
 Sections:
-1. Market Overview KPIs (6 metric cards)
+1. Market Overview KPIs (5 metric cards)
 2. Commodity Tables (2x2 grid: minerals, isotopes, doctrine ships, popular modules)
 3. Market Activity (ISK volume chart)
 4. 30-Day Summary + Top Items
@@ -30,7 +30,7 @@ from state import get_active_language
 from repositories import get_sde_repository, get_doctrine_repository
 from ui.i18n import translate_text
 from ui.market_selector import render_market_selector
-from ui.sync_display import display_sync_status  # noqa: F401
+from ui.sync_display import display_sync_status
 
 logger = setup_logging(__name__)
 
@@ -76,13 +76,11 @@ def _render_kpi_bar(market_service, language_code: str):
 
 def _navigate_to_market_stats(type_id: int):
     """Navigate to market stats page with the given item pre-selected."""
-    # st.query_params["item_id"] = str(type_id)
     st.switch_page("pages/market_stats.py", query_params={"item_id": str(type_id)})
 
 
 def _navigate_to_doctrine_status(type_id: int):
     """Navigate to doctrine status page with the given ship pre-selected."""
-    # st.query_params["ship_id"] = str(type_id)
     st.switch_page("pages/doctrine_status.py", query_params={"ship_id": str(type_id)})
 
 
@@ -162,14 +160,12 @@ def main():
         )
         st.stop()
 
-    # Title
     st.title(
         translate_text(
             language_code, "dashboard.title", market_name=market.name,
         )
     )
 
-    # Services
     market_service = get_market_service()
     price_service = get_price_service(
         db_alias=market.database_alias,
@@ -193,7 +189,7 @@ def main():
     render_isk_volume_chart_ui(market_service, language_code)
     st.divider()
 
-    # Section 4 + 5: 30-Day Summary Metrics + Top Items
+    # Section 4: 30-Day Summary Metrics + Top Items
     # Clear item selection so metrics show market-wide totals
     st.session_state["selected_item"] = None
     st.session_state["selected_item_id"] = None

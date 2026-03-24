@@ -273,7 +273,7 @@ def main():
         try:
             qp_item_id = int(st.query_params["item_id"])
         except (ValueError, TypeError):
-            pass
+            logger.warning("Invalid item_id query param: %s", st.query_params["item_id"])
         del st.query_params["item_id"]
 
     # Sidebar filters

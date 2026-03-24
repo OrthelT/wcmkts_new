@@ -19,7 +19,7 @@ logger = setup_logging(__name__)
 
 
 def initialize_databases() -> bool:
-    """Initialize all databases (primary + deployment + shared).
+    """Initialize all databases (market, SDE, and build cost).
 
     Only sets ``db_initialized`` to True once *every* database has been
     verified to contain tables.  If a previous attempt partially failed,
@@ -52,6 +52,9 @@ def initialize_databases() -> bool:
 @st.cache_data(ttl=600)
 def check_for_db_updates(db_alias: str) -> tuple[bool, datetime]:
     """Check whether local and remote databases are in sync.
+
+    Returns True if the database is in sync or if remote credentials are
+    unavailable (local-only mode).
 
     The db_alias must be an explicit alias (e.g. "wcmktprod", "wcmktnorth")
     so the cache key correctly distinguishes between markets.
@@ -103,14 +106,17 @@ def check_db(manual_override: bool = False):
         if not check:
             any_stale = True
             logger.info(f"check_db() {alias} is stale, syncing")
-            db.sync()
-
-            if db.validate_sync():
-                logger.info(f"{alias} synced and validated")
-                synced_any = True
-            else:
-                logger.info(f"{alias} sync failed validation")
-                st.toast(f"Sync failed for {alias}", icon="❌")
+            try:
+                db.sync()
+                if db.validate_sync():
+                    logger.info(f"{alias} synced and validated")
+                    synced_any = True
+                else:
+                    logger.warning(f"{alias} sync failed validation")
+                    st.toast(f"Sync failed for {alias}", icon="❌")
+            except Exception:
+                logger.error(f"Sync error for {alias}", exc_info=True)
+                st.toast(f"Sync error for {alias}", icon="❌")
 
     if synced_any:
         invalidate_market_caches()

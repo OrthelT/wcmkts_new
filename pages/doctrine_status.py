@@ -161,9 +161,9 @@ def main():
     if "ship_id" in st.query_params:
         try:
             qp_ship_id = int(st.query_params["ship_id"])
-            del st.query_params["ship_id"]
         except (ValueError, TypeError):
-            pass
+            logger.warning("Invalid ship_id query param: %s", st.query_params["ship_id"])
+        del st.query_params["ship_id"]
 
     if not ensure_market_db_ready(market.database_alias):
         st.error(
