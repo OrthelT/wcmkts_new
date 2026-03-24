@@ -130,9 +130,9 @@ def _jita_diff_cell_style(diff_value: float) -> str:
         return ""
     if value > 5:
         return "color: #66bb6a"
-    if value < 5:
+    if value < 0:
         return "color: #ef5350"
-    return ""
+    return "color: #728049"
 
 
 # =========================================================================

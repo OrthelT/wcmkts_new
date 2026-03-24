@@ -249,7 +249,7 @@ def main():
                 )
             )
         st.markdown(
-            f"<p style='font-size: 0.875rem; color: rgb(49, 51, 63);'>{'; '.join(parts)}.</p>",
+            f"<p style='font-size: 0.875rem; color: rgb(99, 101, 63);'>{'; '.join(parts)}.</p>",
             unsafe_allow_html=True,
         )
 
