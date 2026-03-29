@@ -90,7 +90,12 @@ class DoctrineRepository:
     # Moved to outer scope to facilitate caching
 
     def get_all_fits(self) -> pd.DataFrame:
-        return get_all_fits_with_cache(self._db.alias)
+        try:
+            from state.market_state import get_active_market_key
+            market_key = get_active_market_key()
+        except (ImportError, Exception):
+            market_key = "primary"
+        return get_all_fits_with_cache(self._db.alias, market_key)
 
     def get_fit_by_id(self, fit_id: int) -> pd.DataFrame:
         return get_fit_by_id_with_cache(fit_id, self._db.alias)
@@ -505,15 +510,34 @@ def get_doctrine_repository() -> DoctrineRepository:
 # Caching Functions
 # =============================================================================
 @st.cache_data(ttl=600, show_spinner="Getting all fits...")
-def get_all_fits_with_cache(db_alias: str = "wcmkt") -> pd.DataFrame:
-    """Get all fit data from the doctrines table."""
-    logger.info("Getting all fits...with cache")
-    query = "SELECT * FROM doctrines"
+def get_all_fits_with_cache(db_alias: str = "wcmkt", market_key: str = "primary") -> pd.DataFrame:
+    """Get fit data from the doctrines table, filtered by market_flag.
+
+    Only returns rows whose fit_id appears in doctrine_fits with a
+    market_flag matching the active market key or 'both'.
+    """
+    logger.info("Getting all fits for market_key=%s ...with cache", market_key)
     db = DatabaseConfig(db_alias)
     engine = db.engine
     try:
         with engine.connect() as conn:
-            df = pd.read_sql_query(query, conn, index_col='id')
+            # Get valid fit_ids for this market from doctrine_fits
+            fits_df = pd.read_sql_query("SELECT fit_id, market_flag FROM doctrine_fits", conn)
+            if "market_flag" in fits_df.columns:
+                valid_fit_ids = fits_df[
+                    fits_df["market_flag"].isin([market_key, "both"])
+                ]["fit_id"].unique()
+            else:
+                valid_fit_ids = fits_df["fit_id"].unique()
+
+            df = pd.read_sql_query("SELECT * FROM doctrines", conn, index_col='id')
+
+            # Filter to only fits belonging to this market
+            if len(valid_fit_ids) > 0:
+                df = df[df["fit_id"].isin(valid_fit_ids)]
+            else:
+                logger.warning("No valid fit_ids found for market_key=%s", market_key)
+
             return df
     except Exception as e:
         logger.error(f"Failed to get all fits: {e}")
