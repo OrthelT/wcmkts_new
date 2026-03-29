@@ -93,8 +93,12 @@ class DoctrineRepository:
         try:
             from state.market_state import get_active_market_key
             market_key = get_active_market_key()
-        except (ImportError, Exception):
+        except ImportError:
+            logger.debug("state.market_state unavailable, defaulting to 'primary'")
             market_key = "primary"
+        except Exception:
+            logger.error("Failed to resolve active market key — returning empty DataFrame", exc_info=True)
+            return pd.DataFrame()
         return get_all_fits_with_cache(self._db.alias, market_key)
 
     def get_fit_by_id(self, fit_id: int) -> pd.DataFrame:
@@ -139,8 +143,12 @@ class DoctrineRepository:
             try:
                 from state.market_state import get_active_market_key
                 market_key = get_active_market_key()
-            except (ImportError, Exception):
+            except ImportError:
+                logger.debug("state.market_state unavailable, defaulting to 'primary'")
                 market_key = "primary"
+            except Exception:
+                logger.error("Failed to resolve active market key — returning empty DataFrame", exc_info=True)
+                return pd.DataFrame()
 
             if "market_flag" in df.columns:
                 df = df[df["market_flag"].isin([market_key, "both"])]
@@ -533,9 +541,8 @@ def get_all_fits_with_cache(db_alias: str = "wcmkt", market_key: str = "primary"
             df = pd.read_sql_query("SELECT * FROM doctrines", conn, index_col='id')
 
             # Filter to only fits belonging to this market
-            if len(valid_fit_ids) > 0:
-                df = df[df["fit_id"].isin(valid_fit_ids)]
-            else:
+            df = df[df["fit_id"].isin(valid_fit_ids)]
+            if df.empty:
                 logger.warning("No valid fit_ids found for market_key=%s", market_key)
 
             return df

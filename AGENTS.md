@@ -257,6 +257,13 @@ api_key = "your_janice_api_key"  # For Pricer page Jita price lookups
 
 ## Development Guidelines
 
+### Data Integrity Rule
+**Never return incorrect data. Return no data rather than defaulting to the wrong data. We NEVER lie to the user.**
+
+If a context lookup fails (e.g. active market key, hub selection, language), return empty results (`pd.DataFrame()`, `None`, `[]`) and log at ERROR — do not silently fall back to a default that serves data from a different context. Users make real decisions based on this data. Empty results are obviously wrong and prompt investigation; wrong data looks correct and causes harm silently.
+
+The only acceptable default is when the context module is genuinely unavailable (`ImportError` in test/CLI environments), not as a catch-all for unexpected runtime errors.
+
 ### Coding Style & Naming Conventions
 - **Python style**: PEP 8, 4-space indents, max line length 100
 - **Naming conventions**:
