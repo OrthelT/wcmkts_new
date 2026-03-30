@@ -335,6 +335,16 @@ def render_doctrine_ships_table(
     if fits_df.empty:
         return None, None
 
+    # Compute bottleneck fits per ship: min fits_on_mkt across all items in each fit,
+    # then min across all fits sharing the same ship_id.
+    # This reflects the true number of complete fits that can be assembled.
+    fits_on_mkt_col = pd.to_numeric(fits_df["fits_on_mkt"], errors="coerce").fillna(0).astype(int)
+    bottleneck_fits = (
+        fits_on_mkt_col.groupby(fits_df["ship_id"])
+        .min()
+        .rename("bottleneck_fits")
+    )
+
     # Unique ships: rows where type_id == ship_id (hull rows)
     ships = fits_df[fits_df["type_id"] == fits_df["ship_id"]].copy()
     ships = ships.drop_duplicates(subset=["ship_id"], keep="first")
@@ -370,7 +380,7 @@ def render_doctrine_ships_table(
             local_price = float(ship.get("price", 0) or 0)
 
         stock = int(ship.get("total_stock", 0) or 0)
-        fits_on_mkt = int(ship.get("fits_on_mkt", 0) or 0)
+        fits_on_mkt = int(bottleneck_fits.get(sid, 0))
         target = targets_map.get(sid, 0)
         jita_sell = _get_price_result_value(jita_map.get(sid), "sell_price")
         status = StockStatus.from_stock_and_target(fits_on_mkt, target)
