@@ -121,7 +121,7 @@ def check_db(manual_override: bool = False):
     if synced_any:
         invalidate_market_caches()
         update_wcmkt_state()
-        st.toast("Database synced successfully", icon="✅")
+        st.toast("Database synced successfully. Loading updated data.", icon="✅")
     elif local_only_mode and not any_stale and manual_override:
         st.toast("Local-only mode: remote sync checks skipped", icon="ℹ️")
     elif not any_stale:
