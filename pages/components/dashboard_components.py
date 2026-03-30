@@ -315,6 +315,50 @@ def render_popular_modules_table(
 # =========================================================================
 
 
+def _apply_equivalents_to_fits(fits_df: pd.DataFrame) -> pd.DataFrame:
+    """Adjust fits_on_mkt using aggregated stock across equivalent modules.
+
+    Mirrors FitDataBuilder.apply_module_equivalents() so the dashboard
+    bottleneck calculation accounts for interchangeable faction modules.
+    """
+    try:
+        from settings_service import SettingsService
+        if not SettingsService().use_equivalents:
+            return fits_df
+    except Exception:
+        return fits_df
+
+    try:
+        from services.module_equivalents_service import get_module_equivalents_service
+        equiv_service = get_module_equivalents_service()
+        type_ids_with_equivs = equiv_service.get_type_ids_with_equivalents()
+        if not type_ids_with_equivs:
+            return fits_df
+    except Exception:
+        return fits_df
+
+    modules_to_update = fits_df[
+        fits_df["type_id"].isin(type_ids_with_equivs)
+    ]["type_id"].unique()
+
+    if len(modules_to_update) == 0:
+        return fits_df
+
+    fits_df = fits_df.copy()
+    aggregated_stocks = equiv_service.get_aggregated_stock(list(modules_to_update))
+
+    for type_id, total_stock in aggregated_stocks.items():
+        mask = fits_df["type_id"] == type_id
+        for idx in fits_df.loc[mask].index:
+            fit_qty = fits_df.at[idx, "fit_qty"]
+            if fit_qty > 0:
+                fits_df.at[idx, "fits_on_mkt"] = total_stock // fit_qty
+            else:
+                fits_df.at[idx, "fits_on_mkt"] = total_stock
+
+    return fits_df
+
+
 def render_doctrine_ships_table(
     doctrine_repo,
     market_service,
@@ -334,6 +378,10 @@ def render_doctrine_ships_table(
     fits_df = doctrine_repo.get_all_fits()
     if fits_df.empty:
         return None, None
+
+    # Apply module equivalents: recalculate fits_on_mkt using combined stock
+    # across interchangeable modules (mirrors FitDataBuilder.apply_module_equivalents)
+    fits_df = _apply_equivalents_to_fits(fits_df)
 
     # Compute bottleneck fits per fit_id: min fits_on_mkt across all items in each fit.
     # This reflects the true number of complete fits that can be assembled.
