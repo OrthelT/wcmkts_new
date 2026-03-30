@@ -302,6 +302,10 @@ def get_doctrine_ships_column_config(language_code: str = "en") -> dict:
             translate_text(language_code, "common.item"),
             width=135,
         ),
+        "fit_id": st.column_config.NumberColumn(
+            translate_text(language_code, "doctrine_report.fit_id"),
+            width=50,
+        ),
         "current_sell_price": st.column_config.NumberColumn(
             translate_text(language_code, "market_stats.sell_price"),
             format="compact",
