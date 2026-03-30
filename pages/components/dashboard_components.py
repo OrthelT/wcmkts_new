@@ -335,28 +335,27 @@ def render_doctrine_ships_table(
     if fits_df.empty:
         return None, None
 
-    # Compute bottleneck fits per ship: min fits_on_mkt across all items in each fit,
-    # then min across all fits sharing the same ship_id.
+    # Compute bottleneck fits per fit_id: min fits_on_mkt across all items in each fit.
     # This reflects the true number of complete fits that can be assembled.
     fits_on_mkt_col = pd.to_numeric(fits_df["fits_on_mkt"], errors="coerce").fillna(0).astype(int)
     bottleneck_fits = (
-        fits_on_mkt_col.groupby(fits_df["ship_id"])
+        fits_on_mkt_col.groupby(fits_df["fit_id"])
         .min()
         .rename("bottleneck_fits")
     )
 
-    # Unique ships: rows where type_id == ship_id (hull rows)
-    ships = fits_df[fits_df["type_id"] == fits_df["ship_id"]].copy()
-    ships = ships.drop_duplicates(subset=["ship_id"], keep="first")
-    if ships.empty:
+    # One row per fit_id: use hull rows (type_id == ship_id) to get ship info
+    hull_rows = fits_df[fits_df["type_id"] == fits_df["ship_id"]].copy()
+    hull_rows = hull_rows.drop_duplicates(subset=["fit_id"], keep="first")
+    if hull_rows.empty:
         return None, None
 
-    ship_type_ids = ships["ship_id"].tolist()
+    ship_type_ids = hull_rows["ship_id"].unique().tolist()
 
-    # Targets
+    # Targets — keyed by fit_id
     targets_df = doctrine_repo.get_all_targets()
     if not targets_df.empty:
-        targets_map = targets_df.set_index("ship_id")["ship_target"].to_dict()
+        targets_map = targets_df.set_index("fit_id")["ship_target"].to_dict()
     else:
         targets_map = {}
 
@@ -366,10 +365,11 @@ def render_doctrine_ships_table(
     # Jita prices — batch fetch
     jita_map = price_service.get_jita_price_data_map(ship_type_ids)
 
-    # Build result DataFrame
+    # Build result DataFrame — one row per fit_id
     rows = []
-    for _, ship in ships.iterrows():
-        sid = int(ship["ship_id"])
+    for _, hull in hull_rows.iterrows():
+        sid = int(hull["ship_id"])
+        fid = int(hull["fit_id"])
         # Local price from snapshot if available, else from doctrines table
         local_price = 0.0
         if not snapshot.empty and sid in snapshot["type_id"].values:
@@ -377,11 +377,11 @@ def render_doctrine_ships_table(
             if not match.empty:
                 local_price = float(match.iloc[0].get("current_sell_price", 0) or 0)
         if local_price == 0.0:
-            local_price = float(ship.get("price", 0) or 0)
+            local_price = float(hull.get("price", 0) or 0)
 
-        stock = int(ship.get("total_stock", 0) or 0)
-        fits_on_mkt = int(bottleneck_fits.get(sid, 0))
-        target = targets_map.get(sid, 0)
+        stock = int(hull.get("total_stock", 0) or 0)
+        fits_on_mkt = int(bottleneck_fits.get(fid, 0))
+        target = targets_map.get(fid, 0)
         jita_sell = _get_price_result_value(jita_map.get(sid), "sell_price")
         status = StockStatus.from_stock_and_target(fits_on_mkt, target)
         status_icons = {
@@ -392,8 +392,9 @@ def render_doctrine_ships_table(
 
         rows.append({
             "type_id": sid,
+            "fit_id": fid,
             "image_url": _get_eve_icon_url(sid),
-            "type_name": ship.get("ship_name", str(sid)),
+            "type_name": hull.get("ship_name", str(sid)),
             "current_sell_price": local_price,
             "order_volume": stock,
             "jita_sell_price": jita_sell,
@@ -409,7 +410,7 @@ def render_doctrine_ships_table(
     result_df["type_name"] = result_df["type_name"].fillna(result_df["type_id"].astype(str))
 
     display_cols = [
-        "image_url", "type_name", "current_sell_price", "order_volume",
+        "image_url", "type_name", "fit_id", "current_sell_price", "order_volume",
         "jita_sell_price", "ship_target", "fits_on_mkt", "_mkt", "_doc",
     ]
     display_df = result_df[display_cols].copy()
@@ -446,7 +447,7 @@ def render_doctrine_ships_table(
                 return int(result_df.iloc[idx]["type_id"]), "doctrine_status"
         return None, None
     else:
-        table_df = drop_localized_backup_columns(result_df[display_cols[:7]].copy())
+        table_df = drop_localized_backup_columns(result_df[display_cols[:8]].copy())
         status_labels = result_df["status"]
         styled_table = table_df.style.apply(
             lambda col: _fits_avail_column_style(col, status_labels), axis=0
