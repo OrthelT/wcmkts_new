@@ -416,18 +416,16 @@ class FitDataBuilder:
             for type_id, total_stock in aggregated_stocks.items():
                 mask = self._raw_df["type_id"] == type_id
 
-                # Get fit_qty for this module
-                fit_qty = self._raw_df.loc[mask, "fit_qty"].iloc[0] if mask.any() else 1
-
-                # Calculate new fits_on_mkt based on combined stock
-                if fit_qty > 0:
-                    new_fits_on_mkt = total_stock // fit_qty
-                else:
-                    new_fits_on_mkt = total_stock
-
                 # Update stock
                 self._raw_df.loc[mask, "total_stock"] = total_stock
-                self._raw_df.loc[mask, "fits_on_mkt"] = new_fits_on_mkt
+
+                # Calculate fits_on_mkt per row — fit_qty varies across fits
+                for idx in self._raw_df.loc[mask].index:
+                    fit_qty = self._raw_df.at[idx, "fit_qty"]
+                    if fit_qty > 0:
+                        self._raw_df.at[idx, "fits_on_mkt"] = total_stock // fit_qty
+                    else:
+                        self._raw_df.at[idx, "fits_on_mkt"] = total_stock
 
                 # Use lowest equivalent price for cost calculation
                 if type_id in lowest_prices:
@@ -435,7 +433,6 @@ class FitDataBuilder:
 
                 self._logger.debug(
                     f"Updated type_id {type_id}: total_stock={total_stock}, "
-                    f"fits_on_mkt={new_fits_on_mkt}, "
                     f"price={lowest_prices.get(type_id, 'unchanged')}"
                 )
 
