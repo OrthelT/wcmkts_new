@@ -284,7 +284,7 @@ uv run streamlit run app.py
 Contributors who don't have Turso cloud credentials can run the app using pre-built database snapshots:
 
 1. Download the database files from the shared [Google Drive folder](https://drive.google.com/drive/folders/1Hwx28Imyvc10jXcdKtLftZNi994AKKsq)
-2. Place the `.db` files (`wcmktprod.db`, `sdelite.db`, `buildcost.db`) in the project root directory
+2. Place the `.db` files (`wcmktprod.db`, `wcmktnorth2.db`, `sdelite.db`, `buildcost.db`) in the project root directory
 3. Enable local-only mode in `settings.toml`:
 ```toml
 [env]
@@ -295,7 +295,7 @@ Contributors who don't have Turso cloud credentials can run the app using pre-bu
 uv run streamlit run app.py
 ```
 
-In local-only mode, all Turso sync operations are skipped and the app reads directly from the local database files. The sidebar sync button will display "Local-only mode" instead of attempting remote checks.
+In local-only mode, all Turso sync operations are skipped and the app reads directly from the local database files. The sidebar shows "Local-only mode — sync disabled" in place of the update timestamps. If the sync button is clicked, a toast confirms that remote checks are skipped.
 
 ### Local Secrets
 

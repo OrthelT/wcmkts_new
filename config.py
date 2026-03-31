@@ -57,8 +57,8 @@ class DatabaseConfig:
         try:
             _db_turso_urls[_turso_key] = st.secrets[_secret_key].url
             _db_turso_auth_tokens[_turso_key] = st.secrets[_secret_key].token
-        except (KeyError, AttributeError):
-            pass  # Not all aliases need Turso (graceful degradation)
+        except Exception:
+            pass  # Not all aliases need Turso; local-only mode has no secrets file
 
     # Shared handles per-alias to avoid multiple simultaneous connections to the same file
     _engines: dict[str, object] = {}
@@ -300,7 +300,15 @@ class DatabaseConfig:
         from settings_service import is_local_only
         if is_local_only():
             logger.info(f"sync() skipped for {self.alias} — local-only mode enabled")
-            return os.path.exists(self.path)
+            from init_db import verify_db_content
+            if verify_db_content(self.path):
+                return True
+            logger.warning(
+                f"sync() for {self.alias}: local file missing or empty at {self.path}. "
+                "Download from: https://drive.google.com/drive/folders/"
+                "1Hwx28Imyvc10jXcdKtLftZNi994AKKsq"
+            )
+            return False
 
         # Fail fast before libsql.connect() can create an empty db file
         if not self.turso_url or not self.token:

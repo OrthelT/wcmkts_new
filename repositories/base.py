@@ -102,6 +102,12 @@ class BaseRepository:
                     self.db.sync()
                     return _run_local()
                 except Exception:
+                    if not self.db.has_remote_credentials:
+                        self._logger.error(
+                            f"Local DB corrupt for '{self.db.alias}' and no remote "
+                            "credentials available. Re-download the database file."
+                        )
+                        raise
                     self._logger.error(
                         "Failed to sync local DB; falling back to remote read."
                     )

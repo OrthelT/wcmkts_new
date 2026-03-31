@@ -94,7 +94,7 @@ class SettingsService:
 
 def is_local_only() -> bool:
     """Return True when running in local-only mode (no Turso sync)."""
-    return _load_settings().get("env", {}).get("local_only", False)
+    return SettingsService().local_only
 
 
 def resolve_db_alias(db_alias: str | None = None, fallback: str = "wcmkt") -> str:

@@ -40,7 +40,16 @@ def initialize_databases() -> bool:
         if result:
             st.session_state.db_initialized = True
         else:
-            st.toast("One or more databases failed to initialize", icon="❌")
+            from settings_service import is_local_only
+            if is_local_only():
+                st.error(
+                    "**Missing database files.** Download them from the "
+                    "[Google Drive folder](https://drive.google.com/drive/folders/"
+                    "1Hwx28Imyvc10jXcdKtLftZNi994AKKsq) "
+                    "and place the `.db` files in the project root."
+                )
+            else:
+                st.toast("One or more databases failed to initialize", icon="❌")
     else:
         logger.info("Databases already initialized in session state")
 
@@ -59,8 +68,9 @@ def check_for_db_updates(db_alias: str) -> tuple[bool, datetime]:
     The db_alias must be an explicit alias (e.g. "wcmktprod", "wcmktnorth")
     so the cache key correctly distinguishes between markets.
     """
+    from settings_service import is_local_only
     db = DatabaseConfig(db_alias)
-    if not db.has_remote_credentials:
+    if is_local_only() or not db.has_remote_credentials:
         logger.info(f"check_for_db_updates(): skipping remote validation for {db_alias}")
         local_time = datetime.now()
         return True, local_time
@@ -87,12 +97,13 @@ def check_db(manual_override: bool = False):
         logger.info("check_for_db_updates() cache cleared for manual override")
         logger.info("*" * 60)
 
+    from settings_service import is_local_only
     synced_any = False
     any_stale = False
-    local_only_mode = False
+    local_only_mode = is_local_only()
     for alias in all_aliases:
         db = DatabaseConfig(alias)
-        if not db.has_remote_credentials:
+        if local_only_mode or not db.has_remote_credentials:
             logger.info(f"check_db(): skipping {alias}; no remote credentials configured")
             local_only_mode = True
             continue

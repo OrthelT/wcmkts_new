@@ -258,9 +258,10 @@ api_key = "your_janice_api_key"  # For Pricer page Jita price lookups
 ### Local-Only Mode (for contributors without Turso access)
 Contributors can run the app without Turso cloud credentials:
 1. Download database files from: https://drive.google.com/drive/folders/1Hwx28Imyvc10jXcdKtLftZNi994AKKsq
-2. Place `.db` files in the project root
+2. Place `.db` files (`wcmktprod.db`, `wcmktnorth2.db`, `sdelite.db`, `buildcost.db`) in the project root
 3. Set `local_only = true` in `settings.toml` under `[env]`
 4. No `.streamlit/secrets.toml` is needed — all sync operations are skipped
+5. The sidebar shows "Local-only mode — sync disabled" instead of update timestamps
 
 ## Development Guidelines
 
