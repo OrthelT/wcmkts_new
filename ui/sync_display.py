@@ -17,8 +17,17 @@ logger = setup_logging(__name__, log_file="sync_display.log")
 
 def display_sync_status(language_code: str = "en"):
     """Display sync status in the sidebar."""
+    from settings_service import is_local_only
     from state.market_state import get_active_market
     active_alias = get_active_market().database_alias
+
+    if is_local_only():
+        st.sidebar.markdown(
+            "<span style='font-size: 14px; color: lightgrey;'>"
+            "*Local-only mode — sync disabled*</span>",
+            unsafe_allow_html=True,
+        )
+        return
 
     update_time: datetime | None = None
     time_since: timedelta | None = None

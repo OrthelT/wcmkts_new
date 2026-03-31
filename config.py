@@ -296,6 +296,12 @@ class DatabaseConfig:
         Raises:
             ValueError: If Turso credentials are missing for this alias.
         """
+        # In local-only mode, skip all remote sync operations
+        from settings_service import is_local_only
+        if is_local_only():
+            logger.info(f"sync() skipped for {self.alias} — local-only mode enabled")
+            return os.path.exists(self.path)
+
         # Fail fast before libsql.connect() can create an empty db file
         if not self.turso_url or not self.token:
             raise ValueError(
