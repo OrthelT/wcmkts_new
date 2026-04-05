@@ -104,6 +104,10 @@
 [env]
     env = "prod"
     log_level = "DEBUG" #INFO or DEBUG (case sensitive)
+    # Set to true for local development without Turso cloud access.
+    # Download databases from: https://drive.google.com/drive/folders/1Hwx28Imyvc10jXcdKtLftZNi994AKKsq
+    # Place .db files in the project root directory.
+    local_only = false
 
 [market]
     name = "4-HWWF"

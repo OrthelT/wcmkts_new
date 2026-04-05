@@ -173,8 +173,8 @@ All pages follow consistent patterns with Streamlit best practices:
 ### Configuration Files
 
 - **`config.toml`**: Streamlit theme and UI configuration
-- **`settings.toml`**: Application settings including ship role definitions, special cases, `[db_paths]` alias-to-file mappings, and `[db_turso_keys]` alias-to-secret overrides
-- **`.streamlit/secrets.toml`**: Turso credentials (local only, git-ignored)
+- **`settings.toml`**: Application settings including ship role definitions, special cases, `[db_paths]` alias-to-file mappings, `[db_turso_keys]` alias-to-secret overrides, and `[env] local_only` toggle for running without Turso
+- **`.streamlit/secrets.toml`**: Turso credentials (local only, git-ignored; not needed when `local_only = true`)
 - **`pyproject.toml`**: Project metadata, dependencies, dev tools config
 
 ### Other Directories
@@ -254,6 +254,14 @@ api_key = "your_janice_api_key"  # For Pricer page Jita price lookups
 - The application will use local SQLite files if sync credentials are not available
 - Database files are git-ignored (*.db, *.db-shm, *.db-wal)
 - Logs are stored in `logs/` directory (git-ignored)
+
+### Local-Only Mode (for contributors without Turso access)
+Contributors can run the app without Turso cloud credentials:
+1. Download database files from: https://drive.google.com/drive/folders/1Hwx28Imyvc10jXcdKtLftZNi994AKKsq
+2. Place `.db` files (`wcmktprod.db`, `wcmktnorth2.db`, `sdelite.db`, `buildcost.db`) in the project root
+3. Set `local_only = true` in `settings.toml` under `[env]`
+4. No `.streamlit/secrets.toml` is needed — all sync operations are skipped
+5. The sidebar shows "Local-only mode — sync disabled" instead of update timestamps
 
 ## Development Guidelines
 

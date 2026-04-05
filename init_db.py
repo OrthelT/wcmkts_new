@@ -3,7 +3,7 @@ import os
 import sqlite3 as sql
 from logging_config import setup_logging
 from time import perf_counter
-from settings_service import get_all_market_configs
+from settings_service import get_all_market_configs, is_local_only
 
 logger = setup_logging(__name__)
 
@@ -92,6 +92,10 @@ def init_db():
     db_paths[sde_db.alias] = sde_db.path
     db_paths[build_cost_db.alias] = build_cost_db.path
 
+    local_only = is_local_only()
+    if local_only:
+        logger.info("Running in LOCAL-ONLY mode — Turso sync disabled")
+
     status = {}
 
     for key, value in db_paths.items():
@@ -103,6 +107,12 @@ def init_db():
             if verify_db_content(db_path):
                 logger.info(f"DB exists and has content: {db_path}✔️")
                 status[key] = "success initialized🟢"
+            elif local_only:
+                logger.warning(
+                    f"DB missing or empty: {db_path}. "
+                    "Download from: https://drive.google.com/drive/folders/1Hwx28Imyvc10jXcdKtLftZNi994AKKsq"
+                )
+                status[key] = "missing (local-only mode)🔴"
             else:
                 # File is missing, empty, or has no tables — need to sync
                 if verify_db_path(db_path):
@@ -159,6 +169,14 @@ def ensure_market_db_ready(db_alias: str) -> bool:
 
     if verify_db_content(db.path):
         return True
+
+    if is_local_only():
+        logger.warning(
+            f"Market database '{db_alias}' ({db.path}) not found. "
+            "Running in local-only mode — download databases from: "
+            "https://drive.google.com/drive/folders/1Hwx28Imyvc10jXcdKtLftZNi994AKKsq"
+        )
+        return False
 
     # Database is missing or empty — attempt sync
     logger.warning(f"Market database '{db_alias}' ({db.path}) not ready, attempting sync")

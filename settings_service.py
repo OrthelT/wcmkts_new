@@ -86,6 +86,16 @@ class SettingsService:
     def default_language(self) -> str:
         return self.settings.get("i18n", {}).get("default_language", "en")
 
+    @property
+    def local_only(self) -> bool:
+        """True when running without Turso cloud access (local .db files only)."""
+        return self.settings.get("env", {}).get("local_only", False)
+
+
+def is_local_only() -> bool:
+    """Return True when running in local-only mode (no Turso sync)."""
+    return SettingsService().local_only
+
 
 def resolve_db_alias(db_alias: str | None = None, fallback: str = "wcmkt") -> str:
     """Resolve a database alias, falling back to the active market hub.
