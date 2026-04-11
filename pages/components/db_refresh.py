@@ -12,7 +12,7 @@ import streamlit as st
 from config import DatabaseConfig
 from init_db import ensure_market_db_ready, init_db
 from logging_config import setup_logging
-from state.market_state import invalidate_market_data_caches
+from state.market_state import refresh_market_caches
 from state.sync_state import update_wcmkt_state
 
 logger = setup_logging(__name__)
@@ -134,7 +134,7 @@ def check_db(manual_override: bool = False):
         # Drop the freshness-check cache so the next run doesn't resync from
         # a stale "stale" verdict cached before the sync happened.
         check_for_db_updates.clear()
-        invalidate_market_data_caches()
+        refresh_market_caches()
         update_wcmkt_state()
         # Mark this run as having completed a check so the periodic guard
         # in maybe_run_check() doesn't immediately re-fire after the rerun.

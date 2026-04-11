@@ -116,6 +116,12 @@ def time_until_next_db_update(now: datetime | None = None) -> timedelta:
     frequency=1, minute=20). If every slot today has already passed, this
     rolls over to the first slot of the following day.
 
+    Note: "every ``frequency`` hours" only holds cleanly when ``frequency``
+    divides 24 (1, 2, 3, 4, 6, 8, 12, 24). For non-divisors (e.g. 5), the
+    last daily slot lands before 24h and the rollover resets at 00:``minute``
+    tomorrow — producing a short gap between the last slot of today and the
+    first slot of tomorrow. Use divisor values to keep the cadence uniform.
+
     Args:
         now: Reference time (assumed UTC if naive). Defaults to ``datetime.now(tz=UTC)``.
     """

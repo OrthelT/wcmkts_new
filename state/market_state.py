@@ -59,7 +59,7 @@ def set_active_market(key: str) -> None:
     _clear_market_services(key)
 
     # Clear market data caches
-    invalidate_market_data_caches()
+    refresh_market_caches()
 
     # Clear sync state so it refreshes for the new market
     for ss_key in ("local_update_status", "remote_update_status"):
@@ -91,15 +91,21 @@ def _clear_market_services(market_key: str) -> None:
     clear_services(*keys_to_clear)
 
 
-def invalidate_market_data_caches() -> None:
+def refresh_market_caches() -> None:
     """Clear all Streamlit + in-memory caches holding market-scoped data.
 
-    Called after a DB sync and after switching market hubs. Clears:
+    This is the **orchestrator** for market cache invalidation and is the
+    function callers outside this module should use. It is distinct from
+    ``repositories.market_repo.invalidate_market_caches()``, which only
+    drops that one module's ``@st.cache_data`` entries. This function
+    fans out across every layer that holds market-scoped state:
       - market_repo @st.cache_data entries
       - doctrine_repo @st.cache_data entries
       - module_equivalents @st.cache_data entries
       - DoctrineService._cached_result on the active session-state singleton
         (if one exists — we deliberately do not instantiate it here)
+
+    Called after a DB sync and after switching market hubs.
 
     Does NOT remove cached service singletons themselves. The market-switch
     path handles that separately via _clear_market_services() so it can drop
