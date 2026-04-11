@@ -79,6 +79,30 @@ class TestTimeUntilNextDbUpdate:
             delta = time_until_next_db_update(now)
             assert delta == timedelta(minutes=5)
 
+    def test_non_utc_tz_converted_to_utc(self):
+        # 14:15 in UTC-5 == 19:15 UTC. Next :20 slot is 19:20 UTC (5 min).
+        # Without the astimezone() conversion, the code would anchor
+        # midnight at 00:00 UTC-5 (== 05:00 UTC) and produce a wrong delta.
+        tz_minus5 = timezone(timedelta(hours=-5))
+        now = datetime(2026, 4, 10, 14, 15, tzinfo=tz_minus5)
+        with patch(
+            "settings_service._load_settings", return_value=_fake_settings(1, 20)
+        ):
+            delta = time_until_next_db_update(now)
+            assert delta == timedelta(minutes=5)
+
+    def test_non_utc_tz_rolls_to_next_day_correctly(self):
+        # 22:00 UTC-5 == 03:00 next-day UTC. Next :20 slot is 03:20 UTC
+        # (20 min). This catches the bug where midnight would be computed
+        # in the local tz and the day-rollover logic would misfire.
+        tz_minus5 = timezone(timedelta(hours=-5))
+        now = datetime(2026, 4, 10, 22, 0, tzinfo=tz_minus5)
+        with patch(
+            "settings_service._load_settings", return_value=_fake_settings(1, 20)
+        ):
+            delta = time_until_next_db_update(now)
+            assert delta == timedelta(minutes=20)
+
 
 class TestMinutesUntilNextDbUpdate:
     def test_rounds_up_to_whole_minute(self):

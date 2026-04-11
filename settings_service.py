@@ -130,6 +130,10 @@ def time_until_next_db_update(now: datetime | None = None) -> timedelta:
         now = datetime.now(tz=timezone.utc)
     elif now.tzinfo is None:
         now = now.replace(tzinfo=timezone.utc)
+    else:
+        # Schedule is UTC-anchored; convert any other tz so the midnight
+        # boundary below lands on UTC midnight, not the caller's local one.
+        now = now.astimezone(timezone.utc)
 
     midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
     # Iterate candidate slots for today, then fall through to tomorrow.
