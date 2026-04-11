@@ -290,7 +290,9 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "market_stats.price_history": "Price History - {filter_info}",
         "market_stats.expand_market_history_data": "Expand to view Market History Data",
         "market_stats.fitting_data": "Fitting Data",
-        "market_stats.check_db_state": "Check DB State",
+        "market_stats.update_data": "Update Data",
+        "market_stats.next_update_countdown": "Time until next automated update: {minutes} minutes",
+        "market_stats.no_new_data": "No new data available.",
         "market_stats.downloads_hint": (
             "*Visit the **Downloads** page for market data, doctrine fits, and SDE table exports.*"
         ),
@@ -839,7 +841,9 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "market_stats.price_history": "价格历史 - {filter_info}",
         "market_stats.expand_market_history_data": "展开查看市场历史数据",
         "market_stats.fitting_data": "装配数据",
-        "market_stats.check_db_state": "检查数据库状态",
+        "market_stats.update_data": "更新数据",
+        "market_stats.next_update_countdown": "距离下次自动更新：{minutes} 分钟",
+        "market_stats.no_new_data": "暂无新数据。",
         "market_stats.downloads_hint": "*访问**下载**页面以导出市场、建制和 SDE 数据。*",
         "market_stats.date_range": "日期范围",
         "market_stats.available_data_range": "可用数据范围：{start} 到 {end}",

@@ -12,7 +12,7 @@ import streamlit as st
 from config import DatabaseConfig
 from init_db import ensure_market_db_ready, init_db
 from logging_config import setup_logging
-from repositories import invalidate_market_caches
+from state.market_state import refresh_market_caches
 from state.sync_state import update_wcmkt_state
 
 logger = setup_logging(__name__)
@@ -89,7 +89,10 @@ def check_db(manual_override: bool = False):
 
     synced_any = False
     any_stale = False
+    any_sync_failed = False
     local_only_mode = False
+    status_ctx = None  # lazily created the first time we actually sync
+
     for alias in all_aliases:
         db = DatabaseConfig(alias)
         if not db.has_remote_credentials:
@@ -106,6 +109,13 @@ def check_db(manual_override: bool = False):
         if not check:
             any_stale = True
             logger.info(f"check_db() {alias} is stale, syncing")
+            # Lazily create the status container on the first stale DB so
+            # users see feedback during both manual and periodic syncs, but
+            # no UI flashes when everything is already up to date.
+            if status_ctx is None:
+                st.toast("Syncing database…", icon="🔄")
+                status_ctx = st.status("Syncing database…", expanded=False)
+            status_ctx.update(label=f"Syncing {alias}…", state="running")
             try:
                 db.sync()
                 if db.local_matches_remote():
@@ -113,46 +123,69 @@ def check_db(manual_override: bool = False):
                     synced_any = True
                 else:
                     logger.warning(f"{alias} sync failed validation")
+                    any_sync_failed = True
                     st.toast(f"Sync failed for {alias}", icon="❌")
             except Exception:
                 logger.error(f"Sync error for {alias}", exc_info=True)
+                any_sync_failed = True
                 st.toast(f"Sync error for {alias}", icon="❌")
 
     if synced_any:
-        invalidate_market_caches()
+        # Drop the freshness-check cache so the next run doesn't resync from
+        # a stale "stale" verdict cached before the sync happened.
+        check_for_db_updates.clear()
+        refresh_market_caches()
         update_wcmkt_state()
+        # Mark this run as having completed a check so the periodic guard
+        # in maybe_run_check() doesn't immediately re-fire after the rerun.
+        st.session_state["last_check"] = time.time()
+        if status_ctx is not None:
+            final_state = "error" if any_sync_failed else "complete"
+            final_label = (
+                "Sync finished with errors" if any_sync_failed else "Sync complete — refreshing"
+            )
+            status_ctx.update(label=final_label, state=final_state, expanded=False)
         st.toast("Database synced successfully. Loading updated data.", icon="✅")
+        st.rerun()
+    elif any_sync_failed and status_ctx is not None:
+        status_ctx.update(label="Sync failed", state="error", expanded=False)
     elif local_only_mode and not any_stale and manual_override:
         st.toast("Local-only mode: remote sync checks skipped", icon="ℹ️")
-    elif not any_stale:
-        if "local_update_status" in st.session_state:
-            time_since = st.session_state.local_update_status["time_since"]
-            if time_since is not None:
-                local_update_since = f"{int(time_since.total_seconds() // 60)} mins"
-            else:
-                local_update_since = "unknown"
-            st.toast(f"DB updated: {local_update_since} ago", icon="✅")
-        else:
-            local_update_since = DatabaseConfig(active_alias).get_time_since_update(
-                "marketstats", remote=False
-            )
-            local_update_since = f"{local_update_since} mins"
-            st.toast(f"DB updated: {local_update_since} ago", icon="✅")
+    elif not any_stale and manual_override:
+        # User clicked "Update Data" but there's nothing new — tell them
+        # when the next automated update will land.
+        from settings_service import minutes_until_next_db_update
+        from state.language_state import get_active_language
+        from ui.i18n import translate_text
+
+        lang = get_active_language()
+        minutes = minutes_until_next_db_update()
+        no_new = translate_text(lang, "market_stats.no_new_data")
+        countdown = translate_text(
+            lang, "market_stats.next_update_countdown", minutes=minutes
+        )
+        st.toast(f"{no_new} {countdown}", icon="⏳")
 
 
 def maybe_run_check():
-    """Run a periodic staleness check every 600 seconds."""
+    """Run a periodic staleness check every 600 seconds.
+
+    ``last_check`` is written BEFORE ``check_db()`` runs. This matters
+    because ``check_db()`` may call ``st.rerun()`` on a successful sync,
+    which would abort before any post-call assignment and re-trigger this
+    guard on the next run — causing an infinite sync loop.
+    """
     now = time.time()
     if "last_check" not in st.session_state:
         logger.info("last_check not in st.session_state, setting to now")
-        check_db()
         st.session_state["last_check"] = now
+        check_db()
     elif now - st.session_state.get("last_check", 0) > 600:
         logger.info(
             f"now - last_check={now - st.session_state.get('last_check', 0)}, running check_db()"
         )
-        check_db()
         st.session_state["last_check"] = now
+        check_db()
 
 
 def ensure_init_and_check() -> bool:

@@ -59,7 +59,7 @@ def set_active_market(key: str) -> None:
     _clear_market_services(key)
 
     # Clear market data caches
-    _invalidate_market_caches()
+    refresh_market_caches()
 
     # Clear sync state so it refreshes for the new market
     for ss_key in ("local_update_status", "remote_update_status"):
@@ -91,8 +91,27 @@ def _clear_market_services(market_key: str) -> None:
     clear_services(*keys_to_clear)
 
 
-def _invalidate_market_caches() -> None:
-    """Clear Streamlit caches for market-specific data."""
+def refresh_market_caches() -> None:
+    """Clear all Streamlit + in-memory caches holding market-scoped data.
+
+    This is the **orchestrator** for market cache invalidation and is the
+    function callers outside this module should use. It is distinct from
+    ``repositories.market_repo.invalidate_market_caches()``, which only
+    drops that one module's ``@st.cache_data`` entries. This function
+    fans out across every layer that holds market-scoped state:
+      - market_repo @st.cache_data entries
+      - doctrine_repo @st.cache_data entries
+      - module_equivalents @st.cache_data entries
+      - DoctrineService._cached_result on the active session-state singleton
+        (if one exists — we deliberately do not instantiate it here)
+
+    Called after a DB sync and after switching market hubs.
+
+    Does NOT remove cached service singletons themselves. The market-switch
+    path handles that separately via _clear_market_services() so it can drop
+    stale DatabaseConfig bindings; the sync path must preserve service
+    instances so transient UI state (e.g. selection_service) survives.
+    """
     try:
         from repositories.market_repo import invalidate_market_caches
         invalidate_market_caches()
@@ -128,4 +147,14 @@ def _invalidate_market_caches() -> None:
         _get_all_equivalence_groups_cached.clear()
     except ImportError:
         pass
+
+    # Clear DoctrineService's in-memory _cached_result on the cached singleton
+    # for the active market, without creating one if none exists.
+    service_key = f"doctrine_service_{get_active_market_key()}"
+    svc = st.session_state.get(service_key)
+    if svc is not None and hasattr(svc, "clear_cache"):
+        try:
+            svc.clear_cache()
+        except Exception as e:
+            logger.warning(f"Failed to clear DoctrineService cache: {e}")
 

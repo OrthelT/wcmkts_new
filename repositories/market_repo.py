@@ -274,9 +274,12 @@ def _get_sde_info_cached(type_ids: tuple) -> pd.DataFrame:
 # =============================================================================
 
 def invalidate_market_caches():
-    """Clear only market-data caches, preserving SDE, settings, and other caches.
+    """Clear only this module's market-data ``@st.cache_data`` entries.
 
-    Call this after a database sync instead of the global st.cache_data.clear().
+    This is a narrow helper: it only drops market_repo's cached functions.
+    Most callers should instead use ``state.market_state.refresh_market_caches()``,
+    which fans out across market_repo + doctrine_repo + module_equivalents +
+    the DoctrineService in-memory result on the active singleton.
     """
     _get_all_stats_cached.clear()
     _get_all_orders_cached.clear()
