@@ -19,10 +19,11 @@ import streamlit as st
 import pandas as pd
 
 from logging_config import setup_logging
-from config import DatabaseConfig, get_settings
+from config import DatabaseConfig
 from services import get_doctrine_service
 from services.doctrine_service import format_doctrine_name
-from repositories import get_market_repository, get_sde_repository
+from repositories import get_sde_repository
+from repositories.market_repo import MarketRepository
 from repositories.base import BaseRepository
 from ui.market_selector import render_market_selector
 from init_db import ensure_market_db_ready
@@ -35,25 +36,25 @@ logger = setup_logging(__name__, log_file="downloads.log")
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
-def _get_market_orders_csv() -> bytes:
+def _get_market_orders_csv(db_alias: str) -> bytes:
     """Lazily load and convert market orders to CSV bytes."""
-    repo = get_market_repository()
+    repo = MarketRepository(DatabaseConfig(db_alias))
     df = repo.get_all_orders()
     return df.to_csv(index=False).encode('utf-8')
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
-def _get_market_stats_csv() -> bytes:
+def _get_market_stats_csv(db_alias: str) -> bytes:
     """Lazily load and convert market stats to CSV bytes."""
-    repo = get_market_repository()
+    repo = MarketRepository(DatabaseConfig(db_alias))
     df = repo.get_all_stats()
     return df.to_csv(index=False).encode('utf-8')
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
-def _get_market_history_csv() -> bytes:
+def _get_market_history_csv(db_alias: str) -> bytes:
     """Lazily load and convert market history to CSV bytes."""
-    repo = get_market_repository()
+    repo = MarketRepository(DatabaseConfig(db_alias))
     df = repo.get_all_history()
     return df.to_csv(index=False).encode('utf-8')
 
@@ -121,10 +122,13 @@ def _get_single_fit_csv(fit_id: int) -> bytes:
 
 
 @st.cache_data(ttl=600, show_spinner=False)
-def _get_low_stock_csv(max_days: float, doctrine_only: bool, tech2_only: bool) -> bytes:
+def _get_low_stock_csv(
+    db_alias: str, max_days: float, doctrine_only: bool, tech2_only: bool
+) -> bytes:
     """Get low stock items as CSV bytes."""
-    mktdb = DatabaseConfig("wcmkt")
+    mktdb = DatabaseConfig(db_alias)
 
+    tech2_type_ids: list[int] = []
     if tech2_only:
         tech2_type_ids = get_sde_repository().get_tech2_type_ids()
 
@@ -146,11 +150,15 @@ def _get_low_stock_csv(max_days: float, doctrine_only: bool, tech2_only: bool) -
         df = df[df['days_remaining'] <= max_days]
 
     if not df.empty:
-        ship_groups = df.groupby('type_id', group_keys=False).apply(
-            lambda x: [f"{row['ship_name']} ({int(row['fits_on_mkt'])})"
-                      for _, row in x.iterrows()
-                      if pd.notna(row['ship_name']) and pd.notna(row['fits_on_mkt'])], include_groups=False
-        ).to_dict()
+        ship_groups: dict[int, list[str]] = {}
+        for type_id, group in df.groupby('type_id'):
+            ships = [
+                f"{row['ship_name']} ({int(row['fits_on_mkt'])})"
+                for _, row in group.iterrows()
+                if pd.notna(row['ship_name']) and pd.notna(row['fits_on_mkt'])
+            ]
+            if ships:
+                ship_groups[type_id] = ships  # type: ignore[index]
 
         df = df.drop_duplicates(subset=['type_id'])
         df['ships'] = df['type_id'].map(ship_groups)
@@ -188,9 +196,11 @@ def _get_sde_tables() -> list[str]:
 def market_downloads_section():
     """Section for market data downloads."""
     from state.market_state import get_active_market
-    short_name = get_active_market().short_name
+    market = get_active_market()
+    db_alias = market.database_alias
+    short_name = market.short_name
 
-    st.subheader("Market Data Downloads", divider="blue")
+    st.subheader(f"Market Data Downloads — {market.name}", divider="blue")
     st.markdown("Download market orders, statistics, and history data.")
 
     col1, col2, col3 = st.columns(3)
@@ -198,7 +208,7 @@ def market_downloads_section():
     with col1:
         st.download_button(
             "Download Market Orders",
-            data=_get_market_orders_csv,
+            data=lambda a=db_alias: _get_market_orders_csv(a),
             file_name=f"{short_name}_market_orders.csv",
             mime="text/csv",
             use_container_width=True,
@@ -208,7 +218,7 @@ def market_downloads_section():
     with col2:
         st.download_button(
             "Download Market Stats",
-            data=_get_market_stats_csv,
+            data=lambda a=db_alias: _get_market_stats_csv(a),
             file_name=f"{short_name}_market_stats.csv",
             mime="text/csv",
             use_container_width=True,
@@ -218,7 +228,7 @@ def market_downloads_section():
     with col3:
         st.download_button(
             "Download Market History",
-            data=_get_market_history_csv,
+            data=lambda a=db_alias: _get_market_history_csv(a),
             file_name=f"{short_name}_market_history.csv",
             mime="text/csv",
             use_container_width=True,
@@ -320,6 +330,10 @@ def individual_fit_downloads_section():
 @st.fragment
 def low_stock_downloads_section():
     """Fragment for low stock data downloads."""
+    from state.market_state import get_active_market
+    market = get_active_market()
+    db_alias = market.database_alias
+
     st.subheader("Low Stock Data Downloads", divider="red")
     st.markdown("Download items that are running low on stock.")
 
@@ -343,8 +357,8 @@ def low_stock_downloads_section():
 
     st.download_button(
         "Download Low Stock Items",
-        data=lambda md=max_days, do=doctrine_only, t2=tech2_only: _get_low_stock_csv(md, do, t2),
-        file_name="low_stock_items.csv",
+        data=lambda a=db_alias, md=max_days, do=doctrine_only, t2=tech2_only: _get_low_stock_csv(a, md, do, t2),
+        file_name=f"{market.short_name}_low_stock_items.csv",
         mime="text/csv",
         use_container_width=True,
         icon=":material/download:"

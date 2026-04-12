@@ -403,7 +403,7 @@ class DatabaseConfig:
                     os.remove(file_path)
                     logger.info(f"Removed {file_path} created during failed sync")
 
-    def get_table_list(self, local_only: bool = True) -> list[tuple]:
+    def get_table_list(self, local_only: bool = True) -> list[str]:
         if local_only:
             engine = self.engine
             with engine.connect() as conn:
