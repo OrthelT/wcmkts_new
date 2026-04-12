@@ -243,7 +243,7 @@ def doctrine_downloads_section():
     db_alias = market.database_alias
 
     st.subheader("Doctrine Data Downloads", divider="orange")
-    st.markdown("Download doctrine fit data. Filter by specific doctrine or download all fits.")
+    st.markdown(f"Download doctrine fit data with market data for **{market.name}**.")
 
     # Filter options
     col1, col2 = st.columns([1, 2])
@@ -308,7 +308,7 @@ def individual_fit_downloads_section():
     db_alias = market.database_alias
 
     st.subheader("Individual Fit Downloads", divider="green")
-    st.markdown("Download detailed data for a specific fit.")
+    st.markdown(f"Download detailed fit data with market data for **{market.name}**.")
 
     fits = _get_fit_options(db_alias)
     fit_options = {f"{f['ship_name']} (ID: {f['fit_id']})": f for f in fits}
@@ -342,7 +342,7 @@ def low_stock_downloads_section():
     db_alias = market.database_alias
 
     st.subheader("Low Stock Data Downloads", divider="red")
-    st.markdown("Download items that are running low on stock.")
+    st.markdown(f"Download items running low on stock at **{market.name}**.")
 
     col1, col2, col3 = st.columns(3)
 
