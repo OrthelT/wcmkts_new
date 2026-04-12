@@ -20,8 +20,7 @@ import pandas as pd
 
 from logging_config import setup_logging
 from config import DatabaseConfig
-from services import get_doctrine_service
-from services.doctrine_service import format_doctrine_name
+from services.doctrine_service import DoctrineService, format_doctrine_name
 from repositories import get_sde_repository
 from repositories.market_repo import MarketRepository
 from repositories.base import BaseRepository
@@ -60,9 +59,9 @@ def _get_market_history_csv(db_alias: str) -> bytes:
 
 
 @st.cache_data(ttl=600, show_spinner=False)
-def _get_all_doctrine_fits_csv() -> bytes:
+def _get_all_doctrine_fits_csv(db_alias: str) -> bytes:
     """Lazily load all doctrine fits data as CSV bytes."""
-    service = get_doctrine_service()
+    service = DoctrineService.create_default(db_alias)
     all_fits_df = service.build_fit_data().raw_df
     targets = service.repository.get_all_targets()
     data = all_fits_df.merge(targets, on='fit_id', how='left')
@@ -71,9 +70,9 @@ def _get_all_doctrine_fits_csv() -> bytes:
 
 
 @st.cache_data(ttl=600, show_spinner=False)
-def _get_fit_options() -> list[dict]:
+def _get_fit_options(db_alias: str) -> list[dict]:
     """Get list of fits for the dropdown."""
-    service = get_doctrine_service()
+    service = DoctrineService.create_default(db_alias)
     summaries = service.get_all_fit_summaries()
     return [
         {"fit_id": s.fit_id, "ship_name": s.ship_name, "fit_name": s.fit_name}
@@ -82,9 +81,9 @@ def _get_fit_options() -> list[dict]:
 
 
 @st.cache_data(ttl=600, show_spinner=False)
-def _get_doctrine_options() -> list[dict]:
+def _get_doctrine_options(db_alias: str) -> list[dict]:
     """Get list of doctrines for filtering."""
-    service = get_doctrine_service()
+    service = DoctrineService.create_default(db_alias)
     df = service.repository.get_all_doctrine_compositions()
     if df.empty:
         return []
@@ -98,9 +97,9 @@ def _get_doctrine_options() -> list[dict]:
 
 
 @st.cache_data(ttl=600, show_spinner=False)
-def _get_filtered_doctrine_csv(fit_ids: tuple) -> bytes:
+def _get_filtered_doctrine_csv(db_alias: str, fit_ids: tuple) -> bytes:
     """Get doctrine data filtered by fit_ids as CSV bytes."""
-    service = get_doctrine_service()
+    service = DoctrineService.create_default(db_alias)
     all_fits_df = service.build_fit_data().raw_df
     targets = service.repository.get_all_targets()
 
@@ -112,9 +111,9 @@ def _get_filtered_doctrine_csv(fit_ids: tuple) -> bytes:
 
 
 @st.cache_data(ttl=600, show_spinner=False)
-def _get_single_fit_csv(fit_id: int) -> bytes:
+def _get_single_fit_csv(db_alias: str, fit_id: int) -> bytes:
     """Get CSV bytes for a single fit."""
-    service = get_doctrine_service()
+    service = DoctrineService.create_default(db_alias)
     fit_df = service.repository.get_fit_by_id(fit_id)
     if fit_df.empty:
         return b""
@@ -239,6 +238,10 @@ def market_downloads_section():
 @st.fragment
 def doctrine_downloads_section():
     """Fragment for doctrine data downloads with filtering."""
+    from state.market_state import get_active_market
+    market = get_active_market()
+    db_alias = market.database_alias
+
     st.subheader("Doctrine Data Downloads", divider="orange")
     st.markdown("Download doctrine fit data. Filter by specific doctrine or download all fits.")
 
@@ -255,7 +258,7 @@ def doctrine_downloads_section():
 
     with col2:
         if filter_type == "By Doctrine":
-            doctrines = _get_doctrine_options()
+            doctrines = _get_doctrine_options(db_alias)
             doctrine_names = ["Select a doctrine..."] + sorted(
                 [d['doctrine_name'] for d in doctrines], key=format_doctrine_name
             )
@@ -272,15 +275,15 @@ def doctrine_downloads_section():
     if filter_type == "All Fits":
         st.download_button(
             "Download All Doctrine Fits",
-            data=_get_all_doctrine_fits_csv,
-            file_name="wc_doctrine_fits.csv",
+            data=lambda a=db_alias: _get_all_doctrine_fits_csv(a),
+            file_name=f"{market.short_name}_doctrine_fits.csv",
             mime="text/csv",
             use_container_width=True,
             icon=":material/download:"
         )
     else:
         if selected_doctrine and selected_doctrine != "Select a doctrine...":
-            doctrines = _get_doctrine_options()
+            doctrines = _get_doctrine_options(db_alias)
             doctrine_data = next((d for d in doctrines if d['doctrine_name'] == selected_doctrine), None)
 
             if doctrine_data:
@@ -289,7 +292,7 @@ def doctrine_downloads_section():
 
                 st.download_button(
                     f"Download {format_doctrine_name(selected_doctrine)}",
-                    data=lambda fids=fit_ids: _get_filtered_doctrine_csv(fids),
+                    data=lambda a=db_alias, fids=fit_ids: _get_filtered_doctrine_csv(a, fids),
                     file_name=f"doctrine_{safe_name}.csv",
                     mime="text/csv",
                     use_container_width=True,
@@ -300,10 +303,14 @@ def doctrine_downloads_section():
 @st.fragment
 def individual_fit_downloads_section():
     """Fragment for individual fit downloads."""
+    from state.market_state import get_active_market
+    market = get_active_market()
+    db_alias = market.database_alias
+
     st.subheader("Individual Fit Downloads", divider="green")
     st.markdown("Download detailed data for a specific fit.")
 
-    fits = _get_fit_options()
+    fits = _get_fit_options(db_alias)
     fit_options = {f"{f['ship_name']} (ID: {f['fit_id']})": f for f in fits}
 
     selected_fit_label = st.selectbox(
@@ -319,7 +326,7 @@ def individual_fit_downloads_section():
 
         st.download_button(
             f"Download Fit {fit_id}",
-            data=lambda fid=fit_id: _get_single_fit_csv(fid),
+            data=lambda a=db_alias, fid=fit_id: _get_single_fit_csv(a, fid),
             file_name=f"fit_{fit_id}_{ship_name}.csv",
             mime="text/csv",
             use_container_width=True,

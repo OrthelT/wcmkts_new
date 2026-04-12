@@ -138,6 +138,83 @@ class TestLowStockCsvMarketContext:
         mock_db_cls.assert_called_once_with("wcmktprod")
 
 
+class TestDoctrineDownloadsCsv:
+    """Test that doctrine CSV functions use the provided db_alias."""
+
+    @patch("pages.downloads.DoctrineService")
+    def test_all_doctrine_fits_csv_uses_provided_alias(self, mock_svc_cls):
+        """_get_all_doctrine_fits_csv passes db_alias to DoctrineService.create_default."""
+        mock_service = Mock()
+        mock_service.build_fit_data.return_value.raw_df = pd.DataFrame({
+            "fit_id": [1], "type_id": [34], "qty": [1]
+        })
+        mock_service.repository.get_all_targets.return_value = pd.DataFrame({
+            "fit_id": [1], "target": [10]
+        })
+        mock_svc_cls.create_default.return_value = mock_service
+
+        from pages.downloads import _get_all_doctrine_fits_csv
+        _get_all_doctrine_fits_csv.clear()
+        result = _get_all_doctrine_fits_csv("wcmktnorth")
+
+        mock_svc_cls.create_default.assert_called_once_with("wcmktnorth")
+        assert b"fit_id" in result
+
+    @patch("pages.downloads.DoctrineService")
+    def test_fit_options_uses_provided_alias(self, mock_svc_cls):
+        """_get_fit_options passes db_alias to DoctrineService.create_default."""
+        mock_summary = Mock()
+        mock_summary.fit_id = 1
+        mock_summary.ship_name = "Osprey"
+        mock_summary.fit_name = "Logi"
+        mock_service = Mock()
+        mock_service.get_all_fit_summaries.return_value = [mock_summary]
+        mock_svc_cls.create_default.return_value = mock_service
+
+        from pages.downloads import _get_fit_options
+        _get_fit_options.clear()
+        result = _get_fit_options("wcmktnorth")
+
+        mock_svc_cls.create_default.assert_called_once_with("wcmktnorth")
+        assert len(result) == 1
+        assert result[0]["ship_name"] == "Osprey"
+
+    @patch("pages.downloads.DoctrineService")
+    def test_single_fit_csv_uses_provided_alias(self, mock_svc_cls):
+        """_get_single_fit_csv passes db_alias to DoctrineService.create_default."""
+        mock_service = Mock()
+        mock_service.repository.get_fit_by_id.return_value = pd.DataFrame({
+            "fit_id": [1], "type_id": [34]
+        })
+        mock_svc_cls.create_default.return_value = mock_service
+
+        from pages.downloads import _get_single_fit_csv
+        _get_single_fit_csv.clear()
+        result = _get_single_fit_csv("wcmktprod", 1)
+
+        mock_svc_cls.create_default.assert_called_once_with("wcmktprod")
+        assert b"fit_id" in result
+
+    @patch("pages.downloads.DoctrineService")
+    def test_filtered_doctrine_csv_uses_provided_alias(self, mock_svc_cls):
+        """_get_filtered_doctrine_csv passes db_alias to DoctrineService.create_default."""
+        mock_service = Mock()
+        mock_service.build_fit_data.return_value.raw_df = pd.DataFrame({
+            "fit_id": [1, 2], "type_id": [34, 35], "qty": [1, 2]
+        })
+        mock_service.repository.get_all_targets.return_value = pd.DataFrame({
+            "fit_id": [1, 2], "target": [10, 20]
+        })
+        mock_svc_cls.create_default.return_value = mock_service
+
+        from pages.downloads import _get_filtered_doctrine_csv
+        _get_filtered_doctrine_csv.clear()
+        result = _get_filtered_doctrine_csv("wcmktnorth", (1,))
+
+        mock_svc_cls.create_default.assert_called_once_with("wcmktnorth")
+        assert b"fit_id" in result
+
+
 class TestGetTableListReturnType:
     """Test that get_table_list returns list[str]."""
 
