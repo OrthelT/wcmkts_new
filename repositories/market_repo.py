@@ -197,7 +197,8 @@ def _get_sde_info_impl(type_ids: list) -> pd.DataFrame:
     query = text("""
         SELECT typeName as type_name, typeID as type_id, groupID as group_id,
                groupName as group_name, categoryID as category_id,
-               categoryName as category_name
+               categoryName as category_name,
+               metaGroupID as meta_group_id, metaGroupName as meta_group_name
         FROM sdetypes
         WHERE typeID IN :type_ids
     """).bindparams(bindparam("type_ids", expanding=True))
