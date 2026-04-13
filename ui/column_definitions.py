@@ -298,36 +298,44 @@ def get_doctrine_ships_column_config(language_code: str = "en") -> dict:
             "",
             width=40,
         ),
-        "type_name": st.column_config.TextColumn(
-            translate_text(language_code, "common.item"),
-            width=135,
-        ),
         "fit_id": st.column_config.NumberColumn(
             translate_text(language_code, "doctrine_report.fit_id"),
             width=50,
         ),
-        "current_sell_price": st.column_config.NumberColumn(
-            translate_text(language_code, "market_stats.sell_price"),
-            format="compact",
-            width=55,
+        "type_name": st.column_config.TextColumn(
+            translate_text(language_code, "common.item"),
+            width=135,
+        ),
+        "target_pct": st.column_config.ProgressColumn(
+            translate_text(language_code, "dashboard.column_target_pct"),
+            help="Percentage of target stock achieved",
+            min_value=0,
+            max_value=100,
+            format="%d%%",
+            width=80,
         ),
         "order_volume": st.column_config.NumberColumn(
             translate_text(language_code, "market_stats.market_stock"),
             format="compact",
-            width=40,
-        ),
-        "jita_sell_price": st.column_config.NumberColumn(
-            translate_text(language_code, "import_helper.column_jita_sell"),
-            format="compact",
-            width=55,
-        ),
-        "ship_target": st.column_config.NumberColumn(
-            translate_text(language_code, "dashboard.column_target"),
             width=50,
         ),
         "fits_on_mkt": st.column_config.NumberColumn(
             translate_text(language_code, "dashboard.column_fits_available"),
             width=70,
+        ),
+        "ship_target": st.column_config.NumberColumn(
+            translate_text(language_code, "dashboard.column_target"),
+            width=50,
+        ),
+        "current_sell_price": st.column_config.NumberColumn(
+            translate_text(language_code, "market_stats.sell_price"),
+            format="compact",
+            width=65,
+        ),
+        "jita_sell_price": st.column_config.NumberColumn(
+            translate_text(language_code, "import_helper.column_jita_sell"),
+            format="compact",
+            width=65,
         ),
         "_mkt": st.column_config.CheckboxColumn(
             "📈",
@@ -340,6 +348,57 @@ def get_doctrine_ships_column_config(language_code: str = "en") -> dict:
             help=translate_text(language_code, "dashboard.hint_click_doctrine_status"),
             width=40,
             default=False,
+        ),
+    }
+
+
+def get_doctrine_modules_column_config(language_code: str = "en") -> dict:
+    """Get column configuration for the dashboard doctrine modules table."""
+    return {
+        "image_url": st.column_config.ImageColumn(
+            "",
+            width=30,
+        ),
+        "type_name": st.column_config.TextColumn(
+            translate_text(language_code, "common.item"),
+        ),
+        "order_volume": st.column_config.NumberColumn(
+            translate_text(language_code, "market_stats.market_stock"),
+            format="compact",
+            width=50,
+        ),
+        "target_pct": st.column_config.ProgressColumn(
+            translate_text(language_code, "dashboard.column_target_pct"),
+            help="Worst-case target % across all fits containing this module",
+            min_value=0,
+            max_value=100,
+            format="%d%%",
+            width=80,
+        ),
+        "qty_needed": st.column_config.NumberColumn(
+            translate_text(language_code, "dashboard.column_qty_needed"),
+            format="compact",
+            width=60,
+        ),
+        "current_sell_price": st.column_config.NumberColumn(
+            translate_text(language_code, "market_stats.sell_price"),
+            format="compact",
+            width=65,
+        ),
+        "jita_sell_price": st.column_config.NumberColumn(
+            translate_text(language_code, "import_helper.column_jita_sell"),
+            format="compact",
+            width=65,
+        ),
+        "jita_buy_price": st.column_config.NumberColumn(
+            translate_text(language_code, "import_helper.column_jita_buy"),
+            format="compact",
+            width=65,
+        ),
+        "pct_diff_vs_jita_sell": st.column_config.NumberColumn(
+            translate_text(language_code, "market_stats.delta_vs_jita_sell_column"),
+            format="%.2f%%",
+            width=60,
         ),
     }
 

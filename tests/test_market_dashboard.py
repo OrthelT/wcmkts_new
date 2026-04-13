@@ -76,65 +76,106 @@ class TestGetMarketOverviewKpis:
 
 
 # =========================================================================
-# get_popular_module_type_ids
+# _compute_module_targets
 # =========================================================================
 
 
-class TestGetPopularModuleTypeIds:
-    """Tests for get_popular_module_type_ids()."""
+class TestComputeModuleTargets:
+    """Tests for _compute_module_targets()."""
 
-    def test_excludes_ship_hulls_and_non_modules(self):
-        from pages.components.dashboard_components import get_popular_module_type_ids
-
+    def _make_repo(self, fits_df, targets_df):
         repo = MagicMock()
-        repo.get_all_fits.return_value = pd.DataFrame({
-            "type_id": [100, 200, 300],
-            "ship_id": [200, 200, 200],
-            "category_id": [7, 7, 8],  # 300 is category 8 (Charge), not Module
-            "avg_vol": [50.0, 30.0, 40.0],
-        })
-        result = get_popular_module_type_ids(repo, n=10)
-        # 200 excluded (hull), 300 excluded (category 8), only 100 remains
-        assert result == [100]
+        repo.get_all_fits.return_value = fits_df
+        repo.get_all_targets.return_value = targets_df
+        return repo
 
-    def test_returns_top_n(self):
-        from pages.components.dashboard_components import get_popular_module_type_ids
+    def test_excludes_ship_hulls(self):
+        from pages.components.dashboard_components import _compute_module_targets
 
-        repo = MagicMock()
-        repo.get_all_fits.return_value = pd.DataFrame({
-            "type_id": [100, 101, 102],
-            "ship_id": [999, 999, 999],
-            "category_id": [7, 7, 7],
-            "avg_vol": [10.0, 30.0, 20.0],
+        fits_df = pd.DataFrame({
+            "type_id": [100, 200],
+            "ship_id": [200, 200],
+            "fit_id": [1, 1],
+            "fit_qty": [2, 1],
+            "fits_on_mkt": [10, 10],
+            "category_id": [7, 6],
         })
-        result = get_popular_module_type_ids(repo, n=2)
-        assert len(result) == 2
-        assert result[0] == 101  # highest avg_vol
-        assert result[1] == 102
+        targets_df = pd.DataFrame({"fit_id": [1], "ship_target": [20]})
+        repo = self._make_repo(fits_df, targets_df)
+        result = _compute_module_targets(repo)
+        # Only type_id 100 (module), not 200 (ship hull)
+        assert list(result["type_id"]) == [100]
+
+    def test_qty_needed_and_target_pct(self):
+        from pages.components.dashboard_components import _compute_module_targets
+
+        fits_df = pd.DataFrame({
+            "type_id": [100],
+            "ship_id": [999],
+            "fit_id": [1],
+            "fit_qty": [3],
+            "fits_on_mkt": [8],
+            "category_id": [7],
+        })
+        targets_df = pd.DataFrame({"fit_id": [1], "ship_target": [20]})
+        repo = self._make_repo(fits_df, targets_df)
+        result = _compute_module_targets(repo)
+        row = result.iloc[0]
+        # qty_needed = (20 - 8) * 3 = 36
+        assert row["qty_needed"] == 36
+        # target_pct = round((8 / 20) * 100) = 40
+        assert row["target_pct"] == 40
+
+    def test_no_shortfall_means_zero_qty_needed(self):
+        from pages.components.dashboard_components import _compute_module_targets
+
+        fits_df = pd.DataFrame({
+            "type_id": [100],
+            "ship_id": [999],
+            "fit_id": [1],
+            "fit_qty": [2],
+            "fits_on_mkt": [25],
+            "category_id": [7],
+        })
+        targets_df = pd.DataFrame({"fit_id": [1], "ship_target": [20]})
+        repo = self._make_repo(fits_df, targets_df)
+        result = _compute_module_targets(repo)
+        assert result.iloc[0]["qty_needed"] == 0
+        # target_pct capped at 100
+        assert result.iloc[0]["target_pct"] == 100
+
+    def test_aggregates_across_fits(self):
+        from pages.components.dashboard_components import _compute_module_targets
+
+        # Module 100 appears in two fits with different shortfall levels
+        fits_df = pd.DataFrame({
+            "type_id": [100, 100],
+            "ship_id": [999, 998],
+            "fit_id": [1, 2],
+            "fit_qty": [2, 4],
+            "fits_on_mkt": [15, 5],
+            "category_id": [7, 7],
+        })
+        targets_df = pd.DataFrame({
+            "fit_id": [1, 2],
+            "ship_target": [20, 10],
+        })
+        repo = self._make_repo(fits_df, targets_df)
+        result = _compute_module_targets(repo)
+        assert len(result) == 1
+        row = result.iloc[0]
+        # Fit 1: qty_needed = (20-15)*2 = 10, target_pct = round(15/20*100) = 75
+        # Fit 2: qty_needed = (10-5)*4 = 20, target_pct = round(5/10*100) = 50
+        # MAX(qty_needed) = 20, MIN(target_pct) = 50
+        assert row["qty_needed"] == 20
+        assert row["target_pct"] == 50
 
     def test_empty_fits(self):
-        from pages.components.dashboard_components import get_popular_module_type_ids
+        from pages.components.dashboard_components import _compute_module_targets
 
-        repo = MagicMock()
-        repo.get_all_fits.return_value = pd.DataFrame()
-        result = get_popular_module_type_ids(repo, n=10)
-        assert result == []
-
-    def test_deduplicates_by_type_id(self):
-        from pages.components.dashboard_components import get_popular_module_type_ids
-
-        repo = MagicMock()
-        # Same module appears in multiple fits
-        repo.get_all_fits.return_value = pd.DataFrame({
-            "type_id": [100, 100, 101],
-            "ship_id": [999, 998, 999],
-            "category_id": [7, 7, 7],
-            "avg_vol": [50.0, 30.0, 40.0],
-        })
-        result = get_popular_module_type_ids(repo, n=10)
-        assert len(result) == 2
-        # 100 should come first (highest avg_vol = 50.0)
-        assert result[0] == 100
+        repo = self._make_repo(pd.DataFrame(), pd.DataFrame())
+        result = _compute_module_targets(repo)
+        assert result.empty
 
 
 # =========================================================================
@@ -180,7 +221,8 @@ class TestDoctrineShipsColumnConfig:
         from ui.column_definitions import get_doctrine_ships_column_config
         config = get_doctrine_ships_column_config("en")
         expected_keys = {
-            "image_url", "type_name", "fit_id", "current_sell_price", "order_volume",
+            "image_url", "fit_id", "type_name", "target_pct",
+            "current_sell_price", "order_volume",
             "jita_sell_price", "ship_target", "fits_on_mkt",
             "_mkt", "_doc",
         }
