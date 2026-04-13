@@ -696,7 +696,7 @@ def main():
     with st.sidebar:
         display_sync_status(language_code)
         st.sidebar.divider()
-        db_check = st.sidebar.button(translate_text(language_code, "market_stats.check_db_state"), width='content')
+        db_check = st.sidebar.button(translate_text(language_code, "market_stats.update_data"), width='content')
         if db_check:
             check_db(manual_override=True)
         st.sidebar.divider()
