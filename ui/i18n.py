@@ -246,12 +246,11 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.column_turnover_30d": "30D Turnover",
         "import_helper.column_volume_30d": "30D Volume",
         "import_helper.column_capital_utilis": "Cap Utilis",
-        "builder_helper.title": "Builder Helper (Prototype)",
+        "builder_helper.title": "Builder Helper",
         "builder_helper.description": (
-            "Quickly locate high profit products in nullsec market"
+            "Quickly locate high profit products in nullsec market\n\n"
             "Manufacture cost vs. market price analysis for a fixed list of items. "
-            "Build costs are retrieved from EverRef (ME10 / TE10, Sotiyo, Null-sec, "
-            "system cost bonus −50%, mfg index 3%, no facility tax). "
+            "Build costs are retrieved from EverRef (ME and runs vary by item tier). "
             "ISK/Hour = (Market Sell − Build Cost) ÷ Build Time × 3600."
         ),
         "builder_helper.filters_header": "Filters",
@@ -285,7 +284,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "builder_helper.column_turnover_30d_help": "Jita Sell × 30D Volume",
         "builder_helper.column_volume_30d": "30D Volume",
         "builder_helper.column_volume_30d_help": "Total traded volume over the past 30 days.",
-        "builder_helper.footer": "Build costs from [EverRef](https://api.everef.net) — ME10 / TE10 / Sotiyo / Null-sec / system cost bonus −50% / mfg index 3% / no facility tax. Market Sell falls back to Jita × 1.4 when no local sell orders exist.",
+        "builder_helper.footer": "Build costs from [EverRef](https://api.everef.net) — Sotiyo / Null-sec / system cost bonus −50% / mfg index 3% / no facility tax. ME and runs vary by item tier (T1: ME10 / 10 runs; T2 modules/drones/charges: ME0–4 / 5–10 runs; T2 ships: ME3 / 3 runs). Market Sell falls back to Jita × 1.4 when no local sell orders exist.",
         "doctrine_status.logo_not_found": "Logo image not found",
         "doctrine_status.downloads_hint": "Use Downloads page for full data export",
         "doctrine_status.filter_doctrine": "Doctrine",
@@ -804,12 +803,11 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.chart_title": "库存剩余天数",
         "low_stock.chart_days_label": "剩余天数",
         "low_stock.chart_critical_level": "严重阈值（3 天）",
-        "builder_helper.title": "制造助手（原型）",
+        "builder_helper.title": "制造助手",
         "builder_helper.description": (
-            "帮助你快速锁定适合给00市场供货的商品"
+            "帮助你快速锁定适合给00市场供货的商品\n\n"
             "制造成本与市场价格分析，针对固定物品列表。"
-            "制造成本来自 EverRef（ME10 / TE10、Sotiyo、Null-sec、"
-            "系统成本奖金 −50%、制造指数 3%、无设施税）。"
+            "制造成本来自 EverRef（ME 与生产批次因物品等级而异）。"
             "ISK/小时 = （市场卖价 − 制造成本）÷ 制造时间 × 3600。"
         ),
         "import_helper.title": "{market_name} 进货助手",
@@ -892,7 +890,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "builder_helper.column_turnover_30d_help": "吉他卖价 × 30 天销量",
         "builder_helper.column_volume_30d": "30 天销量",
         "builder_helper.column_volume_30d_help": "过去 30 天的总成交量。",
-        "builder_helper.footer": "制造成本来自 [EverRef](https://api.everef.net) — ME10 / TE10 / Sotiyo / Null-sec / 系统成本奖金 −50% / 制造指数 3% / 无设施税。当没有本地卖单时，本地卖价回退至吉他价 × 1.4。",
+        "builder_helper.footer": "制造成本来自 [EverRef](https://api.everef.net) — Sotiyo / Null-sec / 系统成本奖金 −50% / 制造指数 3% / 无设施税。ME 与批次因等级而异（T1: ME10 / 10 批次；T2 模块/无人机/弹药: ME0–4 / 5–10 批次；T2 舰船: ME3 / 3 批次）。当没有本地卖单时，本地卖价回退至吉他价 × 1.4。",
         "doctrine_status.logo_not_found": "未找到徽标图片",
         "doctrine_status.downloads_hint": "完整数据导出请使用下载页面",
         "doctrine_status.filter_doctrine": "建制",
@@ -1385,11 +1383,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.chart_title": "Verbleibende Bestandstage",
         "low_stock.chart_days_label": "Verbleibende Tage",
         "low_stock.chart_critical_level": "Kritisches Niveau (3 Tage)",
-        "builder_helper.title": "Builder Helper (Prototype)",
+        "builder_helper.title": "Builder Helper",
         "builder_helper.description": (
             "Herstellungskostenanalyse vs. Marktpreis für eine feste Artikelliste. "
-            "Herstellungskosten werden von EverRef abgerufen (ME10 / TE10, Sotiyo, Null-sec, "
-            "Systemkostenbonus −50%, Herstellungsindex 3%, keine Gebühren). "
+            "Herstellungskosten werden von EverRef abgerufen (ME und Runs variieren je nach Tier). "
             "ISK/Stunde = (Marktverkauf − Herstellungskosten) ÷ Herstellungszeit × 3600."
         ),
         "import_helper.title": "Importhilfe für {market_name}",
@@ -1480,7 +1477,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "builder_helper.column_turnover_30d_help": "Jita Sell × 30D Volumen",
         "builder_helper.column_volume_30d": "30D Volumen",
         "builder_helper.column_volume_30d_help": "Gesamthandelvolumen der letzten 30 Tage.",
-        "builder_helper.footer": "Herstellungskosten von [EverRef](https://api.everef.net) — ME10 / TE10 / Sotiyo / Null-sec / Systemkostenbonus −50% / Herstellungsindex 3% / keine Gebühren. Markt Verkauf fällt auf Jita × 1,4 zurück, wenn keine lokalen Verkaufsorders vorhanden sind.",
+        "builder_helper.footer": "Herstellungskosten von [EverRef](https://api.everef.net) — Sotiyo / Null-sec / Systemkostenbonus −50% / Herstellungsindex 3% / keine Gebühren. ME und Runs variieren je nach Tier (T1: ME10 / 10 Runs; T2 Module/Drohnen/Munition: ME0–4 / 5–10 Runs; T2 Schiffe: ME3 / 3 Runs). Markt Verkauf fällt auf Jita × 1,4 zurück, wenn keine lokalen Verkaufsorders vorhanden sind.",
         "build_costs.title": "Produktionskostenrechner",
         "build_costs.category_label": "Kategorie auswählen",
         "build_costs.category_placeholder": "Schiff",
@@ -1789,11 +1786,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.chart_title": "Jours de stock restants",
         "low_stock.chart_days_label": "Jours restants",
         "low_stock.chart_critical_level": "Niveau critique (3 jours)",
-        "builder_helper.title": "Aide Builder (Prototype)",
+        "builder_helper.title": "Aide Builder",
         "builder_helper.description": (
             "Analyse des coûts de fabrication par rapport aux prix du marché pour une liste d'objets fixe. "
-            "Les coûts de fabrication sont extraits d'EverRef (ME10 / TE10, Sotiyo, Null-sec, "
-            "bonus de coût système −50%, indice de fabrication 3%, pas de frais d'installation). "
+            "Les coûts de fabrication sont extraits d'EverRef (ME et cycles varient selon le niveau). "
             "ISK/Heure = (Vente Marché − Coûts de fabrication) ÷ Temps de fabrication × 3600."
         ),
         "import_helper.title": "Aide Import {market_name}",
@@ -1882,7 +1878,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "builder_helper.column_turnover_30d_help": "Vente Jita × Volume 30J",
         "builder_helper.column_volume_30d": "Volume 30J",
         "builder_helper.column_volume_30d_help": "Volume commercial total des 30 derniers jours.",
-        "builder_helper.footer": "Coûts de fabrication de [EverRef](https://api.everef.net) — ME10 / TE10 / Sotiyo / Null-sec / Bonus coût système −50% / Indice fabrication 3% / sans frais d'installation. La vente marché revient à Jita × 1,4 s'il n'y a pas de commandes de vente locales.",
+        "builder_helper.footer": "Coûts de fabrication de [EverRef](https://api.everef.net) — Sotiyo / Null-sec / Bonus coût système −50% / Indice fabrication 3% / sans frais d'installation. ME et cycles varient selon le niveau (T1 : ME10 / 10 cycles ; T2 modules/drones/munitions : ME0–4 / 5–10 cycles ; T2 vaisseaux : ME3 / 3 cycles). La vente marché revient à Jita × 1,4 s'il n'y a pas de commandes de vente locales.",
         "build_costs.title": "Outil de Coût de Production",
         "build_costs.category_label": "Sélectionner une catégorie",
         "build_costs.category_placeholder": "Vaisseau",
@@ -2191,11 +2187,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.chart_title": "Дни оставшегося запаса",
         "low_stock.chart_days_label": "Дни",
         "low_stock.chart_critical_level": "Критический уровень (3 дня)",
-        "builder_helper.title": "Помощник Builder (Прототип)",
+        "builder_helper.title": "Помощник Builder",
         "builder_helper.description": (
             "Анализ стоимости производства в сравнении с ценой на рынке для фиксированного списка предметов. "
-            "Стоимость производства получена из EverRef (ME10 / TE10, Sotiyo, Null-sec, "
-            "бонус системной стоимости −50%, индекс производства 3%, без комиссии за сооружение). "
+            "Стоимость производства получена из EverRef (ME и циклы варьируются по уровню). "
             "ISK/Час = (Локальная цена продажи − Стоимость производства) ÷ Время производства × 3600."
         ),
         "import_helper.title": "Помощник импорта {market_name}",
@@ -2284,7 +2279,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "builder_helper.column_turnover_30d_help": "Цена продажи Jita × Объём 30д",
         "builder_helper.column_volume_30d": "Объём 30д",
         "builder_helper.column_volume_30d_help": "Общий объём торговли за последние 30 дней.",
-        "builder_helper.footer": "Стоимость производства из [EverRef](https://api.everef.net) — ME10 / TE10 / Sotiyo / Null-sec / Бонус стоимости системы −50% / Индекс производства 3% / без комиссии за сооружение. Локальная цена продажи возвращается к Jita × 1,4, если локальных ордеров на продажу нет.",
+        "builder_helper.footer": "Стоимость производства из [EverRef](https://api.everef.net) — Sotiyo / Null-sec / Бонус стоимости системы −50% / Индекс производства 3% / без комиссии за сооружение. ME и циклы варьируются по уровню (T1: ME10 / 10 циклов; T2 модули/дроны/заряды: ME0–4 / 5–10 циклов; T2 корабли: ME3 / 3 цикла). Локальная цена продажи возвращается к Jita × 1,4, если локальных ордеров нет.",
         "build_costs.title": "Инструмент стоимости производства",
         "build_costs.category_label": "Выберите категорию",
         "build_costs.category_placeholder": "Корабль",
@@ -2508,11 +2503,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "segun el volumen historico medio."
         ),
         "low_stock.filters_header": "Filtros",
-        "builder_helper.title": "Asistente de Builder (Prototipo)",
+        "builder_helper.title": "Asistente de Builder",
         "builder_helper.description": (
             "Análisis de costes de fabricación vs. precio del mercado para una lista fija de artículos. "
-            "Los costes de fabricación se obtienen de EverRef (ME10 / TE10, Sotiyo, Null-sec, "
-            "bonificación de coste del sistema −50%, índice de fabricación 3%, sin impuesto de instalación). "
+            "Los costes de fabricación se obtienen de EverRef (ME y ciclos varían según el nivel). "
             "ISK/Hora = (Precio de venta local − Coste de fabricación) ÷ Tiempo de fabricación × 3600."
         ),
         "import_helper.title": "Asistente de Importacion de {market_name}",
@@ -2616,7 +2610,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "builder_helper.column_turnover_30d_help": "Precio de venta Jita × Volumen 30D",
         "builder_helper.column_volume_30d": "Volumen 30D",
         "builder_helper.column_volume_30d_help": "Volumen total comercializado en los últimos 30 días.",
-        "builder_helper.footer": "Costes de fabricación de [EverRef](https://api.everef.net) — ME10 / TE10 / Sotiyo / Null-sec / Bonificación de coste del sistema −50% / Índice de fabricación 3% / sin impuesto de instalación. El precio de venta local vuelve a Jita × 1,4 cuando no hay órdenes de venta locales.",
+        "builder_helper.footer": "Costes de fabricación de [EverRef](https://api.everef.net) — Sotiyo / Null-sec / Bonificación de coste del sistema −50% / Índice de fabricación 3% / sin impuesto de instalación. ME y ciclos varían según el nivel (T1: ME10 / 10 ciclos; T2 módulos/drones/cargas: ME0–4 / 5–10 ciclos; T2 naves: ME3 / 3 ciclos). El precio de venta local vuelve a Jita × 1,4 cuando no hay órdenes de venta locales.",
         "build_costs.title": "Herramienta de Costes de Fabricacion",
         "build_costs.category_label": "Selecciona una categoria",
         "build_costs.category_placeholder": "Nave",
