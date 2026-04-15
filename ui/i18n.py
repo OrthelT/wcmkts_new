@@ -260,6 +260,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_status.select_all": "📋 Select All",
         "doctrine_status.clear_all": "🗑️ Clear All",
         "doctrine_status.selected_items": "Selected Items",
+        "doctrine_status.selected_items_help": "Click the copy icon to copy the selected items to the clipboard in Eve Multibuy/JEve Assets stockpiles format.",
         "doctrine_status.render_market_data": "📊 Render market data for export",
         "doctrine_status.market_data": "Market Data",
         "doctrine_status.market_data_line": "  {name} (Stock: {stock} | Fits: {fits} | Need: {need})",
@@ -509,8 +510,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         ),
         "build_costs.no_jita_price": "No Jita price data found for this item",
         "build_costs.super_note": (
-            "<span style=\"font-weight: bold;\">Note:</span> "
-            "<span style=\"color: orange;\">Only structures configured for supercapital "
+            '<span style="font-weight: bold;">Note:</span> '
+            '<span style="color: orange;">Only structures configured for supercapital '
             "construction are displayed.</span>"
         ),
         "build_costs.material_breakdown": "Material Breakdown",
@@ -813,6 +814,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_status.select_all": "📋 全选",
         "doctrine_status.clear_all": "🗑️ 全部清除",
         "doctrine_status.selected_items": "已选物品",
+        "doctrine_status.selected_items_help": "点击复制图标将已选物品复制到剪贴板，格式为 Eve Multibuy/JEve Assets 库存清单。",
         "doctrine_status.render_market_data": "📊 生成导出市场数据",
         "doctrine_status.market_data": "市场数据",
         "doctrine_status.market_data_line": "  {name} (库存: {stock} | 装配数: {fits} | 需求: {need})",
@@ -1040,8 +1042,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         ),
         "build_costs.no_jita_price": "未找到该物品的吉他价格数据",
         "build_costs.super_note": (
-            "<span style=\"font-weight: bold;\">注意:</span> "
-            "<span style=\"color: orange;\">这里只显示可用于超级旗舰建造的建筑。</span>"
+            '<span style="font-weight: bold;">注意:</span> '
+            '<span style="color: orange;">这里只显示可用于超级旗舰建造的建筑。</span>'
         ),
         "build_costs.material_breakdown": "材料明细",
         "build_costs.material_breakdown_for_structure": "材料明细: {structure}",
@@ -1156,6 +1158,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_status.tab_fit_details": "Fit-Details",
         "doctrine_status.low_stock_modules": "Module mit niedrigem Bestand",
         "doctrine_status.no_fits": "Keine Doktrin-Fits in der Datenbank gefunden.",
+        "doctrine_status.selected_items_help": (
+            "Klicken Sie auf das Kopiersymbol, um die ausgewählten Elemente in die Zwischenablage im "
+            "Format Eve Multibuy/JEve Assets Stockpiles zu kopieren."
+        ),
         "doctrine_report.subtitle": "Marktstatus von {market_name} nach Flottendoktrin",
         "doctrine_report.no_data": "Keine Daten zum Anzeigen",
         "doctrine_report.metric_total_fits": "Verfügbare Fits gesamt",
@@ -1382,8 +1388,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         ),
         "build_costs.no_jita_price": "Keine Jita-Preisdaten für diesen Artikel gefunden",
         "build_costs.super_note": (
-            "<span style=\"font-weight: bold;\">Hinweis:</span> "
-            "<span style=\"color: orange;\">Es werden nur Strukturen für Supercapital-Bau "
+            '<span style="font-weight: bold;">Hinweis:</span> '
+            '<span style="color: orange;">Es werden nur Strukturen für Supercapital-Bau '
             "angezeigt.</span>"
         ),
         "build_costs.material_breakdown": "Materialaufschlüsselung",
@@ -1512,6 +1518,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_status.tab_fit_details": "Details du Fit",
         "doctrine_status.low_stock_modules": "Modules à Stock Faible",
         "doctrine_status.no_fits": "Aucun fit de doctrine trouvé dans la base de données.",
+        "doctrine_status.selected_items_help": (
+            "Cliquez sur l'icône de copie pour copier les objets sélectionnés dans le presse-papiers "
+            "au format Eve Multibuy / JEve Assets stockpiles."
+        ),
         "doctrine_report.subtitle": "État du marché de {market_name} par doctrine",
         "doctrine_report.no_data": "Aucune donnée à afficher",
         "doctrine_report.metric_total_fits": "Total fits disponibles",
@@ -1733,8 +1743,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         ),
         "build_costs.no_jita_price": "Aucune donnée de prix Jita pour cet objet",
         "build_costs.super_note": (
-            "<span style=\"font-weight: bold;\">Note :</span> "
-            "<span style=\"color: orange;\">Seules les structures configurees pour la construction "
+            '<span style="font-weight: bold;">Note :</span> '
+            '<span style="color: orange;">Seules les structures configurees pour la construction '
             "de supercapitaux sont affichees.</span>"
         ),
         "build_costs.material_breakdown": "Détail des matériaux",
@@ -1863,6 +1873,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_status.tab_fit_details": "Детали фита",
         "doctrine_status.low_stock_modules": "Модули с низким запасом",
         "doctrine_status.no_fits": "В базе данных не найдены фиты доктрины.",
+        "doctrine_status.selected_items_help": (
+            "Нажмите значок копирования, чтобы скопировать выбранные предметы в буфер обмена "
+            "в формате Eve Multibuy/JEve Assets stockpiles."
+        ),
         "doctrine_report.subtitle": "Статус рынка {market_name} по доктринам",
         "doctrine_report.no_data": "Нет данных для отображения",
         "doctrine_report.metric_total_fits": "Всего доступных фитов",
@@ -2084,8 +2098,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         ),
         "build_costs.no_jita_price": "Данные о цене Jita для этого предмета не найдены",
         "build_costs.super_note": (
-            "<span style=\"font-weight: bold;\">Примечание:</span> "
-            "<span style=\"color: orange;\">Показаны только структуры, настроенные для "
+            '<span style="font-weight: bold;">Примечание:</span> '
+            '<span style="color: orange;">Показаны только структуры, настроенные для '
             "строительства supercapital.</span>"
         ),
         "build_costs.material_breakdown": "Разбор материалов",
@@ -2214,6 +2228,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_status.tab_fit_details": "Detalles del Fit",
         "doctrine_status.low_stock_modules": "Modulos con Stock Bajo",
         "doctrine_status.no_fits": "No se encontraron fits de doctrina en la base de datos.",
+        "doctrine_status.selected_items_help": (
+            "Haga clic en el icono de copia para copiar los objetos seleccionados al portapapeles "
+            "en formato Eve Multibuy/JEve Assets stockpiles."
+        ),
         "doctrine_report.subtitle": "Estado del mercado de {market_name} por doctrina de flota",
         "doctrine_report.no_data": "No hay datos para mostrar",
         "doctrine_report.metric_total_fits": "Fits Totales Disponibles",
@@ -2365,8 +2383,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         ),
         "build_costs.no_jita_price": "No se encontraron datos de precio de Jita para este articulo",
         "build_costs.super_note": (
-            "<span style=\"font-weight: bold;\">Nota:</span> "
-            "<span style=\"color: orange;\">Solo se muestran estructuras configuradas para "
+            '<span style="font-weight: bold;">Nota:</span> '
+            '<span style="color: orange;">Solo se muestran estructuras configuradas para '
             "construccion de supercapitales.</span>"
         ),
         "build_costs.material_breakdown": "Desglose de materiales",

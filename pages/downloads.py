@@ -64,9 +64,21 @@ def _get_all_doctrine_fits_csv(db_alias: str) -> bytes:
     service = DoctrineService.create_default(db_alias)
     all_fits_df = service.build_fit_data().raw_df
     targets = service.repository.get_all_targets()
-    data = all_fits_df.merge(targets, on='fit_id', how='left')
+    targets = targets[["fit_id", "ship_target"]].drop_duplicates(
+        subset=["fit_id"], keep="first"
+    )
+    data = all_fits_df.merge(targets, on="fit_id", how="left")
+
+    ship_target = pd.to_numeric(data.get("ship_target"), errors="coerce").fillna(0)
+    fits_on_mkt = pd.to_numeric(data.get("fits_on_mkt"), errors="coerce").fillna(0)
+    fit_qty = pd.to_numeric(data.get("fit_qty"), errors="coerce").fillna(0)
+    data["qty_needed"] = (ship_target - fits_on_mkt).clip(lower=0) * fit_qty
+
+    if "own_fits_on_mkt" in data.columns:
+        data = data.drop(columns=["own_fits_on_mkt"])
+
     data = data.reset_index(drop=True)
-    return data.to_csv(index=False).encode('utf-8')
+    return data.to_csv(index=False).encode("utf-8")
 
 
 @st.cache_data(ttl=600, show_spinner=False)

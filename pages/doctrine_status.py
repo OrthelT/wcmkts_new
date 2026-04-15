@@ -745,6 +745,8 @@ def main():
     if selected:
         st.sidebar.markdown("---")
         st.sidebar.header(translate_text(language_code, "doctrine_status.selected_items"), divider="blue")
+        help_msg = translate_text(language_code, "doctrine_status.selected_items_help")
+        st.sidebar.caption(f"*{help_msg}*")
 
         selection_lines = []
         for tid in sorted(selected):
