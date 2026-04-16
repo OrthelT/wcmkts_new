@@ -67,12 +67,15 @@ def _get_all_doctrine_fits_csv(db_alias: str) -> bytes:
         subset=["fit_id"], keep="first"
     )
     data = all_fits_df.merge(targets, on="fit_id", how="left")
+
     ship_target = pd.to_numeric(data.get("ship_target"), errors="coerce").fillna(0)
     fits_on_mkt = pd.to_numeric(data.get("fits_on_mkt"), errors="coerce").fillna(0)
     fit_qty = pd.to_numeric(data.get("fit_qty"), errors="coerce").fillna(0)
     data["qty_needed"] = (ship_target - fits_on_mkt).clip(lower=0) * fit_qty
+
     if "own_fits_on_mkt" in data.columns:
         data = data.drop(columns=["own_fits_on_mkt"])
+
     data = data.sort_values(["ship_name","fit_id", "type_name"])
     data = data.reset_index(drop=True)
     return data.to_csv(index=False).encode("utf-8")
@@ -93,7 +96,6 @@ def _get_low_stock_doctrine_fits_csv(db_alias: str) -> bytes:
     fits_on_mkt = pd.to_numeric(data.get("fits_on_mkt"), errors="coerce").fillna(0)
     fit_qty = pd.to_numeric(data.get("fit_qty"), errors="coerce").fillna(0)
     data["qty_needed"] = (ship_target - fits_on_mkt).clip(lower=0) * fit_qty
-    data = data.reset_index(drop=True)
     data = data[data["qty_needed"] > 0]
     if "own_fits_on_mkt" in data.columns:
         data = data.drop(columns=["own_fits_on_mkt"])
@@ -102,7 +104,6 @@ def _get_low_stock_doctrine_fits_csv(db_alias: str) -> bytes:
        'group_id', 'group_name', 'category_id', 'category_name', 'timestamp']
     data = data[output_columns]
     data = data.rename(columns={'total_stock': 'qty_on_mkt', 'item_cost': 'cost_per_fit'})
-    data["_ship_row_priority"] = (data["category_id"] == 6).astype(int)
     data = data.sort_values(
         ["ship_name", "fit_id"],
         ascending=[True, True],
