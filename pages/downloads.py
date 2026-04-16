@@ -14,7 +14,6 @@ Downloads available:
 """
 
 import pathlib
-
 import streamlit as st
 import pandas as pd
 
@@ -68,18 +67,48 @@ def _get_all_doctrine_fits_csv(db_alias: str) -> bytes:
         subset=["fit_id"], keep="first"
     )
     data = all_fits_df.merge(targets, on="fit_id", how="left")
-
     ship_target = pd.to_numeric(data.get("ship_target"), errors="coerce").fillna(0)
     fits_on_mkt = pd.to_numeric(data.get("fits_on_mkt"), errors="coerce").fillna(0)
     fit_qty = pd.to_numeric(data.get("fit_qty"), errors="coerce").fillna(0)
     data["qty_needed"] = (ship_target - fits_on_mkt).clip(lower=0) * fit_qty
-
     if "own_fits_on_mkt" in data.columns:
         data = data.drop(columns=["own_fits_on_mkt"])
-
+    data = data.sort_values(["ship_name","fit_id", "type_name"])
     data = data.reset_index(drop=True)
     return data.to_csv(index=False).encode("utf-8")
 
+@st.cache_data(ttl=600, show_spinner=False)
+def _get_low_stock_doctrine_fits_csv(db_alias: str) -> bytes:
+    """Lazily load low stock doctrine fits data as CSV bytes."""
+    service = DoctrineService.create_default(db_alias)
+    df = service.build_fit_data().raw_df
+    if df.empty:    
+        return b""
+    targets = service.repository.get_all_targets()
+    targets = targets[["fit_id", "ship_target"]].drop_duplicates(
+        subset=["fit_id"], keep="first"
+    )
+    data = df.merge(targets, on="fit_id", how="left")
+    ship_target = pd.to_numeric(data.get("ship_target"), errors="coerce").fillna(0)
+    fits_on_mkt = pd.to_numeric(data.get("fits_on_mkt"), errors="coerce").fillna(0)
+    fit_qty = pd.to_numeric(data.get("fit_qty"), errors="coerce").fillna(0)
+    data["qty_needed"] = (ship_target - fits_on_mkt).clip(lower=0) * fit_qty
+    data = data.reset_index(drop=True)
+    data = data[data["qty_needed"] > 0]
+    if "own_fits_on_mkt" in data.columns:
+        data = data.drop(columns=["own_fits_on_mkt"])
+    output_columns = ['fit_id', 'ship_id', 'ship_name', 'ship_target', 'hulls', 'type_id', 'type_name', 'qty_needed', 'fit_qty',
+      'fits_on_mkt', 'total_stock', 'price', 'item_cost', 'avg_vol', 'days',
+       'group_id', 'group_name', 'category_id', 'category_name', 'timestamp']
+    data = data[output_columns]
+    data = data.rename(columns={'total_stock': 'qty_on_mkt', 'item_cost': 'cost_per_fit'})
+    data["_ship_row_priority"] = (data["category_id"] == 6).astype(int)
+    data = data.sort_values(
+        ["ship_name", "fit_id"],
+        ascending=[True, True],
+    )
+    data = data.reset_index(drop=True)
+    return data.to_csv(index=False).encode("utf-8")
 
 @st.cache_data(ttl=600, show_spinner=False)
 def _get_fit_options(db_alias: str) -> list[dict]:
@@ -263,7 +292,7 @@ def doctrine_downloads_section():
     with col1:
         filter_type = st.radio(
             "Filter Type",
-            ["All Fits", "By Doctrine"],
+            ["All Fits", "By Doctrine", "Low Stock Only"],
             key="doctrine_filter_type",
             horizontal=True
         )
@@ -289,6 +318,15 @@ def doctrine_downloads_section():
             "Download All Doctrine Fits",
             data=lambda a=db_alias: _get_all_doctrine_fits_csv(a),
             file_name=f"{market.short_name}_doctrine_fits.csv",
+            mime="text/csv",
+            use_container_width=True,
+            icon=":material/download:"
+        )
+    elif filter_type == "Low Stock Only":
+        st.download_button(
+            "Download Low Stock Doctrine Fits",
+            data=lambda a=db_alias: _get_low_stock_doctrine_fits_csv(a),
+            file_name=f"{market.short_name}_low_stock_doctrine_fits.csv",
             mime="text/csv",
             use_container_width=True,
             icon=":material/download:"
