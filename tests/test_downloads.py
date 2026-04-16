@@ -146,10 +146,11 @@ class TestDoctrineDownloadsCsv:
         """_get_all_doctrine_fits_csv passes db_alias to DoctrineService.create_default."""
         mock_service = Mock()
         mock_service.build_fit_data.return_value.raw_df = pd.DataFrame({
-            "fit_id": [1], "type_id": [34], "qty": [1]
+            "fit_id": [1], "type_id": [34], "fit_qty": [1],
+            "fits_on_mkt": [2], "ship_name": ["Osprey"], "type_name": ["Tritanium"],
         })
         mock_service.repository.get_all_targets.return_value = pd.DataFrame({
-            "fit_id": [1], "target": [10]
+            "fit_id": [1], "ship_target": [10]
         })
         mock_svc_cls.create_default.return_value = mock_service
 

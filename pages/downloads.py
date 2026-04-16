@@ -14,6 +14,7 @@ Downloads available:
 """
 
 import pathlib
+
 import streamlit as st
 import pandas as pd
 
@@ -38,7 +39,7 @@ def _get_market_orders_csv(db_alias: str) -> bytes:
     """Lazily load and convert market orders to CSV bytes."""
     repo = MarketRepository(DatabaseConfig(db_alias))
     df = repo.get_all_orders()
-    return df.to_csv(index=False).encode('utf-8')
+    return df.to_csv(index=False).encode("utf-8")
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
@@ -46,7 +47,7 @@ def _get_market_stats_csv(db_alias: str) -> bytes:
     """Lazily load and convert market stats to CSV bytes."""
     repo = MarketRepository(DatabaseConfig(db_alias))
     df = repo.get_all_stats()
-    return df.to_csv(index=False).encode('utf-8')
+    return df.to_csv(index=False).encode("utf-8")
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
@@ -54,7 +55,7 @@ def _get_market_history_csv(db_alias: str) -> bytes:
     """Lazily load and convert market history to CSV bytes."""
     repo = MarketRepository(DatabaseConfig(db_alias))
     df = repo.get_all_history()
-    return df.to_csv(index=False).encode('utf-8')
+    return df.to_csv(index=False).encode("utf-8")
 
 
 @st.cache_data(ttl=600, show_spinner=False)
@@ -62,54 +63,92 @@ def _get_all_doctrine_fits_csv(db_alias: str) -> bytes:
     """Lazily load all doctrine fits data as CSV bytes."""
     service = DoctrineService.create_default(db_alias)
     all_fits_df = service.build_fit_data().raw_df
+    if all_fits_df.empty:
+        logger.warning("No fit data for all-doctrine export (db_alias=%s)", db_alias)
+        return b""
+
     targets = service.repository.get_all_targets()
+    if targets.empty:
+        logger.warning("No targets data for doctrine export (db_alias=%s)", db_alias)
+        return b""
     targets = targets[["fit_id", "ship_target"]].drop_duplicates(
         subset=["fit_id"], keep="first"
     )
     data = all_fits_df.merge(targets, on="fit_id", how="left")
 
-    ship_target = pd.to_numeric(data.get("ship_target"), errors="coerce").fillna(0)
-    fits_on_mkt = pd.to_numeric(data.get("fits_on_mkt"), errors="coerce").fillna(0)
-    fit_qty = pd.to_numeric(data.get("fit_qty"), errors="coerce").fillna(0)
+    ship_target = pd.to_numeric(data["ship_target"], errors="coerce").fillna(0)
+    fits_on_mkt = pd.to_numeric(data["fits_on_mkt"], errors="coerce").fillna(0)
+    fit_qty = pd.to_numeric(data["fit_qty"], errors="coerce").fillna(0)
     data["qty_needed"] = (ship_target - fits_on_mkt).clip(lower=0) * fit_qty
 
     if "own_fits_on_mkt" in data.columns:
         data = data.drop(columns=["own_fits_on_mkt"])
 
-    data = data.sort_values(["ship_name","fit_id", "type_name"])
+    data = data.sort_values(["ship_name", "fit_id", "type_name"])
     data = data.reset_index(drop=True)
     return data.to_csv(index=False).encode("utf-8")
+
 
 @st.cache_data(ttl=600, show_spinner=False)
 def _get_low_stock_doctrine_fits_csv(db_alias: str) -> bytes:
     """Lazily load low stock doctrine fits data as CSV bytes."""
     service = DoctrineService.create_default(db_alias)
     df = service.build_fit_data().raw_df
-    if df.empty:    
+    if df.empty:
+        logger.warning("No fit data for low-stock export (db_alias=%s)", db_alias)
         return b""
+
     targets = service.repository.get_all_targets()
+    if targets.empty:
+        logger.warning("No targets data for low-stock export (db_alias=%s)", db_alias)
+        return b""
     targets = targets[["fit_id", "ship_target"]].drop_duplicates(
         subset=["fit_id"], keep="first"
     )
     data = df.merge(targets, on="fit_id", how="left")
-    ship_target = pd.to_numeric(data.get("ship_target"), errors="coerce").fillna(0)
-    fits_on_mkt = pd.to_numeric(data.get("fits_on_mkt"), errors="coerce").fillna(0)
-    fit_qty = pd.to_numeric(data.get("fit_qty"), errors="coerce").fillna(0)
+
+    ship_target = pd.to_numeric(data["ship_target"], errors="coerce").fillna(0)
+    fits_on_mkt = pd.to_numeric(data["fits_on_mkt"], errors="coerce").fillna(0)
+    fit_qty = pd.to_numeric(data["fit_qty"], errors="coerce").fillna(0)
     data["qty_needed"] = (ship_target - fits_on_mkt).clip(lower=0) * fit_qty
     data = data[data["qty_needed"] > 0]
+
     if "own_fits_on_mkt" in data.columns:
         data = data.drop(columns=["own_fits_on_mkt"])
-    output_columns = ['fit_id', 'ship_id', 'ship_name', 'ship_target', 'hulls', 'type_id', 'type_name', 'qty_needed', 'fit_qty',
-      'fits_on_mkt', 'total_stock', 'price', 'item_cost', 'avg_vol', 'days',
-       'group_id', 'group_name', 'category_id', 'category_name', 'timestamp']
+
+    output_columns = [
+        "fit_id",
+        "ship_id",
+        "ship_name",
+        "ship_target",
+        "hulls",
+        "type_id",
+        "type_name",
+        "qty_needed",
+        "fit_qty",
+        "fits_on_mkt",
+        "total_stock",
+        "price",
+        "item_cost",
+        "avg_vol",
+        "days",
+        "group_id",
+        "group_name",
+        "category_id",
+        "category_name",
+        "timestamp",
+    ]
     data = data[output_columns]
-    data = data.rename(columns={'total_stock': 'qty_on_mkt', 'item_cost': 'cost_per_fit'})
-    data = data.sort_values(
-        ["ship_name", "fit_id"],
-        ascending=[True, True],
+    data = data.rename(
+        columns={
+            "total_stock": "qty_on_mkt",
+            "item_cost": "cost_per_fit",
+        }
     )
+    data = data.sort_values(["ship_name", "fit_id"])
     data = data.reset_index(drop=True)
     return data.to_csv(index=False).encode("utf-8")
+
 
 @st.cache_data(ttl=600, show_spinner=False)
 def _get_fit_options(db_alias: str) -> list[dict]:
@@ -129,11 +168,15 @@ def _get_doctrine_options(db_alias: str) -> list[dict]:
     df = service.repository.get_all_doctrine_compositions()
     if df.empty:
         return []
-    doctrines = df.groupby(['doctrine_id', 'doctrine_name']).agg({
-        'fit_id': list
-    }).reset_index()
+    doctrines = (
+        df.groupby(["doctrine_id", "doctrine_name"]).agg({"fit_id": list}).reset_index()
+    )
     return [
-        {"doctrine_id": row['doctrine_id'], "doctrine_name": row['doctrine_name'], "fit_ids": row['fit_id']}
+        {
+            "doctrine_id": row["doctrine_id"],
+            "doctrine_name": row["doctrine_name"],
+            "fit_ids": row["fit_id"],
+        }
         for _, row in doctrines.iterrows()
     ]
 
@@ -146,10 +189,10 @@ def _get_filtered_doctrine_csv(db_alias: str, fit_ids: tuple) -> bytes:
     targets = service.repository.get_all_targets()
 
     # Filter by fit_ids
-    filtered_df = all_fits_df[all_fits_df['fit_id'].isin(fit_ids)]
-    data = filtered_df.merge(targets, on='fit_id', how='left')
+    filtered_df = all_fits_df[all_fits_df["fit_id"].isin(fit_ids)]
+    data = filtered_df.merge(targets, on="fit_id", how="left")
     data = data.reset_index(drop=True)
-    return data.to_csv(index=False).encode('utf-8')
+    return data.to_csv(index=False).encode("utf-8")
 
 
 @st.cache_data(ttl=600, show_spinner=False)
@@ -159,7 +202,7 @@ def _get_single_fit_csv(db_alias: str, fit_id: int) -> bytes:
     fit_df = service.repository.get_fit_by_id(fit_id)
     if fit_df.empty:
         return b""
-    return fit_df.to_csv(index=False).encode('utf-8')
+    return fit_df.to_csv(index=False).encode("utf-8")
 
 
 @st.cache_data(ttl=600, show_spinner=False)
@@ -185,42 +228,50 @@ def _get_low_stock_csv(
     df = BaseRepository(mktdb).read_df(query)
 
     if doctrine_only:
-        df = df[df['is_doctrine'] == 1]
+        df = df[df["is_doctrine"] == 1]
 
     if max_days is not None:
-        df = df[df['days_remaining'] <= max_days]
+        df = df[df["days_remaining"] <= max_days]
 
     if not df.empty:
         ship_groups: dict[int, list[str]] = {}
-        for type_id, group in df.groupby('type_id'):
+        for type_id, group in df.groupby("type_id"):
             ships = [
                 f"{row['ship_name']} ({int(row['fits_on_mkt'])})"
                 for _, row in group.iterrows()
-                if pd.notna(row['ship_name']) and pd.notna(row['fits_on_mkt'])
+                if pd.notna(row["ship_name"]) and pd.notna(row["fits_on_mkt"])
             ]
             if ships:
                 ship_groups[type_id] = ships  # type: ignore[index]
 
-        df = df.drop_duplicates(subset=['type_id'])
-        df['ships'] = df['type_id'].map(ship_groups)
+        df = df.drop_duplicates(subset=["type_id"])
+        df["ships"] = df["type_id"].map(ship_groups)
 
     if tech2_only:
-        df = df[df['type_id'].isin(tech2_type_ids)]
+        df = df[df["type_id"].isin(tech2_type_ids)]
 
-    df = df.sort_values('days_remaining')
+    df = df.sort_values("days_remaining")
 
     # Clean up columns for export
-    columns_to_drop = ['min_price', 'avg_price', 'category_id', 'group_id', 'is_doctrine']
-    df = df.drop(columns=[c for c in columns_to_drop if c in df.columns], errors='ignore')
+    columns_to_drop = [
+        "min_price",
+        "avg_price",
+        "category_id",
+        "group_id",
+        "is_doctrine",
+    ]
+    df = df.drop(
+        columns=[c for c in columns_to_drop if c in df.columns], errors="ignore"
+    )
 
-    return df.to_csv(index=False).encode('utf-8')
+    return df.to_csv(index=False).encode("utf-8")
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _get_sde_table_csv(table_name: str) -> bytes:
     """Get SDE table as CSV bytes."""
     df = get_sde_repository().get_sde_table(table_name)
-    return df.to_csv(index=False).encode('utf-8')
+    return df.to_csv(index=False).encode("utf-8")
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -234,9 +285,11 @@ def _get_sde_tables() -> list[str]:
 # UI Sections
 # =============================================================================
 
+
 def market_downloads_section():
     """Section for market data downloads."""
     from state.market_state import get_active_market
+
     market = get_active_market()
     db_alias = market.database_alias
     short_name = market.short_name
@@ -253,7 +306,7 @@ def market_downloads_section():
             file_name=f"{short_name}_market_orders.csv",
             mime="text/csv",
             use_container_width=True,
-            icon=":material/download:"
+            icon=":material/download:",
         )
 
     with col2:
@@ -263,7 +316,7 @@ def market_downloads_section():
             file_name=f"{short_name}_market_stats.csv",
             mime="text/csv",
             use_container_width=True,
-            icon=":material/download:"
+            icon=":material/download:",
         )
 
     with col3:
@@ -273,7 +326,7 @@ def market_downloads_section():
             file_name=f"{short_name}_market_history.csv",
             mime="text/csv",
             use_container_width=True,
-            icon=":material/download:"
+            icon=":material/download:",
         )
 
 
@@ -281,6 +334,7 @@ def market_downloads_section():
 def doctrine_downloads_section():
     """Fragment for doctrine data downloads with filtering."""
     from state.market_state import get_active_market
+
     market = get_active_market()
     db_alias = market.database_alias
 
@@ -295,14 +349,14 @@ def doctrine_downloads_section():
             "Filter Type",
             ["All Fits", "By Doctrine", "Low Stock Only"],
             key="doctrine_filter_type",
-            horizontal=True
+            horizontal=True,
         )
 
     with col2:
         if filter_type == "By Doctrine":
             doctrines = _get_doctrine_options(db_alias)
             doctrine_names = ["Select a doctrine..."] + sorted(
-                [d['doctrine_name'] for d in doctrines], key=format_doctrine_name
+                [d["doctrine_name"] for d in doctrines], key=format_doctrine_name
             )
             selected_doctrine = st.selectbox(
                 "Select Doctrine",
@@ -321,7 +375,7 @@ def doctrine_downloads_section():
             file_name=f"{market.short_name}_doctrine_fits.csv",
             mime="text/csv",
             use_container_width=True,
-            icon=":material/download:"
+            icon=":material/download:",
         )
     elif filter_type == "Low Stock Only":
         st.download_button(
@@ -330,24 +384,28 @@ def doctrine_downloads_section():
             file_name=f"{market.short_name}_low_stock_doctrine_fits.csv",
             mime="text/csv",
             use_container_width=True,
-            icon=":material/download:"
+            icon=":material/download:",
         )
     else:
         if selected_doctrine and selected_doctrine != "Select a doctrine...":
             doctrines = _get_doctrine_options(db_alias)
-            doctrine_data = next((d for d in doctrines if d['doctrine_name'] == selected_doctrine), None)
+            doctrine_data = next(
+                (d for d in doctrines if d["doctrine_name"] == selected_doctrine), None
+            )
 
             if doctrine_data:
-                fit_ids = tuple(doctrine_data['fit_ids'])
-                safe_name = selected_doctrine.replace(' ', '_').lower()
+                fit_ids = tuple(doctrine_data["fit_ids"])
+                safe_name = selected_doctrine.replace(" ", "_").lower()
 
                 st.download_button(
                     f"Download {format_doctrine_name(selected_doctrine)}",
-                    data=lambda a=db_alias, fids=fit_ids: _get_filtered_doctrine_csv(a, fids),
+                    data=lambda a=db_alias, fids=fit_ids: _get_filtered_doctrine_csv(
+                        a, fids
+                    ),
                     file_name=f"doctrine_{safe_name}.csv",
                     mime="text/csv",
                     use_container_width=True,
-                    icon=":material/download:"
+                    icon=":material/download:",
                 )
 
 
@@ -355,6 +413,7 @@ def doctrine_downloads_section():
 def individual_fit_downloads_section():
     """Fragment for individual fit downloads."""
     from state.market_state import get_active_market
+
     market = get_active_market()
     db_alias = market.database_alias
 
@@ -367,13 +426,13 @@ def individual_fit_downloads_section():
     selected_fit_label = st.selectbox(
         "Select Fit",
         ["Select a fit..."] + list(fit_options.keys()),
-        key="individual_fit_select"
+        key="individual_fit_select",
     )
 
     if selected_fit_label and selected_fit_label != "Select a fit...":
         fit_data = fit_options[selected_fit_label]
-        fit_id = fit_data['fit_id']
-        ship_name = fit_data['ship_name'].replace(' ', '_')
+        fit_id = fit_data["fit_id"]
+        ship_name = fit_data["ship_name"].replace(" ", "_")
 
         st.download_button(
             f"Download Fit {fit_id}",
@@ -381,7 +440,7 @@ def individual_fit_downloads_section():
             file_name=f"fit_{fit_id}_{ship_name}.csv",
             mime="text/csv",
             use_container_width=True,
-            icon=":material/download:"
+            icon=":material/download:",
         )
 
 
@@ -389,6 +448,7 @@ def individual_fit_downloads_section():
 def low_stock_downloads_section():
     """Fragment for low stock data downloads."""
     from state.market_state import get_active_market
+
     market = get_active_market()
     db_alias = market.database_alias
 
@@ -404,22 +464,26 @@ def low_stock_downloads_section():
             max_value=30.0,
             value=7.0,
             step=0.5,
-            key="low_stock_max_days"
+            key="low_stock_max_days",
         )
 
     with col2:
-        doctrine_only = st.checkbox("Doctrine Items Only", key="low_stock_doctrine_only")
+        doctrine_only = st.checkbox(
+            "Doctrine Items Only", key="low_stock_doctrine_only"
+        )
 
     with col3:
         tech2_only = st.checkbox("Tech 2 Items Only", key="low_stock_tech2_only")
 
     st.download_button(
         "Download Low Stock Items",
-        data=lambda a=db_alias, md=max_days, do=doctrine_only, t2=tech2_only: _get_low_stock_csv(a, md, do, t2),
+        data=lambda a=db_alias, md=max_days, do=doctrine_only, t2=tech2_only: (
+            _get_low_stock_csv(a, md, do, t2)
+        ),
         file_name=f"{market.short_name}_low_stock_items.csv",
         mime="text/csv",
         use_container_width=True,
-        icon=":material/download:"
+        icon=":material/download:",
     )
 
 
@@ -427,7 +491,9 @@ def low_stock_downloads_section():
 def sde_downloads_section():
     """Fragment for SDE table downloads."""
     st.subheader("SDE Table Downloads", divider="violet")
-    st.markdown("Download Static Data Export (SDE) tables. The **sdetypes** table combines the most commonly used fields.")
+    st.markdown(
+        "Download Static Data Export (SDE) tables. The **sdetypes** table combines the most commonly used fields."
+    )
 
     tables = _get_sde_tables()
 
@@ -440,10 +506,7 @@ def sde_downloads_section():
     default_index = tables.index("sdetypes") if "sdetypes" in tables else 0
 
     selected_table = st.selectbox(
-        "Select SDE Table",
-        tables,
-        index=default_index,
-        key="sde_table_select"
+        "Select SDE Table", tables, index=default_index, key="sde_table_select"
     )
 
     st.download_button(
@@ -452,13 +515,14 @@ def sde_downloads_section():
         file_name=f"{selected_table}.csv",
         mime="text/csv",
         use_container_width=True,
-        icon=":material/download:"
+        icon=":material/download:",
     )
 
 
 # =============================================================================
 # Main Page
 # =============================================================================
+
 
 def main():
     market = render_market_selector()
