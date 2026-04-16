@@ -71,7 +71,7 @@ def _get_all_doctrine_fits_csv(db_alias: str) -> bytes:
     if targets.empty:
         logger.warning("No targets data for doctrine export (db_alias=%s)", db_alias)
         return b""
-    targets = targets[["fit_id", "ship_target"]].drop_duplicates(
+    targets = targets[["fit_id", "fit_name", "ship_target"]].drop_duplicates(
         subset=["fit_id"], keep="first"
     )
     data = all_fits_df.merge(targets, on="fit_id", how="left")
@@ -83,6 +83,14 @@ def _get_all_doctrine_fits_csv(db_alias: str) -> bytes:
 
     if "own_fits_on_mkt" in data.columns:
         data = data.drop(columns=["own_fits_on_mkt"])
+
+    # Place fit_name right after fit_id
+    cols = data.columns.tolist()
+    if "fit_name" in cols:
+        cols.remove("fit_name")
+        fit_id_idx = cols.index("fit_id")
+        cols.insert(fit_id_idx + 1, "fit_name")
+        data = data[cols]
 
     data = data.sort_values(["ship_name", "fit_id", "type_name"])
     data = data.reset_index(drop=True)
@@ -102,7 +110,7 @@ def _get_low_stock_doctrine_fits_csv(db_alias: str) -> bytes:
     if targets.empty:
         logger.warning("No targets data for low-stock export (db_alias=%s)", db_alias)
         return b""
-    targets = targets[["fit_id", "ship_target"]].drop_duplicates(
+    targets = targets[["fit_id", "fit_name", "ship_target"]].drop_duplicates(
         subset=["fit_id"], keep="first"
     )
     data = df.merge(targets, on="fit_id", how="left")
@@ -118,6 +126,7 @@ def _get_low_stock_doctrine_fits_csv(db_alias: str) -> bytes:
 
     output_columns = [
         "fit_id",
+        "fit_name",
         "ship_id",
         "ship_name",
         "ship_target",
@@ -162,23 +171,22 @@ def _get_fit_options(db_alias: str) -> list[dict]:
 
 
 @st.cache_data(ttl=600, show_spinner=False)
-def _get_doctrine_options(db_alias: str) -> list[dict]:
-    """Get list of doctrines for filtering."""
+def _get_doctrine_options(db_alias: str) -> dict[int, dict]:
+    """Get doctrines for filtering, keyed by doctrine_id."""
     service = DoctrineService.create_default(db_alias)
     df = service.repository.get_all_doctrine_compositions()
     if df.empty:
-        return []
+        return {}
     doctrines = (
         df.groupby(["doctrine_id", "doctrine_name"]).agg({"fit_id": list}).reset_index()
     )
-    return [
-        {
-            "doctrine_id": row["doctrine_id"],
+    return {
+        int(row["doctrine_id"]): {
             "doctrine_name": row["doctrine_name"],
             "fit_ids": row["fit_id"],
         }
         for _, row in doctrines.iterrows()
-    ]
+    }
 
 
 @st.cache_data(ttl=600, show_spinner=False)
@@ -354,18 +362,21 @@ def doctrine_downloads_section():
 
     with col2:
         if filter_type == "By Doctrine":
-            doctrines = _get_doctrine_options(db_alias)
-            doctrine_names = ["Select a doctrine..."] + sorted(
-                [d["doctrine_name"] for d in doctrines], key=format_doctrine_name
+            doctrine_map = _get_doctrine_options(db_alias)
+            doctrine_ids = sorted(
+                doctrine_map,
+                key=lambda did: format_doctrine_name(doctrine_map[did]["doctrine_name"]),
             )
-            selected_doctrine = st.selectbox(
+            selected_doctrine_id = st.selectbox(
                 "Select Doctrine",
-                doctrine_names,
+                [None] + doctrine_ids,
                 key="doctrine_select",
-                format_func=format_doctrine_name,
+                format_func=lambda did: "Select a doctrine..."
+                if did is None
+                else format_doctrine_name(doctrine_map[did]["doctrine_name"]),
             )
         else:
-            selected_doctrine = None
+            selected_doctrine_id = None
 
     # Download button
     if filter_type == "All Fits":
@@ -387,26 +398,22 @@ def doctrine_downloads_section():
             icon=":material/download:",
         )
     else:
-        if selected_doctrine and selected_doctrine != "Select a doctrine...":
-            doctrines = _get_doctrine_options(db_alias)
-            doctrine_data = next(
-                (d for d in doctrines if d["doctrine_name"] == selected_doctrine), None
+        if selected_doctrine_id is not None and selected_doctrine_id in doctrine_map:
+            doctrine_data = doctrine_map[selected_doctrine_id]
+            fit_ids = tuple(doctrine_data["fit_ids"])
+            doctrine_name = doctrine_data["doctrine_name"]
+            safe_name = doctrine_name.replace(" ", "_").lower()
+
+            st.download_button(
+                f"Download {format_doctrine_name(doctrine_name)}",
+                data=lambda a=db_alias, fids=fit_ids: _get_filtered_doctrine_csv(
+                    a, fids
+                ),
+                file_name=f"doctrine_{safe_name}.csv",
+                mime="text/csv",
+                use_container_width=True,
+                icon=":material/download:",
             )
-
-            if doctrine_data:
-                fit_ids = tuple(doctrine_data["fit_ids"])
-                safe_name = selected_doctrine.replace(" ", "_").lower()
-
-                st.download_button(
-                    f"Download {format_doctrine_name(selected_doctrine)}",
-                    data=lambda a=db_alias, fids=fit_ids: _get_filtered_doctrine_csv(
-                        a, fids
-                    ),
-                    file_name=f"doctrine_{safe_name}.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                    icon=":material/download:",
-                )
 
 
 @st.fragment
