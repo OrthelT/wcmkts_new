@@ -150,7 +150,7 @@ class TestDoctrineDownloadsCsv:
             "fits_on_mkt": [2], "ship_name": ["Osprey"], "type_name": ["Tritanium"],
         })
         mock_service.repository.get_all_targets.return_value = pd.DataFrame({
-            "fit_id": [1], "ship_target": [10]
+            "fit_id": [1], "fit_name": ["Logi"], "ship_target": [10]
         })
         mock_svc_cls.create_default.return_value = mock_service
 

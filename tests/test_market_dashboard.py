@@ -180,7 +180,7 @@ class TestDoctrineShipsColumnConfig:
         from ui.column_definitions import get_doctrine_ships_column_config
         config = get_doctrine_ships_column_config("en")
         expected_keys = {
-            "image_url", "type_name", "current_sell_price", "order_volume",
+            "image_url", "type_name", "fit_id", "current_sell_price", "order_volume",
             "jita_sell_price", "ship_target", "fits_on_mkt",
             "_mkt", "_doc",
         }
