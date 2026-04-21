@@ -216,6 +216,69 @@ class TestDoctrineDownloadsCsv:
         assert b"fit_id" in result
 
 
+class TestClearDownloadCaches:
+    """Regression tests for post-sync cache invalidation.
+
+    The downloads page wraps already-cached repo calls in its own
+    @st.cache_data layer. Without targeted invalidation in
+    refresh_market_caches(), users saw stale CSVs until the page-level
+    TTL expired.
+    """
+
+    _MARKET_SCOPED_FNS = (
+        "_get_market_orders_csv",
+        "_get_market_stats_csv",
+        "_get_market_history_csv",
+        "_get_all_doctrine_fits_csv",
+        "_get_low_stock_doctrine_fits_csv",
+        "_get_fit_options",
+        "_get_doctrine_options",
+        "_get_filtered_doctrine_csv",
+        "_get_single_fit_csv",
+        "_get_low_stock_csv",
+    )
+    _SDE_SCOPED_FNS = ("_get_sde_table_csv", "_get_sde_tables")
+
+    def test_clears_all_market_and_doctrine_caches(self):
+        """clear_download_caches() calls .clear() on every market-scoped CSV fn."""
+        import pages.downloads as downloads
+        patches = {name: patch.object(downloads, name) for name in self._MARKET_SCOPED_FNS}
+        mocks = {name: p.start() for name, p in patches.items()}
+        try:
+            downloads.clear_download_caches()
+            for name, m in mocks.items():
+                m.clear.assert_called_once()
+        finally:
+            for p in patches.values():
+                p.stop()
+
+    def test_leaves_sde_caches_untouched(self):
+        """SDE caches are invariant across market syncs and must not be cleared."""
+        import pages.downloads as downloads
+        patches = {name: patch.object(downloads, name) for name in self._SDE_SCOPED_FNS}
+        mocks = {name: p.start() for name, p in patches.items()}
+        try:
+            downloads.clear_download_caches()
+            for name, m in mocks.items():
+                m.clear.assert_not_called()
+        finally:
+            for p in patches.values():
+                p.stop()
+
+    @patch("pages.downloads.clear_download_caches")
+    def test_refresh_market_caches_invokes_download_clear(self, mock_clear):
+        """refresh_market_caches() must call clear_download_caches() post-sync.
+
+        This guards against the original bug: repo caches cleared but page-level
+        CSV caches left stale until TTL expiry.
+        """
+        from state.market_state import refresh_market_caches
+
+        refresh_market_caches()
+
+        mock_clear.assert_called_once()
+
+
 class TestGetTableListReturnType:
     """Test that get_table_list returns list[str]."""
 
