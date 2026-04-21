@@ -11,6 +11,7 @@ import streamlit as st
 
 from config import DatabaseConfig
 from logging_config import setup_logging
+from pages.components.db_refresh import simple_time_to_update
 
 logger = setup_logging(__name__, log_file="sync_display.log")
 
@@ -78,3 +79,12 @@ def display_sync_status(language_code: str = "en"):
         ),
         unsafe_allow_html=True,
     )
+
+    # render progress bar until next db update
+    minutes_remaining = simple_time_to_update()
+    percent_until_next = (60-minutes_remaining)/60
+    minutes_string = " minute" if minutes_remaining == 1 else " minutes"
+    if total_minutes is not None and total_minutes > 70:
+        st.sidebar.markdown(f"Database update is **{total_minutes - 60} minutes** overdue, click update data to check if new data is available")
+    else:
+        st.sidebar.progress(percent_until_next, text=f"{minutes_remaining}{minutes_string} remaining until next update")
