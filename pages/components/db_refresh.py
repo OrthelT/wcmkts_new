@@ -154,17 +154,20 @@ def check_db(manual_override: bool = False):
     elif not any_stale and manual_override:
         # User clicked "Update Data" but there's nothing new — tell them
         # when the next automated update will land.
-        from settings_service import minutes_until_next_db_update
         from state.language_state import get_active_language
+        from state.sync_state import minutes_until_next_update
         from ui.i18n import translate_text
 
         lang = get_active_language()
-        minutes = minutes_until_next_db_update()
+        minutes = minutes_until_next_update()
         no_new = translate_text(lang, "market_stats.no_new_data")
-        countdown = translate_text(
-            lang, "market_stats.next_update_countdown", minutes=minutes
-        )
-        st.toast(f"{no_new} {countdown}", icon="⏳")
+        if minutes is None:
+            st.toast(no_new, icon="⏳")
+        else:
+            countdown = translate_text(
+                lang, "market_stats.next_update_countdown", minutes=minutes
+            )
+            st.toast(f"{no_new} {countdown}", icon="⏳")
 
 
 def maybe_run_check():

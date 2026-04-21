@@ -6,7 +6,6 @@ config.py, or logging_config.py to avoid circular imports.
 
 import tomllib
 import logging
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -86,79 +85,6 @@ class SettingsService:
     @property
     def default_language(self) -> str:
         return self.settings.get("i18n", {}).get("default_language", "en")
-
-
-def get_db_update_schedule() -> tuple[int, int]:
-    """Return the (frequency_hours, minutes_after_hour) schedule for DB updates.
-
-    Values come from the ``[db_update]`` section of settings.toml:
-      - ``frequency``: hours between scheduled updates (1 = hourly)
-      - ``time``: minutes after the hour when the update runs
-
-    Defaults to (1, 0) if the section is missing so callers always get a
-    valid schedule.
-    """
-    settings = _load_settings()
-    cfg = settings.get("db_update", {})
-    frequency = int(cfg.get("frequency", 1))
-    minute = int(cfg.get("time", 0))
-    if frequency < 1:
-        frequency = 1
-    minute = max(0, min(59, minute))
-    return frequency, minute
-
-
-def time_until_next_db_update(now: datetime | None = None) -> timedelta:
-    """Return the ``timedelta`` from ``now`` until the next scheduled DB update.
-
-    The schedule is midnight-UTC anchored: updates run every ``frequency``
-    hours at ``minute`` past the hour (e.g. 00:20, 01:20, 02:20 for
-    frequency=1, minute=20). If every slot today has already passed, this
-    rolls over to the first slot of the following day.
-
-    Note: "every ``frequency`` hours" only holds cleanly when ``frequency``
-    divides 24 (1, 2, 3, 4, 6, 8, 12, 24). For non-divisors (e.g. 5), the
-    last daily slot lands before 24h and the rollover resets at 00:``minute``
-    tomorrow — producing a short gap between the last slot of today and the
-    first slot of tomorrow. Use divisor values to keep the cadence uniform.
-
-    Args:
-        now: Reference time (assumed UTC if naive). Defaults to ``datetime.now(tz=UTC)``.
-    """
-    frequency, minute = get_db_update_schedule()
-    if now is None:
-        now = datetime.now(tz=timezone.utc)
-    elif now.tzinfo is None:
-        now = now.replace(tzinfo=timezone.utc)
-    else:
-        # Schedule is UTC-anchored; convert any other tz so the midnight
-        # boundary below lands on UTC midnight, not the caller's local one.
-        now = now.astimezone(timezone.utc)
-
-    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    # Iterate candidate slots for today, then fall through to tomorrow.
-    slots_per_day = max(1, 24 // frequency)
-    for k in range(slots_per_day):
-        candidate = midnight + timedelta(hours=k * frequency, minutes=minute)
-        if candidate > now:
-            return candidate - now
-    tomorrow_midnight = midnight + timedelta(days=1)
-    return (tomorrow_midnight + timedelta(minutes=minute)) - now
-
-
-def minutes_until_next_db_update(now: datetime | None = None) -> int:
-    """Return the whole-minute countdown until the next scheduled DB update.
-
-    Convenience wrapper around :func:`time_until_next_db_update` for UI
-    callers that just want an integer. Rounds up so a countdown of 0s
-    becomes 1 minute (never report "0 minutes" to the user).
-    """
-    delta = time_until_next_db_update(now)
-    total_seconds = max(0, int(delta.total_seconds()))
-    # Round up to at least 1 so we never render "0 minutes".
-    minutes = (total_seconds + 59) // 60
-    return max(1, minutes)
-
 
 def resolve_db_alias(db_alias: str | None = None, fallback: str = "wcmkt") -> str:
     """Resolve a database alias, falling back to the active market hub.

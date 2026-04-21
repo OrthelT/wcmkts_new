@@ -2,9 +2,18 @@ from logging_config import setup_logging
 from config import DatabaseConfig
 from datetime import timezone, datetime, timedelta
 from time import perf_counter
+
+import streamlit as st
+
 from state.session_state import ss_set
 from state.market_state import get_active_market
 logger = setup_logging(__name__)
+
+# Expected interval between ESI market updates. Used to derive a countdown
+# from the last-observed local update timestamp without assuming a fixed
+# wall-clock slot (data lands ~hourly after the previous update, not at a
+# fixed :MM past the hour).
+_UPDATE_INTERVAL_MINUTES = 60
 
 def update_wcmkt_state(db_alias: str = None, skip_remote: bool = False) -> None:
     """Update session state with local (and optionally remote) DB update times.
@@ -75,6 +84,34 @@ def update_wcmkt_state(db_alias: str = None, skip_remote: bool = False) -> None:
     elapsed_time = round((end_time-start_time)*1000, 2)
     logger.info(f"TIME update_wcmkt_state() = {elapsed_time} ms")
     logger.info("-"*60)
+
+def minutes_until_next_update() -> int | None:
+    """Return whole minutes until the next expected DB update, or None if unknown.
+
+    Assumes ingestion arrives ~60 minutes after the last recorded update.
+    Returns 0 once the window has elapsed (the update is "due").
+    Returns None when local update status is unavailable — callers must
+    render a neutral state rather than a misleading countdown.
+    """
+    if "local_update_status" not in st.session_state:
+        try:
+            update_wcmkt_state()
+        except Exception as exc:
+            logger.error(f"Error initializing local_update_status: {exc}")
+            return None
+
+    status = st.session_state.get("local_update_status")
+    if status is None:
+        return None
+    time_since = status.get("time_since")
+    if time_since is None:
+        return None
+
+    minutes_since = time_since.total_seconds() / 60
+    if minutes_since >= _UPDATE_INTERVAL_MINUTES:
+        return 0
+    return int(_UPDATE_INTERVAL_MINUTES - minutes_since)
+
 
 if __name__ == "__main__":
     pass
