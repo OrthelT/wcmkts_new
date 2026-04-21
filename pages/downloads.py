@@ -289,6 +289,27 @@ def _get_sde_tables() -> list[str]:
     return db.get_table_list()
 
 
+def clear_download_caches() -> None:
+    """Clear market/doctrine-scoped CSV caches on this page.
+
+    Called by ``state.market_state.refresh_market_caches()`` after a DB sync.
+    SDE caches are intentionally excluded — SDE does not change on market sync.
+    """
+    for fn in (
+        _get_market_orders_csv,
+        _get_market_stats_csv,
+        _get_market_history_csv,
+        _get_all_doctrine_fits_csv,
+        _get_low_stock_doctrine_fits_csv,
+        _get_fit_options,
+        _get_doctrine_options,
+        _get_filtered_doctrine_csv,
+        _get_single_fit_csv,
+        _get_low_stock_csv,
+    ):
+        fn.clear()
+
+
 # =============================================================================
 # UI Sections
 # =============================================================================

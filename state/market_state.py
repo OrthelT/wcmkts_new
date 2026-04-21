@@ -148,6 +148,15 @@ def refresh_market_caches() -> None:
     except ImportError:
         pass
 
+    # Clear download page CSV caches (market/doctrine-scoped only; SDE excluded).
+    # These are dual-layer: page caches wrap repo caches, so clearing only repo
+    # caches leaves stale CSV bytes until page-level TTL expires.
+    try:
+        from pages.downloads import clear_download_caches
+        clear_download_caches()
+    except ImportError:
+        pass
+
     # Clear DoctrineService's in-memory _cached_result on the cached singleton
     # for the active market, without creating one if none exists.
     service_key = f"doctrine_service_{get_active_market_key()}"
