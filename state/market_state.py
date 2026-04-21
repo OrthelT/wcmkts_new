@@ -154,8 +154,8 @@ def refresh_market_caches() -> None:
     try:
         from pages.downloads import clear_download_caches
         clear_download_caches()
-    except ImportError:
-        pass
+    except ImportError as e:
+        logger.debug(f"Skipping download cache clear: {e}")
 
     # Clear DoctrineService's in-memory _cached_result on the cached singleton
     # for the active market, without creating one if none exists.

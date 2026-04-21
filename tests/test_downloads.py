@@ -221,8 +221,8 @@ class TestClearDownloadCaches:
 
     The downloads page wraps already-cached repo calls in its own
     @st.cache_data layer. Without targeted invalidation in
-    refresh_market_caches(), users saw stale CSVs until the TTL expired
-    (up to 30 min).
+    refresh_market_caches(), users saw stale CSVs until the page-level
+    TTL expired.
     """
 
     _MARKET_SCOPED_FNS = (
