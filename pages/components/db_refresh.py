@@ -155,15 +155,19 @@ def check_db(manual_override: bool = False):
         # User clicked "Update Data" but there's nothing new — tell them
         # when the next automated update will land.
         from state.language_state import get_active_language
+        from state.sync_state import minutes_until_next_update
         from ui.i18n import translate_text
 
         lang = get_active_language()
-        minutes = simple_time_to_update()
+        minutes = minutes_until_next_update()
         no_new = translate_text(lang, "market_stats.no_new_data")
-        countdown = translate_text(
-            lang, "market_stats.next_update_countdown", minutes=minutes
-        )
-        st.toast(f"{no_new} {countdown}", icon="⏳")
+        if minutes is None:
+            st.toast(no_new, icon="⏳")
+        else:
+            countdown = translate_text(
+                lang, "market_stats.next_update_countdown", minutes=minutes
+            )
+            st.toast(f"{no_new} {countdown}", icon="⏳")
 
 
 def maybe_run_check():
@@ -220,19 +224,3 @@ def ensure_init_and_check() -> bool:
     update_wcmkt_state()
     maybe_run_check()
     return True
-
-def simple_time_to_update():
-    if "local_update_status" not in st.session_state:
-        try:
-            from state.sync_state import update_wcmkt_state
-            update_wcmkt_state()
-        except Exception as exc:
-            logger.error(f"Error initializing local_update_status: {exc}")
-
-    update_status = st.session_state.get("local_update_status")
-    time_since = update_status["time_since"].seconds/60
-
-    if time_since > 60:
-        return 0
-    else:
-        return int(60 - time_since)

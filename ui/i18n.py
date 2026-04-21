@@ -294,6 +294,11 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "market_stats.update_data": "Update Data",
         "market_stats.next_update_countdown": "Time until next automated update: {minutes} minutes",
         "market_stats.no_new_data": "No new data available.",
+        "sync_status.minutes_remaining": "{minutes} minutes remaining until next update",
+        "sync_status.minute_remaining": "1 minute remaining until next update",
+        "sync_status.awaiting_update": "Awaiting next update…",
+        "sync_status.update_overdue": "Database update is **{minutes} minutes** overdue, click update data to check if new data is available",
+        "sync_status.countdown_unavailable": "Update time unavailable",
         "market_stats.downloads_hint": (
             "*Visit the **Downloads** page for market data, doctrine fits, and SDE table exports.*"
         ),
@@ -846,6 +851,11 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "market_stats.update_data": "更新数据",
         "market_stats.next_update_countdown": "距离下次自动更新：{minutes} 分钟",
         "market_stats.no_new_data": "暂无新数据。",
+        "sync_status.minutes_remaining": "距离下次更新还有 {minutes} 分钟",
+        "sync_status.minute_remaining": "距离下次更新还有 1 分钟",
+        "sync_status.awaiting_update": "等待下次更新…",
+        "sync_status.update_overdue": "数据库更新已延迟 **{minutes} 分钟**，点击更新数据检查是否有新数据可用",
+        "sync_status.countdown_unavailable": "更新时间不可用",
         "market_stats.downloads_hint": "*访问**下载**页面以导出市场、建制和 SDE 数据。*",
         "market_stats.date_range": "日期范围",
         "market_stats.available_data_range": "可用数据范围：{start} 到 {end}",

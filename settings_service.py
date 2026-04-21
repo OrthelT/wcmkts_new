@@ -6,7 +6,6 @@ config.py, or logging_config.py to avoid circular imports.
 
 import tomllib
 import logging
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 logger = logging.getLogger(__name__)

@@ -11,9 +11,16 @@ import streamlit as st
 
 from config import DatabaseConfig
 from logging_config import setup_logging
-from pages.components.db_refresh import simple_time_to_update
+from state.sync_state import minutes_until_next_update
+from ui.i18n import translate_text
 
 logger = setup_logging(__name__, log_file="sync_display.log")
+
+# Tolerance before flagging an update as overdue. Ingestion lag of a few
+# minutes is normal, so the overdue banner only fires once the window has
+# been open for this many minutes past the expected 60-minute interval.
+_OVERDUE_GRACE_MINUTES = 10
+_UPDATE_INTERVAL_MINUTES = 60
 
 
 def display_sync_status(language_code: str = "en"):
@@ -23,6 +30,7 @@ def display_sync_status(language_code: str = "en"):
 
     update_time: datetime | None = None
     time_since: timedelta | None = None
+    total_minutes: int | None = None
     display_time = "Unavailable"
     display_time_since = "Unavailable"
 
@@ -80,11 +88,26 @@ def display_sync_status(language_code: str = "en"):
         unsafe_allow_html=True,
     )
 
-    # render progress bar until next db update
-    minutes_remaining = simple_time_to_update()
-    percent_until_next = (60-minutes_remaining)/60
-    minutes_string = " minute" if minutes_remaining == 1 else " minutes"
-    if total_minutes is not None and total_minutes > 70:
-        st.sidebar.markdown(f"Database update is **{total_minutes - 60} minutes** overdue, click update data to check if new data is available")
+    overdue_threshold = _UPDATE_INTERVAL_MINUTES + _OVERDUE_GRACE_MINUTES
+    if total_minutes is not None and total_minutes > overdue_threshold:
+        overdue_by = total_minutes - _UPDATE_INTERVAL_MINUTES
+        st.sidebar.markdown(
+            translate_text(language_code, "sync_status.update_overdue", minutes=overdue_by)
+        )
+        return
+
+    minutes_remaining = minutes_until_next_update()
+    if minutes_remaining is None:
+        st.sidebar.caption(translate_text(language_code, "sync_status.countdown_unavailable"))
+        return
+
+    percent_until_next = (_UPDATE_INTERVAL_MINUTES - minutes_remaining) / _UPDATE_INTERVAL_MINUTES
+    if minutes_remaining == 0:
+        bar_text = translate_text(language_code, "sync_status.awaiting_update")
+    elif minutes_remaining == 1:
+        bar_text = translate_text(language_code, "sync_status.minute_remaining")
     else:
-        st.sidebar.progress(percent_until_next, text=f"{minutes_remaining}{minutes_string} remaining until next update")
+        bar_text = translate_text(
+            language_code, "sync_status.minutes_remaining", minutes=minutes_remaining
+        )
+    st.sidebar.progress(percent_until_next, text=bar_text)
