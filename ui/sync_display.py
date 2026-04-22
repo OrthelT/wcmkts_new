@@ -102,6 +102,10 @@ def display_sync_status(language_code: str = "en"):
         return
 
     percent_until_next = (_UPDATE_INTERVAL_MINUTES - minutes_remaining) / _UPDATE_INTERVAL_MINUTES
+  
+    if minutes_remaining < 5:
+        st.balloons()
+  
     if minutes_remaining == 0:
         bar_text = translate_text(language_code, "sync_status.awaiting_update")
     elif minutes_remaining == 1:
