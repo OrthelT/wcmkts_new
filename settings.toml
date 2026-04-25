@@ -75,11 +75,11 @@
     turso_secret_key = "wcmktprod_turso"
 
 [markets.deployment]
-    name = "B-9C24 Keepstar"
-    short_name = "B9"
-    region_id = 10000023
-    system_id = 30002029
-    structure_id = 1046831245129
+    name = "4-HWWF Sotiyo"
+    short_name = "Sotiyo"
+    region_id = 10000003
+    system_id = 30000240
+    structure_id = 1035603743755
     database_alias = "wcmktnorth"
     database_file = "wcmktnorth2.db"
     turso_secret_key = "wcmktnorth_turso"
@@ -107,7 +107,7 @@
 
 [env]
     env = "prod"
-    log_level = "DEBUG" #INFO or DEBUG (case sensitive)
+    log_level = "INFO" #INFO or DEBUG (case sensitive)
 
 [market]
     name = "4-HWWF"
