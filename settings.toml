@@ -65,11 +65,11 @@
     "33157" = 494
 
 [markets.primary]
-    name = "4-HWWF Keepstar"
-    short_name = "4H"
+    name = "4-HWWF New Keepstar"
+    short_name = "4H-New"
     region_id = 10000003
     system_id = 30000240
-    structure_id = 1035466617946
+    structure_id = 1053654548169
     database_alias = "wcmktprod"
     database_file = "wcmktprod.db"
     turso_secret_key = "wcmktprod_turso"
@@ -111,7 +111,7 @@
 
 [market]
     name = "4-HWWF"
-    short_name = "4H"
+    short_name = "4H-New"
 
 [import_helper]
     default_shipping_cost = 445
