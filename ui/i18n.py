@@ -287,7 +287,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "market_stats.total_buy_orders": "Total Buy Orders",
         "market_stats.no_current_buy_orders": "No current buy orders found for {item_name}",
         "market_stats.no_current_market_orders": "No current market orders found for {item_name}",
-        "market_stats.market_history": "Market History - {item_name}",
+        "market_stats.market_history": "Regional Market History - {item_name}",
         "market_stats.price_history": "Price History - {filter_info}",
         "market_stats.expand_market_history_data": "Expand to view Market History Data",
         "market_stats.fitting_data": "Fitting Data",

@@ -75,11 +75,11 @@
     turso_secret_key = "wcmktprod_turso"
 
 [markets.deployment]
-    name = "4-HWWF Sotiyo"
-    short_name = "Sotiyo"
-    region_id = 10000003
-    system_id = 30000240
-    structure_id = 1035603743755
+    name = "X47L-Q - Rogue Threshold"
+    short_name = "X47"
+    region_id = 10000023
+    system_id = 30001967
+    structure_id = 1041669946862
     database_alias = "wcmktnorth"
     database_file = "wcmktnorth2.db"
     turso_secret_key = "wcmktnorth_turso"
