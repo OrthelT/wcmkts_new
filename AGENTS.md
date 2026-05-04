@@ -2,6 +2,43 @@
 
 This file provides comprehensive guidance for LLM assistants (like Claude Code) when helping developers work with the Winter Coalition Market Stats Viewer codebase.
 
+## New Task
+### Improve Dashboard UI
+One of the primary use cases of this app is to monitor market availability of doctrine ships. I'd like to revise the display of Doctrine Ships and Popular Modules tables on ./pages/market_dashboard.py to better support this usecase. 
+- Doctrine Ships - add a column "% target" calculated from fits_on_mkt/ship_target with a progress bar keyed to % target.
+- Doctrine Ships - reorder columns: (icon), fit_id, item, progress bar, stock, fit_available, target, % target, sell_price, jita_sell
+- Popular Modules - create new columns "target %" and "qty needed" that is calculated from the doctrines table. Use the following query for type_id 13001 as an example or a more efficient method if you can devise it:
+```sql
+```sql
+
+WITH needed AS (
+  SELECT
+    d.type_id,
+    CASE WHEN d.fits_on_mkt < s.ship_target
+      THEN (s.ship_target - fits_on_mkt) * fit_qty
+    ELSE 0
+    END qty_needed
+  FROM doctrines as d
+  JOIN ship_targets as s
+  ON d.fit_id = s.fit_id
+)
+SELECT
+  MAX(n.qty_needed) qty_needed,
+  round(MIN((d.fits_on_mkt/s.ship_target)*100),0) AS target_perc
+FROM doctrines as d
+JOIN needed as n
+ON d.type_id = n.type_id
+JOIN ship_targets as s
+ON d.fit_id = s.fit_id
+WHERE d.type_id = 13001
+```
+
+- Popular modules - Column order: (icon), item, stock, "target %", "qty needed". sell_price, jita_sell,jita_buy, % vs jita
+- Popular modules - order alphabetically, include all items in the doctrine table except for ships.
+- Doctrine Ships - add a column % target calculated from progress bar keyed to percent target. 
+- Display these tables across the width of the page rather than in two columns
+Make a plan first
+
 ## Project Overview
 
 Winter Coalition Market Stats Viewer is a Streamlit web application for EVE Online market analysis. It provides real-time market data visualization, doctrine analysis, and inventory management tools for the Winter Coalition.
