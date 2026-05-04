@@ -452,7 +452,7 @@ class DatabasePriceProvider:
             if not df.empty:
                 max_updated = df['last_updated'].max()
                 try:
-                    updated_dt = datetime.fromisoformat(max_updated)
+                    updated_dt = datetime.fromisoformat(max_updated).replace(tzinfo=timezone.utc)
                     age_hours = (datetime.now(timezone.utc) - updated_dt).total_seconds() / 3600
                     if age_hours > 4:
                         self._logger.warning(

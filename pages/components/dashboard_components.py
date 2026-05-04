@@ -20,6 +20,7 @@ from ui.column_definitions import (
 from ui.formatters import drop_localized_backup_columns
 from ui.i18n import translate_text
 from domain.enums import StockStatus
+from state import ss_get
 
 logger = setup_logging(__name__)
 
@@ -195,7 +196,6 @@ def render_comparison_table(
     )
 
     st.subheader(translate_text(language_code, title_key), divider="gray")
-
     if dataframe_key:
         st.caption(translate_text(language_code, "dashboard.hint_click_market_stats"))
         event = st.dataframe(
@@ -307,6 +307,15 @@ def _compute_module_targets(doctrine_repo) -> pd.DataFrame:
 
     return agg
 
+def _render_filter_columns(filter_key: str):
+    filter_col1,filter_col2 = st.columns(spec=[0.3,0.7], width=400, vertical_alignment="center")
+    with filter_col1:
+        st.menu_button(label="filter", options=["low stock", "all"], type="tertiary", key=filter_key)
+    with filter_col2:
+        filter_selection = ss_get(filter_key,"low stock")
+        st.markdown(f"<span style='color: orange;'>Showing:</span> {filter_selection}",unsafe_allow_html=True)
+    return filter_selection
+
 
 def render_popular_modules_table(
     market_service,
@@ -363,18 +372,24 @@ def render_popular_modules_table(
         "current_sell_price", "jita_sell_price", "jita_buy_price",
         "pct_diff_vs_jita_sell",
     ]
-    display_df = snapshot[display_cols].copy()
-    table_df = drop_localized_backup_columns(display_df)
-    styled_table = table_df.style.map(
-        _jita_diff_cell_style, subset=["pct_diff_vs_jita_sell"]
-    )
 
     st.subheader(
         translate_text(language_code, "dashboard.doctrine_modules"), divider="gray",
     )
+    display_df = snapshot[display_cols].copy()
+    
+    # render a filter to allow users to display all items. defaults to just low stock itemns
+    mod_dash_filter_selection: str = _render_filter_columns("mod_dash_filter")
+    if mod_dash_filter_selection == "low stock":
+        display_df = display_df[display_df["target_pct"]<100]
 
+    table_df = drop_localized_backup_columns(display_df)
+    styled_table = table_df.style.map(
+        _jita_diff_cell_style, subset=["pct_diff_vs_jita_sell"]
+    )
+    
     if dataframe_key:
-        st.caption(translate_text(language_code, "dashboard.hint_click_market_stats"))
+        st.caption("📈 = "+translate_text(language_code, "dashboard.hint_click_market_stats"))
         event = st.dataframe(
             styled_table,
             hide_index=True,
@@ -587,11 +602,16 @@ def render_doctrine_ships_table(
         "fits_on_mkt", "ship_target", "current_sell_price", "jita_sell_price",
         "_mkt", "_doc",
     ]
-    display_df = result_df[display_cols].copy()
+    
 
+    display_df = result_df[display_cols].copy()
     st.subheader(
         translate_text(language_code, "dashboard.doctrine_ships"), divider="gray",
     )
+    # render a filter to allow users to display all items. defaults to just low stock itemns
+    doc_dash_filter_selection: str = _render_filter_columns("doc_dash_filter")
+    if doc_dash_filter_selection == "low stock":
+        display_df = display_df[display_df["target_pct"]<100]
 
     if dataframe_key:
         st.caption(
