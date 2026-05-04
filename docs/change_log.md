@@ -4,6 +4,51 @@ Historical record of releases, the architectural refactoring project (Phases 1-1
 
 ---
 
+## v0.5.1 (2026-05-04)
+
+Dashboard refinement release. Builds on the v0.5.0 dashboard with target % progress bars, full-width layout, and harder error handling.
+
+### Improvements
+- **Doctrine Ships table**: New `% target` column (fits_on_mkt / ship_target) rendered as an inline progress bar; columns reordered to: icon, fit_id, item, progress bar, stock, fit_available, target, % target, sell_price, jita_sell.
+- **Popular Modules table**: New `target %` and `qty needed` columns derived from doctrine requirements; alphabetized; includes all non-ship doctrine items. Column order: icon, item, stock, target %, qty needed, sell_price, jita_sell, jita_buy, % vs jita.
+- **Full-width layout**: Doctrine Ships and Popular Modules tables now span the page width instead of sharing a two-column split.
+- **Surface missing ship_targets**: Dashboard now reports doctrine fits that have no `ship_targets` row instead of silently dropping them.
+- **Color refinement**: Mid-luminance tones used for low-stock highlights so they stay readable in dark mode; third neutral color for small positive deltas.
+
+### Bug Fixes
+- Hardened error handling around uninitialized DB access on the dashboard.
+- Replaced deprecated `pandas.Styler.applymap` with `Styler.map`.
+
+---
+
+## v0.5.0 (2026-04-XX)
+
+Market Dashboard release. Introduces a new default landing page with at-a-glance doctrine ship coverage and popular module stock, expanded multi-market support, and significant sync/cache plumbing improvements.
+
+### New Features
+- **Market Dashboard** (`pages/market_dashboard.py`): New default landing page with Doctrine Ships, Popular Modules, Minerals, and Isotopes tables. Rows are clickable -- ships jump to Doctrine Status filtered by ship; minerals/isotopes/modules jump to Market Stats with the item pre-selected via query parameter.
+- **Module equivalents on dashboard**: Dashboard fits-on-market calculations apply the module-equivalents aggregation and use bottleneck (lowest-availability module) instead of hull count, matching Doctrine Status semantics.
+- **x47 market hub**: Added as a third selectable hub alongside 4-HWWF and B-9C24; deployment switched to 4-HWWF Sotiyo with the new keepstar.
+- **Low-stock doctrine market export**: New CSV export on the Downloads page that joins low-stock items with their doctrine usage.
+- **Time-to-update progress bar**: Sidebar replaces text countdown with a progress bar; balloons fire when less than 5 minutes remain before the next scheduled update.
+- **DB refresh extraction**: Shared `pages/components/db_refresh.py` drives database initialization and staleness check from the dashboard; Market Stats delegates to the same code.
+
+### Improvements
+- **Doctrine IDs as state**: Doctrine selectboxes now key on integer doctrine IDs (not display strings) for robust localization; `fit_name` added to all doctrine exports.
+- **Active-market correctness**: Downloads page, doctrine downloads, and download section descriptions now respect the active market hub. Architecture rule added: never silently display data from the wrong market context -- fail with empty results instead.
+- **Sync simplification**: Removed parallel sync validation paths; `local_matches_remote()` is the single source of truth for sync freshness. `time_until_next_db_update` correctly handles tz-aware non-UTC inputs. Cache orchestrator renamed for clarity.
+- **Cache hygiene on sync**: Downloads page CSV caches and sidebar update times refresh after DB sync; manual sync button renamed; "Loading updated data" toast added after sync.
+- **Performance**: Smaller `wclogo` for faster page load; deferred remote sync check until `check_update` runs; eliminated duplicate localization calls on Market Stats.
+- **Pricer/Market Stats**: Auxiliary pricing table added to the Market Stats view with adjusted column sizing; Import Helper now filters zero-volume rows.
+- **Removed mineral/isotope tables from Market Stats**: They now live on the dashboard.
+
+### Bug Fixes
+- Resolved `DatabasePriceProvider` deferred-issue regressions.
+- Doctrine exports guarded against empty targets and missing columns.
+- Removed unused sort column and redundant `reset_index` in low-stock export.
+
+---
+
 ## v0.4.1 (2026-03-14)
 
 Version bump. No functional changes.

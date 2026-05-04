@@ -609,7 +609,7 @@ from state.session_state import ss_get  # ✗ state!
 
 ## Version Information
 
-- **Current version**: 0.4.1
+- **Current version**: 0.5.1
 - **Python version**: 3.12+
 - **Package manager**: uv (preferred)
 - **Main branch**: main

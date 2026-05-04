@@ -1,4 +1,4 @@
-# Winter Coalition Market App (v.0.4.1)
+# Winter Coalition Market App (v.0.5.1)
 A Streamlit application for viewing EVE Online market statistics for Winter Coalition. This tool provides real-time market data analysis, historical price tracking, and fitting information for various items in EVE Online markets.
 
 SUPPORT: Join the Discord for support https://discord.gg/BxatJE572Y
@@ -7,6 +7,24 @@ CONTRIBUTING: Contributors welcome. This project is fully open source under MIT 
 
 
 # UPDATES:
+## version 0.5.0 / 0.5.1
+### New Features
+- **Market Dashboard**: New default landing page (`pages/market_dashboard.py`) with at-a-glance Doctrine Ships, Popular Modules, Minerals, and Isotopes tables. Rows are clickable -- ships jump to Doctrine Status filtered by ship; modules/minerals/isotopes jump to Market Stats with the item pre-selected via query parameter.
+- **Target % progress bars**: Doctrine Ships table now shows `% target` (fits_on_mkt / ship_target) as an inline progress bar; Popular Modules table shows `target %` and `qty needed` derived from doctrine requirements.
+- **Module equivalents on Dashboard**: Dashboard fits-on-market calculations apply the module-equivalents aggregation and use bottleneck (lowest-availability module) instead of hull count, matching Doctrine Status semantics.
+- **x47 market hub**: Added as a third selectable hub alongside 4-HWWF and B-9C24; deployment switched to 4-HWWF Sotiyo with the new keepstar.
+- **Low-stock doctrine market export**: New CSV export on the Downloads page that joins low-stock items with their doctrine usage.
+- **Time-to-update progress bar**: Sidebar replaces text countdown with a progress bar; balloons fire when less than 5 minutes remain before the next scheduled update.
+
+### Improvements
+- **Doctrine IDs as state**: Doctrine selectboxes now key on integer doctrine IDs (not display strings) for robust localization; `fit_name` added to all doctrine exports.
+- **Active-market correctness**: Downloads page, doctrine downloads, and download section descriptions now respect the active market hub. Architecture rule added: never silently display data from the wrong market context -- fail with empty results instead.
+- **Sync simplification**: Removed parallel sync validation paths; `local_matches_remote()` is now the single source of truth for sync freshness. `time_until_next_db_update` correctly handles tz-aware non-UTC inputs.
+- **Cache hygiene**: Downloads page CSV caches and sidebar update times refresh after DB sync; the manual sync button was renamed for clarity.
+- **Dashboard polish**: Full-width layout, mid-luminance colors that stay readable in dark mode, third neutral color for small positive deltas, surfaced missing `ship_targets` rows, and hardened error handling for uninitialized DB access.
+- **Performance**: Smaller `wclogo` for faster page load; deferred remote sync check until `check_update` runs; eliminated duplicate localization calls on Market Stats.
+- **Pricer/Market Stats**: Auxiliary pricing table added to the Market Stats view with adjusted column sizing; import helper now filters zero-volume rows.
+
 ## version 0.4.2
 - performance improvements to Jita price fetching, UI updates to import helper to indicate derived estimated values and refinement of calculations. Various other improvements to code quality, testing, and performance. 
 
