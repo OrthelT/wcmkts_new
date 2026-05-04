@@ -106,7 +106,7 @@ def _status_cell_style(status_label: str) -> str:
     """
     if isinstance(status_label, str):
         if status_label.startswith("🟡"):
-            return "background-color: rgba(220, 250, 60, 0.25)"
+            return "background-color: rgba(220, 170, 60, 0.55)"
         if status_label.startswith("🔴"):
             return "background-color: rgba(239, 83, 80, 0.28)"
     return ""
@@ -518,7 +518,7 @@ def render_doctrine_ships_table(
     result_df["type_name"] = result_df["type_name"].fillna(result_df["type_id"].astype(str))
 
     display_cols = [
-        "image_url", "fit_id", "type_name", "target_pct", "order_volume",
+         "fit_id", "image_url", "type_name", "target_pct", "order_volume",
         "fits_on_mkt", "ship_target", "current_sell_price", "jita_sell_price",
         "_mkt", "_doc",
     ]

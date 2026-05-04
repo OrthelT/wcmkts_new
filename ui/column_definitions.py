@@ -294,13 +294,13 @@ def get_market_comparison_column_config(
 def get_doctrine_ships_column_config(language_code: str = "en") -> dict:
     """Get column configuration for the dashboard doctrine ships table."""
     return {
-        "image_url": st.column_config.ImageColumn(
-            "",
-            width=40,
-        ),
         "fit_id": st.column_config.NumberColumn(
             translate_text(language_code, "doctrine_report.fit_id"),
-            width=50,
+            width=15,
+        ),
+       "image_url": st.column_config.ImageColumn(
+            "",
+            width=40,
         ),
         "type_name": st.column_config.TextColumn(
             translate_text(language_code, "common.item"),
