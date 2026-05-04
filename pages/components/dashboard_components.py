@@ -307,14 +307,34 @@ def _compute_module_targets(doctrine_repo) -> pd.DataFrame:
 
     return agg
 
-def _render_filter_columns(filter_key: str):
-    filter_col1,filter_col2 = st.columns(spec=[0.3,0.7], width=400, vertical_alignment="center")
+_FILTER_OPTIONS = ("low_stock", "all")
+
+
+def _render_filter_columns(filter_key: str, language_code: str) -> str:
+    option_labels = {
+        "low_stock": translate_text(language_code, "dashboard.filter_low_stock"),
+        "all": translate_text(language_code, "dashboard.filter_all"),
+    }
+    filter_col1, filter_col2 = st.columns(spec=[0.3, 0.7], width=400, vertical_alignment="center")
     with filter_col1:
-        st.menu_button(label="filter", options=["low stock", "all"], type="tertiary", key=filter_key)
+        st.menu_button(
+            label=translate_text(language_code, "dashboard.filter_label"),
+            options=[option_labels[opt] for opt in _FILTER_OPTIONS],
+            type="tertiary",
+            key=filter_key,
+        )
+    selection_label = ss_get(filter_key, option_labels["low_stock"])
+    selection_token = next(
+        (token for token, label in option_labels.items() if label == selection_label),
+        "low_stock",
+    )
     with filter_col2:
-        filter_selection = ss_get(filter_key,"low stock")
-        st.markdown(f"<span style='color: orange;'>Showing:</span> {filter_selection}",unsafe_allow_html=True)
-    return filter_selection
+        showing_label = translate_text(language_code, "dashboard.filter_showing")
+        st.markdown(
+            f"<span style='color: orange;'>{showing_label}</span> {option_labels[selection_token]}",
+            unsafe_allow_html=True,
+        )
+    return selection_token
 
 
 def render_popular_modules_table(
@@ -377,11 +397,10 @@ def render_popular_modules_table(
         translate_text(language_code, "dashboard.doctrine_modules"), divider="gray",
     )
     display_df = snapshot[display_cols].copy()
-    
-    # render a filter to allow users to display all items. defaults to just low stock itemns
-    mod_dash_filter_selection: str = _render_filter_columns("mod_dash_filter")
-    if mod_dash_filter_selection == "low stock":
-        display_df = display_df[display_df["target_pct"]<100]
+
+    mod_dash_filter_selection = _render_filter_columns("mod_dash_filter", language_code)
+    if mod_dash_filter_selection == "low_stock":
+        display_df = display_df[display_df["target_pct"] < 100]
 
     table_df = drop_localized_backup_columns(display_df)
     styled_table = table_df.style.map(
@@ -608,10 +627,9 @@ def render_doctrine_ships_table(
     st.subheader(
         translate_text(language_code, "dashboard.doctrine_ships"), divider="gray",
     )
-    # render a filter to allow users to display all items. defaults to just low stock itemns
-    doc_dash_filter_selection: str = _render_filter_columns("doc_dash_filter")
-    if doc_dash_filter_selection == "low stock":
-        display_df = display_df[display_df["target_pct"]<100]
+    doc_dash_filter_selection = _render_filter_columns("doc_dash_filter", language_code)
+    if doc_dash_filter_selection == "low_stock":
+        display_df = display_df[display_df["target_pct"] < 100]
 
     if dataframe_key:
         st.caption(
