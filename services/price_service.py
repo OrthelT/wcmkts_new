@@ -18,6 +18,7 @@ import pandas as pd
 from sqlalchemy.exc import OperationalError
 from config import DatabaseConfig
 from logging_config import setup_logging
+from sqlalchemy import bindparam, text
 
 logger = setup_logging(__name__, log_file="price_service.log")
 
@@ -40,6 +41,24 @@ def _chunked(values: Iterable[TypeID], chunk_size: int) -> list[list[TypeID]]:
     if chunk_size <= 0:
         raise ValueError("chunk_size must be positive")
     return [items[i:i + chunk_size] for i in range(0, len(items), chunk_size)]
+
+
+def _get_time_since_update(table_name: str, alias: str = "wcmktprod") -> float:
+    dt = datetime
+    engine = DatabaseConfig(alias).engine
+
+    with engine.connect() as conn:
+        result = conn.execute(text("SELECT timestamp FROM updatelog WHERE table_name = :param"),{"param": table_name})
+        update_time = result.fetchone().timestamp
+
+    update_time = dt.fromisoformat(update_time).replace(tzinfo=timezone.utc)
+    current_time = dt.now(timezone.utc)
+    time_since_update = (current_time-update_time).seconds/3600
+    if time_since_update > 4:
+        print(("long since update_time"))
+    else: 
+        print("data current")
+    return time_since_update
 
 
 # =============================================================================
@@ -443,25 +462,23 @@ class DatabasePriceProvider:
             return BatchPriceResult(source=PriceSource.JITA_DATABASE)
 
         try:
-            placeholders = ','.join(['?'] * len(type_ids))
-            query = f"SELECT type_id, sell_price, buy_price, last_updated FROM jita_prices WHERE type_id IN ({placeholders})"
-
+            query = text(
+                "SELECT type_id, sell_price, buy_price, last_updated "
+                "FROM jita_prices WHERE type_id IN :ids"
+            ).bindparams(bindparam("ids", expanding=True))
             with self._db.engine.connect() as conn:
-                df = pd.read_sql_query(query, conn, params=tuple(type_ids))
+                df = pd.read_sql_query(query, conn, params={"ids": list(type_ids)})
 
             if not df.empty:
-                max_updated = df['last_updated'].max()
                 try:
-                    updated_dt = datetime.fromisoformat(max_updated).replace(tzinfo=timezone.utc)
-                    age_hours = (datetime.now(timezone.utc) - updated_dt).total_seconds() / 3600
+                    age_hours = _get_time_since_update("jita_prices", self._db.alias)
                     if age_hours > 4:
                         self._logger.warning(
-                            "jita_prices data is %.1f hours old (last_updated: %s)",
-                            age_hours, max_updated,
+                            f"jita_prices data is {round(age_hours,1)} hours old"
                         )
                 except (ValueError, TypeError):
                     self._logger.warning(
-                        "Could not parse last_updated value: %r", max_updated,
+                        "Could not parse last_updated value: %r"
                     )
 
             prices = {}
@@ -530,11 +547,12 @@ class LocalMarketProvider:
             return BatchPriceResult(source=PriceSource.LOCAL_MARKET)
 
         try:
-            placeholders = ','.join(['?'] * len(type_ids))
-            query = f"SELECT type_id, price, avg_price FROM marketstats WHERE type_id IN ({placeholders})"
+            query = text(
+                "SELECT type_id, price, avg_price FROM marketstats WHERE type_id IN :ids"
+            ).bindparams(bindparam("ids", expanding=True))
 
             with self._db.engine.connect() as conn:
-                df = pd.read_sql_query(query, conn, params=tuple(type_ids))
+                df = pd.read_sql_query(query, conn, params={"ids": list(type_ids)})
 
             return self._parse_dataframe(df, type_ids)
 
