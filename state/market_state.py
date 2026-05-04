@@ -74,6 +74,7 @@ _MARKET_SERVICE_NAMES = (
     "market_orders_repository",
     "doctrine_service",
     "market_service",
+    "build_cost_service",
     "pricer_service",
     "low_stock_service",
     "import_helper_service",

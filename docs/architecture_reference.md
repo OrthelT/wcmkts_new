@@ -50,7 +50,6 @@ All domain dataclasses use `frozen=True` for immutability and safe caching.
 | `base.py` | `BaseRepository` with `read_df()` + malformed-DB recovery logic |
 | `doctrine_repo.py` | `DoctrineRepository` (17+ methods) -- fits, targets, doctrine compositions, module stock, equivalents |
 | `market_repo.py` | `MarketRepository` -- stats, orders, history, local prices, SDE info, targeted cache invalidation |
-| `build_cost_repo.py` | `BuildCostRepository` -- structures, rigs, industry indices |
 | `sde_repo.py` | `SDERepository` -- type/group/category lookups, SDE table exports, SQL injection protection via table name allowlist |
 | `market_orders_repo.py` | Market orders for Pricer page |
 
@@ -60,7 +59,7 @@ All domain dataclasses use `frozen=True` for immutability and safe caching.
 |------|-------------|
 | `doctrine_service.py` | `DoctrineService` + `FitDataBuilder` (7-step Builder pipeline), `BuildMetadata` |
 | `market_service.py` | `MarketService` -- 30-day metrics, ISK volume, outlier handling, Plotly chart creation |
-| `build_cost_service.py` | `BuildCostService` -- async cost fetching (httpx), URL construction, `BuildCostJob` dataclass |
+| `build_cost_service.py` | `BuildCostService` -- stored build-cost catalog and per-item snapshot summaries |
 | `price_service.py` | `PriceService` -- provider chain (Fuzzwork -> Janice) with `FallbackPriceProvider` |
 | `pricer_service.py` | `PricerService` -- EFT/multibuy parsing, dual-market price lookups |
 | `import_helper_service.py` | `ImportHelperService` -- local-vs-Jita price comparison, shipping cost, profit, capital utilisation |
@@ -151,8 +150,7 @@ The `_url` cache key is needed because Streamlit cannot hash `self`. Factory fun
 ### Service Pattern
 
 - Services receive repositories via dependency injection
-- Use `Protocol` classes for callbacks (e.g., `ProgressCallback` in build_cost_service)
-- Dataclasses with `@property` replace stateful classes (e.g., `BuildCostJob.is_super`)
+- Use focused dataclasses for service IO (e.g., `BuildCostSnapshot`, `ImportHelperFilters`)
 - Factory functions: `try: from state import get_service` / `except ImportError: return _create()`
 
 ### Builder Pattern (FitDataBuilder)
