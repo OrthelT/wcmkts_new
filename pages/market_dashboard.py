@@ -113,7 +113,6 @@ def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_rep
         if selected:
             _navigate_to_market_stats(selected)
 
-    # Doctrine ships — full width
     ship_id, target = render_doctrine_ships_table(
         doctrine_repo=doctrine_repo,
         market_service=market_service,
@@ -127,7 +126,6 @@ def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_rep
     elif ship_id and target == "doctrine_status":
         _navigate_to_doctrine_status(ship_id)
 
-    # Doctrine modules — full width
     selected = render_popular_modules_table(
         market_service=market_service,
         price_service=price_service,

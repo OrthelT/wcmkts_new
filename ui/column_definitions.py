@@ -298,7 +298,7 @@ def get_doctrine_ships_column_config(language_code: str = "en") -> dict:
             translate_text(language_code, "doctrine_report.fit_id"),
             width=15,
         ),
-       "image_url": st.column_config.ImageColumn(
+        "image_url": st.column_config.ImageColumn(
             "",
             width=40,
         ),
@@ -308,7 +308,7 @@ def get_doctrine_ships_column_config(language_code: str = "en") -> dict:
         ),
         "target_pct": st.column_config.ProgressColumn(
             translate_text(language_code, "dashboard.column_target_pct"),
-            help="Percentage of target stock achieved",
+            help="Percent of ship_target met by fits_on_mkt (capped at 100%)",
             min_value=0,
             max_value=100,
             format="%d%%",
@@ -377,6 +377,7 @@ def get_doctrine_modules_column_config(language_code: str = "en") -> dict:
         ),
         "qty_needed": st.column_config.NumberColumn(
             translate_text(language_code, "dashboard.column_qty_needed"),
+            help="Per-worst-fit shortfall (max across fits, not total fleet demand)",
             format="compact",
             width=60,
         ),

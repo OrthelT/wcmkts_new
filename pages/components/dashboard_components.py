@@ -12,7 +12,11 @@ import pandas as pd
 import streamlit as st
 from logging_config import setup_logging
 from services.type_name_localization import apply_localized_type_names
-from ui.column_definitions import get_market_comparison_column_config
+from ui.column_definitions import (
+    get_doctrine_modules_column_config,
+    get_doctrine_ships_column_config,
+    get_market_comparison_column_config,
+)
 from ui.formatters import drop_localized_backup_columns
 from ui.i18n import translate_text
 from domain.enums import StockStatus
@@ -222,10 +226,20 @@ def render_comparison_table(
 def _compute_module_targets(doctrine_repo) -> pd.DataFrame:
     """Compute target_pct and qty_needed for all non-ship doctrine items.
 
+    Module equivalents (interchangeable faction modules) are resolved before
+    aggregation, so type_ids reflect the canonical equivalent.
+
     For each type_id across all fits it appears in:
     - qty_needed = MAX across fits of:
         if fits_on_mkt < ship_target then (ship_target - fits_on_mkt) * fit_qty else 0
-    - target_pct = MIN across fits of: round((fits_on_mkt / ship_target) * 100)
+    - target_pct = MIN across fits of: round((fits_on_mkt / ship_target) * 100),
+        clipped to [0, 100]. The cap masks overstock (>100%) by design — once a
+        fit hits its target, the dashboard treats it as done.
+
+    Raises:
+        ValueError: if any fit referenced in fits_df has no matching row in
+            ship_targets. Per AGENTS.md data-integrity rule, missing target
+            configuration is surfaced loudly rather than coerced to 0.
 
     Returns DataFrame with columns: type_id, qty_needed, target_pct
     """
@@ -248,6 +262,19 @@ def _compute_module_targets(doctrine_repo) -> pd.DataFrame:
     modules = modules.merge(
         targets_df[["fit_id", "ship_target"]], on="fit_id", how="left",
     )
+
+    # Detect fits with no configured ship_target row (left-join miss).
+    # Coercing NaN to 0 here would silently drive target_pct=0 via MIN-aggregation.
+    missing_mask = modules["ship_target"].isna()
+    if missing_mask.any():
+        missing_fit_ids = sorted(modules.loc[missing_mask, "fit_id"].unique().tolist())
+        logger.error(
+            "Doctrine fits missing ship_targets configuration: %s", missing_fit_ids,
+        )
+        raise ValueError(
+            f"Missing ship_targets configuration for fit_ids: {missing_fit_ids}"
+        )
+
     modules["ship_target"] = (
         pd.to_numeric(modules["ship_target"], errors="coerce").fillna(0).astype(int)
     )
@@ -296,9 +323,11 @@ def render_popular_modules_table(
     Returns:
         Selected type_id if a row was clicked, None otherwise.
     """
-    from ui.column_definitions import get_doctrine_modules_column_config
-
-    module_targets = _compute_module_targets(doctrine_repo)
+    try:
+        module_targets = _compute_module_targets(doctrine_repo)
+    except ValueError as e:
+        st.error(f"Doctrine configuration error: {e}")
+        return None
     if module_targets.empty:
         return None
 
@@ -371,6 +400,18 @@ def render_popular_modules_table(
 # =========================================================================
 
 
+def _compute_ship_target_pct(fits_on_mkt: int, target: int) -> int:
+    """Return progress toward ship_target as an int percent in [0, 100].
+
+    Cap at 100 mirrors `_compute_module_targets` — overstock is masked by design.
+    target<=0 yields 0 (callers should detect "no target configured" upstream
+    rather than relying on this fallback).
+    """
+    if target <= 0:
+        return 0
+    return min(round((fits_on_mkt / target) * 100), 100)
+
+
 def _apply_equivalents_to_fits(fits_df: pd.DataFrame) -> pd.DataFrame:
     """Adjust fits_on_mkt using aggregated stock across equivalent modules.
 
@@ -382,6 +423,7 @@ def _apply_equivalents_to_fits(fits_df: pd.DataFrame) -> pd.DataFrame:
         if not SettingsService().use_equivalents:
             return fits_df
     except Exception:
+        logger.exception("Failed to read use_equivalents setting; returning unmodified fits")
         return fits_df
 
     try:
@@ -391,6 +433,9 @@ def _apply_equivalents_to_fits(fits_df: pd.DataFrame) -> pd.DataFrame:
         if not type_ids_with_equivs:
             return fits_df
     except Exception:
+        logger.exception(
+            "Failed to load module equivalents service; returning unmodified fits"
+        )
         return fits_df
 
     modules_to_update = fits_df[
@@ -429,8 +474,6 @@ def render_doctrine_ships_table(
         (type_id, target) where target is "market_stats" or "doctrine_status",
         or (None, None) if nothing was clicked.
     """
-    from ui.column_definitions import get_doctrine_ships_column_config
-
     fits_df = doctrine_repo.get_all_fits()
     if fits_df.empty:
         return None, None
@@ -471,9 +514,17 @@ def render_doctrine_ships_table(
 
     # Build result DataFrame — one row per fit_id
     rows = []
+    missing_target_fids: list[int] = []
     for _, hull in hull_rows.iterrows():
         sid = int(hull["ship_id"])
         fid = int(hull["fit_id"])
+
+        # Distinguish "no target row" (None) from "target=0" — surfacing the
+        # former as 0% would silently misreport doctrine readiness.
+        if fid not in targets_map:
+            missing_target_fids.append(fid)
+            continue
+
         # Local price from snapshot if available, else from doctrines table
         local_price = 0.0
         if not snapshot.empty and sid in snapshot["type_id"].values:
@@ -485,7 +536,7 @@ def render_doctrine_ships_table(
 
         stock = int(hull.get("total_stock", 0) or 0)
         fits_on_mkt = int(bottleneck_fits.get(fid, 0))
-        target = targets_map.get(fid, 0)
+        target = int(targets_map[fid])
         jita_sell = _get_price_result_value(jita_map.get(sid), "sell_price")
         status = StockStatus.from_stock_and_target(fits_on_mkt, target)
         status_icons = {
@@ -494,8 +545,7 @@ def render_doctrine_ships_table(
             StockStatus.GOOD: "🟢",
         }
 
-        target_pct = round((fits_on_mkt / target) * 100) if target > 0 else 0
-        target_pct = min(target_pct, 100)
+        target_pct = _compute_ship_target_pct(fits_on_mkt, target)
 
         rows.append({
             "type_id": sid,
@@ -513,12 +563,27 @@ def render_doctrine_ships_table(
             "_doc": False,
         })
 
+    if missing_target_fids:
+        logger.error(
+            "Doctrine fits missing ship_targets configuration (excluded from "
+            "ships table): %s",
+            sorted(missing_target_fids),
+        )
+        st.error(
+            "Doctrine configuration error: fits missing ship_target rows: "
+            f"{sorted(missing_target_fids)}. These fits are excluded from the "
+            "ships table — add ship_targets entries to surface them."
+        )
+
+    if not rows:
+        return None, None
+
     result_df = pd.DataFrame(rows)
     result_df = apply_localized_type_names(result_df, sde_repo, language_code, logger)
     result_df["type_name"] = result_df["type_name"].fillna(result_df["type_id"].astype(str))
 
     display_cols = [
-         "fit_id", "image_url", "type_name", "target_pct", "order_volume",
+        "fit_id", "image_url", "type_name", "target_pct", "order_volume",
         "fits_on_mkt", "ship_target", "current_sell_price", "jita_sell_price",
         "_mkt", "_doc",
     ]
