@@ -15,6 +15,7 @@ from ui.column_definitions import get_builder_helper_column_config
 from ui.i18n import translate_text
 from ui.market_selector import render_market_selector
 from ui.sync_display import display_sync_status
+from pages.components.header import render_page_title
 
 logger = setup_logging(__name__, log_file="builder_helper.log")
 
@@ -30,11 +31,7 @@ def main():
         )
         st.stop()
 
-    col1, col2 = st.columns([0.2, 0.8], vertical_alignment="bottom")
-    with col1:
-        st.image("images/wclogo.png", width=125)
-    with col2:
-        st.title(translate_text(language_code, "builder_helper.title"))
+    render_page_title(translate_text(language_code, "builder_helper.title"))
 
     st.markdown(translate_text(language_code, "builder_helper.description"))
 
@@ -155,6 +152,7 @@ def main():
         display_df,
         hide_index=True,
         use_container_width=True,
+        height=600,
         column_config=get_builder_helper_column_config(language_code=language_code),
     )
 

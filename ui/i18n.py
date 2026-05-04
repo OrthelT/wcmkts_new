@@ -64,6 +64,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_status.title": "{market_name} Doctrine Status",
         "doctrine_status.tab_market_stock": "Market Stock",
         "doctrine_status.tab_fit_details": "Fit Details",
+        "doctrine_status.show_fit_details": "Show Fit Details",
         "doctrine_status.low_stock_modules": "Low Stock Modules",
         "doctrine_status.no_fits": "No doctrine fits found in the database.",
         "doctrine_report.subtitle": "{market_name} Market Status By Fleet Doctrine",

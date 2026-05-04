@@ -20,6 +20,7 @@ from services.doctrine_service import format_doctrine_name
 from state import get_active_language, ss_init, ss_get, ss_set
 from ui.market_selector import render_market_selector
 from ui.i18n import translate_text
+from pages.components.header import render_page_title
 from ui.column_definitions import get_low_stock_column_config
 from init_db import ensure_market_db_ready
 from ui.sync_display import display_sync_status
@@ -152,12 +153,7 @@ def main():
         }
     )
 
-    # Title and logo
-    col1, col2 = st.columns([0.2, 0.8], vertical_alignment="bottom")
-    with col1:
-        st.image("images/wclogo.png", width=125)
-    with col2:
-        st.title(translate_text(language_code, "low_stock.title", market_name=market.name))
+    render_page_title(translate_text(language_code, "low_stock.title", market_name=market.name))
 
     st.markdown(translate_text(language_code, "low_stock.description"))
 
@@ -449,6 +445,7 @@ def main():
         edited_df = st.data_editor(
             styled_df,
             hide_index=True,
+            height=600,
             column_config=column_config,
             disabled=[col for col in display_df.columns if col != "select"],
             key="low_stock_editor",

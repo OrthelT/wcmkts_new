@@ -24,6 +24,7 @@ from ui.formatters import get_image_url, drop_localized_backup_columns
 from ui.i18n import translate_text
 from ui.market_selector import render_market_selector
 from init_db import ensure_market_db_ready
+from pages.components.header import render_page_title
 
 logger = setup_logging(__name__, log_file="pricer.log")
 
@@ -176,11 +177,7 @@ def highlight_low_stock(val):
 
 def render_header(language_code: str):
     """Render the Winter Coalition header with panda logo."""
-    col1, col2 = st.columns([0.2, 0.8], vertical_alignment="bottom")
-    with col1:
-        st.image("images/wclogo.png", width=125)
-    with col2:
-        st.title(translate_text(language_code, "pricer.title"))
+    render_page_title(translate_text(language_code, "pricer.title"))
 
 
 def render_fit_header(result, sde_repo, language_code: str):
