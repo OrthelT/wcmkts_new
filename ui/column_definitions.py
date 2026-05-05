@@ -308,7 +308,6 @@ def get_doctrine_ships_column_config(language_code: str = "en") -> dict:
         ),
         "target_pct": st.column_config.ProgressColumn(
             translate_text(language_code, "dashboard.column_target_pct"),
-            help="Percent of ship_target met by fits_on_mkt (capped at 100%)",
             min_value=0,
             max_value=100,
             format="%d%%",

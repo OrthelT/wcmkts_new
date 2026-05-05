@@ -20,6 +20,7 @@ from ui.column_definitions import (
 from ui.formatters import drop_localized_backup_columns
 from ui.i18n import translate_text
 from domain.enums import StockStatus
+from state import ss_get
 
 logger = setup_logging(__name__)
 
@@ -195,7 +196,6 @@ def render_comparison_table(
     )
 
     st.subheader(translate_text(language_code, title_key), divider="gray")
-
     if dataframe_key:
         st.caption(translate_text(language_code, "dashboard.hint_click_market_stats"))
         event = st.dataframe(
@@ -307,6 +307,35 @@ def _compute_module_targets(doctrine_repo) -> pd.DataFrame:
 
     return agg
 
+_FILTER_OPTIONS = ("low_stock", "all")
+
+
+def _render_filter_columns(filter_key: str, language_code: str) -> str:
+    option_labels = {
+        "low_stock": translate_text(language_code, "dashboard.filter_low_stock"),
+        "all": translate_text(language_code, "dashboard.filter_all"),
+    }
+    filter_col1, filter_col2 = st.columns(spec=[0.3, 0.7], width=400, vertical_alignment="center")
+    with filter_col1:
+        st.menu_button(
+            label=translate_text(language_code, "dashboard.filter_label"),
+            options=[option_labels[opt] for opt in _FILTER_OPTIONS],
+            type="tertiary",
+            key=filter_key,
+        )
+    selection_label = ss_get(filter_key, option_labels["low_stock"])
+    selection_token = next(
+        (token for token, label in option_labels.items() if label == selection_label),
+        "low_stock",
+    )
+    with filter_col2:
+        showing_label = translate_text(language_code, "dashboard.filter_showing")
+        st.markdown(
+            f"<span style='color: orange;'>{showing_label}</span> {option_labels[selection_token]}",
+            unsafe_allow_html=True,
+        )
+    return selection_token
+
 
 def render_popular_modules_table(
     market_service,
@@ -363,18 +392,23 @@ def render_popular_modules_table(
         "current_sell_price", "jita_sell_price", "jita_buy_price",
         "pct_diff_vs_jita_sell",
     ]
-    display_df = snapshot[display_cols].copy()
-    table_df = drop_localized_backup_columns(display_df)
-    styled_table = table_df.style.map(
-        _jita_diff_cell_style, subset=["pct_diff_vs_jita_sell"]
-    )
 
     st.subheader(
         translate_text(language_code, "dashboard.doctrine_modules"), divider="gray",
     )
+    display_df = snapshot[display_cols].copy()
 
+    mod_dash_filter_selection = _render_filter_columns("mod_dash_filter", language_code)
+    if mod_dash_filter_selection == "low_stock":
+        display_df = display_df[display_df["target_pct"] < 100]
+
+    table_df = drop_localized_backup_columns(display_df)
+    styled_table = table_df.style.map(
+        _jita_diff_cell_style, subset=["pct_diff_vs_jita_sell"]
+    )
+    
     if dataframe_key:
-        st.caption(translate_text(language_code, "dashboard.hint_click_market_stats"))
+        st.caption("📈 = "+translate_text(language_code, "dashboard.hint_click_market_stats"))
         event = st.dataframe(
             styled_table,
             hide_index=True,
@@ -587,11 +621,15 @@ def render_doctrine_ships_table(
         "fits_on_mkt", "ship_target", "current_sell_price", "jita_sell_price",
         "_mkt", "_doc",
     ]
-    display_df = result_df[display_cols].copy()
+    
 
+    display_df = result_df[display_cols].copy()
     st.subheader(
         translate_text(language_code, "dashboard.doctrine_ships"), divider="gray",
     )
+    doc_dash_filter_selection = _render_filter_columns("doc_dash_filter", language_code)
+    if doc_dash_filter_selection == "low_stock":
+        display_df = display_df[display_df["target_pct"] < 100]
 
     if dataframe_key:
         st.caption(

@@ -18,6 +18,7 @@ import pandas as pd
 from sqlalchemy.exc import OperationalError
 from config import DatabaseConfig
 from logging_config import setup_logging
+from sqlalchemy import bindparam, text
 
 logger = setup_logging(__name__, log_file="price_service.log")
 
@@ -443,16 +444,17 @@ class DatabasePriceProvider:
             return BatchPriceResult(source=PriceSource.JITA_DATABASE)
 
         try:
-            placeholders = ','.join(['?'] * len(type_ids))
-            query = f"SELECT type_id, sell_price, buy_price, last_updated FROM jita_prices WHERE type_id IN ({placeholders})"
-
+            query = text(
+                "SELECT type_id, sell_price, buy_price, last_updated "
+                "FROM jita_prices WHERE type_id IN :ids"
+            ).bindparams(bindparam("ids", expanding=True))
             with self._db.engine.connect() as conn:
-                df = pd.read_sql_query(query, conn, params=tuple(type_ids))
+                df = pd.read_sql_query(query, conn, params={"ids": list(type_ids)})
 
             if not df.empty:
                 max_updated = df['last_updated'].max()
                 try:
-                    updated_dt = datetime.fromisoformat(max_updated)
+                    updated_dt = datetime.fromisoformat(max_updated).replace(tzinfo=timezone.utc)
                     age_hours = (datetime.now(timezone.utc) - updated_dt).total_seconds() / 3600
                     if age_hours > 4:
                         self._logger.warning(
@@ -530,11 +532,12 @@ class LocalMarketProvider:
             return BatchPriceResult(source=PriceSource.LOCAL_MARKET)
 
         try:
-            placeholders = ','.join(['?'] * len(type_ids))
-            query = f"SELECT type_id, price, avg_price FROM marketstats WHERE type_id IN ({placeholders})"
+            query = text(
+                "SELECT type_id, price, avg_price FROM marketstats WHERE type_id IN :ids"
+            ).bindparams(bindparam("ids", expanding=True))
 
             with self._db.engine.connect() as conn:
-                df = pd.read_sql_query(query, conn, params=tuple(type_ids))
+                df = pd.read_sql_query(query, conn, params={"ids": list(type_ids)})
 
             return self._parse_dataframe(df, type_ids)
 
