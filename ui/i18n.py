@@ -31,6 +31,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "nav.page.market_stats": "📈Market Stats",
         "nav.page.low_stock": "⚠️Low Stock",
         "nav.page.import_helper": "📦Import Helper",
+        "nav.page.builder_helper": "🔨Builder Helper",
         "nav.page.doctrine_status": "⚔️Doctrine Status",
         "nav.page.doctrine_report": "📝Doctrine Report",
         "nav.page.build_costs": "🏗️Build Costs",
@@ -63,6 +64,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_status.title": "{market_name} Doctrine Status",
         "doctrine_status.tab_market_stock": "Market Stock",
         "doctrine_status.tab_fit_details": "Fit Details",
+        "doctrine_status.show_fit_details": "Show Fit Details",
         "doctrine_status.low_stock_modules": "Low Stock Modules",
         "doctrine_status.no_fits": "No doctrine fits found in the database.",
         "doctrine_report.subtitle": "{market_name} Market Status By Fleet Doctrine",
@@ -245,6 +247,45 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.column_turnover_30d": "30D Turnover",
         "import_helper.column_volume_30d": "30D Volume",
         "import_helper.column_capital_utilis": "Cap Utilis",
+        "builder_helper.title": "Builder Helper",
+        "builder_helper.description": (
+            "Quickly locate high profit products in nullsec market\n\n"
+            "Manufacture cost vs. market price analysis for a fixed list of items. "
+            "Build costs are read from the locally synced builder-cost catalog. "
+            "ISK/Hour = (Market Sell − Build Cost) ÷ Build Time × 3600."
+        ),
+        "builder_helper.filters_header": "Filters",
+        "builder_helper.categories": "Categories",
+        "builder_helper.categories_help": "Limit the table to one or more item categories.",
+        "builder_helper.search_items": "Search Items",
+        "builder_helper.search_items_help": "Case-insensitive item name filter.",
+        "builder_helper.loading": "Loading builder data…",
+        "builder_helper.error_loading_data": "Failed to load builder data. Check local database availability and try refreshing.",
+        "builder_helper.no_data": "No builder data available.",
+        "builder_helper.metric_items": "Items",
+        "builder_helper.metric_with_build_cost": "With Build Cost",
+        "builder_helper.metric_profitable": "Profitable (vs local sell)",
+        "builder_helper.column_item_name": "Item Name",
+        "builder_helper.column_item_name_help": "Type name of the item.",
+        "builder_helper.column_category": "Category",
+        "builder_helper.column_category_help": "Item category.",
+        "builder_helper.column_group": "Group",
+        "builder_helper.column_group_help": "Item group.",
+        "builder_helper.column_market_sell_price": "Market Sell",
+        "builder_helper.column_market_sell_price_help": "Lowest sell price on the local market (4-HWWF). Falls back to Jita × 1.4 if no local orders.",
+        "builder_helper.column_jita_sell_price": "Jita Sell",
+        "builder_helper.column_jita_sell_price_help": "Jita sell price (Fuzzwork).",
+        "builder_helper.column_build_cost": "Build Cost",
+        "builder_helper.column_build_cost_help": "Total manufacture cost per unit from the stored builder-cost catalog (ME10/TE10, Sotiyo, Null-sec).",
+        "builder_helper.column_cap_utils": "Cap Utils",
+        "builder_helper.column_cap_utils_help": "(Market Sell − Build Cost) ÷ Market Sell",
+        "builder_helper.column_profit_30d": "30D Profit",
+        "builder_helper.column_profit_30d_help": "(Market Sell − Build Cost) × 30D Volume",
+        "builder_helper.column_turnover_30d": "30D Turnover",
+        "builder_helper.column_turnover_30d_help": "Jita Sell × 30D Volume",
+        "builder_helper.column_volume_30d": "30D Volume",
+        "builder_helper.column_volume_30d_help": "Total traded volume over the past 30 days.",
+        "builder_helper.footer": "Build costs come from the synced builder-cost catalog — Sotiyo / Null-sec / system cost bonus −50% / mfg index 3% / no facility tax. ME and runs vary by item tier (T1: ME10 / 10 runs; T2 modules/drones/charges: ME0–4 / 5–10 runs; T2 ships: ME3 / 3 runs). Market Sell falls back to Jita × 1.4 when no local sell orders exist.",
         "doctrine_status.logo_not_found": "Logo image not found",
         "doctrine_status.downloads_hint": "Use Downloads page for full data export",
         "doctrine_status.filter_doctrine": "Doctrine",
@@ -615,6 +656,34 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.column_total_cost_materials_help": "Total cost for this material (ISK).",
         "build_costs.column_percent_total": "% of Total",
         "build_costs.column_percent_total_help": "Percentage of the total material cost.",
+        "build_costs.data_source_description": (
+            "Stored builder costs are loaded directly from the market database. "
+            "Use the sidebar to filter the cached rows by category, group, and item."
+        ),
+        "build_costs.quantity_label": "Quantity",
+        "build_costs.quantity_help": "Multiplier applied to the stored per-unit build cost.",
+        "build_costs.no_cost_data": (
+            "No stored builder-cost rows were found in this market database. Run the backend "
+            "builder-cost collection job and sync the market DB, then reload this page."
+        ),
+        "build_costs.no_cost_data_for_item": (
+            "No stored builder-cost row was found for type_id {type_id}."
+        ),
+        "build_costs.db_summary": (
+            "Stored build data for {item_name}. Quantity: {quantity}, cached ME: {me}, "
+            "cached runs: {runs}, type_id: {type_id}."
+        ),
+        "build_costs.metric_build_time_per_unit": "Build time per unit",
+        "build_costs.metric_total_build_time": "Total build time",
+        "build_costs.cost_updated": "Stored builder cost last updated: {fetched_at}",
+        "build_costs.detail_header": "Stored Build Cost",
+        "build_costs.group_catalog_header": "Stored build costs in {group_name}",
+        "build_costs.not_available": "N/A",
+        "build_costs.column_build_time_per_unit": "Build Time / Unit",
+        "build_costs.column_total_build_time": "Total Build Time",
+        "build_costs.column_cached_me": "Cached ME",
+        "build_costs.column_cached_runs": "Cached Runs",
+        "build_costs.column_fetched_at": "Fetched At",
     },
     "zh": {
         "app.page_title": "凛冬联盟市场",
@@ -625,6 +694,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "nav.page.market_stats": "📈市场统计",
         "nav.page.low_stock": "⚠️低库存",
         "nav.page.import_helper": "📦进货助手",
+        "nav.page.builder_helper": "🔨制造助手",
         "nav.page.doctrine_status": "⚔️建制状态",
         "nav.page.doctrine_report": "📝建制报告",
         "nav.page.build_costs": "🏗️制造成本",
@@ -657,6 +727,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_status.title": "{market_name} 建制状态",
         "doctrine_status.tab_market_stock": "市场库存",
         "doctrine_status.tab_fit_details": "装配详情",
+        "doctrine_status.show_fit_details": "显示装配详情",
         "doctrine_status.low_stock_modules": "低库存装备",
         "doctrine_status.no_fits": "数据库中未找到舰队配置。",
         "doctrine_report.subtitle": "{market_name} 舰队配置市场状态",
@@ -762,6 +833,13 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.chart_title": "库存剩余天数",
         "low_stock.chart_days_label": "剩余天数",
         "low_stock.chart_critical_level": "严重阈值（3 天）",
+        "builder_helper.title": "制造助手",
+        "builder_helper.description": (
+            "帮助你快速锁定适合给00市场供货的商品\n\n"
+            "制造成本与市场价格分析，针对固定物品列表。"
+            "制造成本来自本地同步的制造成本目录。"
+            "ISK/小时 = （市场卖价 − 制造成本）÷ 制造时间 × 3600。"
+        ),
         "import_helper.title": "{market_name} 进货助手",
         "import_helper.description": (
             "查找本地市场价格明显高于吉他卖价的物品。30 天利润使用 "
@@ -811,6 +889,38 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.column_turnover_30d": "30 天成交额",
         "import_helper.column_volume_30d": "30 天销量",
         "import_helper.column_capital_utilis": "资本利用率",
+        "builder_helper.filters_header": "筛选",
+        "builder_helper.categories": "类别",
+        "builder_helper.categories_help": "将表格限制为一个或多个物品类别。",
+        "builder_helper.search_items": "搜索物品",
+        "builder_helper.search_items_help": "不区分大小写的名称筛选。",
+        "builder_helper.loading": "正在加载制造助手数据…",
+        "builder_helper.error_loading_data": "无法加载制造助手数据。检查本地数据库状态并尝试刷新。",
+        "builder_helper.no_data": "没有可用的工业者数据。",
+        "builder_helper.metric_items": "物品",
+        "builder_helper.metric_with_build_cost": "有制造成本",
+        "builder_helper.metric_profitable": "有利润（vs 本地卖价）",
+        "builder_helper.column_item_name": "物品名称",
+        "builder_helper.column_item_name_help": "物品的类型名称。",
+        "builder_helper.column_category": "类别",
+        "builder_helper.column_category_help": "物品类别。",
+        "builder_helper.column_group": "分组",
+        "builder_helper.column_group_help": "物品分组。",
+        "builder_helper.column_market_sell_price": "本地卖价",
+        "builder_helper.column_market_sell_price_help": "本地市场的最低卖价 (4-HWWF)。如果没有本地卖单，则使用吉他卖价 × 1.4。",
+        "builder_helper.column_jita_sell_price": "吉他卖价",
+        "builder_helper.column_jita_sell_price_help": "吉他卖单价格 (Fuzzwork)。",
+        "builder_helper.column_build_cost": "制造成本",
+        "builder_helper.column_build_cost_help": "来自已同步制造成本目录的单位制造总成本 (ME10/TE10, Sotiyo, Null-sec)。",
+        "builder_helper.column_cap_utils": "资本利用率",
+        "builder_helper.column_cap_utils_help": "（本地卖价 − 制造成本）÷ 本地卖价",
+        "builder_helper.column_profit_30d": "30 天利润",
+        "builder_helper.column_profit_30d_help": "（本地卖价 − 制造成本）× 30 天销量",
+        "builder_helper.column_turnover_30d": "30 天成交额",
+        "builder_helper.column_turnover_30d_help": "吉他卖价 × 30 天销量",
+        "builder_helper.column_volume_30d": "30 天销量",
+        "builder_helper.column_volume_30d_help": "过去 30 天的总成交量。",
+        "builder_helper.footer": "制造成本来自已同步的制造成本目录 — Sotiyo / Null-sec / 系统成本奖金 −50% / 制造指数 3% / 无设施税。ME 与批次因等级而异（T1: ME10 / 10 批次；T2 模块/无人机/弹药: ME0–4 / 5–10 批次；T2 舰船: ME3 / 3 批次）。当没有本地卖单时，本地卖价回退至吉他价 × 1.4。",
         "doctrine_status.logo_not_found": "未找到徽标图片",
         "doctrine_status.downloads_hint": "完整数据导出请使用下载页面",
         "doctrine_status.filter_doctrine": "建制",
@@ -1145,6 +1255,29 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.column_total_cost_materials_help": "该材料的总成本（ISK）。",
         "build_costs.column_percent_total": "总成本占比",
         "build_costs.column_percent_total_help": "该材料占总材料成本的比例。",
+        "build_costs.data_source_description": (
+            "已从市场数据库直接加载缓存的制造成本。使用侧边栏按类别、分组和物品筛选数据。"
+        ),
+        "build_costs.quantity_label": "数量",
+        "build_costs.quantity_help": "应用于已存储单件制造成本的倍数。",
+        "build_costs.no_cost_data": (
+            "当前市场数据库中没有存储的制造成本数据。请运行后端制造成本采集任务并同步市场数据库，然后重新加载此页面。"
+        ),
+        "build_costs.no_cost_data_for_item": "未找到 type_id {type_id} 的存储制造成本数据。",
+        "build_costs.db_summary": (
+            "这是 {item_name} 的已缓存制造数据。数量：{quantity}，缓存的 ME：{me}，缓存的 runs：{runs}，type_id：{type_id}。"
+        ),
+        "build_costs.metric_build_time_per_unit": "单件制造时间",
+        "build_costs.metric_total_build_time": "总制造时间",
+        "build_costs.cost_updated": "存储制造成本最后更新于：{fetched_at}",
+        "build_costs.detail_header": "已存储制造成本",
+        "build_costs.group_catalog_header": "{group_name} 的已存储制造成本",
+        "build_costs.not_available": "N/A",
+        "build_costs.column_build_time_per_unit": "单件制造时间",
+        "build_costs.column_total_build_time": "总制造时间",
+        "build_costs.column_cached_me": "缓存 ME",
+        "build_costs.column_cached_runs": "缓存 Runs",
+        "build_costs.column_fetched_at": "抓取时间",
     },
     "de": {
         "app.page_title": "WinterCo Märkte",
@@ -1155,6 +1288,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "nav.page.market_stats": "📈Marktstatistiken",
         "nav.page.low_stock": "⚠️Niedriger Bestand",
         "nav.page.import_helper": "📦Importhilfe",
+        "nav.page.builder_helper": "🔨Builder Helper",
         "nav.page.doctrine_status": "⚔️Doktrinstatus",
         "nav.page.doctrine_report": "📝Doktrinbericht",
         "nav.page.build_costs": "🏗️Produktionskosten",
@@ -1187,6 +1321,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_status.title": "Doktrinstatus von {market_name}",
         "doctrine_status.tab_market_stock": "Marktbestand",
         "doctrine_status.tab_fit_details": "Fit-Details",
+        "doctrine_status.show_fit_details": "Fit-Details anzeigen",
         "doctrine_status.low_stock_modules": "Module mit niedrigem Bestand",
         "doctrine_status.no_fits": "Keine Doktrin-Fits in der Datenbank gefunden.",
         "doctrine_status.selected_items_help": (
@@ -1302,6 +1437,12 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.chart_title": "Verbleibende Bestandstage",
         "low_stock.chart_days_label": "Verbleibende Tage",
         "low_stock.chart_critical_level": "Kritisches Niveau (3 Tage)",
+        "builder_helper.title": "Builder Helper",
+        "builder_helper.description": (
+            "Herstellungskostenanalyse vs. Marktpreis für eine feste Artikelliste. "
+            "Herstellungskosten werden aus dem lokal synchronisierten Builder-Kostenkatalog gelesen. "
+            "ISK/Stunde = (Marktverkauf − Herstellungskosten) ÷ Herstellungszeit × 3600."
+        ),
         "import_helper.title": "Importhilfe für {market_name}",
         "import_helper.description": (
             "Finde Artikel, bei denen der lokale Marktpreis deutlich über dem Jita-Verkaufspreis liegt. "
@@ -1359,6 +1500,38 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.column_turnover_30d": "30D Umsatz",
         "import_helper.column_volume_30d": "30D Volumen",
         "import_helper.column_capital_utilis": "Kapitaleffizienz",
+        "builder_helper.filters_header": "Filter",
+        "builder_helper.categories": "Kategorien",
+        "builder_helper.categories_help": "Die Tabelle auf eine oder mehrere Kategorien beschränken.",
+        "builder_helper.search_items": "Artikel suchen",
+        "builder_helper.search_items_help": "Namensfilter ohne Beachtung der Groß-/Kleinschreibung.",
+        "builder_helper.loading": "Builder-Daten werden geladen…",
+        "builder_helper.error_loading_data": "Builder-Daten konnten nicht geladen werden. Prüfen Sie die lokale Datenbank und versuchen Sie es erneut.",
+        "builder_helper.no_data": "Keine Builder-Daten verfügbar.",
+        "builder_helper.metric_items": "Artikel",
+        "builder_helper.metric_with_build_cost": "Mit Herstellungskosten",
+        "builder_helper.metric_profitable": "Rentabel (vs. lokaler Verkauf)",
+        "builder_helper.column_item_name": "Artikelname",
+        "builder_helper.column_item_name_help": "Typname des Artikels.",
+        "builder_helper.column_category": "Kategorie",
+        "builder_helper.column_category_help": "Artikelkategorie.",
+        "builder_helper.column_group": "Gruppe",
+        "builder_helper.column_group_help": "Artikelgruppe.",
+        "builder_helper.column_market_sell_price": "Markt Verkauf",
+        "builder_helper.column_market_sell_price_help": "Niedrigster Verkaufspreis auf dem lokalen Markt (4-HWWF). Fällt auf Jita × 1,4 zurück, wenn keine lokalen Verkaufsorders vorhanden sind.",
+        "builder_helper.column_jita_sell_price": "Jita Sell",
+        "builder_helper.column_jita_sell_price_help": "Jita-Verkaufspreis (Fuzzwork).",
+        "builder_helper.column_build_cost": "Herstellungskosten",
+        "builder_helper.column_build_cost_help": "Gesamte Herstellungskosten pro Einheit aus dem gespeicherten Builder-Kostenkatalog (ME10/TE10, Sotiyo, Null-sec).",
+        "builder_helper.column_cap_utils": "Kapitaleffizienz",
+        "builder_helper.column_cap_utils_help": "(Markt Verkauf − Herstellungskosten) ÷ Markt Verkauf",
+        "builder_helper.column_profit_30d": "30D Gewinn",
+        "builder_helper.column_profit_30d_help": "(Markt Verkauf − Herstellungskosten) × 30D Volumen",
+        "builder_helper.column_turnover_30d": "30D Umsatz",
+        "builder_helper.column_turnover_30d_help": "Jita Sell × 30D Volumen",
+        "builder_helper.column_volume_30d": "30D Volumen",
+        "builder_helper.column_volume_30d_help": "Gesamthandelvolumen der letzten 30 Tage.",
+        "builder_helper.footer": "Herstellungskosten stammen aus dem synchronisierten Builder-Kostenkatalog — Sotiyo / Null-sec / Systemkostenbonus −50% / Herstellungsindex 3% / keine Gebühren. ME und Runs variieren je nach Tier (T1: ME10 / 10 Runs; T2 Module/Drohnen/Munition: ME0–4 / 5–10 Runs; T2 Schiffe: ME3 / 3 Runs). Markt Verkauf fällt auf Jita × 1,4 zurück, wenn keine lokalen Verkaufsorders vorhanden sind.",
         "build_costs.title": "Produktionskostenrechner",
         "build_costs.category_label": "Kategorie auswählen",
         "build_costs.category_placeholder": "Schiff",
@@ -1512,6 +1685,34 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.column_total_cost_materials_help": "Gesamtkosten für dieses Material (ISK).",
         "build_costs.column_percent_total": "% des Gesamtwerts",
         "build_costs.column_percent_total_help": "Anteil an den gesamten Materialkosten.",
+        "build_costs.data_source_description": (
+            "Gespeicherte Baukosten werden direkt aus der Marktdatenbank geladen. "
+            "Verwende die Seitenleiste, um die zwischengespeicherten Zeilen nach Kategorie, Gruppe und Artikel zu filtern."
+        ),
+        "build_costs.quantity_label": "Menge",
+        "build_costs.quantity_help": "Multiplikator für die gespeicherten Baukosten pro Einheit.",
+        "build_costs.no_cost_data": (
+            "In dieser Marktdatenbank wurden keine gespeicherten Baukosten gefunden. "
+            "Führe den Backend-Builder-Cost-Job aus und synchronisiere die Marktdatenbank, dann lade diese Seite neu."
+        ),
+        "build_costs.no_cost_data_for_item": (
+            "Kein gespeicherter Baukosten-Datensatz für type_id {type_id} gefunden."
+        ),
+        "build_costs.db_summary": (
+            "Gespeicherte Baudaten für {item_name}. Menge: {quantity}, zwischengespeichertes ME: {me}, "
+            "zwischengespeicherte Läufe: {runs}, type_id: {type_id}."
+        ),
+        "build_costs.metric_build_time_per_unit": "Bauzeit pro Einheit",
+        "build_costs.metric_total_build_time": "Gesamte Bauzeit",
+        "build_costs.cost_updated": "Gespeicherte Baukosten zuletzt aktualisiert: {fetched_at}",
+        "build_costs.detail_header": "Gespeicherte Baukosten",
+        "build_costs.group_catalog_header": "Gespeicherte Baukosten in {group_name}",
+        "build_costs.not_available": "N/A",
+        "build_costs.column_build_time_per_unit": "Bauzeit / Einheit",
+        "build_costs.column_total_build_time": "Gesamte Bauzeit",
+        "build_costs.column_cached_me": "Gespeichertes ME",
+        "build_costs.column_cached_runs": "Gespeicherte Läufe",
+        "build_costs.column_fetched_at": "Abgerufen am",
     },
     "fr": {
         "app.page_title": "Marchés WinterCo",
@@ -1522,6 +1723,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "nav.page.market_stats": "📈Stats Marché",
         "nav.page.low_stock": "⚠️Stock Faible",
         "nav.page.import_helper": "📦Aide Import",
+        "nav.page.builder_helper": "🔨Builder Helper",
         "nav.page.doctrine_status": "⚔️État Doctrine",
         "nav.page.doctrine_report": "📝Rapport Doctrine",
         "nav.page.build_costs": "🏗️Coûts Production",
@@ -1554,6 +1756,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_status.title": "\u00c9tat Doctrine {market_name}",
         "doctrine_status.tab_market_stock": "Stock Marche",
         "doctrine_status.tab_fit_details": "Details du Fit",
+        "doctrine_status.show_fit_details": "Afficher les détails du fit",
         "doctrine_status.low_stock_modules": "Modules à Stock Faible",
         "doctrine_status.no_fits": "Aucun fit de doctrine trouvé dans la base de données.",
         "doctrine_status.selected_items_help": (
@@ -1666,6 +1869,12 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.chart_title": "Jours de stock restants",
         "low_stock.chart_days_label": "Jours restants",
         "low_stock.chart_critical_level": "Niveau critique (3 jours)",
+        "builder_helper.title": "Aide Builder",
+        "builder_helper.description": (
+            "Analyse des coûts de fabrication par rapport aux prix du marché pour une liste d'objets fixe. "
+            "Les coûts de fabrication proviennent du catalogue de coûts synchronisé localement. "
+            "ISK/Heure = (Vente Marché − Coûts de fabrication) ÷ Temps de fabrication × 3600."
+        ),
         "import_helper.title": "Aide Import {market_name}",
         "import_helper.description": (
             "Trouvez les objets dont le prix local dépasse nettement le prix de vente Jita. "
@@ -1721,6 +1930,38 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.column_turnover_30d": "CA 30J",
         "import_helper.column_volume_30d": "Volume 30J",
         "import_helper.column_capital_utilis": "Capital Utilis",
+        "builder_helper.filters_header": "Filtres",
+        "builder_helper.categories": "Catégories",
+        "builder_helper.categories_help": "Limiter le tableau à une ou plusieurs catégories d'articles.",
+        "builder_helper.search_items": "Rechercher des articles",
+        "builder_helper.search_items_help": "Filtre par nom sans tenir compte de la casse.",
+        "builder_helper.loading": "Chargement des données du Builder…",
+        "builder_helper.error_loading_data": "Impossible de charger les données du Builder. Vérifiez la base locale et essayez de rafraîchir.",
+        "builder_helper.no_data": "Aucune donnée de générateur disponible.",
+        "builder_helper.metric_items": "Articles",
+        "builder_helper.metric_with_build_cost": "Avec coût de fabrication",
+        "builder_helper.metric_profitable": "Rentable (vs vente locale)",
+        "builder_helper.column_item_name": "Nom de l'article",
+        "builder_helper.column_item_name_help": "Nom du type d'article.",
+        "builder_helper.column_category": "Catégorie",
+        "builder_helper.column_category_help": "Catégorie d'article.",
+        "builder_helper.column_group": "Groupe",
+        "builder_helper.column_group_help": "Groupe d'article.",
+        "builder_helper.column_market_sell_price": "Vente Marché",
+        "builder_helper.column_market_sell_price_help": "Prix de vente le plus bas sur le marché local (4-HWWF). Revient à Jita × 1,4 s'il n'y a pas de commandes de vente locales.",
+        "builder_helper.column_jita_sell_price": "Vente Jita",
+        "builder_helper.column_jita_sell_price_help": "Prix de vente Jita (Fuzzwork).",
+        "builder_helper.column_build_cost": "Coût de fabrication",
+        "builder_helper.column_build_cost_help": "Coût de fabrication total par unité depuis le catalogue synchronisé (ME10/TE10, Sotiyo, Null-sec).",
+        "builder_helper.column_cap_utils": "Capital Utilis",
+        "builder_helper.column_cap_utils_help": "(Vente Marché − Coût de fabrication) ÷ Vente Marché",
+        "builder_helper.column_profit_30d": "Profit 30J",
+        "builder_helper.column_profit_30d_help": "(Vente Marché − Coût de fabrication) × Volume 30J",
+        "builder_helper.column_turnover_30d": "CA 30J",
+        "builder_helper.column_turnover_30d_help": "Vente Jita × Volume 30J",
+        "builder_helper.column_volume_30d": "Volume 30J",
+        "builder_helper.column_volume_30d_help": "Volume commercial total des 30 derniers jours.",
+        "builder_helper.footer": "Les coûts de fabrication proviennent du catalogue synchronisé — Sotiyo / Null-sec / bonus coût système −50% / indice fabrication 3% / sans frais d'installation. ME et cycles varient selon le niveau (T1 : ME10 / 10 cycles ; T2 modules/drones/munitions : ME0–4 / 5–10 cycles ; T2 vaisseaux : ME3 / 3 cycles). La vente marché revient à Jita × 1,4 s'il n'y a pas de commandes de vente locales.",
         "build_costs.title": "Outil de Coût de Production",
         "build_costs.category_label": "Sélectionner une catégorie",
         "build_costs.category_placeholder": "Vaisseau",
@@ -1874,6 +2115,34 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.column_total_cost_materials_help": "Coût total pour ce matériau (ISK).",
         "build_costs.column_percent_total": "% du total",
         "build_costs.column_percent_total_help": "Pourcentage du cout total des matériaux.",
+        "build_costs.data_source_description": (
+            "Les coûts de construction enregistrés sont chargés directement depuis la base de données du marché. "
+            "Utilisez la barre latérale pour filtrer les lignes mises en cache par catégorie, groupe et article."
+        ),
+        "build_costs.quantity_label": "Quantité",
+        "build_costs.quantity_help": "Multiplicateur appliqué au coût de construction par unité enregistré.",
+        "build_costs.no_cost_data": (
+            "Aucune ligne de coût de construction enregistrée n'a été trouvée dans cette base de données du marché. "
+            "Exécutez la collecte backend des coûts de construction et synchronisez la base de données du marché, puis rechargez cette page."
+        ),
+        "build_costs.no_cost_data_for_item": (
+            "Aucune ligne de coût de construction enregistrée n'a été trouvée pour le type_id {type_id}."
+        ),
+        "build_costs.db_summary": (
+            "Données de construction enregistrées pour {item_name}. Quantité : {quantity}, ME en cache : {me}, "
+            "runs en cache : {runs}, type_id : {type_id}."
+        ),
+        "build_costs.metric_build_time_per_unit": "Temps de construction / unité",
+        "build_costs.metric_total_build_time": "Temps total de construction",
+        "build_costs.cost_updated": "Dernière mise à jour du coût enregistré : {fetched_at}",
+        "build_costs.detail_header": "Coût de construction enregistré",
+        "build_costs.group_catalog_header": "Coûts de construction enregistrés dans {group_name}",
+        "build_costs.not_available": "N/D",
+        "build_costs.column_build_time_per_unit": "Temps / unité",
+        "build_costs.column_total_build_time": "Temps total",
+        "build_costs.column_cached_me": "ME en cache",
+        "build_costs.column_cached_runs": "Runs en cache",
+        "build_costs.column_fetched_at": "Récupéré le",
     },
     "ru": {
         "app.page_title": "Рынки WinterCo",
@@ -1884,6 +2153,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "nav.page.market_stats": "📈Статистика",
         "nav.page.low_stock": "⚠️Низкие запасы",
         "nav.page.import_helper": "📦Помощник импорта",
+        "nav.page.builder_helper": "🔨Builder Helper",
         "nav.page.doctrine_status": "⚔️Статус доктрины",
         "nav.page.doctrine_report": "📝Отчёт доктрины",
         "nav.page.build_costs": "🏗️Стоимость производства",
@@ -1916,6 +2186,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_status.title": "Статус доктрины {market_name}",
         "doctrine_status.tab_market_stock": "Рыночный запас",
         "doctrine_status.tab_fit_details": "Детали фита",
+        "doctrine_status.show_fit_details": "Показать детали фита",
         "doctrine_status.low_stock_modules": "Модули с низким запасом",
         "doctrine_status.no_fits": "В базе данных не найдены фиты доктрины.",
         "doctrine_status.selected_items_help": (
@@ -2028,6 +2299,12 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.chart_title": "Дни оставшегося запаса",
         "low_stock.chart_days_label": "Дни",
         "low_stock.chart_critical_level": "Критический уровень (3 дня)",
+        "builder_helper.title": "Помощник Builder",
+        "builder_helper.description": (
+            "Анализ стоимости производства в сравнении с ценой на рынке для фиксированного списка предметов. "
+            "Стоимость производства берётся из локально синхронизированного каталога. "
+            "ISK/Час = (Локальная цена продажи − Стоимость производства) ÷ Время производства × 3600."
+        ),
         "import_helper.title": "Помощник импорта {market_name}",
         "import_helper.description": (
             "Найдите предметы, где локальная цена значительно выше Jita sell. "
@@ -2083,6 +2360,38 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.column_turnover_30d": "Оборот 30д",
         "import_helper.column_volume_30d": "Объём 30д",
         "import_helper.column_capital_utilis": "Capital Utilis",
+        "builder_helper.filters_header": "Фильтры",
+        "builder_helper.categories": "Категории",
+        "builder_helper.categories_help": "Ограничить таблицу одной или несколькими категориями предметов.",
+        "builder_helper.search_items": "Поиск предметов",
+        "builder_helper.search_items_help": "Фильтр по имени без учёта регистра.",
+        "builder_helper.loading": "Загрузка данных Builder…",
+        "builder_helper.error_loading_data": "Не удалось загрузить данные Builder. Проверьте локальную базу и попробуйте обновить.",
+        "builder_helper.no_data": "Нет доступных данных Builder.",
+        "builder_helper.metric_items": "Предметы",
+        "builder_helper.metric_with_build_cost": "Со стоимостью производства",
+        "builder_helper.metric_profitable": "Прибыльные (vs локальная цена)",
+        "builder_helper.column_item_name": "Название предмета",
+        "builder_helper.column_item_name_help": "Название типа предмета.",
+        "builder_helper.column_category": "Категория",
+        "builder_helper.column_category_help": "Категория предмета.",
+        "builder_helper.column_group": "Группа",
+        "builder_helper.column_group_help": "Группа предметов.",
+        "builder_helper.column_market_sell_price": "Локальная цена продажи",
+        "builder_helper.column_market_sell_price_help": "Самая низкая цена продажи на локальном рынке (4-HWWF). Возвращается к Jita × 1,4, если локальных ордеров на продажу нет.",
+        "builder_helper.column_jita_sell_price": "Цена продажи Jita",
+        "builder_helper.column_jita_sell_price_help": "Цена продажи Jita (Fuzzwork).",
+        "builder_helper.column_build_cost": "Стоимость производства",
+        "builder_helper.column_build_cost_help": "Общая стоимость производства за единицу из синхронизированного каталога (ME10/TE10, Sotiyo, Null-sec).",
+        "builder_helper.column_cap_utils": "Capital Utilis",
+        "builder_helper.column_cap_utils_help": "(Локальная цена продажи − Стоимость производства) ÷ Локальная цена продажи",
+        "builder_helper.column_profit_30d": "Прибыль 30д",
+        "builder_helper.column_profit_30d_help": "(Локальная цена продажи − Стоимость производства) × Объём 30д",
+        "builder_helper.column_turnover_30d": "Оборот 30д",
+        "builder_helper.column_turnover_30d_help": "Цена продажи Jita × Объём 30д",
+        "builder_helper.column_volume_30d": "Объём 30д",
+        "builder_helper.column_volume_30d_help": "Общий объём торговли за последние 30 дней.",
+        "builder_helper.footer": "Стоимость производства берётся из синхронизированного каталога — Sotiyo / Null-sec / Бонус стоимости системы −50% / Индекс производства 3% / без комиссии за сооружение. ME и циклы варьируются по уровню (T1: ME10 / 10 циклов; T2 модули/дроны/заряды: ME0–4 / 5–10 циклов; T2 корабли: ME3 / 3 цикла). Локальная цена продажи возвращается к Jita × 1,4, если локальных ордеров нет.",
         "build_costs.title": "Инструмент стоимости производства",
         "build_costs.category_label": "Выберите категорию",
         "build_costs.category_placeholder": "Корабль",
@@ -2236,6 +2545,34 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.column_total_cost_materials_help": "Общая стоимость этого материала (ISK).",
         "build_costs.column_percent_total": "% от итога",
         "build_costs.column_percent_total_help": "Доля в общей стоимости материалов.",
+        "build_costs.data_source_description": (
+            "Сохраненные производственные стоимости загружаются напрямую из рыночной базы данных. "
+            "Используйте боковую панель, чтобы фильтровать кэшированные строки по категории, группе и предмету."
+        ),
+        "build_costs.quantity_label": "Количество",
+        "build_costs.quantity_help": "Множитель, применяемый к сохраненной стоимости производства за единицу.",
+        "build_costs.no_cost_data": (
+            "В этой рыночной базе данных не найдено сохраненных строк стоимости производства. "
+            "Запустите backend-задачу сбора builder_costs и синхронизируйте рыночную БД, затем перезагрузите страницу."
+        ),
+        "build_costs.no_cost_data_for_item": (
+            "Для type_id {type_id} не найдено сохраненной строки стоимости производства."
+        ),
+        "build_costs.db_summary": (
+            "Сохраненные данные производства для {item_name}. Количество: {quantity}, сохраненный ME: {me}, "
+            "сохраненные runs: {runs}, type_id: {type_id}."
+        ),
+        "build_costs.metric_build_time_per_unit": "Время производства за единицу",
+        "build_costs.metric_total_build_time": "Общее время производства",
+        "build_costs.cost_updated": "Сохраненная стоимость производства обновлена: {fetched_at}",
+        "build_costs.detail_header": "Сохраненная стоимость производства",
+        "build_costs.group_catalog_header": "Сохраненные стоимости производства в {group_name}",
+        "build_costs.not_available": "Н/Д",
+        "build_costs.column_build_time_per_unit": "Время / единица",
+        "build_costs.column_total_build_time": "Общее время",
+        "build_costs.column_cached_me": "Сохраненный ME",
+        "build_costs.column_cached_runs": "Сохраненные runs",
+        "build_costs.column_fetched_at": "Получено",
     },
     "es": {
         "app.page_title": "Mercados WinterCo",
@@ -2246,6 +2583,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "nav.page.market_stats": "📈Estadisticas",
         "nav.page.low_stock": "⚠️Stock Bajo",
         "nav.page.import_helper": "📦Asistente de Importacion",
+        "nav.page.builder_helper": "🔨Builder Helper",
         "nav.page.doctrine_status": "⚔️Estado de Doctrina",
         "nav.page.doctrine_report": "📝Informe de Doctrina",
         "nav.page.build_costs": "🏗️Costes de Fabricacion",
@@ -2278,6 +2616,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "doctrine_status.title": "Estado de Doctrina de {market_name}",
         "doctrine_status.tab_market_stock": "Stock de Mercado",
         "doctrine_status.tab_fit_details": "Detalles del Fit",
+        "doctrine_status.show_fit_details": "Mostrar detalles del fit",
         "doctrine_status.low_stock_modules": "Modulos con Stock Bajo",
         "doctrine_status.no_fits": "No se encontraron fits de doctrina en la base de datos.",
         "doctrine_status.selected_items_help": (
@@ -2305,6 +2644,12 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
             "segun el volumen historico medio."
         ),
         "low_stock.filters_header": "Filtros",
+        "builder_helper.title": "Asistente de Builder",
+        "builder_helper.description": (
+            "Análisis de costes de fabricación vs. precio del mercado para una lista fija de artículos. "
+            "Los costes de fabricación se leen del catálogo sincronizado localmente. "
+            "ISK/Hora = (Precio de venta local − Coste de fabricación) ÷ Tiempo de fabricación × 3600."
+        ),
         "import_helper.title": "Asistente de Importacion de {market_name}",
         "import_helper.description": (
             "Descubre articulos cuyo precio local esta muy por encima del Jita sell. "
@@ -2375,6 +2720,38 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "import_helper.column_turnover_30d": "Rotacion 30D",
         "import_helper.column_volume_30d": "Volumen 30D",
         "import_helper.column_capital_utilis": "Capital Utilis",
+        "builder_helper.filters_header": "Filtros",
+        "builder_helper.categories": "Categorías",
+        "builder_helper.categories_help": "Limitar la tabla a una o más categorías de artículos.",
+        "builder_helper.search_items": "Buscar artículos",
+        "builder_helper.search_items_help": "Filtro por nombre sin distinguir mayúsculas.",
+        "builder_helper.loading": "Cargando datos de Builder…",
+        "builder_helper.error_loading_data": "Error al cargar datos del Builder. Verifica la base local e inténtalo de nuevo.",
+        "builder_helper.no_data": "No hay datos del constructor disponibles.",
+        "builder_helper.metric_items": "Artículos",
+        "builder_helper.metric_with_build_cost": "Con coste de fabricación",
+        "builder_helper.metric_profitable": "Rentables (vs venta local)",
+        "builder_helper.column_item_name": "Nombre del artículo",
+        "builder_helper.column_item_name_help": "Nombre del tipo de artículo.",
+        "builder_helper.column_category": "Categoría",
+        "builder_helper.column_category_help": "Categoría del artículo.",
+        "builder_helper.column_group": "Grupo",
+        "builder_helper.column_group_help": "Grupo de artículos.",
+        "builder_helper.column_market_sell_price": "Precio de venta local",
+        "builder_helper.column_market_sell_price_help": "Precio de venta más bajo en el mercado local (4-HWWF). Vuelve a Jita × 1,4 si no hay órdenes de venta locales.",
+        "builder_helper.column_jita_sell_price": "Precio de venta Jita",
+        "builder_helper.column_jita_sell_price_help": "Precio de venta Jita (Fuzzwork).",
+        "builder_helper.column_build_cost": "Coste de fabricación",
+        "builder_helper.column_build_cost_help": "Coste total de fabricación por unidad del catálogo sincronizado (ME10/TE10, Sotiyo, Null-sec).",
+        "builder_helper.column_cap_utils": "Capital Utilis",
+        "builder_helper.column_cap_utils_help": "(Precio de venta local − Coste de fabricación) ÷ Precio de venta local",
+        "builder_helper.column_profit_30d": "Beneficio 30D",
+        "builder_helper.column_profit_30d_help": "(Precio de venta local − Coste de fabricación) × Volumen 30D",
+        "builder_helper.column_turnover_30d": "Rotación 30D",
+        "builder_helper.column_turnover_30d_help": "Precio de venta Jita × Volumen 30D",
+        "builder_helper.column_volume_30d": "Volumen 30D",
+        "builder_helper.column_volume_30d_help": "Volumen total comercializado en los últimos 30 días.",
+        "builder_helper.footer": "Los costes de fabricación provienen del catálogo sincronizado — Sotiyo / Null-sec / bonificación de coste del sistema −50% / índice de fabricación 3% / sin impuesto de instalación. ME y ciclos varían según el nivel (T1: ME10 / 10 ciclos; T2 módulos/drones/cargas: ME0–4 / 5–10 ciclos; T2 naves: ME3 / 3 ciclos). El precio de venta local vuelve a Jita × 1,4 cuando no hay órdenes de venta locales.",
         "build_costs.title": "Herramienta de Costes de Fabricacion",
         "build_costs.category_label": "Selecciona una categoria",
         "build_costs.category_placeholder": "Nave",
@@ -2528,6 +2905,144 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.column_total_cost_materials_help": "Coste total de este material (ISK).",
         "build_costs.column_percent_total": "% del total",
         "build_costs.column_percent_total_help": "Porcentaje del coste total de materiales.",
+        "build_costs.data_source_description": (
+            "Los costes de fabricación guardados se cargan directamente desde la base de datos del mercado. "
+            "Usa la barra lateral para filtrar las filas en caché por categoría, grupo y artículo."
+        ),
+        "build_costs.quantity_label": "Cantidad",
+        "build_costs.quantity_help": "Multiplicador aplicado al coste de fabricación por unidad almacenado.",
+        "build_costs.no_cost_data": (
+            "No se encontraron filas de costes de fabricación almacenados en esta base de datos de mercado. "
+            "Ejecuta la recolección backend de builder_costs y sincroniza la base de datos del mercado; luego recarga esta página."
+        ),
+        "build_costs.no_cost_data_for_item": (
+            "No se encontró una fila de coste de fabricación almacenada para el type_id {type_id}."
+        ),
+        "build_costs.db_summary": (
+            "Datos de fabricación almacenados para {item_name}. Cantidad: {quantity}, ME en caché: {me}, "
+            "runs en caché: {runs}, type_id: {type_id}."
+        ),
+        "build_costs.metric_build_time_per_unit": "Tiempo de fabricación por unidad",
+        "build_costs.metric_total_build_time": "Tiempo total de fabricación",
+        "build_costs.cost_updated": "Última actualización del coste almacenado: {fetched_at}",
+        "build_costs.detail_header": "Coste de fabricación almacenado",
+        "build_costs.group_catalog_header": "Costes de fabricación almacenados en {group_name}",
+        "build_costs.not_available": "N/D",
+        "build_costs.column_build_time_per_unit": "Tiempo / unidad",
+        "build_costs.column_total_build_time": "Tiempo total",
+        "build_costs.column_cached_me": "ME en caché",
+        "build_costs.column_cached_runs": "Runs en caché",
+        "build_costs.column_fetched_at": "Obtenido",
+    },
+    "ja": {
+        "nav.page.build_costs": "🏗️製造コスト",
+        "common.item": "アイテム",
+        "common.category": "カテゴリ",
+        "common.group": "グループ",
+        "build_costs.title": "製造コスト",
+        "build_costs.category_label": "カテゴリ",
+        "build_costs.category_help": "製造コストを確認するカテゴリを選択します。",
+        "build_costs.group_label": "グループ",
+        "build_costs.item_label": "アイテム",
+        "build_costs.quantity_label": "数量",
+        "build_costs.quantity_help": "保存済みの単位あたり製造コストに適用する倍率です。",
+        "build_costs.header": "{item_name} の製造コスト",
+        "build_costs.metric_build_cost_per_unit": "単位あたり製造コスト",
+        "build_costs.metric_total_build_cost": "総製造コスト",
+        "build_costs.market_price_summary": (
+            "**{market_name} 価格:** <span style='color: orange;'>{price} ISK</span> "
+            "(利益: {profit} ISK | {margin}%)"
+        ),
+        "build_costs.no_market_price": "このアイテムの {market_name} 価格データはありません",
+        "build_costs.jita_price_summary": (
+            "**Jita 価格:** <span style='color: orange;'>{price} ISK</span> "
+            "(利益: {profit} ISK | {margin}%)"
+        ),
+        "build_costs.no_jita_price": "このアイテムの Jita 価格データはありません",
+        "build_costs.data_source_description": (
+            "保存済みの製造コストは市場データベースから直接読み込まれます。"
+            "サイドバーでカテゴリ、グループ、アイテムごとにキャッシュ済み行を絞り込めます。"
+        ),
+        "build_costs.no_cost_data": (
+            "この市場データベースには保存済みの製造コスト行がありません。"
+            "バックエンドの builder_costs 収集ジョブを実行して市場 DB を同期し、このページを再読み込みしてください。"
+        ),
+        "build_costs.no_cost_data_for_item": (
+            "type_id {type_id} に対する保存済みの製造コスト行が見つかりません。"
+        ),
+        "build_costs.db_summary": (
+            "{item_name} の保存済み製造データです。数量: {quantity}、キャッシュ済み ME: {me}、"
+            "キャッシュ済み runs: {runs}、type_id: {type_id}。"
+        ),
+        "build_costs.metric_build_time_per_unit": "単位あたり製造時間",
+        "build_costs.metric_total_build_time": "総製造時間",
+        "build_costs.cost_updated": "保存済み製造コストの最終更新: {fetched_at}",
+        "build_costs.detail_header": "保存済み製造コスト",
+        "build_costs.group_catalog_header": "{group_name} の保存済み製造コスト",
+        "build_costs.not_available": "N/A",
+        "build_costs.column_quantity": "数量",
+        "build_costs.column_cost_per_unit": "単位あたりコスト",
+        "build_costs.column_total_cost": "総コスト",
+        "build_costs.column_build_time_per_unit": "製造時間 / 単位",
+        "build_costs.column_total_build_time": "総製造時間",
+        "build_costs.column_cached_me": "キャッシュ済み ME",
+        "build_costs.column_cached_runs": "キャッシュ済み Runs",
+        "build_costs.column_fetched_at": "取得時刻",
+    },
+    "ko": {
+        "nav.page.build_costs": "🏗️생산 비용",
+        "common.item": "아이템",
+        "common.category": "카테고리",
+        "common.group": "그룹",
+        "build_costs.title": "생산 비용",
+        "build_costs.category_label": "카테고리",
+        "build_costs.category_help": "생산 비용을 확인할 카테고리를 선택하세요.",
+        "build_costs.group_label": "그룹",
+        "build_costs.item_label": "아이템",
+        "build_costs.quantity_label": "수량",
+        "build_costs.quantity_help": "저장된 단위당 생산 비용에 적용할 배수입니다.",
+        "build_costs.header": "{item_name} 생산 비용",
+        "build_costs.metric_build_cost_per_unit": "단위당 생산 비용",
+        "build_costs.metric_total_build_cost": "총 생산 비용",
+        "build_costs.market_price_summary": (
+            "**{market_name} 가격:** <span style='color: orange;'>{price} ISK</span> "
+            "(이익: {profit} ISK | {margin}%)"
+        ),
+        "build_costs.no_market_price": "이 아이템에 대한 {market_name} 가격 데이터가 없습니다",
+        "build_costs.jita_price_summary": (
+            "**Jita 가격:** <span style='color: orange;'>{price} ISK</span> "
+            "(이익: {profit} ISK | {margin}%)"
+        ),
+        "build_costs.no_jita_price": "이 아이템에 대한 Jita 가격 데이터가 없습니다",
+        "build_costs.data_source_description": (
+            "저장된 생산 비용은 시장 데이터베이스에서 직접 불러옵니다. "
+            "사이드바에서 카테고리, 그룹, 아이템별로 캐시된 행을 필터링하세요."
+        ),
+        "build_costs.no_cost_data": (
+            "이 시장 데이터베이스에서 저장된 생산 비용 행을 찾을 수 없습니다. "
+            "백엔드 builder_costs 수집 작업을 실행하고 시장 DB를 동기화한 뒤 이 페이지를 다시 불러오세요."
+        ),
+        "build_costs.no_cost_data_for_item": (
+            "type_id {type_id}에 대한 저장된 생산 비용 행이 없습니다."
+        ),
+        "build_costs.db_summary": (
+            "{item_name}의 저장된 생산 데이터입니다. 수량: {quantity}, 캐시된 ME: {me}, "
+            "캐시된 runs: {runs}, type_id: {type_id}."
+        ),
+        "build_costs.metric_build_time_per_unit": "단위당 생산 시간",
+        "build_costs.metric_total_build_time": "총 생산 시간",
+        "build_costs.cost_updated": "저장된 생산 비용 마지막 업데이트: {fetched_at}",
+        "build_costs.detail_header": "저장된 생산 비용",
+        "build_costs.group_catalog_header": "{group_name}의 저장된 생산 비용",
+        "build_costs.not_available": "N/A",
+        "build_costs.column_quantity": "수량",
+        "build_costs.column_cost_per_unit": "단가",
+        "build_costs.column_total_cost": "총 비용",
+        "build_costs.column_build_time_per_unit": "생산 시간 / 단위",
+        "build_costs.column_total_build_time": "총 생산 시간",
+        "build_costs.column_cached_me": "캐시된 ME",
+        "build_costs.column_cached_runs": "캐시된 Runs",
+        "build_costs.column_fetched_at": "가져온 시각",
     },
 }
 

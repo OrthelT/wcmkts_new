@@ -197,12 +197,110 @@ def _get_sde_info_impl(type_ids: list) -> pd.DataFrame:
     query = text("""
         SELECT typeName as type_name, typeID as type_id, groupID as group_id,
                groupName as group_name, categoryID as category_id,
-               categoryName as category_name
+               categoryName as category_name,
+               metaGroupID as meta_group_id, metaGroupName as meta_group_name
         FROM sdetypes
         WHERE typeID IN :type_ids
     """).bindparams(bindparam("type_ids", expanding=True))
     with sde_db.engine.connect() as conn:
         return pd.read_sql_query(query, conn, params={"type_ids": type_ids})
+
+
+def _empty_builder_cost_df() -> pd.DataFrame:
+    return pd.DataFrame(
+        columns=[
+            "type_id",
+            "type_name",
+            "group_id",
+            "group_name",
+            "category_id",
+            "category_name",
+            "total_cost_per_unit",
+            "time_per_unit",
+            "me",
+            "runs",
+            "fetched_at",
+        ]
+    )
+
+
+def _get_builder_cost_catalog_impl(db_alias: str = "wcmkt") -> pd.DataFrame:
+    """Fetch stored builder costs joined to market-side item metadata."""
+    repo = BaseRepository(DatabaseConfig(db_alias), logger)
+    query = text(
+        """
+        SELECT
+            bc.type_id AS type_id,
+            COALESCE(w.type_name, ms.type_name, CAST(bc.type_id AS TEXT)) AS type_name,
+            COALESCE(w.group_id, ms.group_id) AS group_id,
+            COALESCE(w.group_name, ms.group_name, 'Unknown') AS group_name,
+            COALESCE(w.category_id, ms.category_id) AS category_id,
+            COALESCE(w.category_name, ms.category_name, 'Unknown') AS category_name,
+            bc.total_cost_per_unit,
+            bc.time_per_unit,
+            bc.me,
+            bc.runs,
+            bc.fetched_at
+        FROM builder_costs bc
+        LEFT JOIN watchlist w ON w.type_id = bc.type_id
+        LEFT JOIN marketstats ms ON ms.type_id = bc.type_id
+        WHERE COALESCE(bc.fetched_at, '') = (
+            SELECT MAX(COALESCE(inner_bc.fetched_at, ''))
+            FROM builder_costs inner_bc
+            WHERE inner_bc.type_id = bc.type_id
+        )
+          AND bc.rowid = (
+            SELECT MAX(inner_bc.rowid)
+            FROM builder_costs inner_bc
+            WHERE inner_bc.type_id = bc.type_id
+              AND COALESCE(inner_bc.fetched_at, '') = COALESCE(bc.fetched_at, '')
+        )
+        ORDER BY category_name, group_name, type_name
+        """
+    )
+    try:
+        return repo.read_df(query).reset_index(drop=True)
+    except Exception as exc:
+        message = str(exc).lower()
+        if "no such table" in message and "builder_costs" in message:
+            logger.warning("builder_costs table missing in %s; returning empty catalog", db_alias)
+            return _empty_builder_cost_df()
+        raise
+
+
+def _get_builder_cost_by_type_impl(type_id: int, db_alias: str = "wcmkt") -> pd.DataFrame:
+    """Fetch a single stored builder-cost row with market-side item metadata."""
+    repo = BaseRepository(DatabaseConfig(db_alias), logger)
+    query = text(
+        """
+        SELECT
+            bc.type_id AS type_id,
+            COALESCE(w.type_name, ms.type_name, CAST(bc.type_id AS TEXT)) AS type_name,
+            COALESCE(w.group_id, ms.group_id) AS group_id,
+            COALESCE(w.group_name, ms.group_name, 'Unknown') AS group_name,
+            COALESCE(w.category_id, ms.category_id) AS category_id,
+            COALESCE(w.category_name, ms.category_name, 'Unknown') AS category_name,
+            bc.total_cost_per_unit,
+            bc.time_per_unit,
+            bc.me,
+            bc.runs,
+            bc.fetched_at
+        FROM builder_costs bc
+        LEFT JOIN watchlist w ON w.type_id = bc.type_id
+        LEFT JOIN marketstats ms ON ms.type_id = bc.type_id
+        WHERE bc.type_id = :type_id
+        ORDER BY bc.fetched_at DESC, bc.rowid DESC
+        LIMIT 1
+        """
+    )
+    try:
+        return repo.read_df(query, params={"type_id": type_id}).reset_index(drop=True)
+    except Exception as exc:
+        message = str(exc).lower()
+        if "no such table" in message and "builder_costs" in message:
+            logger.warning("builder_costs table missing in %s; returning empty row set", db_alias)
+            return _empty_builder_cost_df()
+        raise
 
 
 # =============================================================================
@@ -269,6 +367,16 @@ def _get_sde_info_cached(type_ids: tuple) -> pd.DataFrame:
     return _get_sde_info_impl(list(type_ids))
 
 
+@st.cache_data(ttl=600)
+def _get_builder_cost_catalog_cached(db_alias: str = "wcmkt") -> pd.DataFrame:
+    return _get_builder_cost_catalog_impl(db_alias)
+
+
+@st.cache_data(ttl=600)
+def _get_builder_cost_by_type_cached(type_id: int, db_alias: str = "wcmkt") -> pd.DataFrame:
+    return _get_builder_cost_by_type_impl(type_id, db_alias)
+
+
 # =============================================================================
 # Cache Invalidation
 # =============================================================================
@@ -289,6 +397,8 @@ def invalidate_market_caches():
     _get_30day_volume_metrics_cached.clear()
     _get_market_type_ids_cached.clear()
     _get_local_price_cached.clear()
+    _get_builder_cost_catalog_cached.clear()
+    _get_builder_cost_by_type_cached.clear()
     logger.info("Market caches invalidated")
 
 
@@ -414,6 +524,14 @@ class MarketRepository(BaseRepository):
         if not type_ids:
             type_ids = self.get_market_type_ids()
         return _get_sde_info_cached(tuple(type_ids))
+
+    def get_builder_cost_catalog(self) -> pd.DataFrame:
+        """Get all stored builder-cost rows for the active market."""
+        return _get_builder_cost_catalog_cached(self.db.alias)
+
+    def get_builder_cost_by_type(self, type_id: int) -> pd.DataFrame:
+        """Get a stored builder-cost row for a specific type_id."""
+        return _get_builder_cost_by_type_cached(type_id, self.db.alias)
 
     def get_update_time(self, local_update_status: Optional[dict] = None) -> Optional[str]:
         """Get formatted last update time string."""

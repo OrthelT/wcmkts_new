@@ -1,6 +1,3 @@
-
-import pathlib
-
 import pandas as pd
 import streamlit as st
 
@@ -24,6 +21,7 @@ from ui.market_selector import render_market_selector
 from init_db import ensure_market_db_ready
 from ui.sync_display import display_sync_status
 from ui.formatters import drop_localized_backup_columns
+from pages.components.header import render_page_title
 logger = setup_logging(__name__, log_file="doctrine_report.log")
 
 icon_id = 0
@@ -393,17 +391,10 @@ def main():
     if isinstance(st.session_state.selected_modules, list):
         st.session_state.selected_modules = set()
 
-    # App title and logo
-    # Handle path properly for WSL environment
-    image_path = pathlib.Path(__file__).parent.parent / "images" / "wclogo.png"
-
-
-    col1, col2 = st.columns([0.2, 0.8], vertical_alignment="bottom")
-    with col1:
-        st.image(image_path, 150)
-    with col2:
-        st.title(translate_text(language_code, "nav.page.doctrine_report").lstrip("📝"))
-        st.text(translate_text(language_code, "doctrine_report.subtitle", market_name=market.name))
+    render_page_title(
+        translate_text(language_code, "nav.page.doctrine_report").lstrip("📝"),
+        subtitle=translate_text(language_code, "doctrine_report.subtitle", market_name=market.name),
+    )
 
     # Fetch the data using service
     result = service.build_fit_data()

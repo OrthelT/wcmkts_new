@@ -31,6 +31,7 @@ from ui.i18n import translate_text
 from ui.formatters import drop_localized_backup_columns
 from ui.market_selector import render_market_selector
 from ui.sync_display import display_sync_status  # noqa: F401
+from pages.components.header import render_page_title
 # Backwards-compatible alias for pages that may import from here
 new_display_sync_status = display_sync_status
 
@@ -227,18 +228,14 @@ def check_selected_category(
 # =============================================================================
 
 def render_title_headers(market_name: str, language_code: str):
-    col1, col2 = st.columns([0.2, 0.8], vertical_alignment="bottom")
-    with col1:
-        st.image("images/wclogo.png", width=125)
-    with col2:
-        st.title(
-            translate_text(
-                language_code,
-                "market_stats.title",
-                market_name=market_name,
-                header_env=header_env,
-            ).strip()
-        )
+    render_page_title(
+        translate_text(
+            language_code,
+            "market_stats.title",
+            market_name=market_name,
+            header_env=header_env,
+        ).strip()
+    )
 
 
 # =============================================================================

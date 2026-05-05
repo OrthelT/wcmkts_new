@@ -78,6 +78,11 @@ from services.import_helper_service import (
     ImportHelperFilters,
 )
 
+from services.builder_helper_service import (
+    BuilderHelperService,
+    get_builder_helper_service,
+)
+
 from services.selection_service import (
     # Main service
     SelectionService,
@@ -184,4 +189,7 @@ __all__ = [
     # Type Resolution Service
     "TypeResolutionService",
     "get_type_resolution_service",
+    # Builder Helper Service
+    "BuilderHelperService",
+    "get_builder_helper_service",
 ]

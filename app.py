@@ -1,11 +1,9 @@
 import streamlit as st
 from logging_config import setup_logging
-from state.language_state import (
-    set_active_language,
-    set_language_query_param,
-    sync_active_language_with_query_params,
-)
-from ui.i18n import get_language_label, get_language_options, translate_text
+from state.language_state import sync_active_language_with_query_params
+from ui.i18n import get_language_options, translate_text
+from pages.components.header import render_language_selector
+from pages.components.layout import render_global_layout_styles, render_sidebar_branding
 
 logger = setup_logging(__name__)
 
@@ -14,24 +12,16 @@ st.set_page_config(
     page_icon="🐼",
     layout="wide",
 )
+render_global_layout_styles()
 
 available_language_codes = get_language_options()
 current_language = sync_active_language_with_query_params(available_language_codes)
-
-_, language_col = st.columns([0.84, 0.16], vertical_alignment="top")
-with language_col:
-    selected_language = st.selectbox(
-        translate_text(current_language, "app.language_label"),
-        options=available_language_codes,
-        index=available_language_codes.index(current_language),
-        format_func=get_language_label,
-        key="app_language_selector",
-    )
-
-if selected_language != current_language:
-    set_active_language(selected_language)
-    set_language_query_param(selected_language)
-    current_language = selected_language
+render_sidebar_branding()
+current_language = render_language_selector(
+    current_language,
+    sidebar=True,
+    label_visibility="collapsed",
+)
 
 pages = {
     translate_text(current_language, "nav.section.market_stats"): [
@@ -50,6 +40,10 @@ pages = {
         st.Page(
             "pages/import_helper.py",
             title=translate_text(current_language, "nav.page.import_helper"),
+        ),
+        st.Page(
+            "pages/builder_helper.py",
+            title=translate_text(current_language, "nav.page.builder_helper"),
         ),
         st.Page(
             "pages/doctrine_status.py",

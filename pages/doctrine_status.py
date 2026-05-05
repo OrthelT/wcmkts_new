@@ -1,4 +1,3 @@
-import pathlib
 import streamlit as st
 import pandas as pd
 from millify import millify
@@ -21,6 +20,7 @@ from init_db import ensure_market_db_ready
 from ui.sync_display import display_sync_status
 from services.module_equivalents_service import get_module_equivalents_service
 from ui.formatters import drop_localized_backup_columns
+from pages.components.header import render_page_title
 
 # Insert centralized logging configuration
 logger = setup_logging(__name__, log_file="doctrine_status.log")
@@ -55,6 +55,7 @@ def _localize_summary_df(
         else modules
     )
     return localized_df
+
 
 def render_export_data():
     """Query market stock data for all selected type_ids. Stores results in session state."""
@@ -151,10 +152,246 @@ def _rebuild_selections():
         if tid in checked_type_ids
     }
 
+
+def _status_text_color(status: StockStatus) -> str:
+    """Return a readable HTML color for compact stock status text."""
+    return {
+        StockStatus.CRITICAL: "#ef5350",
+        StockStatus.NEEDS_ATTENTION: "#d88a22",
+        StockStatus.GOOD: "#6abf69",
+    }[status]
+
+
+def _inject_compact_doctrine_styles() -> None:
+    """Reduce the vertical footprint of doctrine row controls."""
+    st.markdown(
+        """
+        <style>
+        section[data-testid="stMain"] div[data-testid="stButton"] {
+            width: 100%;
+            max-width: 100%;
+        }
+
+        section[data-testid="stMain"] div[data-testid="stButton"] button[kind="secondary"],
+        section[data-testid="stMain"] div[data-testid="stButton"] button[kind="secondary"] p {
+            font-size: 0.78rem !important;
+            line-height: 1 !important;
+            margin: 0 !important;
+        }
+
+        section[data-testid="stMain"] div[data-testid="stButton"] button[kind="secondary"] {
+            width: 100% !important;
+            max-width: 100%;
+            height: 1.75rem !important;
+            min-height: 1.75rem !important;
+            padding: 0 0.45rem !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            border-radius: 0.45rem !important;
+        }
+
+        section[data-testid="stMain"] div[class*="st-key-toggle_fit_details_"],
+        section[data-testid="stMain"] div[class*="st-key-toggle_low_stock_"] {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_low_stock_modules_button(
+    fit_id: int,
+    language_code: str,
+) -> bool:
+    """Render a low-stock toggle button and return whether modules are visible."""
+    visible_key = f"low_stock_visible_{fit_id}"
+
+    if st.button(
+        translate_text(language_code, "doctrine_status.low_stock_modules"),
+        key=f"toggle_low_stock_{fit_id}",
+        type="secondary",
+        width="stretch",
+    ):
+        st.session_state[visible_key] = not st.session_state.get(visible_key, False)
+        st.rerun()
+
+    return bool(st.session_state.get(visible_key, False))
+
+
+def _render_low_stock_modules_panel(
+    row: pd.Series,
+    fit_id: int,
+    target: int,
+    equiv_groups: dict,
+    sde_repo,
+    language_code: str,
+) -> None:
+    """Render the low-stock module list below a compact doctrine row."""
+    with st.container(border=True):
+        st.caption(translate_text(language_code, "doctrine_status.low_stock_modules"))
+        for mod in row["lowest_modules"]:
+            mod_type_id = mod["type_id"]
+            mod_name = mod["module_name"]
+            mod_fits = mod["fits_on_market"]
+            mod_qty_needed = mod["qty_needed"]
+            mod_position = mod["position"]
+            mod_name_en = mod.get("module_name_en", mod_name)
+
+            has_equiv = mod_type_id in equiv_groups
+            display_text = (
+                f"{mod_name} ({mod_fits} combined)"
+                if has_equiv
+                else f"{mod_name} ({mod_fits})"
+            )
+            module_cb_key = f"mod_{fit_id}_{mod_position}_{mod_type_id}"
+            mod_stock_status = StockStatus.from_stock_and_target(mod_fits, target)
+
+            col_a, col_b = st.columns([0.08, 0.92])
+            with col_a:
+                if module_cb_key not in st.session_state:
+                    st.session_state[module_cb_key] = (
+                        mod_type_id in st.session_state.selected_type_ids
+                    )
+                is_selected = st.checkbox(
+                    "1", key=module_cb_key, label_visibility="hidden"
+                )
+                if is_selected:
+                    _add_selection(
+                        mod_type_id,
+                        mod_name_en,
+                        mod_fits,
+                        mod_qty_needed,
+                    )
+
+            with col_b:
+                equiv_prefix = "🔄 " if has_equiv else ""
+                equiv_help = (
+                    f" ({translate_text(language_code, 'doctrine_status.includes_equivalent_modules')})"
+                    if has_equiv
+                    else ""
+                )
+                if mod_stock_status == StockStatus.CRITICAL:
+                    st.markdown(
+                        f":red-badge[:material/error:] {equiv_prefix}{display_text}",
+                        help=f"{translate_text(language_code, 'doctrine_status.critical_stock_level')}{equiv_help}",
+                    )
+                elif mod_stock_status == StockStatus.NEEDS_ATTENTION:
+                    st.markdown(
+                        f":orange-badge[:material/error:] {equiv_prefix}{display_text}",
+                        help=f"{translate_text(language_code, 'doctrine_status.low_stock_help')}{equiv_help}",
+                    )
+                else:
+                    st.caption(f"{equiv_prefix}{display_text}")
+
+                equiv_group = equiv_groups.get(mod_type_id)
+                if equiv_group:
+                    in_stock_modules = [m for m in equiv_group.modules if m.stock > 0]
+                    combined_total = sum(m.stock for m in in_stock_modules)
+                    with st.popover(
+                        translate_text(
+                            language_code,
+                            "doctrine_status.view_stock_breakdown",
+                        ),
+                        use_container_width=True,
+                    ):
+                        st.markdown(f"**{mod_name}**")
+                        st.caption(
+                            translate_text(
+                                language_code,
+                                "doctrine_status.combined_stock_caption",
+                            )
+                        )
+                        for em in in_stock_modules:
+                            indicator = "► " if em.type_id == mod_type_id else "   "
+                            equiv_name = get_localized_name(
+                                em.type_id,
+                                em.type_name,
+                                sde_repo,
+                                language_code,
+                                logger,
+                            )
+                            st.text(f"{indicator}{equiv_name}: {em.stock:,}")
+                        st.divider()
+                        st.markdown(
+                            f"**{translate_text(language_code, 'doctrine_status.combined_total', total=f'{combined_total:,}')}**"
+                        )
+
+
+def _render_fit_details_button(
+    service,
+    fit_id: int,
+    language_code: str,
+) -> bool:
+    """Render a fit-details toggle button and return whether details are visible."""
+    data_key = f"tab2_data_{fit_id}"
+    visible_key = f"fit_details_visible_{fit_id}"
+
+    if st.button(
+        translate_text(language_code, "doctrine_status.show_fit_details"),
+        key=f"toggle_fit_details_{fit_id}",
+        type="secondary",
+        width="stretch",
+    ):
+        is_visible = st.session_state.get(visible_key, False)
+        if is_visible:
+            st.session_state[visible_key] = False
+        else:
+            if data_key not in st.session_state:
+                st.session_state[data_key] = service.repository.get_fit_by_id(
+                    fit_id=fit_id
+                )
+            st.session_state[visible_key] = True
+        st.rerun()
+
+    return bool(st.session_state.get(visible_key, False))
+
+
+def _render_fit_details_table(
+    fit_id: int,
+    sde_repo,
+    language_code: str,
+) -> None:
+    """Render loaded fit details below the compact row."""
+    fit_detail_df = st.session_state.get(f"tab2_data_{fit_id}")
+    if fit_detail_df is None:
+        return
+
+    if fit_detail_df.empty:
+        st.info(translate_text(language_code, "doctrine_status.no_fit_details"))
+        return
+
+    fit_detail_df = apply_localized_type_names(
+        fit_detail_df,
+        sde_repo,
+        language_code,
+        logger,
+    )
+    fit_detail_df = apply_localized_names(
+        fit_detail_df,
+        sde_repo,
+        language_code,
+        id_column="ship_id",
+        name_column="ship_name",
+        logger=logger,
+        english_name_column="ship_name_en",
+    )
+    col_config = get_fitting_column_config(language_code)
+    st.dataframe(
+        drop_localized_backup_columns(fit_detail_df),
+        hide_index=True,
+        column_config=col_config,
+        width="stretch",
+    )
+
+
 def main():
     language_code = get_active_language()
     market = render_market_selector()
     sde_repo = get_sde_repository()
+    _inject_compact_doctrine_styles()
 
     # Read deep-link query param from dashboard
     qp_ship_id = None
@@ -177,30 +414,16 @@ def main():
     fit_build_result = service.build_fit_data()
     summary_df = fit_build_result.summary_df
 
-    # App title and logo
-    col1, col2, col3 = st.columns([0.2, 0.5, 0.3])
-    with col1:
-        image_path = pathlib.Path(__file__).parent.parent / "images" / "wclogo.png"
-        if image_path.exists():
-            st.image(str(image_path), width=150)
-        else:
-            st.warning(translate_text(language_code, "doctrine_status.logo_not_found"))
+    render_page_title(
+        translate_text(language_code, "doctrine_status.title", market_name=market.name),
+        subtitle=translate_text(language_code, "doctrine_status.downloads_hint"),
+    )
 
-    with col2:
-        st.markdown("&nbsp;")
-        st.title(translate_text(language_code, "doctrine_status.title", market_name=market.name))
-    with col3:
-        # Use summary_df directly from FitBuildResult (no redundant get_fit_summary call)
-        if summary_df.empty:
-            st.warning(translate_text(language_code, "doctrine_status.no_fits"))
-            return
-        fit_summary = summary_df.copy()
-        st.markdown("&nbsp;")
-        st.markdown("&nbsp;")
-        st.markdown(
-            f"<span style='font-size: 12px; color: #666;'>*{translate_text(language_code, 'doctrine_status.downloads_hint')}*</span>",
-            unsafe_allow_html=True,
-        )
+    # Use summary_df directly from FitBuildResult (no redundant get_fit_summary call)
+    if summary_df.empty:
+        st.warning(translate_text(language_code, "doctrine_status.no_fits"))
+        return
+    fit_summary = summary_df.copy()
 
     # Add filters in the sidebar
     st.sidebar.header(translate_text(language_code, "low_stock.filters_header"))
@@ -373,7 +596,9 @@ def main():
         for tid in equiv_type_ids_in_fits:
             group = equiv_service.get_equivalence_group(tid)
             if group:
-                others_in_stock = [m for m in group.modules if m.stock > 0 and m.type_id != tid]
+                others_in_stock = [
+                    m for m in group.modules if m.stock > 0 and m.type_id != tid
+                ]
                 if others_in_stock:
                     equiv_groups[tid] = group
 
@@ -383,305 +608,141 @@ def main():
     # Iterate through each group and display fits
     for group_name, group_data in grouped_fits:
         # Display group header
-        st.subheader(
-            body=f"{group_name}",
-            help=translate_text(language_code, "doctrine_status.ship_group_help"),
-            divider="orange",
+        st.markdown(
+            (
+                "<div "
+                f"title='{translate_text(language_code, 'doctrine_status.ship_group_help')}' "
+                "style='margin: 0.2rem 0 0.1rem 0;'>"
+                f"<div style='font-size: 1rem; font-weight: 600; color: #6b7280; line-height: 1.05;'>{group_name}</div>"
+                "<div style='height: 1px; background: rgba(245, 158, 11, 0.55); margin-top: 0.18rem;'></div>"
+                "</div>"
+            ),
+            unsafe_allow_html=True,
         )
 
         # Display the fits in this group
-        for i, row in group_data.iterrows():
-            # Create a more compact horizontal section for each fit
-            col1, col2, col3 = st.columns([1, 3, 2])
-
-            target_pct = row["target_percentage"]
+        for _, row in group_data.iterrows():
+            target_pct = (
+                int(row["target_percentage"])
+                if pd.notna(row["target_percentage"])
+                else 0
+            )
             target = int(row["ship_target"]) if pd.notna(row["ship_target"]) else 0
             fits = int(row["fits"]) if pd.notna(row["fits"]) else 0
             hulls = int(row["hulls"]) if pd.notna(row["hulls"]) else 0
             ship_id = int(row["ship_id"])
             fit_id = int(row["fit_id"])
+            fit_name = row["fit_name"]
             fit_cost = (
                 millify(int(row["total_cost"]), precision=2)
                 if pd.notna(row["total_cost"])
                 else "N/A"
             )
+            stock_status = StockStatus.from_percentage(target_pct)
+            ship_name_en = row.get("ship_name_en", row["ship_name"])
+            fit_details_visible = False
+            low_stock_visible = False
 
-            with col1:
-                # add space
-                st.space("stretch")
-                # Ship image and ID info
-                try:
-                    st.image(
-                        f"https://images.evetech.net/types/{ship_id}/render?size=64",
-                        width=64,
-                    )
-                except Exception:
-                    st.text(translate_text(language_code, "doctrine_status.image_not_available"))
+            row_cols = st.columns([0.8, 5.45, 1.85], gap="small")
 
-                # Use StockStatus for consistent categorization
-                stock_status = StockStatus.from_percentage(target_pct)
-                color = stock_status.display_color
-                status = stock_status.display_name
-                fit_name = row["fit_name"]
-                st.badge(status, color=color)
-                st.text(translate_text(language_code, "doctrine_status.fit_id_label", fit_id=fit_id))
-                st.text(translate_text(language_code, "doctrine_status.fit_name_label", fit_name=fit_name))
-
-            with col2:
-                tab1, tab2 = st.tabs(
-                    [
-                        translate_text(language_code, "doctrine_status.tab_market_stock"),
-                        translate_text(language_code, "doctrine_status.tab_fit_details"),
-                    ],
-                    default=translate_text(language_code, "doctrine_status.tab_market_stock"),
-                )
-                with tab1:
-                    # Ship name with checkbox and metrics in a more compact layout
-                    ship_cols = st.columns([0.05, 0.95])
-
-                    with ship_cols[0]:
-                        # Ship checkbox — keyed by type_id (ship_id)
-                        ship_cb_key = f"ship_{fit_id}_{ship_id}"
-                        if ship_cb_key not in st.session_state:
-                            st.session_state[ship_cb_key] = (
-                                ship_id in st.session_state.selected_type_ids
-                            )
-                        ship_selected = st.checkbox(
-                            "x", key=ship_cb_key, label_visibility="hidden"
+            with row_cols[0]:
+                left_cols = st.columns([0.36, 0.64], gap="small")
+                with left_cols[0]:
+                    ship_cb_key = f"ship_{fit_id}_{ship_id}"
+                    if ship_cb_key not in st.session_state:
+                        st.session_state[ship_cb_key] = (
+                            ship_id in st.session_state.selected_type_ids
                         )
-                        hull_qty_needed = max(0, target - hulls)
-                        if ship_selected:
-                            _add_selection(
-                                ship_id,
-                                row.get("ship_name_en", row["ship_name"]),
-                                hulls,
-                                hull_qty_needed,
-                            )
-
-                    with ship_cols[1]:
-                        st.markdown(f"**{row['ship_name']}**")
-
-                    # Display metrics in a single row
-                    metric_cols = st.columns(4)
-                    fits_delta = fits - target
-                    hulls_delta = hulls - target
-
-                    with metric_cols[0]:
-                        if fits:
-                            st.metric(
-                                label=translate_text(language_code, "low_stock.column_fits"),
-                                value=f"{int(fits)}",
-                                delta=fits_delta,
-                            )
-                        else:
-                            st.metric(
-                                label=translate_text(language_code, "low_stock.column_fits"),
-                                value="0",
-                                delta=fits_delta,
-                            )
-
-                    with metric_cols[1]:
-                        if hulls:
-                            st.metric(
-                                label=translate_text(language_code, "doctrine_report.metric_total_hulls"),
-                                value=f"{int(hulls)}",
-                                delta=hulls_delta,
-                            )
-                        else:
-                            st.metric(
-                                label=translate_text(language_code, "doctrine_report.metric_total_hulls"),
-                                value="0",
-                                delta=hulls_delta,
-                            )
-
-                    with metric_cols[2]:
-                        if target:
-                            st.metric(
-                                label=translate_text(language_code, "doctrine_report.target"),
-                                value=f"{int(target)}",
-                            )
-                        else:
-                            st.metric(
-                                label=translate_text(language_code, "doctrine_report.target"),
-                                value="0",
-                            )
-
-                    with metric_cols[3]:
-                        if fit_cost and fit_cost != "N/A":
-                            st.metric(
-                                label=translate_text(language_code, "doctrine_report.column_total_cost"),
-                                value=f"{fit_cost}",
-                            )
-                        else:
-                            st.metric(
-                                label=translate_text(language_code, "doctrine_report.column_total_cost"),
-                                value="N/A",
-                            )
-
-                    # Progress bar for target percentage (uses ui.formatters)
-                    target_pct = row["target_percentage"]
-                    st.markdown(
-                        render_progress_bar_html(target_pct), unsafe_allow_html=True
+                    ship_selected = st.checkbox(
+                        "x", key=ship_cb_key, label_visibility="hidden"
                     )
-
-                    with col3:
-                        # Low stock modules with selection checkboxes
-                        st.markdown(
-                            f":blue[**{translate_text(language_code, 'doctrine_status.low_stock_modules')}:**]"
+                    hull_qty_needed = max(0, target - hulls)
+                    if ship_selected:
+                        _add_selection(
+                            ship_id,
+                            ship_name_en,
+                            hulls,
+                            hull_qty_needed,
                         )
 
-                        for mod in row["lowest_modules"]:
-                            mod_type_id = mod["type_id"]
-                            mod_name = mod["module_name"]
-                            mod_fits = mod["fits_on_market"]
-                            mod_qty_needed = mod["qty_needed"]
-                            mod_position = mod["position"]
-                            mod_name_en = mod.get("module_name_en", mod_name)
-
-                            # Display string for the module
-                            has_equiv = mod_type_id in equiv_groups
-                            if has_equiv:
-                                display_text = f"{mod_name} ({mod_fits} combined)"
-                            else:
-                                display_text = f"{mod_name} ({mod_fits})"
-
-                            # Unique checkbox key using fit_id + position
-                            module_cb_key = f"mod_{fit_id}_{mod_position}_{mod_type_id}"
-
-                            # Use StockStatus for consistent module categorization
-                            mod_stock_status = StockStatus.from_stock_and_target(
-                                mod_fits, target
-                            )
-
-                            col_a, col_b = st.columns([0.1, 0.9])
-                            with col_a:
-                                if module_cb_key not in st.session_state:
-                                    st.session_state[module_cb_key] = (
-                                        mod_type_id in st.session_state.selected_type_ids
-                                    )
-                                is_selected = st.checkbox(
-                                    "1", key=module_cb_key, label_visibility="hidden"
-                                )
-                                if is_selected:
-                                    _add_selection(
-                                        mod_type_id,
-                                        mod_name_en,
-                                        mod_fits,
-                                        mod_qty_needed,
-                                    )
-
-                            with col_b:
-                                equiv_prefix = "🔄 " if has_equiv else ""
-                                equiv_help = (
-                                    f" ({translate_text(language_code, 'doctrine_status.includes_equivalent_modules')})"
-                                    if has_equiv
-                                    else ""
-                                )
-                                if mod_stock_status == StockStatus.CRITICAL:
-                                    st.markdown(
-                                        f":red-badge[:material/error:] {equiv_prefix}{display_text}",
-                                        help=f"{translate_text(language_code, 'doctrine_status.critical_stock_level')}{equiv_help}",
-                                    )
-                                elif mod_stock_status == StockStatus.NEEDS_ATTENTION:
-                                    st.markdown(
-                                        f":orange-badge[:material/error:] {equiv_prefix}{display_text}",
-                                        help=f"{translate_text(language_code, 'doctrine_status.low_stock_help')}{equiv_help}",
-                                    )
-                                else:
-                                    st.text(f"{equiv_prefix}{display_text}")
-
-                                # Equiv breakdown popover (only shown when has_equiv)
-                                equiv_group = equiv_groups.get(mod_type_id)
-                                if equiv_group:
-                                    in_stock_modules = [m for m in equiv_group.modules if m.stock > 0]
-                                    combined_total = sum(m.stock for m in in_stock_modules)
-                                    with st.popover(
-                                        translate_text(language_code, "doctrine_status.view_stock_breakdown"),
-                                        use_container_width=True,
-                                    ):
-                                        st.markdown(f"**{mod_name}**")
-                                        st.caption(
-                                            translate_text(
-                                                language_code,
-                                                "doctrine_status.combined_stock_caption",
-                                            )
-                                        )
-                                        for em in in_stock_modules:
-                                            indicator = "► " if em.type_id == mod_type_id else "   "
-                                            equiv_name = get_localized_name(
-                                                em.type_id,
-                                                em.type_name,
-                                                sde_repo,
-                                                language_code,
-                                                logger,
-                                            )
-                                            st.text(f"{indicator}{equiv_name}: {em.stock:,}")
-                                        st.divider()
-                                        st.markdown(
-                                            f"**{translate_text(language_code, 'doctrine_status.combined_total', total=f'{combined_total:,}')}**"
-                                        )
-
-                    with tab2:
-                        ship_name = row["ship_name"]
-                        st.write(
+                with left_cols[1]:
+                    try:
+                        st.image(
+                            f"https://images.evetech.net/types/{ship_id}/render?size=64",
+                            width=42,
+                        )
+                    except Exception:
+                        st.caption(
                             translate_text(
                                 language_code,
-                                "doctrine_status.fit_header",
-                                ship_name=ship_name,
-                                fit_id=fit_id,
+                                "doctrine_status.image_not_available",
                             )
                         )
 
-                        # Lazy-load: only fetch fit details when user explicitly requests
-                        tab2_key = f"tab2_data_{fit_id}"
+            with row_cols[1]:
+                st.markdown(
+                    (
+                        "<div style='font-size: 1.11rem; line-height: 1.12; margin: 0; padding: 0; "
+                        "white-space: nowrap; overflow: hidden; text-overflow: ellipsis;'>"
+                        f"<strong>{translate_text(language_code, 'doctrine_status.fit_id_label', fit_id=fit_id)}</strong> "
+                        f"&nbsp;&nbsp;{translate_text(language_code, 'doctrine_status.fit_name_label', fit_name=fit_name)}"
+                        "</div>"
+                        "<div style='font-size: 1.02rem; line-height: 1.14; margin: 0.08rem 0 0 0; padding: 0;'>"
+                        f"{translate_text(language_code, 'low_stock.column_fits')}: "
+                        f"<strong>{fits}</strong>"
+                        f"&nbsp;&nbsp;|&nbsp;&nbsp;"
+                        f"{translate_text(language_code, 'doctrine_report.metric_total_hulls')}: "
+                        f"<strong>{hulls}</strong>"
+                        f"&nbsp;&nbsp;|&nbsp;&nbsp;"
+                        f"{translate_text(language_code, 'doctrine_report.target')}: "
+                        f"<strong>{target}</strong>"
+                        f"&nbsp;&nbsp;|&nbsp;&nbsp;"
+                        f"{translate_text(language_code, 'doctrine_report.column_total_cost')}: "
+                        f"<strong>{fit_cost}</strong>"
+                        f"&nbsp;&nbsp;|&nbsp;&nbsp;<span style='color: "
+                        f"{_status_text_color(stock_status)}; font-weight: 600;'>"
+                        f"{stock_status.display_name}</span>"
+                        "</div>"
+                        f"{render_progress_bar_html(target_pct, height=10).replace('margin-top: 5px;', 'margin-top: 0.18rem;')}"
+                    ),
+                    unsafe_allow_html=True,
+                )
 
-                        if tab2_key not in st.session_state:
-                            if st.button(
-                                translate_text(language_code, "doctrine_status.load_fit_details"),
-                                key=f"load_tab2_{fit_id}",
-                                type="secondary",
-                            ):
-                                fit_detail_df = service.repository.get_fit_by_id(
-                                    fit_id=fit_id
-                                )
-                                st.session_state[tab2_key] = fit_detail_df
-                                st.rerun()
+            with row_cols[2]:
+                action_cols = st.columns(2, gap="small")
+                with action_cols[0]:
+                    fit_details_visible = _render_fit_details_button(
+                        service=service,
+                        fit_id=fit_id,
+                        language_code=language_code,
+                    )
+                with action_cols[1]:
+                    low_stock_visible = _render_low_stock_modules_button(
+                        fit_id=fit_id,
+                        language_code=language_code,
+                    )
 
-                        if tab2_key in st.session_state:
-                            fit_detail_df = st.session_state[tab2_key]
-                            if not fit_detail_df.empty:
-                                fit_detail_df = apply_localized_type_names(
-                                    fit_detail_df,
-                                    sde_repo,
-                                    language_code,
-                                    logger,
-                                )
-                                fit_detail_df = apply_localized_names(
-                                    fit_detail_df,
-                                    sde_repo,
-                                    language_code,
-                                    id_column="ship_id",
-                                    name_column="ship_name",
-                                    logger=logger,
-                                    english_name_column="ship_name_en",
-                                )
-                                col_config = get_fitting_column_config(language_code)
-                                st.dataframe(
-                                    drop_localized_backup_columns(fit_detail_df),
-                                    hide_index=True,
-                                    column_config=col_config,
-                                    width="stretch",
-                                )
-                            else:
-                                st.info(
-                                    translate_text(language_code, "doctrine_status.no_fit_details")
-                                )
+            if fit_details_visible:
+                _render_fit_details_table(
+                    fit_id=fit_id,
+                    sde_repo=sde_repo,
+                    language_code=language_code,
+                )
 
-                        # Add a thinner divider between fits
-                        st.markdown(
-                            "<hr style='margin: 0.5em 0; border-width: 1px'>",
-                            unsafe_allow_html=True,
-                        )
+            if low_stock_visible:
+                _render_low_stock_modules_panel(
+                    row=row,
+                    fit_id=fit_id,
+                    target=target,
+                    equiv_groups=equiv_groups,
+                    sde_repo=sde_repo,
+                    language_code=language_code,
+                )
+
+            st.markdown(
+                "<hr style='margin: 0.05rem 0 0.08rem 0; border-width: 1px'>",
+                unsafe_allow_html=True,
+            )
 
     # Rebuild selections from checkbox states after all checkboxes have rendered
     _rebuild_selections()
