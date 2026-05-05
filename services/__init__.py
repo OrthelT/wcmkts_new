@@ -115,7 +115,9 @@ from services.build_cost_service import (
     BuildCostService,
     get_build_cost_service,
     # Domain model
-    BuildCostSnapshot,
+    BuildCostJob,
+    # Constants
+    PRICE_SOURCE_MAP,
 )
 
 from services.type_resolution_service import (
@@ -182,7 +184,8 @@ __all__ = [
     # Build Cost Service
     "BuildCostService",
     "get_build_cost_service",
-    "BuildCostSnapshot",
+    "BuildCostJob",
+    "PRICE_SOURCE_MAP",
     # Type Resolution Service
     "TypeResolutionService",
     "get_type_resolution_service",

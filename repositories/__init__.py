@@ -10,6 +10,7 @@ Key Components:
 - DoctrineRepository: All doctrine-related database operations
 - MarketRepository: Market stats, orders, and history with targeted cache invalidation
 - MarketOrdersRepository: Market order aggregation for Pricer feature
+- BuildCostRepository: Structures, rigs, and industry indices
 - SDERepository: Static Data Export lookups (types, groups, categories)
 """
 
@@ -22,6 +23,12 @@ from repositories.market_repo import (
     get_update_time,
 )
 from repositories.market_orders_repo import MarketOrdersRepository, get_market_orders_repository
+from repositories.build_cost_repo import (
+    BuildCostRepository,
+    get_build_cost_repository,
+    invalidate_build_cost_caches,
+    invalidate_structure_caches,
+)
 from repositories.sde_repo import SDERepository, get_sde_repository
 
 __all__ = [
@@ -34,6 +41,10 @@ __all__ = [
     "get_update_time",
     "MarketOrdersRepository",
     "get_market_orders_repository",
+    "BuildCostRepository",
+    "get_build_cost_repository",
+    "invalidate_build_cost_caches",
+    "invalidate_structure_caches",
     "SDERepository",
     "get_sde_repository",
 ]
