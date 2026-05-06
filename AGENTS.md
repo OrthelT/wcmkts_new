@@ -141,7 +141,7 @@ All pages follow consistent patterns with Streamlit best practices:
 **Service Layer (`services/` directory):**
 - **`services/doctrine_service.py`**: DoctrineService and FitDataBuilder for doctrine fit aggregation
 - **`services/market_service.py`**: MarketService for 30-day metrics, ISK volume calculations, outlier handling, and Plotly chart creation
-- **`services/build_cost_service.py`**: BuildCostService for async cost fetching (httpx), URL construction, and BuildCostJob dataclass
+- **`services/build_cost_service.py`**: BuildCostService for stored build-cost catalog browsing and per-item snapshot summaries
 - **`services/price_service.py`**: PriceService with provider chain (Fuzzwork → Janice) for Jita price lookups with caching
 - **`services/pricer_service.py`**: PricerService orchestrates parsing and price lookups from Jita (via Janice API or Fuzzworks) and 4-HWWF (local market database)
 - **`services/low_stock_service.py`**: LowStockService for low stock analysis with filtering (categories, doctrines, fits, tech2/faction items)
@@ -535,7 +535,7 @@ The codebase follows a strict layered architecture. Dependencies must flow **dow
 │  services/           → Business logic orchestration         │
 │    doctrine_service.py   → FitDataBuilder, DoctrineService  │
 │    market_service.py     → MarketService, chart creation    │
-│    build_cost_service.py → BuildCostService, async fetching │
+│    build_cost_service.py → BuildCostService, stored costs   │
 │    price_service.py      → Price fetching with fallbacks    │
 │    categorization.py     → Ship role categorization         │
 │    + pricer, low_stock, selection, equivalents, type_resolution │
@@ -547,7 +547,6 @@ The codebase follows a strict layered architecture. Dependencies must flow **dow
 │    base.py           → BaseRepository with read_df()        │
 │    doctrine_repo.py  → DoctrineRepository                   │
 │    market_repo.py    → MarketRepository                     │
-│    build_cost_repo.py → BuildCostRepository                 │
 │    sde_repo.py       → SDERepository                        │
 └─────────────────────────────────────────────────────────────┘
                               │ imports from ↓
@@ -636,7 +635,7 @@ from state.session_state import ss_get  # ✗ state!
 
 ### Project Directories
 - **`domain/`**: Core business models (FitItem, FitSummary, StockStatus, ShipRole, PricedItem, MarketConfig, converters)
-- **`repositories/`**: Database access layer (BaseRepository, DoctrineRepository, MarketRepository, BuildCostRepository, SDERepository)
+- **`repositories/`**: Database access layer (BaseRepository, DoctrineRepository, MarketRepository, SDERepository)
 - **`services/`**: Business logic (DoctrineService, MarketService, BuildCostService, PriceService, PricerService, ImportHelperService, LowStockService, SelectionService, ModuleEquivalentsService, TypeResolutionService, TypeNameLocalization, categorization)
 - **`state/`**: Session state management (ss_get, ss_has, ss_set, ss_init, get_service, language_state, market_state)
 - **`ui/`**: UI formatting utilities, column configurations, reusable popover components, i18n translations, market selector

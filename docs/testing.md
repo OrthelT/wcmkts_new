@@ -30,11 +30,9 @@ uv run pytest tests/ --cov=. --cov-report=html
 tests/
 ├── conftest.py                        # Path setup
 ├── test_base_repository.py            # BaseRepository + malformed-DB recovery
-├── test_build_cost_repo.py            # BuildCostRepository
 ├── test_build_cost_service.py         # BuildCostService
 ├── test_database_config_concurrency.py # DatabaseConfig sync + _SYNC_LOCK
 ├── test_doctrine_repo.py              # DoctrineRepository
-├── test_fetch_industry_indices.py     # Industry index fetching
 ├── test_i18n.py                       # UI translation (i18n.py)
 ├── test_import_helper_service.py      # ImportHelperService
 ├── test_language_state.py             # Language session state management

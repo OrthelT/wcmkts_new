@@ -141,7 +141,7 @@ def render_progress_bar_html(percentage: float, height: int = 20) -> str:
     return f"""
     <div style="margin-top: 5px;">
         <div style="background-color: {bg_color}; width: 100%; height: {height}px; border-radius: 3px;">
-            <div style="background-color: {color}; width: {percentage}%; height: {height}px; border-radius: 3px; text-align: center; line-height: {height}px; color: white; font-weight: bold;">
+            <div style="background-color: {color}; width: {percentage}%; height: {height}px; border-radius: 3px; text-align: center; line-height: {height+(height*.1)}px; color: white; font-weight: bold;">
                 {int(percentage)}%
             </div>
         </div>
@@ -159,8 +159,6 @@ def format_delta_percentage(delta: float) -> str:
     Returns:
         Formatted string with sign (e.g., "+5.2%", "-3.1%")
     """
-    if delta is None:
-        return ""
     return f"{delta:+.2f}%"
 
 

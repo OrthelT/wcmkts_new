@@ -119,7 +119,7 @@ def _status_cell_style(status_label: str) -> str:
 
 def _fits_avail_column_style(column: pd.Series, status_labels: pd.Series) -> list[str]:
     """Style only fits_on_mkt cells using status labels."""
-    if column.name != "fits_on_mkt":
+    if column.name != "type_name":
         return [""] * len(column)
     return [_status_cell_style(status_labels.get(idx, "")) for idx in column.index]
 
@@ -640,9 +640,14 @@ def render_doctrine_ships_table(
         )
         table_df = drop_localized_backup_columns(display_df)
         status_labels = result_df["status"]
-        styled_table = table_df.style.apply(
-            lambda col: _fits_avail_column_style(col, status_labels), axis=0
-        )
+
+        if doc_dash_filter_selection == "all":
+           styled_table = table_df.style.apply(
+                lambda col: _fits_avail_column_style(col, status_labels), axis=0
+            )
+        else:
+            styled_table = table_df
+
         edited_df = st.data_editor(
             styled_table,
             hide_index=True,
@@ -651,19 +656,28 @@ def render_doctrine_ships_table(
             width="stretch",
             key=dataframe_key,
         )
-        # Detect which checkbox was clicked
+        # Look up the source row by its preserved pandas index, not by
+        # positional iloc — when the low-stock filter is active, edited_df
+        # row positions no longer align with result_df.
         for idx in range(len(edited_df)):
-            if edited_df.iloc[idx]["_mkt"]:
-                return int(result_df.iloc[idx]["type_id"]), "market_stats"
-            if edited_df.iloc[idx]["_doc"]:
-                return int(result_df.iloc[idx]["type_id"]), "doctrine_status"
+            row = edited_df.iloc[idx]
+            if not (row["_mkt"] or row["_doc"]):
+                continue
+            type_id = int(result_df.loc[edited_df.index[idx], "type_id"])
+            target = "market_stats" if row["_mkt"] else "doctrine_status"
+            return type_id, target
         return None, None
     else:
         table_df = drop_localized_backup_columns(result_df[display_cols[:9]].copy())
         status_labels = result_df["status"]
-        styled_table = table_df.style.apply(
-            lambda col: _fits_avail_column_style(col, status_labels), axis=0
-        )
+        
+        if doc_dash_filter_selection == "all":
+           styled_table = table_df.style.apply(
+                lambda col: _fits_avail_column_style(col, status_labels), axis=0
+            )
+        else:
+            styled_table = table_df
+        
         st.dataframe(
             styled_table,
             hide_index=True,

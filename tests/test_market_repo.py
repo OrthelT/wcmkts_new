@@ -137,6 +137,34 @@ class TestMarketRepositoryCachedFunctions:
         assert call_args[1]["params"]["type_ids"] == [34]
         assert "cutoff" in call_args[1]["params"]
 
+    @patch("repositories.market_repo.BaseRepository")
+    @patch("repositories.market_repo.DatabaseConfig")
+    def test_get_watchlist_returns_metadata(self, mock_db_cls, mock_base_repo_cls):
+        expected = pd.DataFrame(
+            [
+                {
+                    "type_id": 24698,
+                    "type_name": "Drake",
+                    "group_id": 419,
+                    "group_name": "Battlecruiser",
+                    "category_id": 6,
+                    "category_name": "Ship",
+                }
+            ]
+        )
+        mock_repo = Mock()
+        mock_repo.read_df.return_value = expected
+        mock_base_repo_cls.return_value = mock_repo
+        mock_db_cls.return_value = Mock()
+
+        from repositories.market_repo import _get_watchlist_impl
+
+        result = _get_watchlist_impl()
+
+        assert result.equals(expected.reset_index(drop=True))
+        query = mock_repo.read_df.call_args[0][0]
+        assert "FROM watchlist" in str(query)
+
 
 class TestMarketRepositoryMalformedRecovery:
     """Test malformed DB recovery in cached functions."""
@@ -273,6 +301,21 @@ class TestMarketRepositoryClass:
 
         assert result is expected
         mock_cached.assert_called_once_with((34,), mock_db.alias)
+
+    @patch("repositories.market_repo._get_watchlist_cached")
+    def test_get_watchlist_delegates(self, mock_cached):
+        expected = pd.DataFrame({"type_id": [24698], "type_name": ["Drake"]})
+        mock_cached.return_value = expected
+
+        from repositories.market_repo import MarketRepository
+
+        mock_db = Mock()
+        repo = MarketRepository(mock_db)
+
+        result = repo.get_watchlist()
+
+        assert result is expected
+        mock_cached.assert_called_once_with(mock_db.alias)
 
 
 class TestGetUpdateTime:

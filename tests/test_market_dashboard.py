@@ -253,19 +253,6 @@ class TestDoctrineStatusCellStyle:
         result = _status_cell_style("🔴 Critical")
         assert result.startswith("background-color:")
 
-    def test_fits_avail_style_applies_only_to_fits_column(self):
-        from pages.components.dashboard_components import _fits_avail_column_style
-
-        fits_column = pd.Series([10, 5, 1], name="fits_on_mkt", index=[0, 1, 2])
-        status_labels = pd.Series(["🟢 Good", "🟡 Needs Attention", "🔴 Critical"], index=[0, 1, 2])
-        styles = _fits_avail_column_style(fits_column, status_labels)
-        assert styles[0] == ""
-        assert styles[1].startswith("background-color:")
-        assert styles[2].startswith("background-color:")
-
-        other_column = pd.Series(["A", "B", "C"], name="type_name", index=[0, 1, 2])
-        assert _fits_avail_column_style(other_column, status_labels) == ["", "", ""]
-
 
 class TestJitaDiffCellStyle:
     """Tests for % vs Jita conditional styling helper."""

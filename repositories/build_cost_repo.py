@@ -105,6 +105,25 @@ def _write_industry_index_impl(engine, df: pd.DataFrame) -> None:
         df.to_sql("industry_index", conn, if_exists="replace", index=False)
 
 
+def _get_builder_cost_catalog_impl() -> pd.DataFrame:
+    """Fetch all rows from buildcost.db.builder_costs."""
+    repo = BaseRepository(DatabaseConfig("build_cost"), logger)
+    query = text(
+        """
+        SELECT
+            type_id,
+            total_cost_per_unit,
+            time_per_unit,
+            me,
+            runs,
+            fetched_at
+        FROM builder_costs
+        ORDER BY type_id
+        """
+    )
+    return repo.read_df(query).reset_index(drop=True)
+
+
 # =============================================================================
 # Cached Wrappers (Streamlit cache layer)
 # =============================================================================
@@ -133,6 +152,11 @@ def _get_all_structures_cached(_url: str, is_super: bool):
     return _get_all_structures_impl(db.engine, is_super)
 
 
+@st.cache_data(ttl=600, show_spinner="Loading builder cost catalog...")
+def _get_builder_cost_catalog_cached(_url: str) -> pd.DataFrame:
+    return _get_builder_cost_catalog_impl()
+
+
 # =============================================================================
 # Cache Invalidation
 # =============================================================================
@@ -143,6 +167,7 @@ def invalidate_build_cost_caches():
     _get_structure_rigs_cached.clear()
     _get_manufacturing_cost_index_cached.clear()
     _get_all_structures_cached.clear()
+    _get_builder_cost_catalog_cached.clear()
     logger.info("Build cost caches invalidated")
 
 
@@ -186,6 +211,10 @@ class BuildCostRepository(BaseRepository):
     def write_industry_index(self, df: pd.DataFrame) -> None:
         """Write industry index DataFrame to the database."""
         _write_industry_index_impl(self.db.engine, df)
+
+    def get_builder_cost_catalog(self) -> pd.DataFrame:
+        """Get the synced builder-cost catalog (cached, TTL=600s)."""
+        return _get_builder_cost_catalog_cached(self._cache_key)
 
     def invalidate_structure_caches(self):
         """Clear the structures cache (e.g. after super-mode toggle)."""

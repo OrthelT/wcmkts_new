@@ -12,6 +12,7 @@ from logging_config import setup_logging
 from state import get_active_language
 from services import ImportHelperFilters
 from services.import_helper_service import SHIPPING_COST_PER_M3, get_import_helper_service
+from pages.components.header import render_page_title
 from ui.column_definitions import get_import_helper_column_config
 from ui.i18n import translate_text
 from ui.market_selector import render_market_selector
@@ -24,6 +25,8 @@ def main():
     language_code = get_active_language()
     market = render_market_selector()
 
+    render_page_title(translate_text(language_code, "import_helper.title", market_name=market.name))
+
     if not ensure_market_db_ready(market.database_alias):
         st.error(
             f"Database for **{market.name}** is not available. "
@@ -32,12 +35,6 @@ def main():
         st.stop()
 
     service = get_import_helper_service()
-
-    col1, col2 = st.columns([0.2, 0.8], vertical_alignment="bottom")
-    with col1:
-        st.image("images/wclogo.png", width=125)
-    with col2:
-        st.title(translate_text(language_code, "import_helper.title", market_name=market.name))
 
     st.sidebar.header(translate_text(language_code, "import_helper.filters_header"))
     category_options = service.get_category_options()
@@ -257,6 +254,7 @@ def main():
         styled_df,
         hide_index=True,
         width="stretch",
+        height=600,
         column_config=get_import_helper_column_config(
             language_code=language_code,
             shipping_cost_per_m3=float(shipping_cost_per_m3),

@@ -80,6 +80,7 @@ _MARKET_SERVICE_NAMES = (
     "price_service",
     "module_equivalents_service",
     "selection_service",
+    "builder_helper_service",
 )
 
 

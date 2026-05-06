@@ -205,6 +205,18 @@ def _get_sde_info_impl(type_ids: list) -> pd.DataFrame:
         return pd.read_sql_query(query, conn, params={"type_ids": type_ids})
 
 
+def _get_watchlist_impl(db_alias: str = "wcmkt") -> pd.DataFrame:
+    """Fetch the full watchlist (type metadata) DataFrame."""
+    repo = BaseRepository(DatabaseConfig(db_alias), logger)
+    query = text(
+        """
+        SELECT type_id, type_name, group_id, group_name, category_id, category_name
+        FROM watchlist
+        """
+    )
+    return repo.read_df(query).reset_index(drop=True)
+
+
 # =============================================================================
 # Cached Wrappers (Streamlit cache layer)
 # =============================================================================
@@ -269,6 +281,11 @@ def _get_sde_info_cached(type_ids: tuple) -> pd.DataFrame:
     return _get_sde_info_impl(list(type_ids))
 
 
+@st.cache_data(ttl=1800)
+def _get_watchlist_cached(db_alias: str = "wcmkt") -> pd.DataFrame:
+    return _get_watchlist_impl(db_alias)
+
+
 # =============================================================================
 # Cache Invalidation
 # =============================================================================
@@ -289,6 +306,7 @@ def invalidate_market_caches():
     _get_30day_volume_metrics_cached.clear()
     _get_market_type_ids_cached.clear()
     _get_local_price_cached.clear()
+    _get_watchlist_cached.clear()
     logger.info("Market caches invalidated")
 
 
@@ -414,6 +432,10 @@ class MarketRepository(BaseRepository):
         if not type_ids:
             type_ids = self.get_market_type_ids()
         return _get_sde_info_cached(tuple(type_ids))
+
+    def get_watchlist(self) -> pd.DataFrame:
+        """Get the full watchlist with type metadata (cached, TTL=1800s)."""
+        return _get_watchlist_cached(self.db.alias)
 
     def get_update_time(self, local_update_status: Optional[dict] = None) -> Optional[str]:
         """Get formatted last update time string."""
