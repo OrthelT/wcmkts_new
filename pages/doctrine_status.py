@@ -1,3 +1,4 @@
+import re
 from streamlit.elements.lib.layout_utils import Height
 import streamlit as st
 import pandas as pd
@@ -526,25 +527,43 @@ def main():
     # Apply deep-link module filter from dashboard (show only fits using the module)
     if qp_module_id is not None:
         module_fits_df = service.repository.get_module_fit_info(qp_module_id)
-        if not module_fits_df.empty:
-            module_fit_ids = module_fits_df["fit_id"].astype(int).unique().tolist()
-            filtered_df = filtered_df[filtered_df["fit_id"].isin(module_fit_ids)]
-            fallback_name = str(module_fits_df.iloc[0].get("type_name") or qp_module_id)
-            module_name = get_localized_name(
-                qp_module_id, fallback_name, sde_repo, language_code, logger,
+        if module_fits_df.empty:
+            logger.error(
+                "module_id=%s returned no fit info; refusing to show unfiltered list",
+                qp_module_id,
             )
-            st.info(
+            st.error(
                 translate_text(
                     language_code,
-                    "doctrine_status.module_filter_banner",
-                    module_name=module_name,
-                    fit_count=len(module_fit_ids),
+                    "doctrine_status.module_filter_unavailable",
+                    module_id=qp_module_id,
                 )
             )
-        else:
-            logger.warning(
-                "module_id=%s has no fit info; filter ignored", qp_module_id,
-            )
+            st.stop()
+        module_fit_ids = module_fits_df["fit_id"].astype(int).unique().tolist()
+        filtered_df = filtered_df[filtered_df["fit_id"].isin(module_fit_ids)]
+        fallback_name = str(module_fits_df.iloc[0].get("type_name") or qp_module_id)
+        module_name = get_localized_name(
+            qp_module_id, fallback_name, sde_repo, language_code, logger,
+        )
+        icon_url = f"https://images.evetech.net/types/{qp_module_id}/icon?size=32"
+        banner_text = translate_text(
+            language_code,
+            "doctrine_status.module_filter_banner",
+            module_name=module_name,
+            fit_count=len(module_fit_ids),
+        )
+        banner_html = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", banner_text)
+        st.markdown(
+            f'<div style="background-color: rgba(28, 131, 225, 0.1); '
+            f'border-left: 0.25em solid #1c83e1; padding: 0.6em 1em; '
+            f'border-radius: 0.25em; display: flex; align-items: center; gap: 0.6em;">'
+            f'<img src="{icon_url}" width="32" height="32" '
+            f'style="border-radius: 4px; flex-shrink: 0;" alt="">'
+            f'<span>{banner_html}</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
     # Update the displayed ships based on filters
     st.session_state.displayed_ships = filtered_df["ship_name"].unique().tolist()

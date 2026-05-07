@@ -143,6 +143,11 @@ def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_rep
         _navigate_to_market_stats(module_type_id)
     elif module_type_id and module_target == "doctrine_status":
         _navigate_to_doctrine_status_module(module_type_id)
+    elif module_type_id:
+        logger.error(
+            "Unknown module_target=%r for type_id=%s; ignoring click",
+            module_target, module_type_id,
+        )
 
 
 # =============================================================================

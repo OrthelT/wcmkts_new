@@ -255,10 +255,19 @@ class DoctrineRepository:
 
     def get_module_fit_info(self, type_id: int) -> pd.DataFrame:
         """
-        Get fit information for a module.
+        Get all doctrine rows that include a module.
+
+        Args:
+            type_id: EVE type ID of the module
+
+        Returns:
+            DataFrame with fit_id, ship_name, fit_qty, type_name, type_id,
+            total_stock, fits_on_mkt — one row per fit using the module.
+            Empty DataFrame if the type_id is not in any fit or on query failure.
+            Callers must distinguish "not in any fit" from "DB error" via logs.
         """
         query = text("""
-            SELECT fit_id, ship_name,fit_qty, type_name, type_id, total_stock, fits_on_mkt
+            SELECT fit_id, ship_name, fit_qty, type_name, type_id, total_stock, fits_on_mkt
             FROM doctrines
             WHERE type_id = :type_id
         """)

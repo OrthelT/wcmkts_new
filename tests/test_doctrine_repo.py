@@ -82,6 +82,55 @@ class TestGetModuleUsage:
 
 
 # ---------------------------------------------------------------------------
+# get_module_fit_info
+# ---------------------------------------------------------------------------
+
+
+def _module_fit_info_df():
+    return pd.DataFrame([
+        {
+            "fit_id": 1, "ship_name": "Hurricane Fleet Issue", "fit_qty": 1,
+            "type_name": "Damage Control II", "type_id": 2048,
+            "total_stock": 500, "fits_on_mkt": 25,
+        },
+        {
+            "fit_id": 2, "ship_name": "Ferox", "fit_qty": 2,
+            "type_name": "Damage Control II", "type_id": 2048,
+            "total_stock": 500, "fits_on_mkt": 12,
+        },
+    ])
+
+
+class TestGetModuleFitInfo:
+    def test_returns_dataframe_for_valid_type_id(self):
+        db, repo = _make_repo()
+        expected = _module_fit_info_df()
+
+        with patch("pandas.read_sql_query", return_value=expected):
+            result = repo.get_module_fit_info(2048)
+
+        assert len(result) == 2
+        assert {"fit_id", "ship_name", "fit_qty", "type_name", "type_id",
+                "total_stock", "fits_on_mkt"}.issubset(result.columns)
+        assert set(result["fit_id"]) == {1, 2}
+
+    def test_returns_empty_on_exception(self):
+        db, repo = _make_repo()
+        db.engine.connect.side_effect = Exception("db down")
+
+        result = repo.get_module_fit_info(2048)
+        assert result.empty
+
+    def test_returns_empty_when_module_in_no_fits(self):
+        db, repo = _make_repo()
+
+        with patch("pandas.read_sql_query", return_value=pd.DataFrame()):
+            result = repo.get_module_fit_info(99999)
+
+        assert result.empty
+
+
+# ---------------------------------------------------------------------------
 # get_module_stock
 # ---------------------------------------------------------------------------
 

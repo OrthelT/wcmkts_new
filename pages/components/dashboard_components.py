@@ -297,7 +297,6 @@ def _compute_module_targets(doctrine_repo) -> pd.DataFrame:
         .round()
     )
 
-    # Aggregate per type_id: MAX qty_needed, MIN target_pct, count distinct fits
     agg = modules.groupby("type_id").agg(
         qty_needed=("row_qty_needed", "max"),
         target_pct=("row_target_pct", "min"),
@@ -309,6 +308,33 @@ def _compute_module_targets(doctrine_repo) -> pd.DataFrame:
     agg["fit_count"] = agg["fit_count"].astype(int)
 
     return agg
+
+def _resolve_table_selection(
+    edited_df: pd.DataFrame, source_df: pd.DataFrame,
+) -> tuple[int | None, str | None]:
+    """Resolve which row in the data_editor was clicked, by preserved pandas index.
+
+    edited_df.index carries the source_df index even when display_df was
+    filtered; positional iloc on source_df would misalign whenever any rows
+    were dropped before render. Returns (type_id, "market_stats" | "doctrine_status")
+    or (None, None) when neither checkbox is checked.
+    """
+    for idx in range(len(edited_df)):
+        row = edited_df.iloc[idx]
+        if not (row["_mkt"] or row["_doc"]):
+            continue
+        source_idx = edited_df.index[idx]
+        if source_idx not in source_df.index:
+            logger.error(
+                "Selected row index %r not found in source DataFrame; skipping",
+                source_idx,
+            )
+            continue
+        type_id = int(source_df.loc[source_idx, "type_id"])
+        target = "market_stats" if row["_mkt"] else "doctrine_status"
+        return type_id, target
+    return None, None
+
 
 _FILTER_OPTIONS = ("low_stock", "all")
 
@@ -428,16 +454,7 @@ def render_popular_modules_table(
             disabled=[c for c in display_cols if c not in ("_mkt", "_doc")],
             key=dataframe_key,
         )
-        # Resolve source row by preserved pandas index (filtered display_df may
-        # not align positionally with snapshot — same fix as ships table).
-        for idx in range(len(edited_df)):
-            row = edited_df.iloc[idx]
-            if not (row["_mkt"] or row["_doc"]):
-                continue
-            type_id = int(snapshot.loc[edited_df.index[idx], "type_id"])
-            target = "market_stats" if row["_mkt"] else "doctrine_status"
-            return type_id, target
-        return None, None
+        return _resolve_table_selection(edited_df, snapshot)
     else:
         table_df = drop_localized_backup_columns(display_df)
         styled_table = table_df.style.map(
@@ -678,17 +695,7 @@ def render_doctrine_ships_table(
             disabled=[c for c in display_cols if c not in ("_mkt", "_doc")],
             key=dataframe_key,
         )
-        # Look up the source row by its preserved pandas index, not by
-        # positional iloc — when the low-stock filter is active, edited_df
-        # row positions no longer align with result_df.
-        for idx in range(len(edited_df)):
-            row = edited_df.iloc[idx]
-            if not (row["_mkt"] or row["_doc"]):
-                continue
-            type_id = int(result_df.loc[edited_df.index[idx], "type_id"])
-            target = "market_stats" if row["_mkt"] else "doctrine_status"
-            return type_id, target
-        return None, None
+        return _resolve_table_selection(edited_df, result_df)
     else:
         table_df = drop_localized_backup_columns(result_df[display_cols[:9]].copy())
         status_labels = result_df["status"]

@@ -19,7 +19,6 @@ Usage:
         hide_index=True
     )
 """
-from wcwidth import width
 
 import streamlit as st
 
