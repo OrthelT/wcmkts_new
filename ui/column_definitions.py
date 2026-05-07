@@ -19,6 +19,7 @@ Usage:
         hide_index=True
     )
 """
+from wcwidth import width
 
 import streamlit as st
 
@@ -296,57 +297,51 @@ def get_doctrine_ships_column_config(language_code: str = "en") -> dict:
     return {
         "fit_id": st.column_config.NumberColumn(
             translate_text(language_code, "doctrine_report.fit_id"),
-            width=15,
+            width=25,
+            alignment="center",
         ),
         "image_url": st.column_config.ImageColumn(
             "",
-            width=40,
+            alignment="center",
         ),
         "type_name": st.column_config.TextColumn(
             translate_text(language_code, "common.item"),
-            width=135,
         ),
         "target_pct": st.column_config.ProgressColumn(
             translate_text(language_code, "dashboard.column_target_pct"),
             min_value=0,
             max_value=100,
             format="%d%%",
-            width=80,
         ),
         "order_volume": st.column_config.NumberColumn(
             translate_text(language_code, "market_stats.market_stock"),
             format="compact",
-            width=50,
         ),
         "fits_on_mkt": st.column_config.NumberColumn(
             translate_text(language_code, "dashboard.column_fits_available"),
-            width=70,
         ),
         "ship_target": st.column_config.NumberColumn(
             translate_text(language_code, "dashboard.column_target"),
-            width=50,
         ),
         "current_sell_price": st.column_config.NumberColumn(
             translate_text(language_code, "market_stats.sell_price"),
             format="compact",
-            width=65,
         ),
         "jita_sell_price": st.column_config.NumberColumn(
             translate_text(language_code, "import_helper.column_jita_sell"),
             format="compact",
-            width=65,
         ),
         "_mkt": st.column_config.CheckboxColumn(
             "📈",
             help=translate_text(language_code, "dashboard.hint_click_market_stats"),
-            width=40,
             default=False,
+            width=15,
         ),
         "_doc": st.column_config.CheckboxColumn(
             "⚔️",
             help=translate_text(language_code, "dashboard.hint_click_doctrine_status"),
-            width=40,
             default=False,
+            width=15,
         ),
     }
 
@@ -356,15 +351,16 @@ def get_doctrine_modules_column_config(language_code: str = "en") -> dict:
     return {
         "type_id": st.column_config.NumberColumn(
             "ID",
-            width=15,
+            width=35,
+            alignment="center",
         ),
         "image_url": st.column_config.ImageColumn(
             "",
-            width=30,
+            alignment="center",
+
         ),
         "type_name": st.column_config.TextColumn(
             translate_text(language_code, "common.item"),
-            width=135,
         ),
         "target_pct": st.column_config.ProgressColumn(
             translate_text(language_code, "dashboard.column_target_pct"),
@@ -372,54 +368,45 @@ def get_doctrine_modules_column_config(language_code: str = "en") -> dict:
             min_value=0,
             max_value=100,
             format="%d%%",
-            width=80,
         ),
         "order_volume": st.column_config.NumberColumn(
             translate_text(language_code, "market_stats.market_stock"),
             format="compact",
-            width=50,
         ),
         "fit_count": st.column_config.NumberColumn(
             translate_text(language_code, "dashboard.column_fits"),
             help="Number of distinct fits that include this module",
-            width=50,
         ),
         "qty_needed": st.column_config.NumberColumn(
             translate_text(language_code, "dashboard.column_qty_needed"),
             help="Per-worst-fit shortfall (max across fits, not total fleet demand)",
             format="compact",
-            width=60,
+            width=50,
         ),
         "current_sell_price": st.column_config.NumberColumn(
             translate_text(language_code, "market_stats.sell_price"),
             format="compact",
-            width=65,
         ),
         "jita_sell_price": st.column_config.NumberColumn(
             translate_text(language_code, "import_helper.column_jita_sell"),
             format="compact",
-            width=65,
         ),
         "jita_buy_price": st.column_config.NumberColumn(
             translate_text(language_code, "import_helper.column_jita_buy"),
             format="compact",
-            width=65,
         ),
         "pct_diff_vs_jita_sell": st.column_config.NumberColumn(
             translate_text(language_code, "market_stats.delta_vs_jita_sell_column"),
             format="%.2f%%",
-            width=60,
         ),
         "_mkt": st.column_config.CheckboxColumn(
             "📈",
             help=translate_text(language_code, "dashboard.hint_click_market_stats"),
-            width=40,
             default=False,
         ),
         "_doc": st.column_config.CheckboxColumn(
             "⚔️",
             help=translate_text(language_code, "dashboard.hint_click_doctrine_status_module"),
-            width=40,
             default=False,
         ),
     }
@@ -437,7 +424,6 @@ def get_low_stock_column_config(language_code: str = "en") -> dict:
         "type_id": st.column_config.NumberColumn(
             "ID",
             help="Type ID of the item",
-            width=50,
         ),
         "type_name": st.column_config.TextColumn(
             translate_text(language_code, "common.item"),

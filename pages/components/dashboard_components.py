@@ -202,10 +202,10 @@ def render_comparison_table(
             styled_table,
             hide_index=True,
             column_config=get_market_comparison_column_config(language_code),
-            width="stretch",
             on_select="rerun",
             selection_mode="single-row",
             key=dataframe_key,
+            height="stretch",
         )
         return _get_selected_type_id(event, comparison_df)
     else:
@@ -213,7 +213,7 @@ def render_comparison_table(
             styled_table,
             hide_index=True,
             column_config=get_market_comparison_column_config(language_code),
-            width="stretch",
+            height="stretch",
         )
         return None
 
@@ -426,7 +426,6 @@ def render_popular_modules_table(
             hide_index=True,
             column_config=get_doctrine_modules_column_config(language_code),
             disabled=[c for c in display_cols if c not in ("_mkt", "_doc")],
-            width="stretch",
             key=dataframe_key,
         )
         # Resolve source row by preserved pandas index (filtered display_df may
@@ -448,7 +447,7 @@ def render_popular_modules_table(
             styled_table,
             hide_index=True,
             column_config=get_doctrine_modules_column_config(language_code),
-            width="stretch",
+            width="content",
         )
         return None, None
 
@@ -677,7 +676,6 @@ def render_doctrine_ships_table(
             hide_index=True,
             column_config=get_doctrine_ships_column_config(language_code),
             disabled=[c for c in display_cols if c not in ("_mkt", "_doc")],
-            width="stretch",
             key=dataframe_key,
         )
         # Look up the source row by its preserved pandas index, not by
@@ -706,6 +704,6 @@ def render_doctrine_ships_table(
             styled_table,
             hide_index=True,
             column_config=get_doctrine_ships_column_config(language_code),
-            width="stretch",
+            width="content",
         )
         return None, None

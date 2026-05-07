@@ -55,7 +55,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "dashboard.hint_click_market_stats": "Select a row to view market details",
         "dashboard.hint_click_doctrine_status": "Select a row to view doctrine details",
         "dashboard.column_target_pct": "% Target",
-        "dashboard.column_qty_needed": "Qty Needed",
+        "dashboard.column_qty_needed": "Need",
         "dashboard.column_fits": "Fits",
         "dashboard.hint_click_doctrine_status_module": "Select a row to view fits using this module",
         "dashboard.doctrine_modules": "Doctrine Modules \u2014 Stock & Targets",
