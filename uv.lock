@@ -1158,7 +1158,7 @@ wheels = [
 
 [[package]]
 name = "wcmkts-staging"
-version = "0.6.0"
+version = "0.6.1"
 source = { editable = "." }
 dependencies = [
     { name = "asyncio" },
