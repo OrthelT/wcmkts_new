@@ -253,6 +253,22 @@ class DoctrineRepository:
             self._logger.error(f"Failed to get module usage for type_id={type_id}: {e}")
             return pd.DataFrame()
 
+    def get_module_fit_info(self, type_id: int) -> pd.DataFrame:
+        """
+        Get fit information for a module.
+        """
+        query = text("""
+            SELECT fit_id, ship_name,fit_qty, type_name, type_id, total_stock, fits_on_mkt
+            FROM doctrines
+            WHERE type_id = :type_id
+        """)
+        try:
+            with self._db.engine.connect() as conn:
+                return pd.read_sql_query(query, conn, params={"type_id": type_id})
+        except Exception as e:
+            self._logger.error(f"Failed to get module fit info for type_id={type_id}: {e}")
+            return pd.DataFrame()
+
     def get_module_stock(self, type_id: int) -> Optional[ModuleStock]:
         """
         Get complete module stock information as a domain model.

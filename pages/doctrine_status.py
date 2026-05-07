@@ -348,7 +348,7 @@ def main():
     market = render_market_selector()
     sde_repo = get_sde_repository()
 
-    # Read deep-link query param from dashboard
+    # Read deep-link query params from dashboard
     qp_ship_id = None
     if "ship_id" in st.query_params:
         try:
@@ -356,6 +356,14 @@ def main():
         except (ValueError, TypeError):
             logger.warning("Invalid ship_id query param: %s", st.query_params["ship_id"])
         del st.query_params["ship_id"]
+
+    qp_module_id = None
+    if "module_id" in st.query_params:
+        try:
+            qp_module_id = int(st.query_params["module_id"])
+        except (ValueError, TypeError):
+            logger.warning("Invalid module_id query param: %s", st.query_params["module_id"])
+        del st.query_params["module_id"]
 
     if not ensure_market_db_ready(market.database_alias):
         st.error(
@@ -514,6 +522,29 @@ def main():
         ship_match = filtered_df[filtered_df["ship_id"] == qp_ship_id]
         if not ship_match.empty:
             filtered_df = ship_match
+
+    # Apply deep-link module filter from dashboard (show only fits using the module)
+    if qp_module_id is not None:
+        module_fits_df = service.repository.get_module_fit_info(qp_module_id)
+        if not module_fits_df.empty:
+            module_fit_ids = module_fits_df["fit_id"].astype(int).unique().tolist()
+            filtered_df = filtered_df[filtered_df["fit_id"].isin(module_fit_ids)]
+            fallback_name = str(module_fits_df.iloc[0].get("type_name") or qp_module_id)
+            module_name = get_localized_name(
+                qp_module_id, fallback_name, sde_repo, language_code, logger,
+            )
+            st.info(
+                translate_text(
+                    language_code,
+                    "doctrine_status.module_filter_banner",
+                    module_name=module_name,
+                    fit_count=len(module_fit_ids),
+                )
+            )
+        else:
+            logger.warning(
+                "module_id=%s has no fit info; filter ignored", qp_module_id,
+            )
 
     # Update the displayed ships based on filters
     st.session_state.displayed_ships = filtered_df["ship_name"].unique().tolist()

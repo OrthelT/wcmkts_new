@@ -235,13 +235,14 @@ def _compute_module_targets(doctrine_repo) -> pd.DataFrame:
     - target_pct = MIN across fits of: round((fits_on_mkt / ship_target) * 100),
         clipped to [0, 100]. The cap masks overstock (>100%) by design — once a
         fit hits its target, the dashboard treats it as done.
+    - fit_count = number of distinct fits that include this type_id.
 
     Raises:
         ValueError: if any fit referenced in fits_df has no matching row in
             ship_targets. Per AGENTS.md data-integrity rule, missing target
             configuration is surfaced loudly rather than coerced to 0.
 
-    Returns DataFrame with columns: type_id, qty_needed, target_pct
+    Returns DataFrame with columns: type_id, qty_needed, target_pct, fit_count
     """
     fits_df = doctrine_repo.get_all_fits()
     if fits_df.empty:
@@ -296,14 +297,16 @@ def _compute_module_targets(doctrine_repo) -> pd.DataFrame:
         .round()
     )
 
-    # Aggregate per type_id: MAX qty_needed, MIN target_pct
+    # Aggregate per type_id: MAX qty_needed, MIN target_pct, count distinct fits
     agg = modules.groupby("type_id").agg(
         qty_needed=("row_qty_needed", "max"),
         target_pct=("row_target_pct", "min"),
+        fit_count=("fit_id", "nunique"),
     ).reset_index()
 
     agg["target_pct"] = agg["target_pct"].clip(upper=100).astype(int)
     agg["qty_needed"] = agg["qty_needed"].astype(int)
+    agg["fit_count"] = agg["fit_count"].astype(int)
 
     return agg
 
@@ -344,27 +347,28 @@ def render_popular_modules_table(
     sde_repo,
     language_code: str,
     dataframe_key: str | None = None,
-) -> int | None:
-    """Render doctrine modules table with stock, target %, and qty needed.
+) -> tuple[int | None, str | None]:
+    """Render doctrine modules table with stock, target %, qty needed, and fit count.
 
     Shows all non-ship items from the doctrines table, sorted alphabetically.
 
     Returns:
-        Selected type_id if a row was clicked, None otherwise.
+        (type_id, target) where target is "market_stats" or "doctrine_status",
+        or (None, None) if nothing was clicked.
     """
     try:
         module_targets = _compute_module_targets(doctrine_repo)
     except ValueError as e:
         st.error(f"Doctrine configuration error: {e}")
-        return None
+        return None, None
     if module_targets.empty:
-        return None
+        return None, None
 
     type_ids = module_targets["type_id"].tolist()
 
     snapshot = market_service.get_current_market_snapshot(type_ids)
     if snapshot.empty:
-        return None
+        return None, None
 
     snapshot = _add_jita_prices(snapshot, price_service, type_ids)
     snapshot["order_volume"] = (
@@ -375,6 +379,7 @@ def render_popular_modules_table(
     snapshot = snapshot.merge(module_targets, on="type_id", how="left")
     snapshot["target_pct"] = snapshot["target_pct"].fillna(0).astype(int)
     snapshot["qty_needed"] = snapshot["qty_needed"].fillna(0).astype(int)
+    snapshot["fit_count"] = snapshot["fit_count"].fillna(0).astype(int)
 
     snapshot = apply_localized_type_names(snapshot, sde_repo, language_code, logger)
     snapshot["type_name"] = snapshot["type_name"].fillna(snapshot["type_id"].astype(str))
@@ -386,11 +391,13 @@ def render_popular_modules_table(
 
     # Sort alphabetically by item name
     snapshot = snapshot.sort_values("type_name", key=lambda s: s.str.lower())
+    snapshot["_mkt"] = False
+    snapshot["_doc"] = False
 
     display_cols = [
-        "image_url", "type_name", "order_volume", "target_pct", "qty_needed",
-        "current_sell_price", "jita_sell_price", "jita_buy_price",
-        "pct_diff_vs_jita_sell",
+        "type_id", "image_url", "type_name", "target_pct", "order_volume",
+        "fit_count", "qty_needed", "current_sell_price", "jita_sell_price",
+        "jita_buy_price", "pct_diff_vs_jita_sell", "_mkt", "_doc",
     ]
 
     st.subheader(
@@ -402,31 +409,48 @@ def render_popular_modules_table(
     if mod_dash_filter_selection == "low_stock":
         display_df = display_df[display_df["target_pct"] < 100]
 
-    table_df = drop_localized_backup_columns(display_df)
-    styled_table = table_df.style.map(
-        _jita_diff_cell_style, subset=["pct_diff_vs_jita_sell"]
-    )
-    
     if dataframe_key:
-        st.caption("📈 = "+translate_text(language_code, "dashboard.hint_click_market_stats"))
-        event = st.dataframe(
+        st.caption(
+            "📈 = "
+            + translate_text(language_code, "dashboard.hint_click_market_stats")
+            + "  ·  ⚔️ = "
+            + translate_text(language_code, "dashboard.hint_click_doctrine_status")
+        )
+        table_df = drop_localized_backup_columns(display_df)
+        styled_table = table_df.style.map(
+            _jita_diff_cell_style, subset=["pct_diff_vs_jita_sell"]
+        )
+
+        edited_df = st.data_editor(
             styled_table,
             hide_index=True,
             column_config=get_doctrine_modules_column_config(language_code),
+            disabled=[c for c in display_cols if c not in ("_mkt", "_doc")],
             width="stretch",
-            on_select="rerun",
-            selection_mode="single-row",
             key=dataframe_key,
         )
-        return _get_selected_type_id(event, snapshot)
+        # Resolve source row by preserved pandas index (filtered display_df may
+        # not align positionally with snapshot — same fix as ships table).
+        for idx in range(len(edited_df)):
+            row = edited_df.iloc[idx]
+            if not (row["_mkt"] or row["_doc"]):
+                continue
+            type_id = int(snapshot.loc[edited_df.index[idx], "type_id"])
+            target = "market_stats" if row["_mkt"] else "doctrine_status"
+            return type_id, target
+        return None, None
     else:
+        table_df = drop_localized_backup_columns(display_df)
+        styled_table = table_df.style.map(
+            _jita_diff_cell_style, subset=["pct_diff_vs_jita_sell"]
+        )
         st.dataframe(
             styled_table,
             hide_index=True,
             column_config=get_doctrine_modules_column_config(language_code),
             width="stretch",
         )
-        return None
+        return None, None
 
 
 # =========================================================================

@@ -322,9 +322,9 @@ class TestDoctrineModulesColumnConfig:
         from ui.column_definitions import get_doctrine_modules_column_config
         config = get_doctrine_modules_column_config("en")
         expected_keys = {
-            "image_url", "type_name", "order_volume", "target_pct",
-            "qty_needed", "current_sell_price", "jita_sell_price",
-            "jita_buy_price", "pct_diff_vs_jita_sell",
+            "type_id", "image_url", "type_name", "target_pct", "order_volume",
+            "fit_count", "qty_needed", "current_sell_price", "jita_sell_price",
+            "jita_buy_price", "pct_diff_vs_jita_sell", "_mkt", "_doc",
         }
         assert set(config.keys()) == expected_keys
 

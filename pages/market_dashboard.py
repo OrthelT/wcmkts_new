@@ -84,6 +84,11 @@ def _navigate_to_doctrine_status(type_id: int):
     st.switch_page("pages/doctrine_status.py", query_params={"ship_id": str(type_id)})
 
 
+def _navigate_to_doctrine_status_module(type_id: int):
+    """Navigate to doctrine status page filtered to fits using the given module."""
+    st.switch_page("pages/doctrine_status.py", query_params={"module_id": str(type_id)})
+
+
 def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_repo, language_code):
     """Render the 2x2 commodity table grid with clickable rows."""
     top_row = st.columns(2, gap="small")
@@ -126,7 +131,7 @@ def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_rep
     elif ship_id and target == "doctrine_status":
         _navigate_to_doctrine_status(ship_id)
 
-    selected = render_popular_modules_table(
+    module_type_id, module_target = render_popular_modules_table(
         market_service=market_service,
         price_service=price_service,
         doctrine_repo=doctrine_repo,
@@ -134,8 +139,10 @@ def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_rep
         language_code=language_code,
         dataframe_key="dash_popular_modules",
     )
-    if selected:
-        _navigate_to_market_stats(selected)
+    if module_type_id and module_target == "market_stats":
+        _navigate_to_market_stats(module_type_id)
+    elif module_type_id and module_target == "doctrine_status":
+        _navigate_to_doctrine_status_module(module_type_id)
 
 
 # =============================================================================
