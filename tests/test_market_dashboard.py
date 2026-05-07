@@ -169,6 +169,41 @@ class TestComputeModuleTargets:
         # MAX(qty_needed) = 20, MIN(target_pct) = 50
         assert row["qty_needed"] == 20
         assert row["target_pct"] == 50
+        assert row["fit_count"] == 2
+
+    def test_fit_count_single_fit(self):
+        from pages.components.dashboard_components import _compute_module_targets
+
+        fits_df = pd.DataFrame({
+            "type_id": [100],
+            "ship_id": [999],
+            "fit_id": [1],
+            "fit_qty": [2],
+            "fits_on_mkt": [10],
+            "category_id": [7],
+        })
+        targets_df = pd.DataFrame({"fit_id": [1], "ship_target": [20]})
+        repo = self._make_repo(fits_df, targets_df)
+        result = _compute_module_targets(repo)
+        assert result.iloc[0]["fit_count"] == 1
+
+    def test_fit_count_uses_distinct_not_row_count(self):
+        # Same module appearing twice in the same fit_id (e.g. low + mid slot)
+        # should count as 1 distinct fit, not 2.
+        from pages.components.dashboard_components import _compute_module_targets
+
+        fits_df = pd.DataFrame({
+            "type_id": [100, 100],
+            "ship_id": [999, 999],
+            "fit_id": [1, 1],
+            "fit_qty": [1, 1],
+            "fits_on_mkt": [10, 10],
+            "category_id": [7, 7],
+        })
+        targets_df = pd.DataFrame({"fit_id": [1], "ship_target": [20]})
+        repo = self._make_repo(fits_df, targets_df)
+        result = _compute_module_targets(repo)
+        assert result.iloc[0]["fit_count"] == 1
 
     def test_empty_fits(self):
         from pages.components.dashboard_components import _compute_module_targets
@@ -322,9 +357,9 @@ class TestDoctrineModulesColumnConfig:
         from ui.column_definitions import get_doctrine_modules_column_config
         config = get_doctrine_modules_column_config("en")
         expected_keys = {
-            "image_url", "type_name", "order_volume", "target_pct",
-            "qty_needed", "current_sell_price", "jita_sell_price",
-            "jita_buy_price", "pct_diff_vs_jita_sell",
+            "type_id", "image_url", "type_name", "target_pct", "order_volume",
+            "fit_count", "qty_needed", "current_sell_price", "jita_sell_price",
+            "jita_buy_price", "pct_diff_vs_jita_sell", "_mkt", "_doc",
         }
         assert set(config.keys()) == expected_keys
 
@@ -370,3 +405,112 @@ class TestComputeModuleTargetsMissingTargets:
         repo = self._make_repo(fits_df, targets_df)
         with pytest.raises(ValueError, match=r"\[2, 3\]"):
             _compute_module_targets(repo)
+
+
+class TestResolveTableSelection:
+    """Regression tests for `_resolve_table_selection`.
+
+    Guards the bug where iloc-based row resolution returned the wrong type_id
+    when display_df was filtered (low-stock filter dropped rows from source_df).
+    """
+
+    def _source_df(self):
+        # Source uses non-contiguous index to simulate a row-filter result;
+        # the bugfix relies on edited_df.index aligning with source_df.index.
+        return pd.DataFrame(
+            {"type_id": [11, 22, 33, 44]},
+            index=[0, 1, 2, 3],
+        )
+
+    def test_returns_market_stats_target_for_correct_row(self):
+        from pages.components.dashboard_components import _resolve_table_selection
+
+        source_df = self._source_df()
+        # Filtered display kept only rows at index 2 and 3 (low-stock subset)
+        edited_df = pd.DataFrame(
+            {"_mkt": [False, True], "_doc": [False, False], "type_id": [33, 44]},
+            index=[2, 3],
+        )
+        # iloc[1] → type_id 44, the correct answer.
+        # Pre-fix code did `source_df.iloc[1]` which would have returned 22.
+        assert _resolve_table_selection(edited_df, source_df) == (44, "market_stats")
+
+    def test_returns_doctrine_status_target(self):
+        from pages.components.dashboard_components import _resolve_table_selection
+
+        source_df = self._source_df()
+        edited_df = pd.DataFrame(
+            {"_mkt": [False, False], "_doc": [True, False], "type_id": [33, 44]},
+            index=[2, 3],
+        )
+        assert _resolve_table_selection(edited_df, source_df) == (33, "doctrine_status")
+
+    def test_returns_none_none_when_no_checkbox_set(self):
+        from pages.components.dashboard_components import _resolve_table_selection
+
+        source_df = self._source_df()
+        edited_df = pd.DataFrame(
+            {"_mkt": [False, False], "_doc": [False, False], "type_id": [11, 22]},
+            index=[0, 1],
+        )
+        assert _resolve_table_selection(edited_df, source_df) == (None, None)
+
+    def test_skips_rows_with_missing_source_index(self):
+        # Latent guard: future refactor that resets indices shouldn't crash.
+        from pages.components.dashboard_components import _resolve_table_selection
+
+        source_df = self._source_df()
+        # Index 99 is not in source_df — should be skipped, falling through
+        # to None, None rather than raising KeyError.
+        edited_df = pd.DataFrame(
+            {"_mkt": [True], "_doc": [False], "type_id": [99]},
+            index=[99],
+        )
+        assert _resolve_table_selection(edited_df, source_df) == (None, None)
+
+
+# =========================================================================
+# render_popular_modules_table — early exit contract
+# =========================================================================
+
+
+class TestRenderPopularModulesTableEarlyExits:
+    """The function must return a (None, None) tuple — not bare None — on
+    every early-exit path so the caller's tuple-unpacking never crashes.
+    """
+
+    def _kwargs(self):
+        return {
+            "market_service": MagicMock(),
+            "price_service": MagicMock(),
+            "doctrine_repo": MagicMock(),
+            "sde_repo": MagicMock(),
+            "language_code": "en",
+            "dataframe_key": "test_key",
+        }
+
+    def test_value_error_returns_none_none(self):
+        from pages.components import dashboard_components as dc
+
+        with patch.object(dc, "_compute_module_targets", side_effect=ValueError("missing")):
+            with patch.object(dc.st, "error"):
+                result = dc.render_popular_modules_table(**self._kwargs())
+        assert result == (None, None)
+
+    def test_empty_module_targets_returns_none_none(self):
+        from pages.components import dashboard_components as dc
+
+        with patch.object(dc, "_compute_module_targets", return_value=pd.DataFrame()):
+            result = dc.render_popular_modules_table(**self._kwargs())
+        assert result == (None, None)
+
+    def test_empty_snapshot_returns_none_none(self):
+        from pages.components import dashboard_components as dc
+
+        targets = pd.DataFrame({"type_id": [100], "qty_needed": [1], "target_pct": [50], "fit_count": [1]})
+        kwargs = self._kwargs()
+        kwargs["market_service"].get_current_market_snapshot.return_value = pd.DataFrame()
+
+        with patch.object(dc, "_compute_module_targets", return_value=targets):
+            result = dc.render_popular_modules_table(**kwargs)
+        assert result == (None, None)
