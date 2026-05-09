@@ -139,10 +139,13 @@ def _build_item_option_labels(
         language_code,
         logger,
     )
-    item_label_map = {
-        type_id: localized_name_map.get(type_id, english_name)
-        for type_id, english_name in english_name_map.items()
-    }
+    item_label_map = {}
+    for type_id, english_name in english_name_map.items():
+        localized = localized_name_map.get(type_id)
+        if localized and localized != english_name:
+            item_label_map[type_id] = f"{localized} ({english_name})"
+        else:
+            item_label_map[type_id] = english_name
     return item_label_map, english_name_map
 
 
@@ -296,6 +299,7 @@ def main():
         index=0,
         key="selected_category_choice",
         format_func=lambda cid: "All Categories" if cid is None else category_name_map[cid],
+        filter_mode="fuzzy",
     )
 
     active_category_id = None if show_all else selected_category_id
@@ -323,6 +327,7 @@ def main():
         options=[None] + item_ids,
         index=item_select_index,
         format_func=lambda tid: "All Items" if tid is None else item_label_map[tid],
+        filter_mode="fuzzy",
     )
     selected_item_id = check_selected_item(
         selected_item_id,

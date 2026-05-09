@@ -12,6 +12,7 @@ from services.type_name_localization import (
     apply_localized_names_to_records,
     apply_localized_type_names,
     get_localized_name,
+    get_localized_name_map,
 )
 from repositories import get_sde_repository
 from state import get_active_language, ss_init, ss_get
@@ -246,6 +247,7 @@ def main():
         translate_text(language_code, "doctrine_status.filter_doctrine"),
         [None] + doctrine_ids,
         format_func=lambda did: all_label if did is None else format_doctrine_name(doctrine_name_map[did]),
+        filter_mode="fuzzy",
     )
 
     # Stock Status filter (renamed from "Doctrine Status" for clarity - single unified filter)
@@ -279,6 +281,37 @@ def main():
         translate_text(language_code, "doctrine_status.filter_ship_group"),
         [None] + ship_group_ids,
         format_func=lambda gid: all_label if gid is None else ship_group_name_map[gid],
+        filter_mode="fuzzy",
+    )
+
+    # Ship name search
+    ship_df = (
+        fit_summary[["ship_id", "ship_name"]]
+        .dropna()
+        .drop_duplicates()
+        .sort_values("ship_name")
+    )
+    ship_english_map = {
+        int(row["ship_id"]): str(row["ship_name"])
+        for _, row in ship_df.iterrows()
+    }
+    ship_localized = get_localized_name_map(
+        list(ship_english_map.keys()), sde_repo, language_code, logger,
+    )
+    ship_label_map = {}
+    for sid, en_name in ship_english_map.items():
+        loc = ship_localized.get(sid)
+        if loc and loc != en_name:
+            ship_label_map[sid] = f"{loc} ({en_name})"
+        else:
+            ship_label_map[sid] = en_name
+    ship_ids_sorted = sorted(ship_label_map, key=lambda sid: ship_label_map[sid].lower())
+
+    selected_ship_id = st.sidebar.selectbox(
+        translate_text(language_code, "doctrine_status.search_ship"),
+        [None] + ship_ids_sorted,
+        format_func=lambda sid: all_label if sid is None else ship_label_map[sid],
+        filter_mode="fuzzy",
     )
 
     # Get unique ship names for selection
@@ -330,6 +363,10 @@ def main():
             doctrine_comps["doctrine_id"] == selected_doctrine_id
         ]["fit_id"].unique()
         filtered_df = filtered_df[filtered_df["fit_id"].isin(doctrine_fit_ids)]
+
+    # Apply ship name filter
+    if selected_ship_id is not None:
+        filtered_df = filtered_df[filtered_df["ship_id"] == selected_ship_id]
 
     # Apply deep-link filter from dashboard (show only the linked ship)
     if qp_ship_id is not None and "ship_id" in filtered_df.columns:
