@@ -510,6 +510,46 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "pricer.highlight_doctrine_items_help": "Highlight items used in doctrine fits.",
         "pricer.issues": "Issues",
         "pricer.unpriced_items": "⚠️ {count} items could not be priced",
+        # Janice-style appraisal card layout
+        "pricer.appraisal.title": "Appraisal {short_id} — {fit_name} @ {market_name}",
+        "pricer.appraisal.title_empty": "New appraisal — paste an EFT fit or item list",
+        "pricer.appraisal.label_created": "Created",
+        "pricer.appraisal.label_priced_at": "Priced at",
+        "pricer.appraisal.label_volume": "Volume",
+        "pricer.appraisal.label_buy": "Buy",
+        "pricer.appraisal.label_split": "Split",
+        "pricer.appraisal.label_sell": "Sell",
+        "pricer.appraisal.fit_name_default": "Multibuy",
+        "pricer.appraisal.action_download": "📥 Download CSV",
+        "pricer.appraisal.action_reset": "🔄 Reset",
+        "pricer.appraisal.action_copy_link": "🔗 Copy link",
+        "pricer.appraisal.copy_link_unavailable": "Share link is not yet available.",
+        # Fit Availability
+        "pricer.fits.section_header": "Fit Availability",
+        "pricer.fits.headline_unit": "fits available",
+        "pricer.fits.headline_zero_label": "No fits available from current stock",
+        "pricer.fits.metric_items_in_fit": "Items in fit",
+        "pricer.fits.metric_bottleneck": "Bottleneck items",
+        "pricer.fits.metric_total_isk": "Total cost @ local sell",
+        "pricer.fits.toggle_equivalents": "Use faction equivalents",
+        "pricer.fits.toggle_equivalents_help": (
+            "Aggregate stock across faction-equivalent modules (e.g. all Heavy Pulse Laser II variants)."
+        ),
+        "pricer.fits.equivalents_unavailable": (
+            "Equivalents lookup unavailable; using raw stock."
+        ),
+        "pricer.fits.bottleneck_caption": (
+            "Bottleneck: {name} — have {stock}, need {required} per fit."
+        ),
+        "pricer.fits.callout_zero": "No fits available. Constraining items:",
+        "pricer.fits.callout_low": "Only {count} fits available. Constraining items:",
+        "pricer.fits.callout_more": "+{count} more",
+        "pricer.fits.column_required": "Per Fit",
+        "pricer.fits.column_in_stock": "In Stock",
+        "pricer.fits.column_fits_possible": "Fits",
+        "pricer.fits.column_status": "Status",
+        "pricer.fits.column_equivalents": "🔄",
+        "pricer.fits.column_equivalents_help": "Stock includes faction-equivalent modules.",
         "build_costs.title": "Build Cost Tool",
         "build_costs.category_label": "Select a category",
         "build_costs.category_placeholder": "Ship",

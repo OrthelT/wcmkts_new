@@ -397,3 +397,57 @@ class PricerResult:
             "Total Quantity": self.total_quantity,
             "Parse Errors": self.error_count,
         }
+
+
+# =============================================================================
+# Fit Availability - per-item analysis and fit-level summary
+# =============================================================================
+
+@dataclass(frozen=True)
+class ItemAvailability:
+    """
+    Per-item analysis for the 'Fit Availability' calculation.
+
+    Attributes:
+        type_id: EVE type ID
+        type_name: Display name
+        image_url: Cached image URL for the type
+        slot_type: EFT slot category
+        quantity_per_fit: Required units per fit
+        raw_stock: Original local sell volume (for display)
+        stock_used: Stock used in the calc (raw or aggregated)
+        fits_possible: floor(stock_used / quantity_per_fit); 0 if qty <= 0
+        used_equivalents: True when stock_used > raw_stock (faction substitution)
+        is_bottleneck: True when fits_possible == FitAvailabilitySummary.fits_available
+        isk_per_unit: Local sell price per unit (for ISK aggregation)
+    """
+    type_id: TypeID
+    type_name: str
+    image_url: str
+    slot_type: SlotType
+    quantity_per_fit: int
+    raw_stock: int
+    stock_used: int
+    fits_possible: int
+    used_equivalents: bool
+    is_bottleneck: bool
+    isk_per_unit: Price
+
+
+@dataclass(frozen=True)
+class FitAvailabilitySummary:
+    """
+    How many copies of an EFT fit are available from current local stock.
+
+    `items` is a tuple (immutable, hashable). `fits_available` is the floor of
+    the minimum stock-to-quantity ratio across all fit items.
+    """
+    fits_available: int
+    items: tuple[ItemAvailability, ...]
+    bottleneck_items: tuple[ItemAvailability, ...]
+    total_isk_per_fit: Price
+    total_isk_all_fits: Price
+    counted_item_count: int
+    ship_type_id: Optional[TypeID]
+    ship_name: Optional[str]
+    used_equivalents: bool

@@ -19,7 +19,9 @@ from sqlalchemy import text
 
 from config import DatabaseConfig
 from domain.pricer import (
+    FitAvailabilitySummary,
     InputFormat,
+    ItemAvailability,
     ParsedItem,
     PricedItem,
     PricerResult,
@@ -436,6 +438,135 @@ class PricerService:
                 ))
 
         return parsed_items
+
+
+# =============================================================================
+# Fit Availability - pure helper (no Streamlit, no DB)
+# =============================================================================
+
+def _empty_fit_availability(result: PricerResult) -> FitAvailabilitySummary:
+    return FitAvailabilitySummary(
+        fits_available=0,
+        items=(),
+        bottleneck_items=(),
+        total_isk_per_fit=0.0,
+        total_isk_all_fits=0.0,
+        counted_item_count=0,
+        ship_type_id=None,
+        ship_name=result.ship_name,
+        used_equivalents=False,
+    )
+
+
+def compute_fit_availability(
+    result: PricerResult,
+    *,
+    aggregated_stock: Optional[dict[int, int]] = None,
+    logger_instance: Optional[logging.Logger] = None,
+) -> FitAvailabilitySummary:
+    """How many copies of this EFT fit are available from current local stock.
+
+    Args:
+        result: PricerResult from PricerService.price_input. Non-EFT or empty
+            input returns an empty summary.
+        aggregated_stock: Optional {type_id: stock} from
+            ModuleEquivalentsService.get_aggregated_stock; substitutes the
+            stock used in the calc while preserving raw_stock for display.
+        logger_instance: Optional logger.
+
+    Returns:
+        FitAvailabilitySummary; fits_available is floor(min(stock_used / qty))
+        across all fit items, or 0 if any item has zero stock.
+    """
+    log = logger_instance or logger
+
+    if result.input_type != InputFormat.EFT or not result.items:
+        return _empty_fit_availability(result)
+
+    raw_analyses: list[dict] = []
+    for priced in result.items:
+        type_id = priced.type_id
+        if type_id is None:
+            log.warning(
+                "Skipping item with no type_id in fit availability calc: %s",
+                priced.type_name,
+            )
+            continue
+
+        qty_per_fit = priced.quantity
+        raw_stock = priced.local_sell_volume or 0
+        stock_used = (
+            aggregated_stock[type_id]
+            if aggregated_stock is not None and type_id in aggregated_stock
+            else raw_stock
+        )
+        used_equivalents = stock_used > raw_stock
+        fits_possible = stock_used // qty_per_fit if qty_per_fit > 0 else 0
+
+        raw_analyses.append({
+            "type_id": type_id,
+            "type_name": priced.type_name,
+            "image_url": priced.image_url,
+            "slot_type": priced.item.slot_type,
+            "quantity_per_fit": qty_per_fit,
+            "raw_stock": raw_stock,
+            "stock_used": stock_used,
+            "fits_possible": fits_possible,
+            "used_equivalents": used_equivalents,
+            "isk_per_unit": priced.local_sell,
+        })
+
+    if not raw_analyses:
+        return _empty_fit_availability(result)
+
+    fits_available = min(a["fits_possible"] for a in raw_analyses)
+
+    items = [
+        ItemAvailability(
+            type_id=a["type_id"],
+            type_name=a["type_name"],
+            image_url=a["image_url"],
+            slot_type=a["slot_type"],
+            quantity_per_fit=a["quantity_per_fit"],
+            raw_stock=a["raw_stock"],
+            stock_used=a["stock_used"],
+            fits_possible=a["fits_possible"],
+            used_equivalents=a["used_equivalents"],
+            is_bottleneck=(a["fits_possible"] == fits_available),
+            isk_per_unit=a["isk_per_unit"],
+        )
+        for a in raw_analyses
+    ]
+    items.sort(key=lambda i: (i.fits_possible, -i.quantity_per_fit))
+
+    bottleneck_items = tuple(i for i in items if i.is_bottleneck)
+
+    total_isk_per_fit = sum(
+        i.quantity_per_fit * i.isk_per_unit
+        for i in items
+        if i.isk_per_unit > 0
+    )
+    total_isk_all_fits = total_isk_per_fit * fits_available
+
+    ship_type_id: Optional[int] = None
+    for priced in result.items:
+        if priced.item.category_name == "Ship":
+            ship_type_id = priced.type_id
+            break
+
+    used_equivalents = any(i.used_equivalents for i in items)
+
+    return FitAvailabilitySummary(
+        fits_available=fits_available,
+        items=tuple(items),
+        bottleneck_items=bottleneck_items,
+        total_isk_per_fit=total_isk_per_fit,
+        total_isk_all_fits=total_isk_all_fits,
+        counted_item_count=len(items),
+        ship_type_id=ship_type_id,
+        ship_name=result.ship_name,
+        used_equivalents=used_equivalents,
+    )
 
 
 # =============================================================================
