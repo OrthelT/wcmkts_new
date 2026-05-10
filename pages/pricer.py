@@ -29,7 +29,6 @@ from pages.components.header import render_page_title
 from repositories import get_sde_repository
 from services import get_pricer_service
 from services.module_equivalents_service import get_module_equivalents_service
-from services.price_service import clear_jita_price_cache
 from services.pricer_service import compute_fit_availability
 from services.type_name_localization import apply_localized_names, get_localized_name
 from state import get_active_language, ss_get, ss_has, ss_init, ss_set
@@ -809,13 +808,7 @@ def _render_fit_availability_section(result: PricerResult, language_code: str):
 
 
 def _process_input(input_text: str):
-    """Run pricing and store the result in session state.
-
-    Drops the Jita price cache first so each click fetches fresh prices
-    from Fuzzwork/Janice instead of reusing entries within their 1-hour TTL.
-    """
-    cleared = clear_jita_price_cache()
-    logger.info("Cleared %d cached Jita price entries before pricing", cleared)
+    """Run pricing and store the result in session state."""
     with st.spinner(translate_text(get_active_language(), "pricer.fetching_prices")):
         try:
             service = get_pricer_service()

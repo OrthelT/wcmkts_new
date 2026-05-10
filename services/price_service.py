@@ -31,18 +31,6 @@ _PRICE_SERVICES: dict[str, "PriceService"] = {}
 _PRICE_CACHE_LOCK = threading.Lock()
 _SHARED_JITA_PRICE_CACHE: dict[TypeID, "CachedPriceEntry"] = {}
 
-
-def clear_jita_price_cache() -> int:
-    """Drop all entries from the process-wide Jita price cache.
-
-    Returns the number of entries cleared. Safe to call concurrently with
-    cache reads/writes.
-    """
-    with _PRICE_CACHE_LOCK:
-        count = len(_SHARED_JITA_PRICE_CACHE)
-        _SHARED_JITA_PRICE_CACHE.clear()
-    return count
-
 API_BATCH_SIZE = 250
 API_CHUNK_DELAY_SECONDS = 2
 
