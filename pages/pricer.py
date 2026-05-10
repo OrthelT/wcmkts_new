@@ -410,12 +410,18 @@ def _stat_cell(label: str, value: str) -> str:
 
 
 def _render_summary_stats_grid(result: PricerResult, market, language_code: str):
-    """Janice-style 2-column stats grid (Created/Priced at/Volume + Buy/Split/Sell)."""
+    """2-column stats grid (Created/Priced at/Volume + local sell + Jita sell/buy totals)."""
     created_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    sell = result.local_sell_grand_total
-    buy = result.local_buy_grand_total
-    split = (sell + buy) / 2 if (sell or buy) else 0.0
+    local_sell_total = result.local_sell_grand_total
+    jita_sell_total = result.jita_sell_grand_total
+    jita_buy_total = result.jita_buy_grand_total
     volume_label = f"{result.total_volume:,.2f} m³"
+
+    local_sell_label = translate_text(
+        language_code,
+        "pricer.column_local_sell_total",
+        market_name=market.short_name,
+    )
 
     left_html = "".join(
         [
@@ -436,16 +442,16 @@ def _render_summary_stats_grid(result: PricerResult, market, language_code: str)
     right_html = "".join(
         [
             _stat_cell(
-                translate_text(language_code, "pricer.appraisal.label_buy"),
-                f"{format_isk(buy)} ISK",
+                local_sell_label,
+                f"{format_isk(local_sell_total)} ISK",
             ),
             _stat_cell(
-                translate_text(language_code, "pricer.appraisal.label_split"),
-                f"{format_isk(split)} ISK",
+                translate_text(language_code, "pricer.column_jita_sell_total"),
+                f"{format_isk(jita_sell_total)} ISK",
             ),
             _stat_cell(
-                translate_text(language_code, "pricer.appraisal.label_sell"),
-                f"{format_isk(sell)} ISK",
+                translate_text(language_code, "pricer.column_jita_buy_total"),
+                f"{format_isk(jita_buy_total)} ISK",
             ),
         ]
     )
@@ -464,7 +470,7 @@ def _render_action_chips(result: PricerResult, language_code: str):
     if result.ship_name:
         filename = f"{result.ship_name.replace(' ', '_')}_priced.csv"
 
-    c1, c2, c3, _ = st.columns([1.2, 1, 1.4, 5])
+    c1, c2, _ = st.columns([1.2, 1, 6.4])
     with c1:
         st.download_button(
             translate_text(language_code, "pricer.appraisal.action_download"),
@@ -482,17 +488,6 @@ def _render_action_chips(result: PricerResult, language_code: str):
             ss_set("pricer_result", None)
             st.session_state.pop("pricer_result", None)
             st.rerun()
-    with c3:
-        if st.button(
-            translate_text(language_code, "pricer.appraisal.action_copy_link"),
-            use_container_width=True,
-            disabled=True,
-            help=translate_text(
-                language_code, "pricer.appraisal.copy_link_unavailable"
-            ),
-            key="pricer_copy_link",
-        ):
-            pass
 
 
 def _render_control_row(language_code: str):

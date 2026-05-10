@@ -522,8 +522,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "pricer.appraisal.fit_name_default": "Multibuy",
         "pricer.appraisal.action_download": "📥 Download CSV",
         "pricer.appraisal.action_reset": "🔄 Reset",
-        "pricer.appraisal.action_copy_link": "🔗 Copy link",
-        "pricer.appraisal.copy_link_unavailable": "Share link is not yet available.",
         # Fit Availability
         "pricer.fits.section_header": "Fit Availability",
         "pricer.fits.headline_unit": "fits available",

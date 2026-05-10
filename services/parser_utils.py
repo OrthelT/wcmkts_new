@@ -371,12 +371,8 @@ def _parse_multibuy_line(line: str, qty_first: bool) -> Optional[RawParsedItem]:
     cols = line.split('\t')
 
     if len(cols) < 2:
-        # Single column - try to parse as item with qty=1
-        if cols:
-            name = cols[0].strip()
-            if name and not _is_numeric(name):
-                return RawParsedItem(name=name, quantity=1)
-        return None
+        # No tabs: parse as space-separated "<name tokens> <qty> [extra...]"
+        return _parse_space_separated_line(line)
 
     if qty_first:
         qty_str = cols[0].strip()
@@ -397,6 +393,63 @@ def _parse_multibuy_line(line: str, qty_first: bool) -> Optional[RawParsedItem]:
         name=name,
         quantity=quantity,
         slot_type=SlotType.UNKNOWN
+    )
+
+
+def _is_pure_int_token(token: str) -> bool:
+    """True if token represents an integer (with optional thousands separators).
+
+    Tokens like "5MN" or "Y-T8" — common in EVE module names — return False
+    because they are not pure integers despite containing digits.
+    """
+    if not token:
+        return False
+    cleaned = token.replace(',', '').replace(' ', '')
+    # Treat period as thousands separator only when followed by 3 digits
+    if '.' in cleaned:
+        parts = cleaned.split('.')
+        if len(parts) == 2 and len(parts[1]) == 3 and parts[0].isdigit():
+            cleaned = cleaned.replace('.', '')
+        else:
+            return False
+    return cleaned.isdigit()
+
+
+def _parse_space_separated_line(line: str) -> Optional[RawParsedItem]:
+    """Parse a whitespace-separated line: name tokens followed by an int qty.
+
+    Algorithm: walk tokens left-to-right; the first pure-integer token marks
+    the quantity, all preceding tokens form the name. Tokens after the qty
+    (e.g. price, volume columns) are ignored.
+
+    Examples:
+        "Torpedo Launcher II 63"            -> ("Torpedo Launcher II", 63)
+        "5MN Y-T8 Compact Microwarpdrive 166" -> ("5MN Y-T8 Compact Microwarpdrive", 166)
+        "'Halcyon' Core Equalizer I 38"     -> ("'Halcyon' Core Equalizer I", 38)
+    """
+    tokens = line.split()
+    if not tokens:
+        return None
+
+    name_tokens: list[str] = []
+    quantity: Optional[int] = None
+    for token in tokens:
+        if _is_pure_int_token(token):
+            quantity = _parse_quantity(token)
+            break
+        name_tokens.append(token)
+
+    if not name_tokens:
+        return None
+
+    name = " ".join(name_tokens)
+    if quantity is None or quantity <= 0:
+        quantity = 1
+
+    return RawParsedItem(
+        name=name,
+        quantity=quantity,
+        slot_type=SlotType.UNKNOWN,
     )
 
 
