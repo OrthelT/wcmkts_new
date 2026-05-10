@@ -15,6 +15,8 @@ import hashlib
 from datetime import datetime, timezone
 
 import pandas as pd
+from sqlalchemy import label
+from repositories.sde_repo import SDERepository
 import streamlit as st
 from millify import millify
 
@@ -45,6 +47,7 @@ logger = setup_logging(__name__, log_file="pricer.log")
 # Formatting helpers
 # =============================================================================
 
+
 def format_isk(value: float) -> str:
     """Format ISK value with millify for compact display."""
     if value == 0:
@@ -57,7 +60,9 @@ def round_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     df2 = df.copy()
     round_cols = [col for col in df2.columns if df2[col].dtype == "float64"]
     for column in round_cols:
-        df2[column] = df2[column].apply(lambda x: round(x, 1) if x < 1000 else round(x, 0))
+        df2[column] = df2[column].apply(
+            lambda x: round(x, 1) if x < 1000 else round(x, 0)
+        )
     return df2
 
 
@@ -71,6 +76,7 @@ def _short_appraisal_id(text: str) -> str:
 # =============================================================================
 # Column configs
 # =============================================================================
+
 
 def get_pricer_column_config(short_name: str = "4H", language_code: str = "en") -> dict:
     """Column configuration for the main pricer results table."""
@@ -101,13 +107,23 @@ def get_pricer_column_config(short_name: str = "4H", language_code: str = "en") 
             width="small",
         ),
         "Local Sell": st.column_config.NumberColumn(
-            translate_text(language_code, "pricer.column_local_sell", market_name=short_name),
-            help=translate_text(language_code, "pricer.column_local_sell_help", market_name=short_name),
+            translate_text(
+                language_code, "pricer.column_local_sell", market_name=short_name
+            ),
+            help=translate_text(
+                language_code, "pricer.column_local_sell_help", market_name=short_name
+            ),
             format="localized",
         ),
         "Local Sell Vol": st.column_config.NumberColumn(
-            translate_text(language_code, "pricer.column_local_sell_volume", market_name=short_name),
-            help=translate_text(language_code, "pricer.column_local_sell_volume_help", market_name=short_name),
+            translate_text(
+                language_code, "pricer.column_local_sell_volume", market_name=short_name
+            ),
+            help=translate_text(
+                language_code,
+                "pricer.column_local_sell_volume_help",
+                market_name=short_name,
+            ),
             format="localized",
         ),
         "Jita Sell": st.column_config.NumberColumn(
@@ -131,18 +147,34 @@ def get_pricer_column_config(short_name: str = "4H", language_code: str = "en") 
             format="localized",
         ),
         "Local Buy": st.column_config.NumberColumn(
-            translate_text(language_code, "pricer.column_local_buy", market_name=short_name),
-            help=translate_text(language_code, "pricer.column_local_buy_help", market_name=short_name),
+            translate_text(
+                language_code, "pricer.column_local_buy", market_name=short_name
+            ),
+            help=translate_text(
+                language_code, "pricer.column_local_buy_help", market_name=short_name
+            ),
             format="localized",
         ),
         "Local Sell Total": st.column_config.NumberColumn(
-            translate_text(language_code, "pricer.column_local_sell_total", market_name=short_name),
-            help=translate_text(language_code, "pricer.column_local_sell_total_help", market_name=short_name),
+            translate_text(
+                language_code, "pricer.column_local_sell_total", market_name=short_name
+            ),
+            help=translate_text(
+                language_code,
+                "pricer.column_local_sell_total_help",
+                market_name=short_name,
+            ),
             format="localized",
         ),
         "Local Buy Total": st.column_config.NumberColumn(
-            translate_text(language_code, "pricer.column_local_buy_total", market_name=short_name),
-            help=translate_text(language_code, "pricer.column_local_buy_total_help", market_name=short_name),
+            translate_text(
+                language_code, "pricer.column_local_buy_total", market_name=short_name
+            ),
+            help=translate_text(
+                language_code,
+                "pricer.column_local_buy_total_help",
+                market_name=short_name,
+            ),
             format="localized",
         ),
         "Volume": st.column_config.NumberColumn(
@@ -233,6 +265,7 @@ def _fit_availability_column_config(language_code: str) -> dict:
 # Style functions
 # =============================================================================
 
+
 def highlight_doctrine_rows(row):
     if row.get("Is Doctrine", False):
         return ["background-color: rgba(50, 143, 237, 0.3)"] * len(row)
@@ -267,49 +300,45 @@ def _highlight_fit_row(row, fits_available: int):
 # Layout helpers — Janice-style appraisal card
 # =============================================================================
 
+
 def render_header(language_code: str):
     render_page_title(translate_text(language_code, "pricer.title"))
 
 
-def render_fit_header(result: PricerResult, sde_repo, language_code: str, *, compact: bool = False):
+def render_fit_header(
+    result: PricerResult, sde_repo, language_code: str, *, compact: bool = False
+):
     """Render the header for an EFT fit result with ship image."""
     if result.input_type != InputFormat.EFT:
         return
 
     ship_type_id = None
     for item in result.items:
+        print(item)
         if item.item.category_name == "Ship":
             ship_type_id = item.type_id
+            print(ship_type_id)
             break
 
-    image_size = 48 if compact else 96
-    col_ratio = [0.08, 0.92] if compact else [0.12, 0.88]
-    col1, col2 = st.columns(col_ratio, vertical_alignment="center")
-
-    with col1:
-        if ship_type_id:
-            st.image(get_image_url(ship_type_id, image_size, isship=True), width=image_size)
-
-    with col2:
-        if result.ship_name:
-            localized_ship_name = get_localized_name(
-                ship_type_id,
-                result.ship_name,
-                sde_repo,
-                language_code,
-                logger,
-            )
-            fit_label = f" — {result.fit_name}" if result.fit_name else ""
-            st.markdown(
-                f'<div style="font-size:0.95rem; font-weight:600;">'
-                f"{localized_ship_name}"
-                f'<span style="opacity:0.6; font-weight:400;">{fit_label}</span>'
-                "</div>",
-                unsafe_allow_html=True,
-            )
+    if result.ship_name:
+        localized_ship_name = get_localized_name(
+            ship_type_id,
+            result.ship_name,
+            sde_repo,
+            language_code,
+            logger,
+        )
+        fit_label = f" — {result.fit_name}" if result.fit_name else ""
+        st.write(localized_ship_name + fit_label)
 
 
-def _render_appraisal_title(result: PricerResult | None, market, input_text: str, language_code: str):
+def _render_appraisal_title(
+    result: PricerResult | None,
+    market,
+    input_text: str,
+    language_code: str,
+    sde_repo: SDERepository,
+):
     """Top-of-card title row, mirroring Janice's appraisal heading."""
     if result is None:
         st.markdown(
@@ -333,16 +362,46 @@ def _render_appraisal_title(result: PricerResult | None, market, input_text: str
         fit_name=fit_name,
         market_name=market.name,
     )
+
     st.markdown(
         f'<div style="font-size:1rem; font-weight:600; margin-bottom:6px;">{title}</div>',
         unsafe_allow_html=True,
     )
 
 
+def _render_fit_appraisal_header(
+    result: PricerResult, language_code: str, sde_repo: SDERepository
+):
+    ship_type_id = None
+    for item in result.items:
+        if item.item.category_name == "Ship":
+            ship_type_id = item.type_id
+            break
+
+    if result.ship_name:
+        localized_ship_name = get_localized_name(
+            ship_type_id,
+            result.ship_name,
+            sde_repo,
+            language_code,
+            logger,
+        )
+
+        col_image, col_header = st.columns([0.1, 0.9])
+        with col_image:
+            if ship_type_id:
+                st.image(
+                    get_image_url(ship_type_id, 128, isship=True),
+                    width=128,
+                )
+        with col_header:
+            st.subheader(localized_ship_name, divider="orange", width="stretch")
+
+
 def _stat_cell(label: str, value: str) -> str:
     return (
         '<div style="display:flex; justify-content:space-between; '
-        'background:rgba(127,127,127,0.08); padding:3px 10px; '
+        "background:rgba(127,127,127,0.08); padding:3px 10px; "
         'border-radius:3px; margin-bottom:3px; font-size:0.85rem;">'
         f'<span style="opacity:0.7;">{label}</span>'
         f'<span style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:600;">{value}</span>'
@@ -358,16 +417,38 @@ def _render_summary_stats_grid(result: PricerResult, market, language_code: str)
     split = (sell + buy) / 2 if (sell or buy) else 0.0
     volume_label = f"{result.total_volume:,.2f} m³"
 
-    left_html = "".join([
-        _stat_cell(translate_text(language_code, "pricer.appraisal.label_created"), created_at),
-        _stat_cell(translate_text(language_code, "pricer.appraisal.label_priced_at"), market.name),
-        _stat_cell(translate_text(language_code, "pricer.appraisal.label_volume"), volume_label),
-    ])
-    right_html = "".join([
-        _stat_cell(translate_text(language_code, "pricer.appraisal.label_buy"), f"{format_isk(buy)} ISK"),
-        _stat_cell(translate_text(language_code, "pricer.appraisal.label_split"), f"{format_isk(split)} ISK"),
-        _stat_cell(translate_text(language_code, "pricer.appraisal.label_sell"), f"{format_isk(sell)} ISK"),
-    ])
+    left_html = "".join(
+        [
+            _stat_cell(
+                translate_text(language_code, "pricer.appraisal.label_created"),
+                created_at,
+            ),
+            _stat_cell(
+                translate_text(language_code, "pricer.appraisal.label_priced_at"),
+                market.name,
+            ),
+            _stat_cell(
+                translate_text(language_code, "pricer.appraisal.label_volume"),
+                volume_label,
+            ),
+        ]
+    )
+    right_html = "".join(
+        [
+            _stat_cell(
+                translate_text(language_code, "pricer.appraisal.label_buy"),
+                f"{format_isk(buy)} ISK",
+            ),
+            _stat_cell(
+                translate_text(language_code, "pricer.appraisal.label_split"),
+                f"{format_isk(split)} ISK",
+            ),
+            _stat_cell(
+                translate_text(language_code, "pricer.appraisal.label_sell"),
+                f"{format_isk(sell)} ISK",
+            ),
+        ]
+    )
 
     c1, c2 = st.columns(2)
     with c1:
@@ -406,7 +487,9 @@ def _render_action_chips(result: PricerResult, language_code: str):
             translate_text(language_code, "pricer.appraisal.action_copy_link"),
             use_container_width=True,
             disabled=True,
-            help=translate_text(language_code, "pricer.appraisal.copy_link_unavailable"),
+            help=translate_text(
+                language_code, "pricer.appraisal.copy_link_unavailable"
+            ),
             key="pricer_copy_link",
         ):
             pass
@@ -441,7 +524,9 @@ def _render_control_row(language_code: str):
                 translate_text(language_code, "pricer.highlight_doctrine_items"),
                 value=ss_get("pricer_highlight_doctrine", True),
                 key="highlight_doctrine",
-                help=translate_text(language_code, "pricer.highlight_doctrine_items_help"),
+                help=translate_text(
+                    language_code, "pricer.highlight_doctrine_items_help"
+                ),
             ),
         )
     with c4:
@@ -451,7 +536,9 @@ def _render_control_row(language_code: str):
                 translate_text(language_code, "pricer.fits.toggle_equivalents"),
                 value=ss_get("pricer_fit_equivalents", True),
                 key="pricer_fit_equivalents_cb",
-                help=translate_text(language_code, "pricer.fits.toggle_equivalents_help"),
+                help=translate_text(
+                    language_code, "pricer.fits.toggle_equivalents_help"
+                ),
             ),
         )
 
@@ -524,6 +611,7 @@ def _render_items_table(result: PricerResult, market, sde_repo, language_code: s
 # Fit Availability — UI helpers
 # =============================================================================
 
+
 def _build_aggregated_stock_map(type_ids: list[int]) -> dict[int, int]:
     """Return {type_id: total_stock} for items that actually have equivalents.
 
@@ -546,29 +634,16 @@ def _build_aggregated_stock_map(type_ids: list[int]) -> dict[int, int]:
 
 
 def _render_fit_availability_hero(summary: FitAvailabilitySummary, language_code: str):
-    """The big headline number, key metrics, and progress bar."""
-    col_left, col_right = st.columns([0.28, 0.72], vertical_alignment="center")
+    """The big headline number, ship icon, key metrics, and progress bar."""
 
-    with col_left:
-        if summary.fits_available == 0:
-            color = "#ef5350"
-        else:
-            status = StockStatus.from_stock_and_target(
-                summary.fits_available, max(1, summary.fits_available)
-            )
-            color = {"red": "#ef5350", "orange": "#d88a22", "green": "#6abf69"}.get(
-                status.display_color, "#6abf69"
-            )
+    col_count, col_right = st.columns([0.22, 0.66], vertical_alignment="center")
+
+    with col_count:
         unit_label = translate_text(language_code, "pricer.fits.headline_unit")
-        st.markdown(
-            f'<div style="line-height:1; padding:4px 0;">'
-            f'<span style="font-size:2.6rem; font-weight:700; color:{color};">'
-            f"{summary.fits_available:,}</span>"
-            f'<div style="font-size:0.8rem; opacity:0.75; margin-top:2px;">{unit_label}</div>'
-            "</div>",
-            unsafe_allow_html=True,
-        )
-
+        with st.container(
+            horizontal_alignment="center", vertical_alignment="center", horizontal=True
+        ):
+            st.metric(label=unit_label, value=summary.fits_available, border=True)
     with col_right:
         m1, m2, m3 = st.columns(3)
         m1.metric(
@@ -600,17 +675,18 @@ def _render_fit_availability_hero(summary: FitAvailabilitySummary, language_code
             unsafe_allow_html=True,
         )
 
-        if summary.bottleneck_items:
-            b = summary.bottleneck_items[0]
-            st.caption(
-                translate_text(
-                    language_code,
-                    "pricer.fits.bottleneck_caption",
-                    name=b.type_name,
-                    stock=f"{b.stock_used:,}",
-                    required=f"{b.quantity_per_fit:,}",
-                )
+    if summary.bottleneck_items:
+        b = summary.bottleneck_items[0]
+        st.space()
+        st.caption(
+            translate_text(
+                language_code,
+                "pricer.fits.bottleneck_caption",
+                name=b.type_name,
+                stock=f"{b.stock_used:,}",
+                required=f"{b.quantity_per_fit:,}",
             )
+        )
 
 
 def _format_bottleneck_line(item: ItemAvailability) -> str:
@@ -630,6 +706,7 @@ def _render_bottleneck_callout(summary: FitAvailabilitySummary, language_code: s
     items_to_show = summary.bottleneck_items[:5]
     overflow = len(summary.bottleneck_items) - len(items_to_show)
     lines = [_format_bottleneck_line(i) for i in items_to_show]
+    st.space()
     if overflow > 0:
         lines.append(
             translate_text(language_code, "pricer.fits.callout_more", count=overflow)
@@ -660,17 +737,19 @@ def _render_fit_availability_table(summary: FitAvailabilitySummary, language_cod
         status_emoji = {"red": "🔴", "orange": "🟠", "green": "🟢"}.get(
             status.display_color, "🟢"
         )
-        rows.append({
-            "image_url": item.image_url,
-            "type_id": item.type_id,
-            "Item": item.type_name,
-            "Slot": item.slot_type.display_name,
-            "Per Fit": item.quantity_per_fit,
-            "In Stock": item.stock_used,
-            "Fits": item.fits_possible,
-            "Status": status_emoji,
-            "Equivalents": "🔄" if item.used_equivalents else "",
-        })
+        rows.append(
+            {
+                "image_url": item.image_url,
+                "type_id": item.type_id,
+                "Item": item.type_name,
+                "Slot": item.slot_type.display_name,
+                "Per Fit": item.quantity_per_fit,
+                "In Stock": item.stock_used,
+                "Fits": item.fits_possible,
+                "Status": status_emoji,
+                "Equivalents": "🔄" if item.used_equivalents else "",
+            }
+        )
     df = pd.DataFrame(rows)
     styled = df.style.apply(
         _highlight_fit_row, axis=1, fits_available=summary.fits_available
@@ -682,8 +761,15 @@ def _render_fit_availability_table(summary: FitAvailabilitySummary, language_cod
         column_config=_fit_availability_column_config(language_code),
         width="stretch",
         column_order=[
-            "image_url", "type_id", "Item", "Slot", "Per Fit",
-            "In Stock", "Fits", "Status", "Equivalents",
+            "image_url",
+            "type_id",
+            "Item",
+            "Slot",
+            "Per Fit",
+            "In Stock",
+            "Fits",
+            "Status",
+            "Equivalents",
         ],
         key="fit_availability_table",
     )
@@ -705,7 +791,9 @@ def _render_fit_availability_section(result: PricerResult, language_code: str):
                 aggregated_stock = None
         except Exception as exc:
             logger.warning("Aggregated stock lookup failed: %s", exc)
-            st.caption(translate_text(language_code, "pricer.fits.equivalents_unavailable"))
+            st.caption(
+                translate_text(language_code, "pricer.fits.equivalents_unavailable")
+            )
             aggregated_stock = None
 
     summary = compute_fit_availability(
@@ -714,12 +802,6 @@ def _render_fit_availability_section(result: PricerResult, language_code: str):
         logger_instance=logger,
     )
 
-    st.markdown(
-        f'<div style="font-size:0.9rem; font-weight:600; margin:8px 0 4px 0;">'
-        f"{translate_text(language_code, 'pricer.fits.section_header')}"
-        "</div>",
-        unsafe_allow_html=True,
-    )
     _render_fit_availability_hero(summary, language_code)
     _render_bottleneck_callout(summary, language_code)
     _render_fit_availability_table(summary, language_code)
@@ -728,6 +810,7 @@ def _render_fit_availability_section(result: PricerResult, language_code: str):
 # =============================================================================
 # Main
 # =============================================================================
+
 
 def _process_input(input_text: str):
     """Run pricing and store the result in session state."""
@@ -755,30 +838,48 @@ def main():
         )
         st.stop()
 
-    ss_init({
-        "pricer_show_jita": True,
-        "pricer_show_doctrine": True,
-        "pricer_highlight_doctrine": True,
-        "pricer_show_stock_metrics": True,
-        "pricer_fit_equivalents": True,
-        "pricer_input_text": "",
-    })
+    ss_init(
+        {
+            "pricer_show_jita": True,
+            "pricer_show_doctrine": True,
+            "pricer_highlight_doctrine": True,
+            "pricer_show_stock_metrics": True,
+            "pricer_fit_equivalents": True,
+            "pricer_eft_result": False,
+            "pricer_input_text": "",
+        }
+    )
 
     render_header(language_code)
-    st.markdown(translate_text(language_code, "pricer.description", market_name=market.name))
+    st.markdown(
+        translate_text(language_code, "pricer.description", market_name=market.name)
+    )
 
-    result: PricerResult | None = ss_get("pricer_result") if ss_has("pricer_result") else None
+    result: PricerResult | None = (
+        ss_get("pricer_result") if ss_has("pricer_result") else None
+    )
+
+    if result:
+        eft_type = True if result.input_type == InputFormat.EFT else False
+        ss_set("pricer_eft_result", eft_type)
+
     cached_input_text = ss_get("pricer_input_text", "") or ""
 
     with st.container(border=True):
-        _render_appraisal_title(result, market, cached_input_text, language_code)
-
-        if result is not None and result.items:
-            _render_summary_stats_grid(result, market, language_code)
-            if result.input_type == InputFormat.EFT:
+        _render_appraisal_title(
+            result, market, cached_input_text, language_code, sde_repo
+        )
+        if result:
+            if ss_get("pricer_eft_result"):
+                _render_fit_appraisal_header(
+                    result=result, language_code=language_code, sde_repo=sde_repo
+                )
+                _render_summary_stats_grid(result, market, language_code)
                 render_fit_header(result, sde_repo, language_code, compact=True)
                 _render_fit_availability_section(result, language_code)
-            _render_items_table(result, market, sde_repo, language_code)
+            else:
+                _render_summary_stats_grid(result, market, language_code)
+                _render_items_table(result, market, sde_repo, language_code)
             _render_action_chips(result, language_code)
             if result.parse_errors:
                 with st.expander(
