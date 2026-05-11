@@ -12,6 +12,7 @@ Data Flow:
 5. Combine into PricedItem list and PricerResult
 """
 
+from keyword import iskeyword
 from typing import Optional
 import logging
 import pandas as pd
@@ -450,7 +451,6 @@ def _empty_fit_availability(result: PricerResult) -> FitAvailabilitySummary:
         items=(),
         bottleneck_items=(),
         total_isk_per_fit=0.0,
-        total_isk_all_fits=0.0,
         counted_item_count=0,
         ship_type_id=None,
         ship_name=result.ship_name,
@@ -540,13 +540,12 @@ def compute_fit_availability(
     items.sort(key=lambda i: (i.fits_possible, -i.quantity_per_fit))
 
     bottleneck_items = tuple(i for i in items if i.is_bottleneck)
-
-    total_isk_per_fit = sum(
-        i.quantity_per_fit * i.isk_per_unit
-        for i in items
-        if i.isk_per_unit > 0
-    )
-    total_isk_all_fits = total_isk_per_fit * fits_available
+    total_isk_per_fit = 0
+    for i in items:
+        if i.isk_per_unit == 0:
+            logger.error(f"isk_per_unit is 0 for item {i.type_name}")
+            continue
+        total_isk_per_fit += i.quantity_per_fit * i.isk_per_unit
 
     ship_type_id: Optional[int] = None
     for priced in result.items:
@@ -561,7 +560,6 @@ def compute_fit_availability(
         items=tuple(items),
         bottleneck_items=bottleneck_items,
         total_isk_per_fit=total_isk_per_fit,
-        total_isk_all_fits=total_isk_all_fits,
         counted_item_count=len(items),
         ship_type_id=ship_type_id,
         ship_name=result.ship_name,

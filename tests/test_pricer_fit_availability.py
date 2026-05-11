@@ -188,7 +188,6 @@ def test_total_isk_scales_with_fits():
 
     expected_per_fit = 2 * 100.0 + 1 * 50.0
     assert summary.total_isk_per_fit == expected_per_fit
-    assert summary.total_isk_all_fits == expected_per_fit * summary.fits_available
 
 
 def test_ship_type_id_extracted_from_hull():

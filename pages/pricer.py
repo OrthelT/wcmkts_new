@@ -13,7 +13,10 @@ from current local market stock and which modules are bottlenecks.
 
 import hashlib
 from datetime import datetime, timezone
+from tkinter import HORIZONTAL
+from turtle import home, width
 
+from _plotly_utils.colors.carto import Bold_r
 import pandas as pd
 from sqlalchemy import label
 from repositories.sde_repo import SDERepository
@@ -35,7 +38,6 @@ from state import get_active_language, ss_get, ss_has, ss_init, ss_set
 from ui.formatters import (
     drop_localized_backup_columns,
     get_image_url,
-    render_progress_bar_html,
 )
 from ui.i18n import translate_text
 from ui.market_selector import render_market_selector
@@ -622,13 +624,10 @@ def _build_aggregated_stock_map(type_ids: list[int]) -> dict[int, int]:
 def _render_fit_availability_hero(summary: FitAvailabilitySummary, language_code: str):
     """The big headline number, ship icon, key metrics, and progress bar."""
 
-    col_count, col_right = st.columns([0.22, 0.66], vertical_alignment="center")
-
+    col_count, col_right = st.columns([0.34, 0.66], vertical_alignment="center")
     with col_count:
         unit_label = translate_text(language_code, "pricer.fits.headline_unit")
-        with st.container(
-            horizontal_alignment="center", vertical_alignment="center", horizontal=True
-        ):
+        with st.container(horizontal_alignment="center", width=150):
             st.metric(label=unit_label, value=summary.fits_available, border=True)
     with col_right:
         m1, m2, m3 = st.columns(3)
@@ -642,23 +641,7 @@ def _render_fit_availability_hero(summary: FitAvailabilitySummary, language_code
         )
         m3.metric(
             translate_text(language_code, "pricer.fits.metric_total_isk"),
-            f"{format_isk(summary.total_isk_all_fits)} ISK",
-        )
-
-        if summary.fits_available >= 1:
-            percent = 100.0
-        elif summary.bottleneck_items:
-            b = summary.bottleneck_items[0]
-            percent = (
-                (b.stock_used / b.quantity_per_fit) * 100.0
-                if b.quantity_per_fit > 0
-                else 0.0
-            )
-        else:
-            percent = 0.0
-        st.markdown(
-            render_progress_bar_html(min(100.0, percent), height=14),
-            unsafe_allow_html=True,
+            f"{format_isk(summary.total_isk_per_fit)} ISK",
         )
 
     if summary.bottleneck_items:
@@ -673,7 +656,6 @@ def _render_fit_availability_hero(summary: FitAvailabilitySummary, language_code
                 required=f"{b.quantity_per_fit:,}",
             )
         )
-
 
 def _format_bottleneck_line(item: ItemAvailability) -> str:
     prefix = "🔄 " if item.used_equivalents else ""
@@ -841,22 +823,22 @@ def main():
         translate_text(language_code, "pricer.description", market_name=market.name)
     )
 
-    result: PricerResult | None = (
+    result: PricerResult = (
         ss_get("pricer_result") if ss_has("pricer_result") else None
     )
 
-    if result:
-        eft_type = True if result.input_type == InputFormat.EFT else False
+    if result is not None:
+        eft_type = result.input_type == InputFormat.EFT
         ss_set("pricer_eft_result", eft_type)
 
-    cached_input_text = ss_get("pricer_input_text", "") or ""
+    cached_input_text = ss_get("pricer_input_text", None) 
 
     with st.container(border=True):
         _render_appraisal_title(
             result, market, cached_input_text, language_code, sde_repo
         )
-        if result:
-            if ss_get("pricer_eft_result"):
+        if result is not None:
+            if eft_type:
                 _render_fit_appraisal_header(
                     result=result, language_code=language_code, sde_repo=sde_repo
                 )

@@ -446,7 +446,6 @@ class FitAvailabilitySummary:
     items: tuple[ItemAvailability, ...]
     bottleneck_items: tuple[ItemAvailability, ...]
     total_isk_per_fit: Price
-    total_isk_all_fits: Price
     counted_item_count: int
     ship_type_id: Optional[TypeID]
     ship_name: Optional[str]
