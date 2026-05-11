@@ -262,7 +262,7 @@ class BuilderHelperService:
         if not type_ids:
             return {}
 
-        price_map = self._price_service.get_jita_price_data_map(type_ids)
+        price_map = self._price_service.get_jita_prices(type_ids).prices
         return {
             tid: result.sell_price
             for tid, result in price_map.items()

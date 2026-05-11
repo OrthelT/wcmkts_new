@@ -337,7 +337,7 @@ class ImportHelperService:
         df["volume_floored"] = volume_floored
 
         try:
-            jita_prices = self._price_service.get_jita_price_data_map(type_ids)
+            jita_prices = self._price_service.get_jita_prices(type_ids).prices
         except Exception as e:
             self._logger.error(f"Jita price fetch failed: {e}")
             raise RuntimeError(f"Failed to fetch Jita prices: {e}") from e

@@ -836,19 +836,6 @@ class PriceService:
             failed_ids=[tid for tid in unique_type_ids if tid not in cached or not cached[tid].success]
         )
 
-    def get_jita_prices_as_dict(self, type_ids: list[TypeID]) -> dict[TypeID, Price]:
-        """
-        Convenience method returning simple type_id -> price dict.
-
-        This is the format expected by existing code like
-        calculate_jita_fit_cost_and_delta().
-        """
-        return self.get_jita_prices(type_ids).to_dict()
-
-    def get_jita_price_data_map(self, type_ids: list[TypeID]) -> dict[TypeID, PriceResult]:
-        """Return full price records including sell and buy values."""
-        return dict(self.get_jita_prices(type_ids).prices)
-
     def analyze_fit_cost(
         self,
         fit_data: pd.DataFrame,
@@ -875,7 +862,7 @@ class PriceService:
 
         # Get Jita prices (use provided map or fetch)
         type_ids = fit_data['type_id'].unique().tolist()
-        jita_prices = jita_price_map or self.get_jita_prices_as_dict(type_ids)
+        jita_prices = jita_price_map or self.get_jita_prices(type_ids).to_dict()
 
         # Calculate Jita cost
         jita_cost = 0.0

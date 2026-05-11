@@ -1355,7 +1355,7 @@ class DoctrineService:
         if jita_price_map is None:
             all_type_ids = result.raw_df["type_id"].dropna().unique().tolist()
             all_type_ids = [int(t) for t in all_type_ids]
-            jita_price_map = self._price_service.get_jita_prices_as_dict(all_type_ids)
+            jita_price_map = self._price_service.get_jita_prices(all_type_ids).to_dict()
 
         for summary in result.summaries:
             fit_df = result.raw_df[result.raw_df["fit_id"] == summary.fit_id]

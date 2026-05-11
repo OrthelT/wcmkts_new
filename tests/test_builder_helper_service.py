@@ -6,13 +6,13 @@ import pandas as pd
 import pytest
 
 from services.builder_helper_service import BuilderHelperService
-from services.price_service import PriceResult, PriceSource
+from services.price_service import BatchPriceResult, PriceResult, PriceSource
 
 
 def _make_price_service(jita_sell_prices: dict[int, float]):
     """Build a price-service stub returning the supplied sell prices."""
     price_service = MagicMock()
-    price_service.get_jita_price_data_map.return_value = {
+    prices = {
         tid: PriceResult.success_result(
             type_id=tid,
             sell_price=price,
@@ -20,6 +20,11 @@ def _make_price_service(jita_sell_prices: dict[int, float]):
         )
         for tid, price in jita_sell_prices.items()
     }
+    price_service.get_jita_prices.return_value = BatchPriceResult(
+        prices=prices,
+        source=PriceSource.JITA_DATABASE,
+        failed_ids=[],
+    )
     return price_service
 
 
@@ -119,7 +124,7 @@ class TestBuilderHelperService:
         market_repo.get_all_stats.assert_called_once()
         market_repo.get_30day_volume_metrics.assert_called_once_with([first_type_id, second_type_id])
         market_repo.get_sde_info.assert_not_called()
-        price_service.get_jita_price_data_map.assert_called_once_with([first_type_id, second_type_id])
+        price_service.get_jita_prices.assert_called_once_with([first_type_id, second_type_id])
         assert mock_async_client.call_count == 0
 
     @patch("httpx.AsyncClient", side_effect=AssertionError("EverRef must not be called"))
@@ -137,7 +142,7 @@ class TestBuilderHelperService:
         market_repo.get_watchlist.assert_not_called()
         market_repo.get_30day_volume_metrics.assert_not_called()
         market_repo.get_sde_info.assert_not_called()
-        price_service.get_jita_price_data_map.assert_not_called()
+        price_service.get_jita_prices.assert_not_called()
         assert mock_async_client.call_count == 0
 
     @patch("httpx.AsyncClient", side_effect=AssertionError("EverRef must not be called"))

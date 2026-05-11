@@ -356,7 +356,7 @@ class PricerService:
         type_ids = [item.type_id for item in resolved if item.type_id]
 
         # Step 4: Fetch prices
-        jita_prices = self._price_service.get_jita_price_data_map(type_ids)
+        jita_prices = self._price_service.get_jita_prices(type_ids).prices
         local_prices = self._market_repo.get_local_prices(type_ids)
 
         # Step 5: Fetch market stats (avg volume, days remaining)
