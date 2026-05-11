@@ -25,6 +25,7 @@ def _make_item(
     local_sell: float = 0.0,
     slot_type: SlotType = SlotType.LOW,
     category_name: str = "Module",
+    has_local_data: bool = True,
 ) -> PricedItem:
     parsed = ParsedItem(
         type_name=name,
@@ -39,6 +40,7 @@ def _make_item(
         item=parsed,
         local_sell=local_sell,
         local_sell_volume=local_sell_volume,
+        has_local_data=has_local_data,
     )
 
 
@@ -150,12 +152,12 @@ def test_equivalents_substitution_increases_fits():
     assert item_b.raw_stock == 2
 
 
-def test_zero_stock_logged_via_logger(caplog):
+def test_zero_stock_blocks_build(caplog):
     item = _make_item(type_id=1, quantity=1, local_sell_volume=0)
     result = _make_result([item])
 
-    test_logger = logging.getLogger("test_fit_availability")
-    with caplog.at_level(logging.WARNING, logger="test_fit_availability"):
+    test_logger = logging.getLogger("test_fit_availability_zero_stock")
+    with caplog.at_level(logging.WARNING, logger="test_fit_availability_zero_stock"):
         summary = compute_fit_availability(result, logger_instance=test_logger)
 
     assert summary.fits_available == 0
@@ -202,3 +204,148 @@ def test_ship_type_id_extracted_from_hull():
 
     assert summary.ship_type_id == 587
     assert summary.ship_name == "Rifter"
+
+
+def test_ship_type_id_none_when_no_hull_item():
+    module = _make_item(type_id=1, quantity=1, local_sell_volume=10)
+    result = _make_result([module])
+
+    summary = compute_fit_availability(result)
+
+    assert summary.ship_type_id is None
+
+
+# =============================================================================
+# Partial-data signals: unpriced items, stock_unknown, total_isk_complete
+# =============================================================================
+
+
+def test_unpriced_items_excluded_from_total_and_counted():
+    priced = _make_item(type_id=1, quantity=2, local_sell_volume=20, local_sell=100.0)
+    unpriced = _make_item(type_id=2, quantity=1, local_sell_volume=10, local_sell=0.0)
+    result = _make_result([priced, unpriced])
+
+    summary = compute_fit_availability(result)
+
+    assert summary.total_isk_per_fit == 200.0
+    assert summary.unpriced_item_count == 1
+    assert summary.total_isk_complete is False
+
+
+def test_total_isk_complete_when_all_priced():
+    items = [
+        _make_item(type_id=1, quantity=2, local_sell_volume=20, local_sell=100.0),
+        _make_item(type_id=2, quantity=1, local_sell_volume=10, local_sell=50.0),
+    ]
+    result = _make_result(items)
+
+    summary = compute_fit_availability(result)
+
+    assert summary.unpriced_item_count == 0
+    assert summary.total_isk_complete is True
+
+
+def test_unpriced_logged_via_injected_logger_at_warning(caplog):
+    item = _make_item(type_id=1, quantity=1, local_sell_volume=10, local_sell=0.0)
+    result = _make_result([item])
+
+    test_logger = logging.getLogger("test_unpriced_logger")
+    with caplog.at_level(logging.WARNING, logger="test_unpriced_logger"):
+        compute_fit_availability(result, logger_instance=test_logger)
+
+    matching = [r for r in caplog.records if r.name == "test_unpriced_logger"]
+    assert any(r.levelno == logging.WARNING for r in matching), (
+        f"expected WARNING via injected logger; got {[(r.name, r.levelname) for r in caplog.records]}"
+    )
+    assert not any(r.levelno == logging.ERROR for r in matching), (
+        "unpriced items should log at WARNING, not ERROR"
+    )
+
+
+def test_stock_unknown_when_no_local_data():
+    item = _make_item(type_id=1, quantity=1, local_sell_volume=0, has_local_data=False)
+    result = _make_result([item])
+
+    summary = compute_fit_availability(result)
+
+    assert summary.items[0].stock_unknown is True
+    assert summary.stock_unknown_count == 1
+
+
+def test_stock_known_when_local_data_present_even_if_zero():
+    item = _make_item(type_id=1, quantity=1, local_sell_volume=0, has_local_data=True)
+    result = _make_result([item])
+
+    summary = compute_fit_availability(result)
+
+    assert summary.items[0].stock_unknown is False
+    assert summary.stock_unknown_count == 0
+
+
+def test_stock_unknown_overridden_by_aggregated_stock():
+    item = _make_item(type_id=1, quantity=1, local_sell_volume=0, has_local_data=False)
+    result = _make_result([item])
+
+    summary = compute_fit_availability(result, aggregated_stock={1: 5})
+
+    assert summary.items[0].stock_unknown is False
+    assert summary.stock_unknown_count == 0
+    assert summary.fits_available == 5
+
+
+def test_items_with_no_type_id_skipped_silently():
+    parsed_no_id = ParsedItem(type_name="Unknown", quantity=1)
+    no_id_item = PricedItem(image_url="", item=parsed_no_id, local_sell_volume=10)
+    valid_item = _make_item(type_id=2, quantity=1, local_sell_volume=5)
+    result = _make_result([no_id_item, valid_item])
+
+    summary = compute_fit_availability(result)
+
+    assert summary.counted_item_count == 1
+    assert summary.items[0].type_id == 2
+    assert summary.fits_available == 5
+
+
+def test_floor_rounding_with_qty_greater_than_one():
+    item = _make_item(type_id=1, quantity=3, local_sell_volume=10)
+    result = _make_result([item])
+
+    summary = compute_fit_availability(result)
+
+    assert summary.fits_available == 3
+    assert summary.items[0].fits_possible == 3
+
+
+def test_zero_quantity_per_fit_returns_zero_fits_possible():
+    parsed = ParsedItem(type_name="X", quantity=0, type_id=1, resolved_name="X")
+    item = PricedItem(image_url="", item=parsed, local_sell_volume=100, local_sell=10.0)
+    result = _make_result([item])
+
+    summary = compute_fit_availability(result)
+
+    assert summary.items[0].fits_possible == 0
+    assert summary.fits_available == 0
+
+
+# =============================================================================
+# PricerResult jita-failure signal
+# =============================================================================
+
+
+def test_pricer_result_jita_failure_signal_defaults():
+    result = _make_result([])
+
+    assert result.failed_jita_count == 0
+    assert result.failed_jita_type_ids == ()
+    assert result.jita_provider_failed is False
+
+
+def test_pricer_result_jita_failure_signal_populated():
+    result = PricerResult(
+        items=[],
+        input_type=InputFormat.EFT,
+        failed_jita_type_ids=(1, 2, 3),
+    )
+
+    assert result.failed_jita_count == 3
+    assert result.jita_provider_failed is True

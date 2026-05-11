@@ -548,6 +548,18 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "pricer.fits.column_status": "Status",
         "pricer.fits.column_equivalents": "🔄",
         "pricer.fits.column_equivalents_help": "Stock includes faction-equivalent modules.",
+        "pricer.fits.total_isk_partial": "(partial: {count} item unpriced)",
+        "pricer.fits.total_isk_partial_plural": "(partial: {count} items unpriced)",
+        "pricer.fits.stock_unknown_warning": (
+            "{count} item has unknown stock (no local market data); fits-available may be understated."
+        ),
+        "pricer.fits.stock_unknown_warning_plural": (
+            "{count} items have unknown stock (no local market data); fits-available may be understated."
+        ),
+        "pricer.jita_provider_failed": (
+            "Jita prices unavailable for {count} item(s); their Jita columns show 0."
+        ),
+        "pricer.error_processing": "Pricing failed: {error}",
         "build_costs.title": "Build Cost Tool",
         "build_costs.category_label": "Select a category",
         "build_costs.category_placeholder": "Ship",

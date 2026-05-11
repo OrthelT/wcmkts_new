@@ -201,6 +201,7 @@ class PricedItem:
     days_of_stock: float = 0.0
     is_doctrine: bool = False
     doctrine_ships: tuple[str, ...] = field(default_factory=tuple)
+    has_local_data: bool = True
 
     @property
     def quantity(self) -> int:
@@ -311,6 +312,7 @@ class PricerResult:
     input_type: InputFormat = InputFormat.UNKNOWN
     fit_name: Optional[str] = None
     ship_name: Optional[str] = None
+    failed_jita_type_ids: tuple[TypeID, ...] = ()
 
     # Grand totals - Jita
     @property
@@ -366,6 +368,14 @@ class PricerResult:
     def is_eft(self) -> bool:
         """True if input was EFT format."""
         return self.input_type == InputFormat.EFT
+
+    @property
+    def failed_jita_count(self) -> int:
+        return len(self.failed_jita_type_ids)
+
+    @property
+    def jita_provider_failed(self) -> bool:
+        return self.failed_jita_count > 0
 
     @property
     def is_multibuy(self) -> bool:
@@ -432,6 +442,7 @@ class ItemAvailability:
     used_equivalents: bool
     is_bottleneck: bool
     isk_per_unit: Price
+    stock_unknown: bool = False
 
 
 @dataclass(frozen=True)
@@ -450,3 +461,9 @@ class FitAvailabilitySummary:
     ship_type_id: Optional[TypeID]
     ship_name: Optional[str]
     used_equivalents: bool
+    unpriced_item_count: int = 0
+    stock_unknown_count: int = 0
+
+    @property
+    def total_isk_complete(self) -> bool:
+        return self.unpriced_item_count == 0

@@ -367,6 +367,7 @@ class PricerService:
 
         # Step 7: Combine into PricedItems
         priced_items = []
+        failed_jita_type_ids: list[int] = []
         for item in resolved:
             if not item.type_id:
                 continue
@@ -375,9 +376,13 @@ class PricerService:
             type_id: int = item.type_id
 
             jita_data = jita_prices.get(type_id, PriceResult.failure_result(type_id, "Not found"))
+            has_local_data = type_id in local_prices
             local_data = local_prices.get(type_id, LocalPriceData(type_id=type_id))
             stats = market_stats.get(type_id, {'avg_volume': 0.0, 'days_remaining': 0.0})
             doctrine = doctrine_info.get(type_id, {'is_doctrine': False, 'ships': []})
+
+            if not jita_data.success:
+                failed_jita_type_ids.append(type_id)
 
             category_name = item.category_name
             isship = True if category_name == "Ship" else False
@@ -395,11 +400,13 @@ class PricerService:
                 days_of_stock=stats['days_remaining'],
                 is_doctrine=doctrine['is_doctrine'],
                 doctrine_ships=tuple(doctrine['ships']),
+                has_local_data=has_local_data,
             ))
 
         self._logger.info(
             f"Priced {len(priced_items)} items "
-            f"({input_format.value} format, {len(parse_errors)} errors)"
+            f"({input_format.value} format, {len(parse_errors)} errors, "
+            f"{len(failed_jita_type_ids)} Jita lookups failed)"
         )
 
         return PricerResult(
@@ -408,6 +415,7 @@ class PricerService:
             input_type=input_format,
             ship_name=ship_name,
             fit_name=fit_name,
+            failed_jita_type_ids=tuple(failed_jita_type_ids),
         )
 
     def _resolve_items(self, raw_items: list[RawParsedItem]) -> list[ParsedItem]:
@@ -494,13 +502,11 @@ def compute_fit_availability(
 
         qty_per_fit = priced.quantity
         raw_stock = priced.local_sell_volume or 0
-        stock_used = (
-            aggregated_stock[type_id]
-            if aggregated_stock is not None and type_id in aggregated_stock
-            else raw_stock
-        )
+        has_aggregated = aggregated_stock is not None and type_id in aggregated_stock
+        stock_used = aggregated_stock[type_id] if has_aggregated else raw_stock
         used_equivalents = stock_used > raw_stock
         fits_possible = stock_used // qty_per_fit if qty_per_fit > 0 else 0
+        stock_unknown = (not priced.has_local_data) and (not has_aggregated)
 
         raw_analyses.append({
             "type_id": type_id,
@@ -513,6 +519,7 @@ def compute_fit_availability(
             "fits_possible": fits_possible,
             "used_equivalents": used_equivalents,
             "isk_per_unit": priced.local_sell,
+            "stock_unknown": stock_unknown,
         })
 
     if not raw_analyses:
@@ -533,16 +540,19 @@ def compute_fit_availability(
             used_equivalents=a["used_equivalents"],
             is_bottleneck=(a["fits_possible"] == fits_available),
             isk_per_unit=a["isk_per_unit"],
+            stock_unknown=a["stock_unknown"],
         )
         for a in raw_analyses
     ]
     items.sort(key=lambda i: (i.fits_possible, -i.quantity_per_fit))
 
     bottleneck_items = tuple(i for i in items if i.is_bottleneck)
-    total_isk_per_fit = 0
+    total_isk_per_fit = 0.0
+    unpriced_item_count = 0
     for i in items:
         if i.isk_per_unit == 0:
-            logger.error(f"isk_per_unit is 0 for item {i.type_name}")
+            log.warning("Unpriced item excluded from fit ISK total: %s", i.type_name)
+            unpriced_item_count += 1
             continue
         total_isk_per_fit += i.quantity_per_fit * i.isk_per_unit
 
@@ -553,6 +563,7 @@ def compute_fit_availability(
             break
 
     used_equivalents = any(i.used_equivalents for i in items)
+    stock_unknown_count = sum(1 for i in items if i.stock_unknown)
 
     return FitAvailabilitySummary(
         fits_available=fits_available,
@@ -563,6 +574,8 @@ def compute_fit_availability(
         ship_type_id=ship_type_id,
         ship_name=result.ship_name,
         used_equivalents=used_equivalents,
+        unpriced_item_count=unpriced_item_count,
+        stock_unknown_count=stock_unknown_count,
     )
 
 

@@ -624,6 +624,15 @@ def _render_fit_availability_hero(summary: FitAvailabilitySummary, language_code
             translate_text(language_code, "pricer.fits.metric_total_isk"),
             f":orange[{format_isk(summary.total_isk_per_fit)}] ISK",
         )
+        if not summary.total_isk_complete:
+            n = summary.unpriced_item_count
+            key = "pricer.fits.total_isk_partial" if n == 1 else "pricer.fits.total_isk_partial_plural"
+            m3.caption(translate_text(language_code, key, count=n))
+
+    if summary.stock_unknown_count > 0:
+        n = summary.stock_unknown_count
+        key = "pricer.fits.stock_unknown_warning" if n == 1 else "pricer.fits.stock_unknown_warning_plural"
+        st.warning(translate_text(language_code, key, count=n))
 
     if summary.bottleneck_items:
         b = summary.bottleneck_items[0]
@@ -769,7 +778,8 @@ def _render_fit_availability_section(
 
 def _process_input(input_text: str):
     """Run pricing and store the result in session state."""
-    with st.spinner(translate_text(get_active_language(), "pricer.fetching_prices")):
+    language_code = get_active_language()
+    with st.spinner(translate_text(language_code, "pricer.fetching_prices")):
         try:
             service = get_pricer_service()
             result = service.price_input(input_text)
@@ -777,8 +787,9 @@ def _process_input(input_text: str):
             ss_set("pricer_input_text", input_text)
             logger.info("Priced %d items", len(result.items))
         except Exception as exc:
-            logger.error("Error pricing items: %s", exc)
-            st.error(f"Error pricing items: {exc}")
+            logger.exception("Error pricing items")
+            ss_set("pricer_result", None)
+            st.error(translate_text(language_code, "pricer.error_processing", error=str(exc)))
 
 
 def main():
@@ -823,6 +834,14 @@ def main():
     with st.container(border=True):
         _render_appraisal_title(result, market, language_code)
         if result is not None:
+            if result.jita_provider_failed:
+                st.warning(
+                    translate_text(
+                        language_code,
+                        "pricer.jita_provider_failed",
+                        count=result.failed_jita_count,
+                    )
+                )
             if eft_type:
                 _render_fit_appraisal_header(
                     result=result, language_code=language_code, sde_repo=sde_repo
