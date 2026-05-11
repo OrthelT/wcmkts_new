@@ -4,7 +4,7 @@ from ui.market_selector import render_market_selector
 from init_db import ensure_market_db_ready
 from ui.formatters import display_build_cost_tool_description
 from ui.i18n import translate_text
-from services import get_jita_price, get_type_resolution_service
+from services import get_price_service, get_type_resolution_service
 from services.type_name_localization import get_localized_name_map
 from repositories import get_sde_repository, get_market_repository
 from repositories.build_cost_repo import get_build_cost_repository
@@ -721,7 +721,7 @@ def main():
         and st.session_state.selected_item_for_display == selected_item
     ):
         vale_price = get_market_repository().get_local_price(type_id)
-        jita_price = get_jita_price(type_id)
+        jita_price = get_price_service().get_jita_price(type_id).sell_price
         if jita_price:
             jita_price = float(jita_price)
         if vale_price:

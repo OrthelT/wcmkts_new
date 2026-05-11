@@ -56,7 +56,7 @@ def _get_eve_icon_url(type_id: int) -> str:
 
 def _add_jita_prices(df: pd.DataFrame, price_service, type_ids: list[int]) -> pd.DataFrame:
     """Add jita_sell_price, jita_buy_price, and pct_diff_vs_jita_sell columns to a DataFrame."""
-    jita_price_map = price_service.get_jita_price_data_map(type_ids)
+    jita_price_map = price_service.get_jita_prices(type_ids).prices
     df["jita_sell_price"] = df["type_id"].map(
         lambda tid: _get_price_result_value(jita_price_map.get(int(tid)), "sell_price")
     )
@@ -584,7 +584,7 @@ def render_doctrine_ships_table(
     snapshot = market_service.get_current_market_snapshot(ship_type_ids)
 
     # Jita prices — batch fetch
-    jita_map = price_service.get_jita_price_data_map(ship_type_ids)
+    jita_map = price_service.get_jita_prices(ship_type_ids).prices
 
     # Build result DataFrame — one row per fit_id
     rows = []

@@ -164,27 +164,6 @@ def get_equivalents_indicator(type_id: int) -> str:
     return ""
 
 
-def get_jita_price(type_id: int) -> float:
-    """
-    Get Jita sell price for an item.
-
-    Args:
-        type_id: EVE type ID
-
-    Returns:
-        Jita sell price or 0.0 if not found
-    """
-    from services import get_price_service
-
-    try:
-        price_service = get_price_service()
-        result = price_service.get_jita_prices([type_id])
-        # Use BatchPriceResult.get_price() which returns float, not PriceResult
-        return result.get_price(type_id, default=0.0)
-    except Exception:
-        return 0.0
-
-
 def render_market_popover(
     type_id: int,
     type_name: str,
@@ -277,7 +256,11 @@ def render_market_popover(
                 if jita_prices and type_id in jita_prices:
                     jita_price = jita_prices[type_id]
                 elif show_jita:
-                    jita_price = get_jita_price(type_id)
+                    from services import get_price_service
+                    try:
+                        jita_price = get_price_service().get_jita_price(type_id).sell_price
+                    except Exception:
+                        jita_price = 0.0
                 else:
                     jita_price = 0.0
 

@@ -1,4 +1,4 @@
-# Winter Coalition Market App (v.0.5.1)
+# Winter Coalition Market App (v.0.6.2)
 A Streamlit application for viewing EVE Online market statistics for Winter Coalition. This tool provides real-time market data analysis, historical price tracking, and fitting information for various items in EVE Online markets.
 
 SUPPORT: Join the Discord for support https://discord.gg/BxatJE572Y
@@ -7,6 +7,49 @@ CONTRIBUTING: Contributors welcome. This project is fully open source under MIT 
 
 
 # UPDATES:
+## version 0.6.2 (unreleased)
+### New Features
+- **Fit Availability hero on Pricer**: Pasting an EFT fit now shows a focal `fits-available` count, three supporting metrics, a progress bar, and a red/orange bottleneck callout for the lowest-stock module -- a Janice-style layout that answers "how many of this fit can I buy right now?" without forcing the user to read the per-item table.
+- **Faction-equivalent aggregation** on the pricer (toggle, default on): substitutes faction-equivalent modules into stock counts where an equivalence group exists.
+- **Partial-data signals**: Pricer surfaces `failed_jita_count`, `unpriced_item_count`, and `stock_unknown_count` so headline ISK totals never silently understate cost when partial data is missing.
+
+### Improvements
+- **Space-separated multibuy parsing**: Lines without tabs now resolve correctly (e.g. `Torpedo Launcher II 63`).
+- **Summary card totals**: Replaced Buy / Split / Sell row with explicit `{market} Sell Total`, `Jita Sell Total`, and `Jita Buy Total`.
+- **Janice batch endpoint fix**: `JaniceProvider._parse_response` now accepts both the v2 `/pricer` top-level JSON list and the legacy appraisal envelope -- fixes a production `'list' object has no attribute 'get'` crash.
+
+### Refactoring
+- Collapsed three near-identical batch Jita-price methods on `PriceService` into one (`get_jita_prices -> BatchPriceResult`).
+- Renamed `PriceService` -> `JitaPriceService` to eliminate the one-letter collision with `PricerService`.
+- Removed duplicate `get_jita_price` wrappers from `services/price_service.py` and `ui/popovers.py`.
+- Removed outdated docs (`code_simplification_review.md`, `docs.md`, `quick_reference.md`, `selectable-mkts.md`).
+
+## version 0.6.1
+- **Doctrine modules table** on the Market Dashboard now mirrors the Doctrine Ships pattern. Replaced row-selection routing with `_mkt` / `_doc` checkbox columns, fixing the iloc/positional mismatch that misrouted clicks when the low-stock filter hid rows.
+- **`fit_count` aggregation** added; modules now show how many doctrine fits use them.
+- **Module deep-link** (`module_id` query param) on Doctrine Status filters fits to those using a specific module, with a banner naming the module.
+- New i18n keys (`column_fits`, `hint_click_doctrine_status_module`, `module_filter_banner`) across en/zh/de/fr/ru/es.
+- Removed the 5-minute-to-update balloon animation (was disruptive at scale).
+
+## version 0.6.0
+### New Features
+- **Builder Helper page** (`pages/builder_helper.py`, `services/builder_helper_service.py`): EverRef-free profitability tool for manufacturers. Shows ROI, ISK/hour, 30-day profit, and turnover for watchlist items, sourced from the synced builder-cost catalog.
+- **Price-basis toggle** on Builder Helper (30-day average / current price) -- defaults to 30-day average since current-price spikes can mislead manufacturing decisions.
+- **Dashboard low-stock filter**: Market Dashboard now constrains to low-stock doctrine items by default with a filter override toggle, focusing FCs on the items that actually need attention.
+
+### Improvements
+- **Build-cost catalog from `buildcost.db`**: Switched both Build Costs and Builder Helper from the dead `wcmktprod.db.builder_costs` table to the synced `buildcost.db` catalog.
+- **Corrected ROI formula** on Builder Helper: `cap_utils` is now `(sell-cost)/cost` (ROI, can exceed 100%) instead of `(sell-cost)/sell` (gross margin, capped at 100%). Help strings updated in all 6 translated languages.
+- **ISK/Hour column** added to Builder Helper (the description already promised it but the column was missing).
+- **Doctrine Status ship display** revised; stacked toggle buttons replaced with a single `st.menu_button` chord that respects column `vertical_alignment`.
+- **Centralized shared page chrome** (`pages/components/header.py`, `pages/components/layout.py`): logo, language selector, and page titles render through shared helpers.
+- **TZ-bug fix in PriceService**: `time_until_next_db_update` now correctly handles tz-aware non-UTC inputs.
+
+### Bug Fixes
+- Doctrine Ships row resolution now uses pandas `index` (not `iloc`).
+- `pd.read_sql_query` syntax updated for list parameters.
+- Replaced deprecated `use_container_width` calls with Streamlit native formats.
+
 ## version 0.5.0 / 0.5.1
 ### New Features
 - **Market Dashboard**: New default landing page (`pages/market_dashboard.py`) with at-a-glance Doctrine Ships, Popular Modules, Minerals, and Isotopes tables. Rows are clickable -- ships jump to Doctrine Status filtered by ship; modules/minerals/isotopes jump to Market Stats with the item pre-selected via query parameter.
