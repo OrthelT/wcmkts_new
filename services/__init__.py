@@ -13,7 +13,7 @@ Each service module follows these principles:
 
 from services.price_service import (
     # Main service
-    PriceService,
+    JitaPriceService,
     get_price_service,
     # Domain models
     PriceResult,
@@ -126,7 +126,7 @@ from services.type_resolution_service import (
 
 __all__ = [
     # Price Service
-    "PriceService",
+    "JitaPriceService",
     "get_price_service",
     "PriceResult",
     "BatchPriceResult",

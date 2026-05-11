@@ -35,7 +35,7 @@ from repositories.market_orders_repo import MarketOrdersRepository, get_market_o
 from logging_config import setup_logging
 import streamlit as st
 from domain.converters import get_image_url
-from services.price_service import PriceService, get_price_service, PriceResult
+from services.price_service import JitaPriceService, get_price_service, PriceResult
 
 logger = setup_logging(__name__, log_file="pricer_service.log")
 
@@ -174,7 +174,7 @@ class PricerService:
         sde_db: DatabaseConfig,
         mkt_db: DatabaseConfig,
         market_repo: MarketOrdersRepository,
-        price_service: PriceService,
+        price_service: JitaPriceService,
         logger_instance: Optional[logging.Logger] = None
     ):
         self._sde_lookup = SDELookupService(sde_db, logger_instance)

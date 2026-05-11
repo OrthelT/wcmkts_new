@@ -27,7 +27,7 @@ TypeID = int
 Price = float
 
 _PRICE_SERVICE_LOCK = threading.Lock()
-_PRICE_SERVICES: dict[str, "PriceService"] = {}
+_PRICE_SERVICES: dict[str, "JitaPriceService"] = {}
 _PRICE_CACHE_LOCK = threading.Lock()
 _SHARED_JITA_PRICE_CACHE: dict[TypeID, "CachedPriceEntry"] = {}
 
@@ -697,7 +697,7 @@ class FallbackPriceProvider:
 # Main Price Service (Facade)
 # =============================================================================
 
-class PriceService:
+class JitaPriceService:
     """
     Main price service - facade for all price operations.
 
@@ -705,7 +705,7 @@ class PriceService:
     It hides the complexity of providers, caching, and fallback logic.
 
     Example usage:
-        service = PriceService.create_default()
+        service = JitaPriceService.create_default()
 
         # Single price
         result = service.get_jita_price(34)  # Tritanium
@@ -743,7 +743,7 @@ class PriceService:
         self._price_cache = price_cache if price_cache is not None else {}
 
     @classmethod
-    def create_default(cls, db_config=None, janice_api_key: Optional[str] = None) -> "PriceService":
+    def create_default(cls, db_config=None, janice_api_key: Optional[str] = None) -> "JitaPriceService":
         """
         Factory method to create service with default configuration.
 
@@ -805,7 +805,7 @@ class PriceService:
         acceptable — Fuzzwork is idempotent and the second write simply
         refreshes the same cache entry.
         """
-        logger.debug(f"PriceService get_jita_prices: {type_ids}")
+        logger.debug(f"JitaPriceService get_jita_prices: {type_ids}")
         # Dedupe first so large multibuy lists do not resend the same type IDs.
         unique_type_ids = list(dict.fromkeys(type_ids))
 
@@ -984,9 +984,9 @@ def get_price_service(
     db_alias: Optional[str] = None,
     janice_api_key: Optional[str] = None,
     market_key: Optional[str] = None,
-) -> PriceService:
+) -> JitaPriceService:
     """
-    Get or create a PriceService instance.
+    Get or create a JitaPriceService instance.
 
     Reuses one process-wide service instance per market key so the
     in-memory price cache survives across Streamlit sessions.
@@ -1010,7 +1010,7 @@ def get_price_service(
 
     service_key = f"price_service_{resolved_market_key}"
 
-    def _create_price_service() -> PriceService:
+    def _create_price_service() -> JitaPriceService:
         janice_key = janice_api_key
         if janice_key is None:
             try:
@@ -1020,7 +1020,7 @@ def get_price_service(
                 janice_key = None
 
         db_config = DatabaseConfig(resolved_db_alias)
-        return PriceService.create_default(
+        return JitaPriceService.create_default(
             db_config=db_config,
             janice_api_key=janice_key
         )

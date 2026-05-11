@@ -41,7 +41,7 @@ tests/
 ├── test_market_repo.py                # MarketRepository
 ├── test_market_service.py             # MarketService
 ├── test_pricer_service.py             # PricerService
-├── test_price_service.py              # PriceService provider chain
+├── test_price_service.py              # JitaPriceService provider chain
 ├── test_rwlock.py                     # RWLock (legacy, kept for reference)
 ├── test_sde_repo.py                   # SDERepository
 ├── test_sde_repo_localization.py      # SDERepository localization methods

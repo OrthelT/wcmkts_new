@@ -142,7 +142,7 @@ All pages follow consistent patterns with Streamlit best practices:
 - **`services/doctrine_service.py`**: DoctrineService and FitDataBuilder for doctrine fit aggregation
 - **`services/market_service.py`**: MarketService for 30-day metrics, ISK volume calculations, outlier handling, and Plotly chart creation
 - **`services/build_cost_service.py`**: BuildCostService for stored build-cost catalog browsing and per-item snapshot summaries
-- **`services/price_service.py`**: PriceService with provider chain (Fuzzwork → Janice) for Jita price lookups with caching
+- **`services/price_service.py`**: JitaPriceService with provider chain (Fuzzwork → Janice) for Jita price lookups with caching
 - **`services/pricer_service.py`**: PricerService orchestrates parsing and price lookups from Jita (via Janice API or Fuzzworks) and 4-HWWF (local market database)
 - **`services/low_stock_service.py`**: LowStockService for low stock analysis with filtering (categories, doctrines, fits, tech2/faction items)
 - **`services/import_helper_service.py`**: ImportHelperService for computing local-vs-Jita price comparisons including shipping cost, profit margin, 30-day turnover, and capital utilisation
@@ -636,7 +636,7 @@ from state.session_state import ss_get  # ✗ state!
 ### Project Directories
 - **`domain/`**: Core business models (FitItem, FitSummary, StockStatus, ShipRole, PricedItem, MarketConfig, converters)
 - **`repositories/`**: Database access layer (BaseRepository, DoctrineRepository, MarketRepository, SDERepository)
-- **`services/`**: Business logic (DoctrineService, MarketService, BuildCostService, PriceService, PricerService, ImportHelperService, LowStockService, SelectionService, ModuleEquivalentsService, TypeResolutionService, TypeNameLocalization, categorization)
+- **`services/`**: Business logic (DoctrineService, MarketService, BuildCostService, JitaPriceService, PricerService, ImportHelperService, LowStockService, SelectionService, ModuleEquivalentsService, TypeResolutionService, TypeNameLocalization, categorization)
 - **`state/`**: Session state management (ss_get, ss_has, ss_set, ss_init, get_service, language_state, market_state)
 - **`ui/`**: UI formatting utilities, column configurations, reusable popover components, i18n translations, market selector
 - **`pages/`**: Streamlit application pages

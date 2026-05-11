@@ -60,7 +60,7 @@ All domain dataclasses use `frozen=True` for immutability and safe caching.
 | `doctrine_service.py` | `DoctrineService` + `FitDataBuilder` (7-step Builder pipeline), `BuildMetadata` |
 | `market_service.py` | `MarketService` -- 30-day metrics, ISK volume, outlier handling, Plotly chart creation |
 | `build_cost_service.py` | `BuildCostService` -- stored build-cost catalog and per-item snapshot summaries |
-| `price_service.py` | `PriceService` -- provider chain (Fuzzwork -> Janice) with `FallbackPriceProvider` |
+| `price_service.py` | `JitaPriceService` -- provider chain (Fuzzwork -> Janice) with `FallbackPriceProvider` |
 | `pricer_service.py` | `PricerService` -- EFT/multibuy parsing, dual-market price lookups |
 | `import_helper_service.py` | `ImportHelperService` -- local-vs-Jita price comparison, shipping cost, profit, capital utilisation |
 | `low_stock_service.py` | `LowStockService` -- low stock analysis with category/doctrine/tech2/faction filtering |

@@ -252,9 +252,9 @@ class BuilderHelperService:
         return df
 
     def _fetch_jita_prices(self, type_ids: list[int]) -> dict[int, float]:
-        """Resolve Jita sell prices via the shared PriceService.
+        """Resolve Jita sell prices via the shared JitaPriceService.
 
-        Delegates to PriceService so this page uses the same provider chain
+        Delegates to JitaPriceService so this page uses the same provider chain
         (local jita_prices cache → Fuzzwork → Janice) and shared in-memory
         cache as the rest of the app. Items without a positive sell price
         are omitted from the returned map.
