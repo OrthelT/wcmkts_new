@@ -12,7 +12,6 @@ Data Flow:
 5. Combine into PricedItem list and PricerResult
 """
 
-from keyword import iskeyword
 from typing import Optional
 import logging
 import pandas as pd

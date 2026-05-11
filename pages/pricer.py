@@ -11,14 +11,9 @@ all wrapped in a single bordered card. EFT fittings additionally render a
 from current local market stock and which modules are bottlenecks.
 """
 
-import hashlib
 from datetime import datetime, timezone
-from tkinter import HORIZONTAL
-from turtle import home, width
 
-from _plotly_utils.colors.carto import Bold_r
 import pandas as pd
-from sqlalchemy import label
 from repositories.sde_repo import SDERepository
 import streamlit as st
 from millify import millify
@@ -310,39 +305,10 @@ def render_header(language_code: str):
     render_page_title(translate_text(language_code, "pricer.title"))
 
 
-def render_fit_header(
-    result: PricerResult, sde_repo, language_code: str, *, compact: bool = False
-):
-    """Render the header for an EFT fit result with ship image."""
-    if result.input_type != InputFormat.EFT:
-        return
-
-    ship_type_id = None
-    for item in result.items:
-        print(item)
-        if item.item.category_name == "Ship":
-            ship_type_id = item.type_id
-            print(ship_type_id)
-            break
-
-    if result.ship_name:
-        localized_ship_name = get_localized_name(
-            ship_type_id,
-            result.ship_name,
-            sde_repo,
-            language_code,
-            logger,
-        )
-        fit_label = f" — {result.fit_name}" if result.fit_name else ""
-        st.write(localized_ship_name + fit_label)
-
-
 def _render_appraisal_title(
     result: PricerResult | None,
     market,
-    input_text: str,
     language_code: str,
-    sde_repo: SDERepository,
 ):
     """Top-of-card title row, mirroring Janice's appraisal heading."""
     if result is None:
@@ -852,19 +818,16 @@ def main():
         eft_type = result.input_type == InputFormat.EFT
         ss_set("pricer_eft_result", eft_type)
 
-    cached_input_text = ss_get("pricer_input_text", None) 
+    cached_input_text = ss_get("pricer_input_text", None)
 
     with st.container(border=True):
-        _render_appraisal_title(
-            result, market, cached_input_text, language_code, sde_repo
-        )
+        _render_appraisal_title(result, market, language_code)
         if result is not None:
             if eft_type:
                 _render_fit_appraisal_header(
                     result=result, language_code=language_code, sde_repo=sde_repo
                 )
                 _render_summary_stats_grid(result, market, language_code)
-                render_fit_header(result, sde_repo, language_code, compact=True)
                 _render_fit_availability_section(result, market, language_code)
             else:
                 _render_summary_stats_grid(result, market, language_code)
