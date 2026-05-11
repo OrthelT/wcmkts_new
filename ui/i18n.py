@@ -511,7 +511,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "pricer.issues": "Issues",
         "pricer.unpriced_items": "⚠️ {count} items could not be priced",
         # Janice-style appraisal card layout
-        "pricer.appraisal.title": "Appraisal {short_id} — {fit_name} @ {market_name}",
+        "pricer.appraisal.title": "Appraisal - {fit_name} @ {market_name}",
         "pricer.appraisal.title_empty": "New appraisal — paste an EFT fit or item list",
         "pricer.appraisal.label_created": "Created",
         "pricer.appraisal.label_priced_at": "Priced at",

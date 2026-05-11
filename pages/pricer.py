@@ -66,13 +66,6 @@ def round_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     return df2
 
 
-def _short_appraisal_id(text: str) -> str:
-    """Stable 6-char id for an appraisal, derived from the input text."""
-    digest = hashlib.sha1(text.encode("utf-8")).digest()
-    alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
-    return "".join(alphabet[b % len(alphabet)] for b in digest[:6])
-
-
 # =============================================================================
 # Column configs
 # =============================================================================
@@ -349,7 +342,6 @@ def _render_appraisal_title(
         )
         return
 
-    short_id = _short_appraisal_id(input_text or "")
     fit_name = (
         result.fit_name
         or result.ship_name
@@ -358,7 +350,6 @@ def _render_appraisal_title(
     title = translate_text(
         language_code,
         "pricer.appraisal.title",
-        short_id=short_id,
         fit_name=fit_name,
         market_name=market.name,
     )
