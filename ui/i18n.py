@@ -1198,6 +1198,58 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "pricer.highlight_doctrine_items_help": "高亮用于建制装配的物品。",
         "pricer.issues": "问题",
         "pricer.unpriced_items": "⚠️ 有 {count} 个物品无法定价",
+        # Janice-style appraisal card layout
+        "pricer.appraisal.title": "估价 - {fit_name} @ {market_name}",
+        "pricer.appraisal.title_empty": "新建估价 — 粘贴 EFT 装配或物品清单",
+        "pricer.appraisal.label_created": "创建时间",
+        "pricer.appraisal.label_priced_at": "定价市场",
+        "pricer.appraisal.label_volume": "体积",
+        "pricer.appraisal.label_buy": "买入",
+        "pricer.appraisal.label_split": "拆分",
+        "pricer.appraisal.label_sell": "卖出",
+        "pricer.appraisal.fit_name_default": "多买清单",
+        "pricer.appraisal.action_download": "📥 下载 CSV",
+        "pricer.appraisal.action_reset": "🔄 重置",
+        # Fit Availability
+        "pricer.fits.section_header": "装配可用性",
+        "pricer.fits.headline_unit": "可装配数量",
+        "pricer.fits.headline_zero_label": "当前库存无可用装配",
+        "pricer.fits.metric_items_in_fit": "装配物品数",
+        "pricer.fits.metric_bottleneck": "瓶颈物品数",
+        "pricer.fits.metric_total_isk": "本地卖价总成本",
+        "pricer.fits.toggle_equivalents": "使用派系等效物品",
+        "pricer.fits.toggle_equivalents_help": (
+            "汇总派系等效模块的库存（例如所有重型脉冲激光炮 II 变体）。"
+        ),
+        "pricer.fits.equivalents_unavailable": (
+            "等效物品查询不可用；使用原始库存。"
+        ),
+        "pricer.fits.bottleneck_caption": (
+            "瓶颈：{name} — 现有 {stock}，每套装配需要 {required}。"
+        ),
+        "pricer.fits.callout_zero": "无可用装配。受限物品：",
+        "pricer.fits.callout_low": "仅有 {count} 套可用装配。受限物品：",
+        "pricer.fits.callout_more": "另外 +{count} 项",
+        "pricer.fits.column_required": "每套",
+        "pricer.fits.column_in_stock": "库存",
+        "pricer.fits.column_fits_possible": "可装配",
+        "pricer.fits.column_status": "状态",
+        "pricer.fits.column_equivalents": "🔄",
+        "pricer.fits.column_equivalents_help": "库存包含派系等效模块。",
+        "pricer.fits.total_isk_partial": "（部分：{count} 项未定价）",
+        "pricer.fits.total_isk_partial_plural": "（部分：{count} 项未定价）",
+        "pricer.fits.stock_unknown_warning": (
+            "{count} 项物品库存未知（无本地市场数据）；可装配数量可能被低估。"
+        ),
+        "pricer.fits.stock_unknown_warning_plural": (
+            "{count} 项物品库存未知（无本地市场数据）；可装配数量可能被低估。"
+        ),
+        "pricer.jita_provider_failed": (
+            "{count} 项物品的吉他价格不可用；其吉他列显示为 0。"
+        ),
+        "pricer.error_processing": (
+            "定价失败。请检查输入格式后重试；详细信息见应用日志。"
+        ),
         "build_costs.title": "制造成本工具",
         "build_costs.category_label": "选择类别",
         "build_costs.category_placeholder": "舰船",
@@ -1612,6 +1664,136 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "builder_helper.column_volume_30d": "30D Volumen",
         "builder_helper.column_volume_30d_help": "Gesamthandelvolumen der letzten 30 Tage.",
         "builder_helper.footer": "Herstellungskosten stammen aus dem synchronisierten Builder-Kostenkatalog — Sotiyo / Null-sec / Systemkostenbonus −50% / Herstellungsindex 3% / keine Gebühren. ME und Runs variieren je nach Tier (T1: ME10 / 10 Runs; T2 Module/Drohnen/Munition: ME0–4 / 5–10 Runs; T2 Schiffe: ME3 / 3 Runs). Markt Verkauf fällt auf Jita × 1,4 zurück, wenn keine lokalen Verkaufsorders vorhanden sind.",
+        "pricer.title": "Winter Coalition Bewerter",
+        "pricer.description": "Bewerte Items und Fittings anhand von Jita- und {market_name}-Marktdaten.",
+        "pricer.input_section": "Eingabe",
+        "pricer.input_placeholder": (
+            "Items hier in einem der folgenden Formate einfügen:\n\n"
+            "EFT-Fitting:\n"
+            "[Hurricane, PVP Fit]\n"
+            "Damage Control II\n"
+            "1600mm Steel Plates II\n"
+            "...\n\n"
+            "Tabulator-getrennt (Item zuerst):\n"
+            "Tritanium\t10000\n"
+            "Pyerite\t5000\n\n"
+            "Tabulator-getrennt (Menge zuerst):\n"
+            "10000\tTritanium\n"
+            "5000\tPyerite"
+        ),
+        "pricer.input_label": "EFT-Fitting oder Itemliste einfügen:",
+        "pricer.price_items": "Items bewerten",
+        "pricer.fetching_prices": "Preise werden abgerufen...",
+        "pricer.format_label": "Format",
+        "pricer.format_multibuy": "Multibuy/Itemliste",
+        "pricer.totals": "Summen",
+        "pricer.column_icon": "Icon",
+        "pricer.column_icon_help": "Item-Icon.",
+        "pricer.column_type_id_help": "Typ-ID.",
+        "pricer.column_item_help": "Itemname.",
+        "pricer.column_qty": "Menge",
+        "pricer.column_qty_help": "Menge.",
+        "pricer.column_slot": "Slot",
+        "pricer.column_slot_help": "Slot-Typ.",
+        "pricer.column_local_sell": "{market_name} Verkauf",
+        "pricer.column_local_sell_help": "Mindestverkaufspreis je Einheit auf {market_name}.",
+        "pricer.column_local_sell_volume": "{market_name} Vol",
+        "pricer.column_local_sell_volume_help": "Verkaufsvolumen auf {market_name}.",
+        "pricer.column_jita_sell": "Jita Verkauf",
+        "pricer.column_jita_sell_help": "Jita-Verkaufspreis je Einheit.",
+        "pricer.column_jita_buy": "Jita Kauf",
+        "pricer.column_jita_buy_help": "Jita-Kaufpreis je Einheit.",
+        "pricer.column_jita_sell_total": "Jita Verkauf gesamt",
+        "pricer.column_jita_sell_total_help": "Gesamter Jita-Verkaufswert.",
+        "pricer.column_jita_buy_total": "Jita Kauf gesamt",
+        "pricer.column_jita_buy_total_help": "Gesamter Jita-Kaufwert.",
+        "pricer.column_local_buy": "{market_name} Kauf",
+        "pricer.column_local_buy_help": "Maximaler Kaufpreis je Einheit auf {market_name}.",
+        "pricer.column_local_sell_total": "{market_name} Verkauf gesamt",
+        "pricer.column_local_sell_total_help": "Gesamter Verkaufswert auf {market_name}.",
+        "pricer.column_local_buy_total": "{market_name} Kauf gesamt",
+        "pricer.column_local_buy_total_help": "Gesamter Kaufwert auf {market_name}.",
+        "pricer.column_volume": "Vol (m³)",
+        "pricer.column_volume_help": "Volumen je Einheit in m³.",
+        "pricer.column_total_volume": "Gesamtvol. (m³)",
+        "pricer.column_total_volume_help": "Gesamtvolumen (Menge × Volumen).",
+        "pricer.column_category_help": "Itemkategorie.",
+        "pricer.column_avg_daily_volume": "Ø/Tag",
+        "pricer.column_avg_daily_volume_help": "Durchschnittliches Tagesvolumen (30 Tage).",
+        "pricer.column_days_of_stock": "Tage Bestand",
+        "pricer.column_days_of_stock_help": "Verbleibender Bestand in Tagen basierend auf dem Durchschnittsabsatz.",
+        "pricer.column_is_doctrine_help": "Item wird in Doktrin-Fittings verwendet.",
+        "pricer.column_doctrine_ships_help": "Doktrin-Schiffe, die dieses Item nutzen.",
+        "pricer.metric_local_sell_help": "Gesamtwert zu Verkaufspreisen auf {market_name}.",
+        "pricer.metric_local_buy_help": "Gesamtwert zu Kaufpreisen auf {market_name}.",
+        "pricer.metric_jita_sell_help": "Gesamtwert zu Jita-Verkaufspreisen.",
+        "pricer.metric_jita_buy_help": "Gesamtwert zu Jita-Kaufpreisen.",
+        "pricer.total_volume_label": "Gesamtvolumen",
+        "pricer.items": "Items",
+        "pricer.display": "Anzeige",
+        "pricer.display_item_prices": "Einzelpreise",
+        "pricer.display_total_prices": "Gesamtpreise",
+        "pricer.display_help": "Zwischen Einzel- und Gesamtpreisen umschalten.",
+        "pricer.show_jita_prices": "Jita-Preise anzeigen",
+        "pricer.show_stock_metrics": "Bestandskennzahlen anzeigen",
+        "pricer.show_stock_metrics_help": "Durchschnittliches Tagesvolumen und Bestandstage anzeigen.",
+        "pricer.highlight_doctrine_items": "Doktrin-Items hervorheben",
+        "pricer.highlight_doctrine_items_help": "Items hervorheben, die in Doktrin-Fittings verwendet werden.",
+        "pricer.issues": "Probleme",
+        "pricer.unpriced_items": "⚠️ {count} Items konnten nicht bewertet werden",
+        # Janice-style appraisal card layout
+        "pricer.appraisal.title": "Bewertung - {fit_name} @ {market_name}",
+        "pricer.appraisal.title_empty": "Neue Bewertung — EFT-Fit oder Itemliste einfügen",
+        "pricer.appraisal.label_created": "Erstellt",
+        "pricer.appraisal.label_priced_at": "Bewertet auf",
+        "pricer.appraisal.label_volume": "Volumen",
+        "pricer.appraisal.label_buy": "Kauf",
+        "pricer.appraisal.label_split": "Split",
+        "pricer.appraisal.label_sell": "Verkauf",
+        "pricer.appraisal.fit_name_default": "Multibuy",
+        "pricer.appraisal.action_download": "📥 CSV herunterladen",
+        "pricer.appraisal.action_reset": "🔄 Zurücksetzen",
+        # Fit Availability
+        "pricer.fits.section_header": "Fit-Verfügbarkeit",
+        "pricer.fits.headline_unit": "Fits verfügbar",
+        "pricer.fits.headline_zero_label": "Aus dem aktuellen Bestand sind keine Fits verfügbar",
+        "pricer.fits.metric_items_in_fit": "Items im Fit",
+        "pricer.fits.metric_bottleneck": "Engpass-Items",
+        "pricer.fits.metric_total_isk": "Gesamtkosten @ lokaler Verkauf",
+        "pricer.fits.toggle_equivalents": "Fraktions-Äquivalente nutzen",
+        "pricer.fits.toggle_equivalents_help": (
+            "Bestand über fraktions-äquivalente Module bündeln (z. B. alle Heavy-Pulse-Laser-II-Varianten)."
+        ),
+        "pricer.fits.equivalents_unavailable": (
+            "Äquivalentsuche nicht verfügbar; Rohbestand wird verwendet."
+        ),
+        "pricer.fits.bottleneck_caption": (
+            "Engpass: {name} — vorhanden {stock}, benötigt {required} je Fit."
+        ),
+        "pricer.fits.callout_zero": "Keine Fits verfügbar. Begrenzende Items:",
+        "pricer.fits.callout_low": "Nur {count} Fits verfügbar. Begrenzende Items:",
+        "pricer.fits.callout_more": "+{count} weitere",
+        "pricer.fits.column_required": "Pro Fit",
+        "pricer.fits.column_in_stock": "Bestand",
+        "pricer.fits.column_fits_possible": "Fits",
+        "pricer.fits.column_status": "Status",
+        "pricer.fits.column_equivalents": "🔄",
+        "pricer.fits.column_equivalents_help": "Bestand enthält fraktions-äquivalente Module.",
+        "pricer.fits.total_isk_partial": "(teilweise: {count} Item ohne Preis)",
+        "pricer.fits.total_isk_partial_plural": "(teilweise: {count} Items ohne Preis)",
+        "pricer.fits.stock_unknown_warning": (
+            "{count} Item hat unbekannten Bestand (keine lokalen Marktdaten); verfügbare Fits können zu niedrig sein."
+        ),
+        "pricer.fits.stock_unknown_warning_plural": (
+            "{count} Items haben unbekannten Bestand (keine lokalen Marktdaten); verfügbare Fits können zu niedrig sein."
+        ),
+        "pricer.jita_provider_failed": (
+            "Jita-Preise für {count} Item(s) nicht verfügbar; deren Jita-Spalten zeigen 0."
+        ),
+        "pricer.error_processing": (
+            "Bewertung fehlgeschlagen. Eingabeformat prüfen und erneut versuchen; "
+            "Details stehen im Anwendungslog."
+        ),
         "build_costs.title": "Produktionskostenrechner",
         "build_costs.category_label": "Kategorie auswählen",
         "build_costs.category_placeholder": "Schiff",
@@ -2051,6 +2233,136 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "builder_helper.column_volume_30d": "Volume 30J",
         "builder_helper.column_volume_30d_help": "Volume commercial total des 30 derniers jours.",
         "builder_helper.footer": "Les coûts de fabrication proviennent du catalogue synchronisé — Sotiyo / Null-sec / bonus coût système −50% / indice fabrication 3% / sans frais d'installation. ME et cycles varient selon le niveau (T1 : ME10 / 10 cycles ; T2 modules/drones/munitions : ME0–4 / 5–10 cycles ; T2 vaisseaux : ME3 / 3 cycles). La vente marché revient à Jita × 1,4 s'il n'y a pas de commandes de vente locales.",
+        "pricer.title": "Estimateur Winter Coalition",
+        "pricer.description": "Estimez objets et fittings avec les données de marché Jita et {market_name}.",
+        "pricer.input_section": "Saisie",
+        "pricer.input_placeholder": (
+            "Collez les objets ici dans l'un de ces formats :\n\n"
+            "Fitting EFT :\n"
+            "[Hurricane, PVP Fit]\n"
+            "Damage Control II\n"
+            "1600mm Steel Plates II\n"
+            "...\n\n"
+            "Tabulation (objet en premier) :\n"
+            "Tritanium\t10000\n"
+            "Pyerite\t5000\n\n"
+            "Tabulation (quantité en premier) :\n"
+            "10000\tTritanium\n"
+            "5000\tPyerite"
+        ),
+        "pricer.input_label": "Collez un fitting EFT ou une liste d'objets :",
+        "pricer.price_items": "Estimer",
+        "pricer.fetching_prices": "Récupération des prix...",
+        "pricer.format_label": "Format",
+        "pricer.format_multibuy": "Multibuy/Liste d'objets",
+        "pricer.totals": "Totaux",
+        "pricer.column_icon": "Icône",
+        "pricer.column_icon_help": "Icône de l'objet.",
+        "pricer.column_type_id_help": "ID de type.",
+        "pricer.column_item_help": "Nom de l'objet.",
+        "pricer.column_qty": "Qté",
+        "pricer.column_qty_help": "Quantité.",
+        "pricer.column_slot": "Slot",
+        "pricer.column_slot_help": "Type de slot.",
+        "pricer.column_local_sell": "Vente {market_name}",
+        "pricer.column_local_sell_help": "Prix de vente minimum par unité sur {market_name}.",
+        "pricer.column_local_sell_volume": "Vol {market_name}",
+        "pricer.column_local_sell_volume_help": "Volume de vente sur {market_name}.",
+        "pricer.column_jita_sell": "Vente Jita",
+        "pricer.column_jita_sell_help": "Prix de vente Jita par unité.",
+        "pricer.column_jita_buy": "Achat Jita",
+        "pricer.column_jita_buy_help": "Prix d'achat Jita par unité.",
+        "pricer.column_jita_sell_total": "Total vente Jita",
+        "pricer.column_jita_sell_total_help": "Valeur totale en vente Jita.",
+        "pricer.column_jita_buy_total": "Total achat Jita",
+        "pricer.column_jita_buy_total_help": "Valeur totale en achat Jita.",
+        "pricer.column_local_buy": "Achat {market_name}",
+        "pricer.column_local_buy_help": "Prix d'achat maximum par unité sur {market_name}.",
+        "pricer.column_local_sell_total": "Total vente {market_name}",
+        "pricer.column_local_sell_total_help": "Valeur totale en vente sur {market_name}.",
+        "pricer.column_local_buy_total": "Total achat {market_name}",
+        "pricer.column_local_buy_total_help": "Valeur totale en achat sur {market_name}.",
+        "pricer.column_volume": "Vol (m³)",
+        "pricer.column_volume_help": "Volume par unité en m³.",
+        "pricer.column_total_volume": "Vol total (m³)",
+        "pricer.column_total_volume_help": "Volume total (Qté × Volume).",
+        "pricer.column_category_help": "Catégorie de l'objet.",
+        "pricer.column_avg_daily_volume": "Moy/Jour",
+        "pricer.column_avg_daily_volume_help": "Volume moyen quotidien (30 jours).",
+        "pricer.column_days_of_stock": "Jours de stock",
+        "pricer.column_days_of_stock_help": "Jours de stock restants selon les ventes moyennes.",
+        "pricer.column_is_doctrine_help": "Objet utilisé dans des fittings de doctrine.",
+        "pricer.column_doctrine_ships_help": "Vaisseaux de doctrine qui utilisent cet objet.",
+        "pricer.metric_local_sell_help": "Valeur totale aux prix de vente {market_name}.",
+        "pricer.metric_local_buy_help": "Valeur totale aux prix d'achat {market_name}.",
+        "pricer.metric_jita_sell_help": "Valeur totale aux prix de vente Jita.",
+        "pricer.metric_jita_buy_help": "Valeur totale aux prix d'achat Jita.",
+        "pricer.total_volume_label": "Volume total",
+        "pricer.items": "Objets",
+        "pricer.display": "Affichage",
+        "pricer.display_item_prices": "prix unitaires",
+        "pricer.display_total_prices": "prix totaux",
+        "pricer.display_help": "Basculer entre prix unitaires et totaux.",
+        "pricer.show_jita_prices": "Afficher les prix Jita",
+        "pricer.show_stock_metrics": "Afficher les indicateurs de stock",
+        "pricer.show_stock_metrics_help": "Afficher le volume moyen quotidien et les jours de stock.",
+        "pricer.highlight_doctrine_items": "Surligner les objets de doctrine",
+        "pricer.highlight_doctrine_items_help": "Surligner les objets utilisés dans des fittings de doctrine.",
+        "pricer.issues": "Problèmes",
+        "pricer.unpriced_items": "⚠️ {count} objets n'ont pas pu être estimés",
+        # Janice-style appraisal card layout
+        "pricer.appraisal.title": "Estimation - {fit_name} @ {market_name}",
+        "pricer.appraisal.title_empty": "Nouvelle estimation — collez un fit EFT ou une liste d'objets",
+        "pricer.appraisal.label_created": "Créée",
+        "pricer.appraisal.label_priced_at": "Estimé sur",
+        "pricer.appraisal.label_volume": "Volume",
+        "pricer.appraisal.label_buy": "Achat",
+        "pricer.appraisal.label_split": "Mixte",
+        "pricer.appraisal.label_sell": "Vente",
+        "pricer.appraisal.fit_name_default": "Multibuy",
+        "pricer.appraisal.action_download": "📥 Télécharger CSV",
+        "pricer.appraisal.action_reset": "🔄 Réinitialiser",
+        # Fit Availability
+        "pricer.fits.section_header": "Disponibilité du fit",
+        "pricer.fits.headline_unit": "fits disponibles",
+        "pricer.fits.headline_zero_label": "Aucun fit disponible avec le stock actuel",
+        "pricer.fits.metric_items_in_fit": "Objets dans le fit",
+        "pricer.fits.metric_bottleneck": "Objets bloquants",
+        "pricer.fits.metric_total_isk": "Coût total @ vente locale",
+        "pricer.fits.toggle_equivalents": "Utiliser les équivalents factions",
+        "pricer.fits.toggle_equivalents_help": (
+            "Agréger le stock entre modules factions équivalents (p. ex. toutes les variantes Heavy Pulse Laser II)."
+        ),
+        "pricer.fits.equivalents_unavailable": (
+            "Recherche d'équivalents indisponible ; utilisation du stock brut."
+        ),
+        "pricer.fits.bottleneck_caption": (
+            "Goulot : {name} — disponible {stock}, requis {required} par fit."
+        ),
+        "pricer.fits.callout_zero": "Aucun fit disponible. Objets limitants :",
+        "pricer.fits.callout_low": "Seulement {count} fits disponibles. Objets limitants :",
+        "pricer.fits.callout_more": "+{count} de plus",
+        "pricer.fits.column_required": "Par fit",
+        "pricer.fits.column_in_stock": "En stock",
+        "pricer.fits.column_fits_possible": "Fits",
+        "pricer.fits.column_status": "Statut",
+        "pricer.fits.column_equivalents": "🔄",
+        "pricer.fits.column_equivalents_help": "Le stock inclut les modules factions équivalents.",
+        "pricer.fits.total_isk_partial": "(partiel : {count} objet sans prix)",
+        "pricer.fits.total_isk_partial_plural": "(partiel : {count} objets sans prix)",
+        "pricer.fits.stock_unknown_warning": (
+            "{count} objet a un stock inconnu (pas de données de marché locales) ; les fits disponibles peuvent être sous-estimés."
+        ),
+        "pricer.fits.stock_unknown_warning_plural": (
+            "{count} objets ont un stock inconnu (pas de données de marché locales) ; les fits disponibles peuvent être sous-estimés."
+        ),
+        "pricer.jita_provider_failed": (
+            "Prix Jita indisponibles pour {count} objet(s) ; leurs colonnes Jita affichent 0."
+        ),
+        "pricer.error_processing": (
+            "Échec de l'estimation. Vérifiez le format d'entrée et réessayez ; "
+            "les détails sont dans le journal de l'application."
+        ),
         "build_costs.title": "Outil de Coût de Production",
         "build_costs.category_label": "Sélectionner une catégorie",
         "build_costs.category_placeholder": "Vaisseau",
@@ -2490,6 +2802,136 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "builder_helper.column_volume_30d": "Объём 30д",
         "builder_helper.column_volume_30d_help": "Общий объём торговли за последние 30 дней.",
         "builder_helper.footer": "Стоимость производства берётся из синхронизированного каталога — Sotiyo / Null-sec / Бонус стоимости системы −50% / Индекс производства 3% / без комиссии за сооружение. ME и циклы варьируются по уровню (T1: ME10 / 10 циклов; T2 модули/дроны/заряды: ME0–4 / 5–10 циклов; T2 корабли: ME3 / 3 цикла). Локальная цена продажи возвращается к Jita × 1,4, если локальных ордеров нет.",
+        "pricer.title": "Оценщик Winter Coalition",
+        "pricer.description": "Оценка предметов и фитов по рыночным данным Jita и {market_name}.",
+        "pricer.input_section": "Ввод",
+        "pricer.input_placeholder": (
+            "Вставьте предметы в одном из следующих форматов:\n\n"
+            "Фит EFT:\n"
+            "[Hurricane, PVP Fit]\n"
+            "Damage Control II\n"
+            "1600mm Steel Plates II\n"
+            "...\n\n"
+            "Через табуляцию (предмет первым):\n"
+            "Tritanium\t10000\n"
+            "Pyerite\t5000\n\n"
+            "Через табуляцию (количество первым):\n"
+            "10000\tTritanium\n"
+            "5000\tPyerite"
+        ),
+        "pricer.input_label": "Вставьте фит EFT или список предметов:",
+        "pricer.price_items": "Оценить",
+        "pricer.fetching_prices": "Получение цен...",
+        "pricer.format_label": "Формат",
+        "pricer.format_multibuy": "Мультибай/Список",
+        "pricer.totals": "Итого",
+        "pricer.column_icon": "Иконка",
+        "pricer.column_icon_help": "Иконка предмета.",
+        "pricer.column_type_id_help": "ID типа.",
+        "pricer.column_item_help": "Название предмета.",
+        "pricer.column_qty": "Кол-во",
+        "pricer.column_qty_help": "Количество.",
+        "pricer.column_slot": "Слот",
+        "pricer.column_slot_help": "Тип слота.",
+        "pricer.column_local_sell": "{market_name} Продажа",
+        "pricer.column_local_sell_help": "Минимальная цена продажи за единицу на {market_name}.",
+        "pricer.column_local_sell_volume": "{market_name} Объём",
+        "pricer.column_local_sell_volume_help": "Объём продаж на {market_name}.",
+        "pricer.column_jita_sell": "Jita Продажа",
+        "pricer.column_jita_sell_help": "Цена продажи Jita за единицу.",
+        "pricer.column_jita_buy": "Jita Покупка",
+        "pricer.column_jita_buy_help": "Цена покупки Jita за единицу.",
+        "pricer.column_jita_sell_total": "Jita Продажа всего",
+        "pricer.column_jita_sell_total_help": "Общая стоимость по ценам продажи Jita.",
+        "pricer.column_jita_buy_total": "Jita Покупка всего",
+        "pricer.column_jita_buy_total_help": "Общая стоимость по ценам покупки Jita.",
+        "pricer.column_local_buy": "{market_name} Покупка",
+        "pricer.column_local_buy_help": "Максимальная цена покупки за единицу на {market_name}.",
+        "pricer.column_local_sell_total": "{market_name} Продажа всего",
+        "pricer.column_local_sell_total_help": "Общая стоимость продаж на {market_name}.",
+        "pricer.column_local_buy_total": "{market_name} Покупка всего",
+        "pricer.column_local_buy_total_help": "Общая стоимость покупок на {market_name}.",
+        "pricer.column_volume": "Объём (м³)",
+        "pricer.column_volume_help": "Объём за единицу в м³.",
+        "pricer.column_total_volume": "Общий объём (м³)",
+        "pricer.column_total_volume_help": "Общий объём (Кол-во × Объём).",
+        "pricer.column_category_help": "Категория предмета.",
+        "pricer.column_avg_daily_volume": "Сред./день",
+        "pricer.column_avg_daily_volume_help": "Средний дневной объём продаж (за 30 дней).",
+        "pricer.column_days_of_stock": "Дней запаса",
+        "pricer.column_days_of_stock_help": "Дней запаса исходя из средних продаж.",
+        "pricer.column_is_doctrine_help": "Предмет используется в доктринальных фитах.",
+        "pricer.column_doctrine_ships_help": "Доктринальные корабли, использующие этот предмет.",
+        "pricer.metric_local_sell_help": "Общая стоимость по ценам продажи {market_name}.",
+        "pricer.metric_local_buy_help": "Общая стоимость по ценам покупки {market_name}.",
+        "pricer.metric_jita_sell_help": "Общая стоимость по ценам продажи Jita.",
+        "pricer.metric_jita_buy_help": "Общая стоимость по ценам покупки Jita.",
+        "pricer.total_volume_label": "Общий объём",
+        "pricer.items": "Предметы",
+        "pricer.display": "Отображение",
+        "pricer.display_item_prices": "цены за штуку",
+        "pricer.display_total_prices": "итоговые цены",
+        "pricer.display_help": "Переключение между ценами за штуку и итоговыми.",
+        "pricer.show_jita_prices": "Показать цены Jita",
+        "pricer.show_stock_metrics": "Показать метрики запаса",
+        "pricer.show_stock_metrics_help": "Показывать средний дневной объём и дни запаса.",
+        "pricer.highlight_doctrine_items": "Выделять доктринальные предметы",
+        "pricer.highlight_doctrine_items_help": "Выделять предметы, используемые в доктринальных фитах.",
+        "pricer.issues": "Проблемы",
+        "pricer.unpriced_items": "⚠️ {count} предметов не удалось оценить",
+        # Janice-style appraisal card layout
+        "pricer.appraisal.title": "Оценка - {fit_name} @ {market_name}",
+        "pricer.appraisal.title_empty": "Новая оценка — вставьте EFT-фит или список предметов",
+        "pricer.appraisal.label_created": "Создано",
+        "pricer.appraisal.label_priced_at": "Оценено на",
+        "pricer.appraisal.label_volume": "Объём",
+        "pricer.appraisal.label_buy": "Покупка",
+        "pricer.appraisal.label_split": "Смешанно",
+        "pricer.appraisal.label_sell": "Продажа",
+        "pricer.appraisal.fit_name_default": "Мультибай",
+        "pricer.appraisal.action_download": "📥 Скачать CSV",
+        "pricer.appraisal.action_reset": "🔄 Сбросить",
+        # Fit Availability
+        "pricer.fits.section_header": "Доступность фита",
+        "pricer.fits.headline_unit": "фитов доступно",
+        "pricer.fits.headline_zero_label": "Из текущего запаса фитов нет",
+        "pricer.fits.metric_items_in_fit": "Предметов в фите",
+        "pricer.fits.metric_bottleneck": "Ограничивающие предметы",
+        "pricer.fits.metric_total_isk": "Итого @ локальная продажа",
+        "pricer.fits.toggle_equivalents": "Учитывать фракционные эквиваленты",
+        "pricer.fits.toggle_equivalents_help": (
+            "Суммировать запас по фракционно-эквивалентным модулям (например, все варианты Heavy Pulse Laser II)."
+        ),
+        "pricer.fits.equivalents_unavailable": (
+            "Поиск эквивалентов недоступен; используется исходный запас."
+        ),
+        "pricer.fits.bottleneck_caption": (
+            "Ограничение: {name} — есть {stock}, нужно {required} на фит."
+        ),
+        "pricer.fits.callout_zero": "Доступных фитов нет. Ограничивающие предметы:",
+        "pricer.fits.callout_low": "Доступно лишь {count} фитов. Ограничивающие предметы:",
+        "pricer.fits.callout_more": "+ ещё {count}",
+        "pricer.fits.column_required": "На фит",
+        "pricer.fits.column_in_stock": "В запасе",
+        "pricer.fits.column_fits_possible": "Фитов",
+        "pricer.fits.column_status": "Статус",
+        "pricer.fits.column_equivalents": "🔄",
+        "pricer.fits.column_equivalents_help": "Запас учитывает фракционно-эквивалентные модули.",
+        "pricer.fits.total_isk_partial": "(частично: {count} предмет без цены)",
+        "pricer.fits.total_isk_partial_plural": "(частично: {count} предметов без цены)",
+        "pricer.fits.stock_unknown_warning": (
+            "У {count} предмета неизвестный запас (нет локальных рыночных данных); число доступных фитов может быть занижено."
+        ),
+        "pricer.fits.stock_unknown_warning_plural": (
+            "У {count} предметов неизвестный запас (нет локальных рыночных данных); число доступных фитов может быть занижено."
+        ),
+        "pricer.jita_provider_failed": (
+            "Цены Jita недоступны для {count} предмета(ов); их столбцы Jita показывают 0."
+        ),
+        "pricer.error_processing": (
+            "Не удалось оценить. Проверьте формат ввода и повторите попытку; "
+            "подробности в журнале приложения."
+        ),
         "build_costs.title": "Инструмент стоимости производства",
         "build_costs.category_label": "Выберите категорию",
         "build_costs.category_placeholder": "Корабль",
@@ -2859,6 +3301,136 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "builder_helper.column_volume_30d": "Volumen 30D",
         "builder_helper.column_volume_30d_help": "Volumen total comercializado en los últimos 30 días.",
         "builder_helper.footer": "Los costes de fabricación provienen del catálogo sincronizado — Sotiyo / Null-sec / bonificación de coste del sistema −50% / índice de fabricación 3% / sin impuesto de instalación. ME y ciclos varían según el nivel (T1: ME10 / 10 ciclos; T2 módulos/drones/cargas: ME0–4 / 5–10 ciclos; T2 naves: ME3 / 3 ciclos). El precio de venta local vuelve a Jita × 1,4 cuando no hay órdenes de venta locales.",
+        "pricer.title": "Tasador Winter Coalition",
+        "pricer.description": "Tasa objetos y fittings usando datos de mercado de Jita y {market_name}.",
+        "pricer.input_section": "Entrada",
+        "pricer.input_placeholder": (
+            "Pega los objetos aquí en uno de estos formatos:\n\n"
+            "Fitting EFT:\n"
+            "[Hurricane, PVP Fit]\n"
+            "Damage Control II\n"
+            "1600mm Steel Plates II\n"
+            "...\n\n"
+            "Separado por tabuladores (objeto primero):\n"
+            "Tritanium\t10000\n"
+            "Pyerite\t5000\n\n"
+            "Separado por tabuladores (cantidad primero):\n"
+            "10000\tTritanium\n"
+            "5000\tPyerite"
+        ),
+        "pricer.input_label": "Pega un fitting EFT o lista de objetos:",
+        "pricer.price_items": "Tasar objetos",
+        "pricer.fetching_prices": "Obteniendo precios...",
+        "pricer.format_label": "Formato",
+        "pricer.format_multibuy": "Multibuy/Lista de objetos",
+        "pricer.totals": "Totales",
+        "pricer.column_icon": "Icono",
+        "pricer.column_icon_help": "Icono del objeto.",
+        "pricer.column_type_id_help": "ID de tipo.",
+        "pricer.column_item_help": "Nombre del objeto.",
+        "pricer.column_qty": "Cant.",
+        "pricer.column_qty_help": "Cantidad.",
+        "pricer.column_slot": "Slot",
+        "pricer.column_slot_help": "Tipo de slot.",
+        "pricer.column_local_sell": "Venta {market_name}",
+        "pricer.column_local_sell_help": "Precio mínimo de venta por unidad en {market_name}.",
+        "pricer.column_local_sell_volume": "Vol {market_name}",
+        "pricer.column_local_sell_volume_help": "Volumen de venta en {market_name}.",
+        "pricer.column_jita_sell": "Venta Jita",
+        "pricer.column_jita_sell_help": "Precio de venta Jita por unidad.",
+        "pricer.column_jita_buy": "Compra Jita",
+        "pricer.column_jita_buy_help": "Precio de compra Jita por unidad.",
+        "pricer.column_jita_sell_total": "Total venta Jita",
+        "pricer.column_jita_sell_total_help": "Valor total a precios de venta Jita.",
+        "pricer.column_jita_buy_total": "Total compra Jita",
+        "pricer.column_jita_buy_total_help": "Valor total a precios de compra Jita.",
+        "pricer.column_local_buy": "Compra {market_name}",
+        "pricer.column_local_buy_help": "Precio máximo de compra por unidad en {market_name}.",
+        "pricer.column_local_sell_total": "Total venta {market_name}",
+        "pricer.column_local_sell_total_help": "Valor total de ventas en {market_name}.",
+        "pricer.column_local_buy_total": "Total compra {market_name}",
+        "pricer.column_local_buy_total_help": "Valor total de compras en {market_name}.",
+        "pricer.column_volume": "Vol (m³)",
+        "pricer.column_volume_help": "Volumen por unidad en m³.",
+        "pricer.column_total_volume": "Vol total (m³)",
+        "pricer.column_total_volume_help": "Volumen total (Cant. × Volumen).",
+        "pricer.column_category_help": "Categoría del objeto.",
+        "pricer.column_avg_daily_volume": "Med/Día",
+        "pricer.column_avg_daily_volume_help": "Volumen medio diario de ventas (30 días).",
+        "pricer.column_days_of_stock": "Días de stock",
+        "pricer.column_days_of_stock_help": "Días de stock restantes según las ventas medias.",
+        "pricer.column_is_doctrine_help": "Objeto usado en fittings de doctrina.",
+        "pricer.column_doctrine_ships_help": "Naves de doctrina que usan este objeto.",
+        "pricer.metric_local_sell_help": "Valor total a precios de venta de {market_name}.",
+        "pricer.metric_local_buy_help": "Valor total a precios de compra de {market_name}.",
+        "pricer.metric_jita_sell_help": "Valor total a precios de venta Jita.",
+        "pricer.metric_jita_buy_help": "Valor total a precios de compra Jita.",
+        "pricer.total_volume_label": "Volumen total",
+        "pricer.items": "Objetos",
+        "pricer.display": "Visualización",
+        "pricer.display_item_prices": "precios unitarios",
+        "pricer.display_total_prices": "precios totales",
+        "pricer.display_help": "Alternar entre precios unitarios y totales.",
+        "pricer.show_jita_prices": "Mostrar precios Jita",
+        "pricer.show_stock_metrics": "Mostrar métricas de stock",
+        "pricer.show_stock_metrics_help": "Mostrar volumen medio diario y días de stock.",
+        "pricer.highlight_doctrine_items": "Resaltar objetos de doctrina",
+        "pricer.highlight_doctrine_items_help": "Resaltar objetos usados en fittings de doctrina.",
+        "pricer.issues": "Incidencias",
+        "pricer.unpriced_items": "⚠️ No se pudieron tasar {count} objetos",
+        # Janice-style appraisal card layout
+        "pricer.appraisal.title": "Tasación - {fit_name} @ {market_name}",
+        "pricer.appraisal.title_empty": "Nueva tasación — pega un fit EFT o lista de objetos",
+        "pricer.appraisal.label_created": "Creada",
+        "pricer.appraisal.label_priced_at": "Tasada en",
+        "pricer.appraisal.label_volume": "Volumen",
+        "pricer.appraisal.label_buy": "Compra",
+        "pricer.appraisal.label_split": "Mixto",
+        "pricer.appraisal.label_sell": "Venta",
+        "pricer.appraisal.fit_name_default": "Multibuy",
+        "pricer.appraisal.action_download": "📥 Descargar CSV",
+        "pricer.appraisal.action_reset": "🔄 Reiniciar",
+        # Fit Availability
+        "pricer.fits.section_header": "Disponibilidad del fit",
+        "pricer.fits.headline_unit": "fits disponibles",
+        "pricer.fits.headline_zero_label": "No hay fits disponibles con el stock actual",
+        "pricer.fits.metric_items_in_fit": "Objetos en el fit",
+        "pricer.fits.metric_bottleneck": "Objetos limitantes",
+        "pricer.fits.metric_total_isk": "Coste total @ venta local",
+        "pricer.fits.toggle_equivalents": "Usar equivalentes de facción",
+        "pricer.fits.toggle_equivalents_help": (
+            "Agregar stock entre módulos equivalentes de facción (p. ej. todas las variantes Heavy Pulse Laser II)."
+        ),
+        "pricer.fits.equivalents_unavailable": (
+            "Búsqueda de equivalentes no disponible; usando stock bruto."
+        ),
+        "pricer.fits.bottleneck_caption": (
+            "Cuello de botella: {name} — hay {stock}, se necesitan {required} por fit."
+        ),
+        "pricer.fits.callout_zero": "No hay fits disponibles. Objetos limitantes:",
+        "pricer.fits.callout_low": "Solo {count} fits disponibles. Objetos limitantes:",
+        "pricer.fits.callout_more": "+{count} más",
+        "pricer.fits.column_required": "Por fit",
+        "pricer.fits.column_in_stock": "En stock",
+        "pricer.fits.column_fits_possible": "Fits",
+        "pricer.fits.column_status": "Estado",
+        "pricer.fits.column_equivalents": "🔄",
+        "pricer.fits.column_equivalents_help": "El stock incluye módulos equivalentes de facción.",
+        "pricer.fits.total_isk_partial": "(parcial: {count} objeto sin precio)",
+        "pricer.fits.total_isk_partial_plural": "(parcial: {count} objetos sin precio)",
+        "pricer.fits.stock_unknown_warning": (
+            "{count} objeto tiene stock desconocido (sin datos de mercado local); los fits disponibles pueden estar subestimados."
+        ),
+        "pricer.fits.stock_unknown_warning_plural": (
+            "{count} objetos tienen stock desconocido (sin datos de mercado local); los fits disponibles pueden estar subestimados."
+        ),
+        "pricer.jita_provider_failed": (
+            "Precios de Jita no disponibles para {count} objeto(s); sus columnas Jita muestran 0."
+        ),
+        "pricer.error_processing": (
+            "Fallo al tasar. Comprueba el formato de entrada e inténtalo de nuevo; "
+            "los detalles están en el registro de la aplicación."
+        ),
         "build_costs.title": "Herramienta de Costes de Fabricacion",
         "build_costs.category_label": "Selecciona una categoria",
         "build_costs.category_placeholder": "Nave",
@@ -3050,6 +3622,136 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "common.item": "アイテム",
         "common.category": "カテゴリ",
         "common.group": "グループ",
+        "pricer.title": "Winter Coalition プライサー",
+        "pricer.description": "Jita と {market_name} の市場データでアイテムとフィットを価格評価します。",
+        "pricer.input_section": "入力",
+        "pricer.input_placeholder": (
+            "次のいずれかの形式でアイテムを貼り付けてください:\n\n"
+            "EFT フィット:\n"
+            "[Hurricane, PVP Fit]\n"
+            "Damage Control II\n"
+            "1600mm Steel Plates II\n"
+            "...\n\n"
+            "タブ区切り（アイテムが先）:\n"
+            "Tritanium\t10000\n"
+            "Pyerite\t5000\n\n"
+            "タブ区切り（数量が先）:\n"
+            "10000\tTritanium\n"
+            "5000\tPyerite"
+        ),
+        "pricer.input_label": "EFT フィットまたはアイテム一覧を貼り付け:",
+        "pricer.price_items": "価格を計算",
+        "pricer.fetching_prices": "価格を取得中...",
+        "pricer.format_label": "形式",
+        "pricer.format_multibuy": "マルチバイ/アイテム一覧",
+        "pricer.totals": "合計",
+        "pricer.column_icon": "アイコン",
+        "pricer.column_icon_help": "アイテムアイコン。",
+        "pricer.column_type_id_help": "タイプ ID。",
+        "pricer.column_item_help": "アイテム名。",
+        "pricer.column_qty": "数量",
+        "pricer.column_qty_help": "数量。",
+        "pricer.column_slot": "スロット",
+        "pricer.column_slot_help": "スロット種別。",
+        "pricer.column_local_sell": "{market_name} 売値",
+        "pricer.column_local_sell_help": "{market_name} の単位あたり最低売値。",
+        "pricer.column_local_sell_volume": "{market_name} 数量",
+        "pricer.column_local_sell_volume_help": "{market_name} の売り注文数量。",
+        "pricer.column_jita_sell": "Jita 売値",
+        "pricer.column_jita_sell_help": "Jita の単位あたり売値。",
+        "pricer.column_jita_buy": "Jita 買値",
+        "pricer.column_jita_buy_help": "Jita の単位あたり買値。",
+        "pricer.column_jita_sell_total": "Jita 売値合計",
+        "pricer.column_jita_sell_total_help": "Jita 売値での合計額。",
+        "pricer.column_jita_buy_total": "Jita 買値合計",
+        "pricer.column_jita_buy_total_help": "Jita 買値での合計額。",
+        "pricer.column_local_buy": "{market_name} 買値",
+        "pricer.column_local_buy_help": "{market_name} の単位あたり最高買値。",
+        "pricer.column_local_sell_total": "{market_name} 売値合計",
+        "pricer.column_local_sell_total_help": "{market_name} 売値での合計額。",
+        "pricer.column_local_buy_total": "{market_name} 買値合計",
+        "pricer.column_local_buy_total_help": "{market_name} 買値での合計額。",
+        "pricer.column_volume": "体積 (m³)",
+        "pricer.column_volume_help": "単位あたりの体積 (m³)。",
+        "pricer.column_total_volume": "総体積 (m³)",
+        "pricer.column_total_volume_help": "総体積（数量 × 体積）。",
+        "pricer.column_category_help": "アイテムのカテゴリ。",
+        "pricer.column_avg_daily_volume": "日平均",
+        "pricer.column_avg_daily_volume_help": "日次平均取引数量（30日）。",
+        "pricer.column_days_of_stock": "在庫日数",
+        "pricer.column_days_of_stock_help": "平均販売量に基づく残り在庫日数。",
+        "pricer.column_is_doctrine_help": "ドクトリンフィットで使われているアイテム。",
+        "pricer.column_doctrine_ships_help": "このアイテムを使うドクトリン艦。",
+        "pricer.metric_local_sell_help": "{market_name} 売値による合計額。",
+        "pricer.metric_local_buy_help": "{market_name} 買値による合計額。",
+        "pricer.metric_jita_sell_help": "Jita 売値による合計額。",
+        "pricer.metric_jita_buy_help": "Jita 買値による合計額。",
+        "pricer.total_volume_label": "総体積",
+        "pricer.items": "アイテム",
+        "pricer.display": "表示",
+        "pricer.display_item_prices": "単価",
+        "pricer.display_total_prices": "合計",
+        "pricer.display_help": "単価と合計を切り替えます。",
+        "pricer.show_jita_prices": "Jita 価格を表示",
+        "pricer.show_stock_metrics": "在庫指標を表示",
+        "pricer.show_stock_metrics_help": "日次平均取引量と在庫日数を表示。",
+        "pricer.highlight_doctrine_items": "ドクトリンアイテムを強調",
+        "pricer.highlight_doctrine_items_help": "ドクトリンフィットで使うアイテムを強調表示。",
+        "pricer.issues": "問題",
+        "pricer.unpriced_items": "⚠️ {count} 件のアイテムを価格評価できませんでした",
+        # Janice-style appraisal card layout
+        "pricer.appraisal.title": "見積もり - {fit_name} @ {market_name}",
+        "pricer.appraisal.title_empty": "新規見積もり — EFT フィットまたはアイテム一覧を貼り付け",
+        "pricer.appraisal.label_created": "作成",
+        "pricer.appraisal.label_priced_at": "評価市場",
+        "pricer.appraisal.label_volume": "体積",
+        "pricer.appraisal.label_buy": "買い",
+        "pricer.appraisal.label_split": "混合",
+        "pricer.appraisal.label_sell": "売り",
+        "pricer.appraisal.fit_name_default": "マルチバイ",
+        "pricer.appraisal.action_download": "📥 CSV をダウンロード",
+        "pricer.appraisal.action_reset": "🔄 リセット",
+        # Fit Availability
+        "pricer.fits.section_header": "フィット可能数",
+        "pricer.fits.headline_unit": "件のフィット",
+        "pricer.fits.headline_zero_label": "現在の在庫で組めるフィットはありません",
+        "pricer.fits.metric_items_in_fit": "フィット内アイテム数",
+        "pricer.fits.metric_bottleneck": "ボトルネック アイテム",
+        "pricer.fits.metric_total_isk": "ローカル売値合計コスト",
+        "pricer.fits.toggle_equivalents": "派閥同等モジュールを合算",
+        "pricer.fits.toggle_equivalents_help": (
+            "派閥同等モジュール（例: すべての Heavy Pulse Laser II バリアント）の在庫を合算します。"
+        ),
+        "pricer.fits.equivalents_unavailable": (
+            "同等モジュール検索が利用できないため、生在庫を使用します。"
+        ),
+        "pricer.fits.bottleneck_caption": (
+            "ボトルネック: {name} — 在庫 {stock}、フィットあたり必要数 {required}。"
+        ),
+        "pricer.fits.callout_zero": "フィットを組めません。制約アイテム:",
+        "pricer.fits.callout_low": "{count} 件のフィットしか組めません。制約アイテム:",
+        "pricer.fits.callout_more": "+ さらに {count} 件",
+        "pricer.fits.column_required": "1フィット",
+        "pricer.fits.column_in_stock": "在庫",
+        "pricer.fits.column_fits_possible": "フィット",
+        "pricer.fits.column_status": "ステータス",
+        "pricer.fits.column_equivalents": "🔄",
+        "pricer.fits.column_equivalents_help": "在庫に派閥同等モジュールを含みます。",
+        "pricer.fits.total_isk_partial": "（部分: {count} 件価格不明）",
+        "pricer.fits.total_isk_partial_plural": "（部分: {count} 件価格不明）",
+        "pricer.fits.stock_unknown_warning": (
+            "{count} 件のアイテムは在庫不明（ローカル市場データなし）。フィット可能数が過小評価される可能性があります。"
+        ),
+        "pricer.fits.stock_unknown_warning_plural": (
+            "{count} 件のアイテムは在庫不明（ローカル市場データなし）。フィット可能数が過小評価される可能性があります。"
+        ),
+        "pricer.jita_provider_failed": (
+            "{count} 件のアイテムで Jita 価格を取得できませんでした。Jita 列は 0 と表示されます。"
+        ),
+        "pricer.error_processing": (
+            "価格評価に失敗しました。入力形式を確認して再試行してください。"
+            "詳細はアプリケーションログを参照してください。"
+        ),
         "build_costs.title": "製造コスト",
         "build_costs.category_label": "カテゴリ",
         "build_costs.category_help": "製造コストを確認するカテゴリを選択します。",
@@ -3109,6 +3811,136 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "common.item": "아이템",
         "common.category": "카테고리",
         "common.group": "그룹",
+        "pricer.title": "Winter Coalition 가격 평가기",
+        "pricer.description": "Jita 및 {market_name} 시장 데이터를 사용해 아이템과 핏을 평가합니다.",
+        "pricer.input_section": "입력",
+        "pricer.input_placeholder": (
+            "다음 형식 중 하나로 아이템을 붙여넣으세요:\n\n"
+            "EFT 핏:\n"
+            "[Hurricane, PVP Fit]\n"
+            "Damage Control II\n"
+            "1600mm Steel Plates II\n"
+            "...\n\n"
+            "탭 구분 (아이템 먼저):\n"
+            "Tritanium\t10000\n"
+            "Pyerite\t5000\n\n"
+            "탭 구분 (수량 먼저):\n"
+            "10000\tTritanium\n"
+            "5000\tPyerite"
+        ),
+        "pricer.input_label": "EFT 핏 또는 아이템 목록 붙여넣기:",
+        "pricer.price_items": "가격 평가",
+        "pricer.fetching_prices": "가격을 가져오는 중...",
+        "pricer.format_label": "형식",
+        "pricer.format_multibuy": "멀티바이/아이템 목록",
+        "pricer.totals": "합계",
+        "pricer.column_icon": "아이콘",
+        "pricer.column_icon_help": "아이템 아이콘.",
+        "pricer.column_type_id_help": "타입 ID.",
+        "pricer.column_item_help": "아이템 이름.",
+        "pricer.column_qty": "수량",
+        "pricer.column_qty_help": "수량.",
+        "pricer.column_slot": "슬롯",
+        "pricer.column_slot_help": "슬롯 유형.",
+        "pricer.column_local_sell": "{market_name} 판매",
+        "pricer.column_local_sell_help": "{market_name}의 단위당 최저 판매가.",
+        "pricer.column_local_sell_volume": "{market_name} 물량",
+        "pricer.column_local_sell_volume_help": "{market_name}의 판매 물량.",
+        "pricer.column_jita_sell": "Jita 판매",
+        "pricer.column_jita_sell_help": "Jita 단위당 판매가.",
+        "pricer.column_jita_buy": "Jita 구매",
+        "pricer.column_jita_buy_help": "Jita 단위당 구매가.",
+        "pricer.column_jita_sell_total": "Jita 판매 합계",
+        "pricer.column_jita_sell_total_help": "Jita 판매가 기준 총액.",
+        "pricer.column_jita_buy_total": "Jita 구매 합계",
+        "pricer.column_jita_buy_total_help": "Jita 구매가 기준 총액.",
+        "pricer.column_local_buy": "{market_name} 구매",
+        "pricer.column_local_buy_help": "{market_name}의 단위당 최고 구매가.",
+        "pricer.column_local_sell_total": "{market_name} 판매 합계",
+        "pricer.column_local_sell_total_help": "{market_name} 판매가 기준 총액.",
+        "pricer.column_local_buy_total": "{market_name} 구매 합계",
+        "pricer.column_local_buy_total_help": "{market_name} 구매가 기준 총액.",
+        "pricer.column_volume": "체적 (m³)",
+        "pricer.column_volume_help": "단위당 체적 (m³).",
+        "pricer.column_total_volume": "총 체적 (m³)",
+        "pricer.column_total_volume_help": "총 체적 (수량 × 체적).",
+        "pricer.column_category_help": "아이템 카테고리.",
+        "pricer.column_avg_daily_volume": "일평균",
+        "pricer.column_avg_daily_volume_help": "30일 일평균 거래량.",
+        "pricer.column_days_of_stock": "재고 일수",
+        "pricer.column_days_of_stock_help": "평균 판매량 기준 남은 재고 일수.",
+        "pricer.column_is_doctrine_help": "독트린 핏에서 사용되는 아이템.",
+        "pricer.column_doctrine_ships_help": "이 아이템을 사용하는 독트린 함선.",
+        "pricer.metric_local_sell_help": "{market_name} 판매가 기준 총액.",
+        "pricer.metric_local_buy_help": "{market_name} 구매가 기준 총액.",
+        "pricer.metric_jita_sell_help": "Jita 판매가 기준 총액.",
+        "pricer.metric_jita_buy_help": "Jita 구매가 기준 총액.",
+        "pricer.total_volume_label": "총 체적",
+        "pricer.items": "아이템",
+        "pricer.display": "표시",
+        "pricer.display_item_prices": "단가",
+        "pricer.display_total_prices": "총가",
+        "pricer.display_help": "단가와 총가 사이 전환.",
+        "pricer.show_jita_prices": "Jita 가격 표시",
+        "pricer.show_stock_metrics": "재고 지표 표시",
+        "pricer.show_stock_metrics_help": "일평균 거래량과 재고 일수를 표시합니다.",
+        "pricer.highlight_doctrine_items": "독트린 아이템 강조",
+        "pricer.highlight_doctrine_items_help": "독트린 핏에 사용되는 아이템을 강조합니다.",
+        "pricer.issues": "문제",
+        "pricer.unpriced_items": "⚠️ {count}개 아이템을 평가할 수 없습니다",
+        # Janice-style appraisal card layout
+        "pricer.appraisal.title": "감정 - {fit_name} @ {market_name}",
+        "pricer.appraisal.title_empty": "새 감정 — EFT 핏 또는 아이템 목록을 붙여넣으세요",
+        "pricer.appraisal.label_created": "생성",
+        "pricer.appraisal.label_priced_at": "평가 시장",
+        "pricer.appraisal.label_volume": "체적",
+        "pricer.appraisal.label_buy": "구매",
+        "pricer.appraisal.label_split": "혼합",
+        "pricer.appraisal.label_sell": "판매",
+        "pricer.appraisal.fit_name_default": "멀티바이",
+        "pricer.appraisal.action_download": "📥 CSV 다운로드",
+        "pricer.appraisal.action_reset": "🔄 초기화",
+        # Fit Availability
+        "pricer.fits.section_header": "핏 가용성",
+        "pricer.fits.headline_unit": "개 핏 가능",
+        "pricer.fits.headline_zero_label": "현재 재고로 만들 수 있는 핏이 없습니다",
+        "pricer.fits.metric_items_in_fit": "핏 내 아이템",
+        "pricer.fits.metric_bottleneck": "병목 아이템",
+        "pricer.fits.metric_total_isk": "로컬 판매가 총비용",
+        "pricer.fits.toggle_equivalents": "팩션 호환 모듈 합산",
+        "pricer.fits.toggle_equivalents_help": (
+            "팩션 호환 모듈(예: 모든 Heavy Pulse Laser II 변형) 재고를 합산합니다."
+        ),
+        "pricer.fits.equivalents_unavailable": (
+            "호환 모듈 조회를 사용할 수 없어 원시 재고를 사용합니다."
+        ),
+        "pricer.fits.bottleneck_caption": (
+            "병목: {name} — 보유 {stock}, 핏당 필요 {required}."
+        ),
+        "pricer.fits.callout_zero": "사용 가능한 핏이 없습니다. 제약 아이템:",
+        "pricer.fits.callout_low": "{count}개 핏만 가능합니다. 제약 아이템:",
+        "pricer.fits.callout_more": "+ {count}개 더",
+        "pricer.fits.column_required": "핏당",
+        "pricer.fits.column_in_stock": "재고",
+        "pricer.fits.column_fits_possible": "가능 핏",
+        "pricer.fits.column_status": "상태",
+        "pricer.fits.column_equivalents": "🔄",
+        "pricer.fits.column_equivalents_help": "재고에 팩션 호환 모듈이 포함됩니다.",
+        "pricer.fits.total_isk_partial": "(부분: {count}개 아이템 가격 미정)",
+        "pricer.fits.total_isk_partial_plural": "(부분: {count}개 아이템 가격 미정)",
+        "pricer.fits.stock_unknown_warning": (
+            "{count}개 아이템의 재고가 알 수 없음(로컬 시장 데이터 없음)이며, 가능 핏 수가 과소 표시될 수 있습니다."
+        ),
+        "pricer.fits.stock_unknown_warning_plural": (
+            "{count}개 아이템의 재고가 알 수 없음(로컬 시장 데이터 없음)이며, 가능 핏 수가 과소 표시될 수 있습니다."
+        ),
+        "pricer.jita_provider_failed": (
+            "{count}개 아이템의 Jita 가격을 가져올 수 없습니다. 해당 Jita 열은 0으로 표시됩니다."
+        ),
+        "pricer.error_processing": (
+            "가격 평가에 실패했습니다. 입력 형식을 확인하고 다시 시도하세요. "
+            "자세한 내용은 애플리케이션 로그를 확인하세요."
+        ),
         "build_costs.title": "생산 비용",
         "build_costs.category_label": "카테고리",
         "build_costs.category_help": "생산 비용을 확인할 카테고리를 선택하세요.",
