@@ -25,6 +25,7 @@ from millify import millify
 
 from domain import InputFormat
 from domain.enums import StockStatus
+from domain.market_config import MarketConfig
 from domain.pricer import FitAvailabilitySummary, ItemAvailability, PricerResult
 from init_db import ensure_market_db_ready
 from logging_config import setup_logging
@@ -209,7 +210,7 @@ def get_pricer_column_config(short_name: str = "4H", language_code: str = "en") 
     }
 
 
-def _fit_availability_column_config(language_code: str) -> dict:
+def _fit_availability_column_config(language_code: str, short_name: str = "4H") -> dict:
     """Column configuration for the Fit Availability breakdown table."""
     return {
         "image_url": st.column_config.ImageColumn(
@@ -242,6 +243,15 @@ def _fit_availability_column_config(language_code: str) -> dict:
         ),
         "Fits": st.column_config.NumberColumn(
             translate_text(language_code, "pricer.fits.column_fits_possible"),
+            format="localized",
+        ),
+        "Local Sell": st.column_config.NumberColumn(
+            translate_text(
+                language_code, "pricer.column_local_sell", market_name=short_name
+            ),
+            help=translate_text(
+                language_code, "pricer.column_local_sell_help", market_name=short_name
+            ),
             format="localized",
         ),
         "Status": st.column_config.TextColumn(
@@ -627,8 +637,13 @@ def _render_fit_availability_hero(summary: FitAvailabilitySummary, language_code
     col_count, col_right = st.columns([0.34, 0.66], vertical_alignment="center")
     with col_count:
         unit_label = translate_text(language_code, "pricer.fits.headline_unit")
-        with st.container(horizontal_alignment="center", width=150):
-            st.metric(label=unit_label, value=summary.fits_available, border=True)
+        with st.container(horizontal_alignment="center"):
+            st.metric(
+                label=unit_label,
+                value=f":green[{summary.fits_available}]",
+                border=True,
+                width="content",
+            )
     with col_right:
         m1, m2, m3 = st.columns(3)
         m1.metric(
@@ -641,7 +656,7 @@ def _render_fit_availability_hero(summary: FitAvailabilitySummary, language_code
         )
         m3.metric(
             translate_text(language_code, "pricer.fits.metric_total_isk"),
-            f"{format_isk(summary.total_isk_per_fit)} ISK",
+            f":orange[{format_isk(summary.total_isk_per_fit)}] ISK",
         )
 
     if summary.bottleneck_items:
@@ -693,7 +708,9 @@ def _render_bottleneck_callout(summary: FitAvailabilitySummary, language_code: s
         st.warning(f"{header}\n\n{body}")
 
 
-def _render_fit_availability_table(summary: FitAvailabilitySummary, language_code: str):
+def _render_fit_availability_table(
+    summary: FitAvailabilitySummary, market: MarketConfig, language_code: str
+):
     if not summary.items:
         return
 
@@ -714,6 +731,7 @@ def _render_fit_availability_table(summary: FitAvailabilitySummary, language_cod
                 "Per Fit": item.quantity_per_fit,
                 "In Stock": item.stock_used,
                 "Fits": item.fits_possible,
+                "Local Sell": item.isk_per_unit,
                 "Status": status_emoji,
                 "Equivalents": "🔄" if item.used_equivalents else "",
             }
@@ -726,7 +744,7 @@ def _render_fit_availability_table(summary: FitAvailabilitySummary, language_cod
     st.data_editor(
         styled,
         hide_index=True,
-        column_config=_fit_availability_column_config(language_code),
+        column_config=_fit_availability_column_config(language_code, market.short_name),
         width="stretch",
         column_order=[
             "image_url",
@@ -736,6 +754,7 @@ def _render_fit_availability_table(summary: FitAvailabilitySummary, language_cod
             "Per Fit",
             "In Stock",
             "Fits",
+            "Local Sell",
             "Status",
             "Equivalents",
         ],
@@ -743,7 +762,9 @@ def _render_fit_availability_table(summary: FitAvailabilitySummary, language_cod
     )
 
 
-def _render_fit_availability_section(result: PricerResult, language_code: str):
+def _render_fit_availability_section(
+    result: PricerResult, market: MarketConfig, language_code: str
+):
     """Orchestrator for the Fit Availability block (EFT only)."""
     if result.input_type != InputFormat.EFT or not result.items:
         return
@@ -772,7 +793,7 @@ def _render_fit_availability_section(result: PricerResult, language_code: str):
 
     _render_fit_availability_hero(summary, language_code)
     _render_bottleneck_callout(summary, language_code)
-    _render_fit_availability_table(summary, language_code)
+    _render_fit_availability_table(summary, market, language_code)
 
 
 # =============================================================================
@@ -844,7 +865,7 @@ def main():
                 )
                 _render_summary_stats_grid(result, market, language_code)
                 render_fit_header(result, sde_repo, language_code, compact=True)
-                _render_fit_availability_section(result, language_code)
+                _render_fit_availability_section(result, market, language_code)
             else:
                 _render_summary_stats_grid(result, market, language_code)
                 _render_items_table(result, market, sde_repo, language_code)

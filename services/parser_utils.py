@@ -205,7 +205,8 @@ def _parse_eft_item_line(line: str, slot_type: SlotType) -> Optional[RawParsedIt
     Handles:
     - "Module Name" -> qty=1
     - "Module Name x10" -> qty=10
-    - "Module Name, Charge Name" -> two items
+    - "Module Name, Charge Name" -> module only; the loaded charge is dropped
+      because pricer does not price ammunition currently loaded in modules.
 
     Args:
         line: Single line from EFT fitting
@@ -220,6 +221,14 @@ def _parse_eft_item_line(line: str, slot_type: SlotType) -> Optional[RawParsedIt
 
     # Handle offline modules: "Module Name /offline"
     line = line.replace('/offline', '').strip()
+
+    # Drop loaded charge: EFT writes "<module>,<charge>" for modules with ammo.
+    # The portion after the first comma is a charge type name (e.g., "Barrage S")
+    # that we intentionally ignore for pricing.
+    if ',' in line:
+        line = line.split(',', 1)[0].strip()
+        if not line:
+            return None
 
     # Check for quantity suffix: "Item x10"
     qty_match = EFT_QTY_PATTERN.search(line)
