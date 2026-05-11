@@ -105,19 +105,21 @@ uv run pytest --cov
 ## Project Structure & Module Organization
 
 ### Application Entry Point
-- **`app.py`**: Streamlit entry point with page routing to 7 main pages across 2 sections ("Market Stats" and "Analysis Tools")
+- **`app.py`**: Streamlit entry point with page routing to 10 pages across 2 sections ("Market Stats" and "Analysis Tools")
 
 ### UI Pages (`pages/` directory)
 All pages follow consistent patterns with Streamlit best practices:
 
-1. **`market_stats.py`** (📈 Market Stats) - Primary market data visualization with interactive Plotly charts, market orders, statistics, and historical data
-2. **`doctrine_status.py`** (⚔️ Doctrine Status) - Doctrine fit status tracking with stock levels, costs, and market availability
-3. **`doctrine_report.py`** (📝 Doctrine Report) - Detailed doctrine analysis and reporting
-4. **`low_stock.py`** (⚠️ Low Stock) - Low inventory alerting system with category filtering
-5. **`build_costs.py`** (🏗️ Build Costs) - Manufacturing cost analysis with structure/rig configuration and industry indices
-6. **`downloads.py`** (📥 Downloads) - Centralized CSV export for market data, doctrine fits, low stock items, and SDE tables. Uses Streamlit's callable pattern for lazy data loading.
-7. **`pricer.py`** (💰 Pricer) - Item and fitting price calculator similar to [Janice](https://janice.e-351.com/). Accepts EFT fittings or tab-separated item lists and displays both Jita and 4-HWWF market prices.
-8. **`import_helper.py`** (Import Helper) - A visualisation tool helps discovering items with significantly large price margin compared with Jita sell. This feature helps importers to quickly spot price hikes to under cut.
+1. **`market_dashboard.py`** (🏠 Market Dashboard, default landing page) - Doctrine Ships, Popular Modules, Minerals, and Isotopes tables with checkbox-driven deep links into Doctrine Status / Market Stats. Constrained to low-stock doctrine items by default (toggle to view all).
+2. **`market_stats.py`** (📈 Market Stats) - Primary market data visualization with interactive Plotly charts, market orders, statistics, and historical data
+3. **`doctrine_status.py`** (⚔️ Doctrine Status) - Doctrine fit status tracking with stock levels, costs, and market availability. Supports `module_id` query param for module-filtered deep links from the dashboard.
+4. **`doctrine_report.py`** (📝 Doctrine Report) - Detailed doctrine analysis and reporting
+5. **`low_stock.py`** (⚠️ Low Stock) - Low inventory alerting system with category filtering
+6. **`build_costs.py`** (🏗️ Build Costs) - Manufacturing cost analysis sourced from the synced `buildcost.db` catalog with structure/rig configuration and industry indices
+7. **`builder_helper.py`** (🛠️ Builder Helper) - Per-item manufacturing profitability table with ROI, ISK/hour, 30-day profit, and turnover. Price-basis toggle (30-day avg / current). Sourced from synced builder-cost catalog.
+8. **`downloads.py`** (📥 Downloads) - Centralized CSV export for market data, doctrine fits, low stock items, and SDE tables. Uses Streamlit's callable pattern for lazy data loading.
+9. **`pricer.py`** (💰 Pricer) - Item and fitting price calculator similar to [Janice](https://janice.e-351.com/). EFT input renders a Janice-style fit availability hero (focal fits-available count, bottleneck callout, faction-equivalent aggregation toggle); tab- or space-separated multibuy renders a per-item grid with local + Jita totals.
+10. **`import_helper.py`** (Import Helper) - A visualisation tool to discover items with significantly larger price margin compared with Jita sell. Helps importers quickly spot price hikes to undercut.
 
 ### Core Modules
 
@@ -142,8 +144,9 @@ All pages follow consistent patterns with Streamlit best practices:
 - **`services/doctrine_service.py`**: DoctrineService and FitDataBuilder for doctrine fit aggregation
 - **`services/market_service.py`**: MarketService for 30-day metrics, ISK volume calculations, outlier handling, and Plotly chart creation
 - **`services/build_cost_service.py`**: BuildCostService for stored build-cost catalog browsing and per-item snapshot summaries
-- **`services/price_service.py`**: JitaPriceService with provider chain (Fuzzwork → Janice) for Jita price lookups with caching
-- **`services/pricer_service.py`**: PricerService orchestrates parsing and price lookups from Jita (via Janice API or Fuzzworks) and 4-HWWF (local market database)
+- **`services/builder_helper_service.py`**: BuilderHelperService for the Builder Helper profitability table — joins synced `buildcost.db` catalog with watchlist metadata and market prices; supports 30-day-avg / current price-basis toggle
+- **`services/price_service.py`**: JitaPriceService with provider chain (DB cache → Fuzzwork → Janice) for Jita price lookups with caching. Sole batch entry point is `get_jita_prices(type_ids) -> BatchPriceResult`; use `.prices` (dict[TypeID, PriceResult]) or `.to_dict()` (dict[TypeID, Price]).
+- **`services/pricer_service.py`**: PricerService orchestrates EFT/multibuy parsing, SDE resolution, Jita + local market lookups, fit availability computation (via `compute_fit_availability`), and doctrine cross-references for the Pricer page
 - **`services/low_stock_service.py`**: LowStockService for low stock analysis with filtering (categories, doctrines, fits, tech2/faction items)
 - **`services/import_helper_service.py`**: ImportHelperService for computing local-vs-Jita price comparisons including shipping cost, profit margin, 30-day turnover, and capital utilisation
 - **`services/categorization.py`**: ConfigBasedCategorizer for ship role categorization via Strategy pattern
@@ -156,7 +159,7 @@ All pages follow consistent patterns with Streamlit best practices:
 - **`domain/models.py`**: Core models: `FitItem`, `FitSummary`, `ModuleStock`, `Doctrine`
 - **`domain/enums.py`**: `StockStatus`, `ShipRole` enums with display formatting
 - **`domain/converters.py`**: Centralized `safe_int()`, `safe_float()`, `safe_str()` type conversion
-- **`domain/pricer.py`**: Domain models including `PricedItem`, `PricingResult`, and `InputFormat` enum for EFT vs multibuy detection
+- **`domain/pricer.py`**: Domain models including `PricedItem`, `PricerResult`, `FitAvailabilitySummary`, `ItemAvailability`, and `InputFormat` enum for EFT vs multibuy detection. `FitAvailabilitySummary` derives `bottleneck_items`, `counted_item_count`, `used_equivalents`, and `stock_unknown_count` as `@property` from `items`.
 - **`domain/doctrine_names.py`**: Passthrough for doctrine name resolution; DB-backed lookup lives in `DoctrineRepository`
 - **`domain/market_config.py`**: `MarketConfig` frozen dataclass representing a market hub's configuration (key, name, short_name, region_id, database_alias)
 
@@ -401,8 +404,8 @@ df = repo.get_all_stats()  # Returns cached pandas DataFrame
 - Sync operations and integrity checks
 
 ### Current Test Coverage
-The test suite covers repositories, services, database config, i18n, and infrastructure:
-- ~191 tests passing (`uv run pytest -q`)
+The test suite covers repositories, services, database config, i18n, parser, pricer/fit-availability, and infrastructure:
+- 329 tests + 16 subtests passing (`uv run pytest -q`)
 
 ## Commit & Pull Request Guidelines
 
@@ -547,6 +550,8 @@ The codebase follows a strict layered architecture. Dependencies must flow **dow
 │    base.py           → BaseRepository with read_df()        │
 │    doctrine_repo.py  → DoctrineRepository                   │
 │    market_repo.py    → MarketRepository                     │
+│    market_orders_repo.py → MarketOrdersRepository           │
+│    build_cost_repo.py → BuildCostRepository                 │
 │    sde_repo.py       → SDERepository                        │
 └─────────────────────────────────────────────────────────────┘
                               │ imports from ↓
@@ -608,7 +613,7 @@ from state.session_state import ss_get  # ✗ state!
 
 ## Version Information
 
-- **Current version**: 0.5.1
+- **Current version**: 0.6.2 (unreleased; latest released tag v0.6.1, 2026-05-07)
 - **Python version**: 3.12+
 - **Package manager**: uv (preferred)
 - **Main branch**: main
@@ -618,31 +623,29 @@ from state.session_state import ss_get  # ✗ state!
 ### Documentation (`docs/` directory)
 
 **User Documentation:**
-- `docs.md` - End-user guide for the application
 - `docs_cn.md` - Chinese translation of user guide
 
 **Technical Reference:**
 - `architecture_reference.md` - Definitive technical reference for the current architecture
-- `change_log.md` - Change log covering v0.2.0 refactoring (Phases 1-13) through v0.4.0 releases
+- `change_log.md` - Change log covering the v0.2.0 refactoring (Phases 1-13) through v0.6.x releases
 - `database_config.md` - Database configuration and Turso sync details
 - `module_equivalents.md` - Module equivalents feature architecture, CLI usage, and aggregation pipeline
 - `testing.md` - Testing guidelines and pytest patterns
 
 **Guides:**
 - `admin_guide.md` - Administrative guide for managing the application
-- `quick_reference.md` - Quick reference for common tasks
 - `walkthrough.md` - Step-by-step walkthroughs
 
 ### Project Directories
 - **`domain/`**: Core business models (FitItem, FitSummary, StockStatus, ShipRole, PricedItem, MarketConfig, converters)
-- **`repositories/`**: Database access layer (BaseRepository, DoctrineRepository, MarketRepository, SDERepository)
-- **`services/`**: Business logic (DoctrineService, MarketService, BuildCostService, JitaPriceService, PricerService, ImportHelperService, LowStockService, SelectionService, ModuleEquivalentsService, TypeResolutionService, TypeNameLocalization, categorization)
+- **`repositories/`**: Database access layer (BaseRepository, DoctrineRepository, MarketRepository, MarketOrdersRepository, BuildCostRepository, SDERepository)
+- **`services/`**: Business logic (DoctrineService, MarketService, BuildCostService, BuilderHelperService, JitaPriceService, PricerService, ImportHelperService, LowStockService, SelectionService, ModuleEquivalentsService, TypeResolutionService, TypeNameLocalization, categorization)
 - **`state/`**: Session state management (ss_get, ss_has, ss_set, ss_init, get_service, language_state, market_state)
-- **`ui/`**: UI formatting utilities, column configurations, reusable popover components, i18n translations, market selector
+- **`ui/`**: UI formatting utilities, column configurations, reusable popover components, i18n translations, market selector, page chrome
 - **`pages/`**: Streamlit application pages
-- **`pages/components/`**: Extracted Streamlit rendering components (market_components)
+- **`pages/components/`**: Extracted Streamlit rendering components (market_components, dashboard_components, db_refresh, page_chrome)
 - **`parser/`**: EFT fitting and item list parser (open source contribution)
-- **`tests/`**: pytest unit tests (~191 tests)
+- **`tests/`**: pytest unit tests (329 tests, 16 subtests as of v0.6.1)
 - **`docs/`**: Documentation
 - **`logs/`**: Application logs (git-ignored)
 - **`images/`**: UI assets
