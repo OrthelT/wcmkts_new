@@ -786,10 +786,10 @@ def _process_input(input_text: str):
             ss_set("pricer_result", result)
             ss_set("pricer_input_text", input_text)
             logger.info("Priced %d items", len(result.items))
-        except Exception as exc:
+        except Exception:
             logger.exception("Error pricing items")
             ss_set("pricer_result", None)
-            st.error(translate_text(language_code, "pricer.error_processing", error=str(exc)))
+            st.error(translate_text(language_code, "pricer.error_processing"))
 
 
 def main():

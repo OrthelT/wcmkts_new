@@ -559,7 +559,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "pricer.jita_provider_failed": (
             "Jita prices unavailable for {count} item(s); their Jita columns show 0."
         ),
-        "pricer.error_processing": "Pricing failed: {error}",
+        "pricer.error_processing": (
+            "Pricing failed. Check input formatting and try again; "
+            "details are in the application log."
+        ),
         "build_costs.title": "Build Cost Tool",
         "build_costs.category_label": "Select a category",
         "build_costs.category_placeholder": "Ship",

@@ -13,11 +13,9 @@ Design Principles:
 """
 
 from dataclasses import dataclass, field
-from enum import Enum, auto
+from enum import Enum
 from typing import Optional
 import pandas as pd
-
-from domain.converters import safe_int, safe_float, safe_str
 
 
 # Type aliases for clarity
@@ -415,22 +413,7 @@ class PricerResult:
 
 @dataclass(frozen=True)
 class ItemAvailability:
-    """
-    Per-item analysis for the 'Fit Availability' calculation.
-
-    Attributes:
-        type_id: EVE type ID
-        type_name: Display name
-        image_url: Cached image URL for the type
-        slot_type: EFT slot category
-        quantity_per_fit: Required units per fit
-        raw_stock: Original local sell volume (for display)
-        stock_used: Stock used in the calc (raw or aggregated)
-        fits_possible: floor(stock_used / quantity_per_fit); 0 if qty <= 0
-        used_equivalents: True when stock_used > raw_stock (faction substitution)
-        is_bottleneck: True when fits_possible == FitAvailabilitySummary.fits_available
-        isk_per_unit: Local sell price per unit (for ISK aggregation)
-    """
+    """Per-item availability analysis for a fit (one row in the Fit Availability table)."""
     type_id: TypeID
     type_name: str
     image_url: str
@@ -444,25 +427,48 @@ class ItemAvailability:
     isk_per_unit: Price
     stock_unknown: bool = False
 
+    def __post_init__(self):
+        if self.quantity_per_fit < 0:
+            raise ValueError(f"quantity_per_fit must be >= 0, got {self.quantity_per_fit}")
+        if self.raw_stock < 0 or self.stock_used < 0 or self.fits_possible < 0:
+            raise ValueError(
+                f"stock and fits values must be >= 0; "
+                f"raw_stock={self.raw_stock}, stock_used={self.stock_used}, "
+                f"fits_possible={self.fits_possible}"
+            )
+
 
 @dataclass(frozen=True)
 class FitAvailabilitySummary:
-    """
-    How many copies of an EFT fit are available from current local stock.
+    """Result of compute_fit_availability for an EFT fit.
 
-    `items` is a tuple (immutable, hashable). `fits_available` is the floor of
-    the minimum stock-to-quantity ratio across all fit items.
+    fits_available is floor(min(stock_used / quantity_per_fit)) across items.
+    Derived fields (bottleneck_items, counted_item_count, used_equivalents,
+    stock_unknown_count) are properties to keep `items` as the single source
+    of truth.
     """
     fits_available: int
     items: tuple[ItemAvailability, ...]
-    bottleneck_items: tuple[ItemAvailability, ...]
     total_isk_per_fit: Price
-    counted_item_count: int
     ship_type_id: Optional[TypeID]
     ship_name: Optional[str]
-    used_equivalents: bool
     unpriced_item_count: int = 0
-    stock_unknown_count: int = 0
+
+    @property
+    def bottleneck_items(self) -> tuple[ItemAvailability, ...]:
+        return tuple(i for i in self.items if i.is_bottleneck)
+
+    @property
+    def counted_item_count(self) -> int:
+        return len(self.items)
+
+    @property
+    def used_equivalents(self) -> bool:
+        return any(i.used_equivalents for i in self.items)
+
+    @property
+    def stock_unknown_count(self) -> int:
+        return sum(1 for i in self.items if i.stock_unknown)
 
     @property
     def total_isk_complete(self) -> bool:

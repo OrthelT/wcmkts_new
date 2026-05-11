@@ -456,12 +456,9 @@ def _empty_fit_availability(result: PricerResult) -> FitAvailabilitySummary:
     return FitAvailabilitySummary(
         fits_available=0,
         items=(),
-        bottleneck_items=(),
         total_isk_per_fit=0.0,
-        counted_item_count=0,
         ship_type_id=None,
         ship_name=result.ship_name,
-        used_equivalents=False,
     )
 
 
@@ -473,17 +470,12 @@ def compute_fit_availability(
 ) -> FitAvailabilitySummary:
     """How many copies of this EFT fit are available from current local stock.
 
-    Args:
-        result: PricerResult from PricerService.price_input. Non-EFT or empty
-            input returns an empty summary.
-        aggregated_stock: Optional {type_id: stock} from
-            ModuleEquivalentsService.get_aggregated_stock; substitutes the
-            stock used in the calc while preserving raw_stock for display.
-        logger_instance: Optional logger.
-
-    Returns:
-        FitAvailabilitySummary; fits_available is floor(min(stock_used / qty))
-        across all fit items, or 0 if any item has zero stock.
+    Non-EFT or empty input returns an empty summary. `aggregated_stock` may
+    substitute equivalent-faction-module stock while preserving `raw_stock`
+    for display. Unpriced items (isk_per_unit == 0) are logged at WARNING via
+    the injected logger and excluded from `total_isk_per_fit`; the count is
+    surfaced on the summary as `unpriced_item_count` so callers can warn the
+    user that the total is partial.
     """
     log = logger_instance or logger
 
@@ -546,7 +538,6 @@ def compute_fit_availability(
     ]
     items.sort(key=lambda i: (i.fits_possible, -i.quantity_per_fit))
 
-    bottleneck_items = tuple(i for i in items if i.is_bottleneck)
     total_isk_per_fit = 0.0
     unpriced_item_count = 0
     for i in items:
@@ -562,20 +553,13 @@ def compute_fit_availability(
             ship_type_id = priced.type_id
             break
 
-    used_equivalents = any(i.used_equivalents for i in items)
-    stock_unknown_count = sum(1 for i in items if i.stock_unknown)
-
     return FitAvailabilitySummary(
         fits_available=fits_available,
         items=tuple(items),
-        bottleneck_items=bottleneck_items,
         total_isk_per_fit=total_isk_per_fit,
-        counted_item_count=len(items),
         ship_type_id=ship_type_id,
         ship_name=result.ship_name,
-        used_equivalents=used_equivalents,
         unpriced_item_count=unpriced_item_count,
-        stock_unknown_count=stock_unknown_count,
     )
 
 
