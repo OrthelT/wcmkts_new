@@ -1,9 +1,10 @@
 import streamlit as st
+
 from logging_config import setup_logging
-from state.language_state import sync_active_language_with_query_params
-from ui.i18n import get_language_options, translate_text
 from pages.components.header import render_language_selector
 from pages.components.layout import render_global_layout_styles, render_sidebar_branding
+from state.language_state import sync_active_language_with_query_params
+from ui.i18n import get_language_options, translate_text
 
 logger = setup_logging(__name__)
 
@@ -12,8 +13,8 @@ st.set_page_config(
     page_icon="🐼",
     layout="wide",
 )
-render_global_layout_styles()
 
+render_global_layout_styles()
 available_language_codes = get_language_options()
 current_language = sync_active_language_with_query_params(available_language_codes)
 render_sidebar_branding()
@@ -62,7 +63,11 @@ pages = {
     translate_text(current_language, "nav.section.data"): [
         st.Page("pages/downloads.py", title=translate_text(current_language, "nav.page.downloads"))
     ],
+    "Admin": [
+        st.Page("pages/admin_login.py", title="Admin Login"),
+        st.Page("pages/admin.py", title="Admin Watchlist"),
+    ],
 }
-pg = st.navigation(pages)
 
+pg = st.navigation(pages)
 pg.run()

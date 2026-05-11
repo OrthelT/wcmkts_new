@@ -11,7 +11,7 @@ Tests the market data repository with:
 """
 import pytest
 import pandas as pd
-from unittest.mock import Mock, patch, PropertyMock, MagicMock
+from unittest.mock import Mock, patch, PropertyMock
 
 
 class TestMarketRepositoryCachedFunctions:
@@ -352,8 +352,15 @@ class TestInvalidateMarketCaches:
     @patch("repositories.market_repo._get_all_history_cached")
     @patch("repositories.market_repo._get_history_by_type_cached")
     @patch("repositories.market_repo._get_30day_volume_metrics_cached")
+    @patch("repositories.market_repo._get_watchlist_type_ids_cached")
     def test_invalidate_clears_all_market_caches(
-        self, mock_volume_metrics, mock_history_type, mock_history, mock_orders, mock_stats
+        self,
+        mock_watchlist_type_ids,
+        mock_volume_metrics,
+        mock_history_type,
+        mock_history,
+        mock_orders,
+        mock_stats,
     ):
         """invalidate_market_caches clears market cache functions.
 
@@ -371,6 +378,7 @@ class TestInvalidateMarketCaches:
         mock_history.clear.assert_called_once()
         mock_history_type.clear.assert_called_once()
         mock_volume_metrics.clear.assert_called_once()
+        mock_watchlist_type_ids.clear.assert_called_once()
 
 
 class TestGetLocalPrice:

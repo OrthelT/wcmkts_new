@@ -125,6 +125,8 @@ from services.type_resolution_service import (
     TypeResolutionService,
     get_type_resolution_service,
 )
+from services.admin_service import AdminService, get_admin_service
+from services.eve_sso_service import EveSSOConfig, EveSSOService, get_eve_sso_service
 
 __all__ = [
     # Price Service
@@ -192,4 +194,10 @@ __all__ = [
     # Builder Helper Service
     "BuilderHelperService",
     "get_builder_helper_service",
+    # Admin Services
+    "AdminService",
+    "get_admin_service",
+    "EveSSOConfig",
+    "EveSSOService",
+    "get_eve_sso_service",
 ]

@@ -86,6 +86,27 @@ class SettingsService:
     def default_language(self) -> str:
         return self.settings.get("i18n", {}).get("default_language", "en")
 
+    @property
+    def eve_sso_client_id(self) -> str:
+        return str(self.settings.get("eve_sso", {}).get("client_id", ""))
+
+    @property
+    def eve_sso_callback_url(self) -> str:
+        return str(self.settings.get("eve_sso", {}).get("callback_url", ""))
+
+    @property
+    def eve_sso_allowed_character_ids(self) -> tuple[int, ...]:
+        values = self.settings.get("eve_sso", {}).get("allowed_character_ids", [])
+        return tuple(int(value) for value in values)
+
+    @property
+    def admin_write_target(self) -> str:
+        return str(self.settings.get("admin", {}).get("write_target", "local"))
+
+    @property
+    def admin_session_ttl_minutes(self) -> int:
+        return int(self.settings.get("admin", {}).get("session_ttl_minutes", 480))
+
 def resolve_db_alias(db_alias: str | None = None, fallback: str = "wcmkt") -> str:
     """Resolve a database alias, falling back to the active market hub.
 
