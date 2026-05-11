@@ -66,6 +66,7 @@ pages = {
     "Admin": [
         st.Page("pages/admin_login.py", title="Admin Login"),
         st.Page("pages/admin.py", title="Admin Watchlist"),
+        st.Page("pages/admin_doctrines.py", title="Admin Doctrines"),
     ],
 }
 

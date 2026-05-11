@@ -10,7 +10,7 @@ Tests the foundation repository class with:
 """
 import pytest
 import pandas as pd
-from unittest.mock import Mock, patch, MagicMock, PropertyMock
+from unittest.mock import Mock, patch, PropertyMock
 
 from repositories.base import BaseRepository
 
@@ -113,6 +113,45 @@ class TestBaseRepository:
 
             assert isinstance(result, pd.DataFrame)
             mock_db.sync.assert_called_once()
+
+    def test_read_df_disk_io_error_triggers_sync(self):
+        """Test that disk I/O errors trigger sync + retry."""
+        expected = pd.DataFrame({'id': [1]})
+        mock_engine, _ = self._mock_engine_with_data(expected)
+        repo, mock_db = self._make_repo(engine=mock_engine)
+        call_count = 0
+
+        def side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise ValueError("disk I/O error")
+            return expected
+
+        with patch('pandas.read_sql_query', side_effect=side_effect):
+            result = repo.read_df("SELECT * FROM test")
+            assert isinstance(result, pd.DataFrame)
+            mock_db.sync.assert_called_once()
+
+    def test_read_df_file_is_not_database_triggers_sync(self):
+        """Test that invalid SQLite files trigger sync + retry."""
+        expected = pd.DataFrame({'id': [1]})
+        mock_engine, _ = self._mock_engine_with_data(expected)
+        repo, mock_db = self._make_repo(engine=mock_engine)
+        call_count = 0
+
+        def side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise ValueError("file is not a database")
+            return expected
+
+        with patch('pandas.read_sql_query', side_effect=side_effect):
+            result = repo.read_df("SELECT * FROM test")
+            assert isinstance(result, pd.DataFrame)
+            mock_db.sync.assert_called_once()
+
 
     def test_read_df_falls_back_to_remote_on_sync_failure(self):
         """Test that when sync+retry fails, falls back to remote."""

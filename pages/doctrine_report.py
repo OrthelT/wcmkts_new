@@ -418,6 +418,9 @@ def main():
         for _, row in doctrine_df.iterrows()
     }
     doctrine_ids = sorted(doctrine_name_map, key=lambda did: format_doctrine_name(doctrine_name_map[did]))
+    if not doctrine_ids:
+        st.warning(translate_text(language_code, "doctrine_report.no_fits"))
+        return
 
     selected_doctrine_id = st.sidebar.selectbox(
         translate_text(language_code, "doctrine_report.select_doctrine"),

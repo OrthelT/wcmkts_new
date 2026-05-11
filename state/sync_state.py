@@ -3,8 +3,11 @@ from config import DatabaseConfig
 from datetime import timezone, datetime, timedelta
 from time import perf_counter
 
+import pandas as pd
 import streamlit as st
+from sqlalchemy import text
 
+from repositories.base import BaseRepository
 from state.session_state import ss_set
 from state.market_state import get_active_market
 logger = setup_logging(__name__)
@@ -14,6 +17,42 @@ logger = setup_logging(__name__)
 # wall-clock slot (data lands ~hourly after the previous update, not at a
 # fixed :MM past the hour).
 _UPDATE_INTERVAL_MINUTES = 60
+
+
+def get_most_recent_update_resilient(
+    db_alias: str,
+    table_name: str = "marketstats",
+    *,
+    remote: bool = False,
+) -> datetime | None:
+    """Return latest updatelog timestamp using sync/retry/remote fallback for local reads."""
+    db = DatabaseConfig(db_alias)
+    reader = BaseRepository(db, logger)
+    query = text(
+        """
+        SELECT timestamp
+        FROM updatelog
+        WHERE table_name = :table_name
+        ORDER BY timestamp DESC
+        LIMIT 1
+        """
+    )
+    df = reader.read_df(query, params={"table_name": table_name}, local=not remote)
+    if df.empty or pd.isna(df.loc[0, "timestamp"]):
+        return None
+    return _coerce_update_time(df.loc[0, "timestamp"])
+
+
+def _coerce_update_time(value) -> datetime | None:
+    if value is None or pd.isna(value):
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+    parsed = pd.to_datetime(value, utc=True, errors="coerce")
+    if pd.isna(parsed):
+        return None
+    return parsed.to_pydatetime()
+
 
 def update_wcmkt_state(db_alias: str = None, skip_remote: bool = False) -> None:
     """Update session state with local (and optionally remote) DB update times.
@@ -43,7 +82,7 @@ def update_wcmkt_state(db_alias: str = None, skip_remote: bool = False) -> None:
 
     now = datetime.now(timezone.utc)
 
-    local_update = db.get_most_recent_update("marketstats", remote=False)
+    local_update = get_most_recent_update_resilient(db.alias, "marketstats", remote=False)
     local_update_status['updated'] = local_update
     if local_update is not None:
         local_update_status['time_since'] = now - local_update
@@ -53,7 +92,7 @@ def update_wcmkt_state(db_alias: str = None, skip_remote: bool = False) -> None:
 
     if not skip_remote and db.has_remote_credentials:
         try:
-            remote_update = db.get_most_recent_update("marketstats", remote=True)
+            remote_update = get_most_recent_update_resilient(db.alias, "marketstats", remote=True)
             remote_update_status['updated'] = remote_update
             if remote_update is not None:
                 remote_update_status['time_since'] = now - remote_update

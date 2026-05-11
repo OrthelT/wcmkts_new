@@ -9,9 +9,47 @@ from services.admin_service import AdminService
 class StubRepo:
     def __init__(self):
         self.rows = None
+        self.saved_doctrine_fit = None
+        self.doctrine_fit = {
+            "doctrine_id": 10,
+            "fit_id": 20,
+            "doctrine_name": "Doctrine Alpha",
+            "target": 50,
+            "market_flag": "primary",
+        }
+        self.doctrine_name = "Doctrine Alpha"
+        self.fit_id_exists = False
+        self.next_fit_id = 99
+        self.fit_eft = "[Vedmak, Old Fit]\nDamage Control II"
+        self.fit_options = pd.DataFrame(
+            [{"doctrine_id": 10, "doctrine_name": "Doctrine Alpha", "fit_id": 20}]
+        )
 
     def replace_watchlist(self, rows):
         self.rows = rows
+
+    def get_doctrine_fit_options(self):
+        return self.fit_options
+
+    def get_doctrine_fit_eft(self, fit_id):
+        return self.fit_eft
+
+    def get_doctrine_fit(self, doctrine_id, fit_id):
+        if doctrine_id == 10 and fit_id == 20:
+            return self.doctrine_fit
+        return None
+
+    def get_doctrine_name(self, doctrine_id):
+        return self.doctrine_name if doctrine_id == 10 else None
+
+    def doctrine_fit_id_exists(self, fit_id):
+        return self.fit_id_exists
+
+    def get_next_doctrine_fit_id(self):
+        return self.next_fit_id
+
+    def save_doctrine_fit(self, **kwargs):
+        self.saved_doctrine_fit = kwargs
 
 
 class StubAuthService:
@@ -83,6 +121,30 @@ def test_save_watchlist_rejects_empty_text_field():
         service.save_watchlist(df, signed_identity={"payload": {}, "signature": "x"})
 
 
+def test_save_watchlist_rejects_empty_replacement():
+    repo = StubRepo()
+    service = AdminService(
+        repo,
+        StubAuthService({"character_id": 2122333361, "character_name": "Orthel"}),
+        cache_invalidator=lambda: None,
+    )
+    df = pd.DataFrame(
+        columns=[
+            "type_id",
+            "group_id",
+            "type_name",
+            "group_name",
+            "category_id",
+            "category_name",
+        ]
+    )
+
+    with pytest.raises(ValueError, match="empty watchlist"):
+        service.save_watchlist(df, signed_identity={"payload": {}, "signature": "x"})
+
+    assert repo.rows is None
+
+
 def test_save_watchlist_persists_valid_rows_and_invalidates_cache():
     repo = StubRepo()
     invalidated = {"called": False}
@@ -118,3 +180,85 @@ def test_save_watchlist_persists_valid_rows_and_invalidates_cache():
     ]
     assert invalidated["called"] is True
     assert result["row_count"] == 1
+
+
+def test_get_doctrine_fit_options_delegates_to_repository():
+    repo = StubRepo()
+    service = AdminService(repo, StubAuthService(None), cache_invalidator=lambda: None)
+
+    result = service.get_doctrine_fit_options()
+
+    assert result.equals(repo.fit_options)
+
+
+def test_get_doctrine_fit_eft_delegates_to_repository():
+    repo = StubRepo()
+    service = AdminService(repo, StubAuthService(None), cache_invalidator=lambda: None)
+
+    result = service.get_doctrine_fit_eft(20)
+
+    assert result == repo.fit_eft
+
+
+def test_update_doctrine_fit_requires_existing_fit_pair():
+    service = AdminService(
+        StubRepo(),
+        StubAuthService({"character_id": 2122333361, "character_name": "Orthel"}),
+        cache_invalidator=lambda: None,
+    )
+
+    with pytest.raises(ValueError, match="No doctrine fit found"):
+        service.save_doctrine_fit(
+            eft_text="[Vedmak, Test]\nDamage Control II",
+            doctrine_id=10,
+            fit_id=99,
+            target=50,
+            market_flag="primary",
+            mode="update",
+            signed_identity={"payload": {}, "signature": "x"},
+        )
+
+
+def test_add_doctrine_fit_requires_existing_doctrine_and_new_fit_id():
+    repo = StubRepo()
+    service = AdminService(
+        repo,
+        StubAuthService({"character_id": 2122333361, "character_name": "Orthel"}),
+        cache_invalidator=lambda: None,
+    )
+
+    result = service.save_doctrine_fit(
+        eft_text="[Vedmak, Test]\nDamage Control II",
+        doctrine_id=10,
+        fit_id=None,
+        target=50,
+        market_flag="primary",
+        mode="add",
+        signed_identity={"payload": {}, "signature": "x"},
+    )
+
+    assert repo.saved_doctrine_fit["doctrine_name"] == "Doctrine Alpha"
+    assert repo.saved_doctrine_fit["fit_id"] == 99
+    assert repo.saved_doctrine_fit["fit_name"] == "Test"
+    assert result["fit_id"] == 99
+
+
+def test_add_doctrine_fit_rejects_existing_fit_id():
+    repo = StubRepo()
+    repo.fit_id_exists = True
+    service = AdminService(
+        repo,
+        StubAuthService({"character_id": 2122333361, "character_name": "Orthel"}),
+        cache_invalidator=lambda: None,
+    )
+
+    with pytest.raises(ValueError, match="already exists"):
+        service.save_doctrine_fit(
+            eft_text="[Vedmak, Test]\nDamage Control II",
+            doctrine_id=10,
+            fit_id=None,
+            target=50,
+            market_flag="primary",
+            mode="add",
+            signed_identity={"payload": {}, "signature": "x"},
+        )

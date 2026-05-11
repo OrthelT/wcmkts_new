@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 import pandas as pd
 from domain import ModuleStock, ShipStock
+from repositories.doctrine_repo import DOCTRINE_FITS_COLUMNS
 
 
 # ---------------------------------------------------------------------------
@@ -120,6 +121,41 @@ class TestGetModuleFitInfo:
 
         result = repo.get_module_fit_info(2048)
         assert result.empty
+
+
+class TestGetAllDoctrineCompositions:
+    def test_returns_schema_on_database_exception(self):
+        db, repo = _make_repo()
+        db.engine.connect.side_effect = Exception("db down")
+
+        result = repo.get_all_doctrine_compositions()
+
+        assert result.empty
+        assert list(result.columns) == DOCTRINE_FITS_COLUMNS
+
+
+class TestDoctrineDisplayName:
+    def test_display_name_uses_active_market_alias_when_alias_omitted(self):
+        from repositories.doctrine_repo import get_doctrine_display_name
+
+        with patch("repositories.doctrine_repo._resolve_doctrine_display_alias", return_value="wcmktprod"):
+            with patch(
+                "repositories.doctrine_repo.get_friendly_names_with_cache",
+                return_value={"SUBS - WC AHACs": "AHACs"},
+            ) as mock_friendly_names:
+                result = get_doctrine_display_name("SUBS - WC AHACs")
+
+        assert result == "AHACs"
+        mock_friendly_names.assert_called_once_with("wcmktprod")
+
+    def test_display_name_falls_back_to_raw_name_when_unknown(self):
+        from repositories.doctrine_repo import get_doctrine_display_name
+
+        with patch("repositories.doctrine_repo._resolve_doctrine_display_alias", return_value="wcmktprod"):
+            with patch("repositories.doctrine_repo.get_friendly_names_with_cache", return_value={}):
+                result = get_doctrine_display_name("Special Fits")
+
+        assert result == "Special Fits"
 
     def test_returns_empty_when_module_in_no_fits(self):
         db, repo = _make_repo()

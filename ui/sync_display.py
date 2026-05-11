@@ -9,9 +9,8 @@ from datetime import datetime, timedelta, timezone
 
 import streamlit as st
 
-from config import DatabaseConfig
 from logging_config import setup_logging
-from state.sync_state import minutes_until_next_update
+from state.sync_state import get_most_recent_update_resilient, minutes_until_next_update
 from ui.i18n import translate_text
 
 logger = setup_logging(__name__, log_file="sync_display.log")
@@ -47,7 +46,7 @@ def display_sync_status(language_code: str = "en"):
         time_since = status.get("time_since")
         if update_time is None:
             try:
-                update_time = DatabaseConfig(active_alias).get_most_recent_update("marketstats", remote=False)
+                update_time = get_most_recent_update_resilient(active_alias, "marketstats")
                 status["updated"] = update_time
             except Exception as exc:
                 logger.error(f"Error fetching cached update time: {exc}")
@@ -56,7 +55,7 @@ def display_sync_status(language_code: str = "en"):
             status["time_since"] = time_since
     else:
         try:
-            update_time = DatabaseConfig(active_alias).get_most_recent_update("marketstats", remote=False)
+            update_time = get_most_recent_update_resilient(active_alias, "marketstats")
         except Exception as exc:
             logger.error(f"Error fetching update time: {exc}")
         if update_time is not None:
