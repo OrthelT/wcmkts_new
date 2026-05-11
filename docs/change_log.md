@@ -4,7 +4,7 @@ Historical record of releases, the architectural refactoring project (Phases 1-1
 
 ---
 
-## Unreleased (v0.6.2 in pyproject)
+## v0.6.2 (2026-05-11)
 
 Pricer overhaul release. Replaces the per-item price grid with a Janice-style fit availability hero, fixes a production crash on the Janice batch endpoint, and collapses three near-identical batch methods on the Jita price service into one.
 
