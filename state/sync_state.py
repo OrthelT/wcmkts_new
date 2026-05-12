@@ -5,6 +5,7 @@ from time import perf_counter
 
 import streamlit as st
 
+from models import UpdateLog
 from state.session_state import ss_set
 from state.market_state import get_active_market
 logger = setup_logging(__name__)
@@ -43,7 +44,7 @@ def update_wcmkt_state(db_alias: str = None, skip_remote: bool = False) -> None:
 
     now = datetime.now(timezone.utc)
 
-    local_update = db.get_most_recent_update("marketstats", remote=False)
+    local_update = db.get_most_recent_update("marketstats", UpdateLog, remote=False)
     local_update_status['updated'] = local_update
     if local_update is not None:
         local_update_status['time_since'] = now - local_update
@@ -53,7 +54,7 @@ def update_wcmkt_state(db_alias: str = None, skip_remote: bool = False) -> None:
 
     if not skip_remote and db.has_remote_credentials:
         try:
-            remote_update = db.get_most_recent_update("marketstats", remote=True)
+            remote_update = db.get_most_recent_update("marketstats", UpdateLog, remote=True)
             remote_update_status['updated'] = remote_update
             if remote_update is not None:
                 remote_update_status['time_since'] = now - remote_update

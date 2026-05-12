@@ -12,6 +12,7 @@ import streamlit as st
 from config import DatabaseConfig
 from init_db import ensure_market_db_ready, init_db
 from logging_config import setup_logging
+from repositories import invalidate_build_cost_caches
 from state.market_state import refresh_market_caches
 from state.sync_state import update_wcmkt_state
 
@@ -76,10 +77,14 @@ def check_db(manual_override: bool = False):
     all of them regardless of which market is currently active.
     """
     from state.market_state import get_active_market
-    from settings_service import get_all_market_configs
+    from settings_service import get_all_market_configs, get_freshness_probe_aliases
 
     active_alias = get_active_market().database_alias
-    all_aliases = [cfg.database_alias for cfg in get_all_market_configs().values()]
+    market_aliases = {cfg.database_alias for cfg in get_all_market_configs().values()}
+    # Any alias with a freshness probe that isn't a market hub is a shared DB
+    # (e.g. build_cost, sde) that also needs periodic staleness checks.
+    shared_aliases = [a for a in get_freshness_probe_aliases() if a not in market_aliases]
+    all_aliases = list(market_aliases) + shared_aliases
 
     if manual_override:
         check_for_db_updates.clear()
@@ -88,6 +93,7 @@ def check_db(manual_override: bool = False):
         logger.info("*" * 60)
 
     synced_any = False
+    synced_aliases: list[str] = []
     any_stale = False
     any_sync_failed = False
     local_only_mode = False
@@ -121,6 +127,7 @@ def check_db(manual_override: bool = False):
                 if db.local_matches_remote():
                     logger.info(f"{alias} synced and validated")
                     synced_any = True
+                    synced_aliases.append(alias)
                 else:
                     logger.warning(f"{alias} sync failed validation")
                     any_sync_failed = True
@@ -134,7 +141,10 @@ def check_db(manual_override: bool = False):
         # Drop the freshness-check cache so the next run doesn't resync from
         # a stale "stale" verdict cached before the sync happened.
         check_for_db_updates.clear()
-        refresh_market_caches()
+        if not market_aliases.isdisjoint(synced_aliases):
+            refresh_market_caches()
+        if "build_cost" in synced_aliases:
+            invalidate_build_cost_caches()
         update_wcmkt_state()
         # Mark this run as having completed a check so the periodic guard
         # in maybe_run_check() doesn't immediately re-fire after the rerun.
