@@ -76,10 +76,8 @@ def check_db(manual_override: bool = False):
     Both market databases receive ESI updates at the same time, so we check
     all of them regardless of which market is currently active.
     """
-    from state.market_state import get_active_market
     from settings_service import get_all_market_configs, get_freshness_probe_aliases
 
-    active_alias = get_active_market().database_alias
     market_aliases = {cfg.database_alias for cfg in get_all_market_configs().values()}
     # Any alias with a freshness probe that isn't a market hub is a shared DB
     # (e.g. build_cost, sde) that also needs periodic staleness checks.
@@ -120,6 +118,7 @@ def check_db(manual_override: bool = False):
             # no UI flashes when everything is already up to date.
             if status_ctx is None:
                 st.toast("Syncing database…", icon="🔄")
+                st.space("medium")
                 status_ctx = st.status("Syncing database…", expanded=False)
             status_ctx.update(label=f"Syncing {alias}…", state="running")
             try:
