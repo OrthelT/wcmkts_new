@@ -79,7 +79,11 @@ def check_db(manual_override: bool = False):
     from settings_service import get_all_market_configs
 
     active_alias = get_active_market().database_alias
-    all_aliases = [cfg.database_alias for cfg in get_all_market_configs().values()]
+    market_aliases = [cfg.database_alias for cfg in get_all_market_configs().values()]
+    # Shared (non-market) databases that also need staleness checks.
+    # Each must have a [freshness_probes] entry in settings.toml.
+    shared_aliases = ["build_cost"]
+    all_aliases = market_aliases + shared_aliases
 
     if manual_override:
         check_for_db_updates.clear()
@@ -88,6 +92,7 @@ def check_db(manual_override: bool = False):
         logger.info("*" * 60)
 
     synced_any = False
+    synced_aliases: list[str] = []
     any_stale = False
     any_sync_failed = False
     local_only_mode = False
@@ -121,6 +126,7 @@ def check_db(manual_override: bool = False):
                 if db.local_matches_remote():
                     logger.info(f"{alias} synced and validated")
                     synced_any = True
+                    synced_aliases.append(alias)
                 else:
                     logger.warning(f"{alias} sync failed validation")
                     any_sync_failed = True
@@ -134,7 +140,11 @@ def check_db(manual_override: bool = False):
         # Drop the freshness-check cache so the next run doesn't resync from
         # a stale "stale" verdict cached before the sync happened.
         check_for_db_updates.clear()
-        refresh_market_caches()
+        if any(a in market_aliases for a in synced_aliases):
+            refresh_market_caches()
+        if "build_cost" in synced_aliases:
+            from repositories.build_cost_repo import invalidate_build_cost_caches
+            invalidate_build_cost_caches()
         update_wcmkt_state()
         # Mark this run as having completed a check so the periodic guard
         # in maybe_run_check() doesn't immediately re-fire after the rerun.

@@ -60,6 +60,10 @@ class DatabaseConfig:
         except (KeyError, AttributeError):
             pass  # Not all aliases need Turso (graceful degradation)
 
+    # Per-alias probe table for post-sync freshness validation.
+    # Empty mapping means "skip the probe and trust libsql sync".
+    _freshness_probes: dict[str, str] = settings.get("freshness_probes", {})
+
     # Shared handles per-alias to avoid multiple simultaneous connections to the same file
     _engines: dict[str, object] = {}
     _remote_engines: dict[str, object] = {}
@@ -98,6 +102,7 @@ class DatabaseConfig:
         turso_key = f"{self.alias}_turso"
         self.turso_url = self._db_turso_urls.get(turso_key)
         self.token = self._db_turso_auth_tokens.get(turso_key)
+        self.probe_table = self._freshness_probes.get(self.alias)
         self._engine = None
         self._remote_engine = None
         self._libsql_connect = None
@@ -363,36 +368,71 @@ class DatabaseConfig:
     def local_matches_remote(self) -> bool:
         """Check if local updatelog timestamp matches remote after sync.
 
+        Probes the row whose ``table_name`` matches ``self.probe_table``
+        (configured in ``settings.toml`` ``[freshness_probes]``).  When no
+        probe is configured for this alias the check is skipped and True
+        is returned — sync is trusted as soon as libsql reports success.
+
+        Returns True when the probe is not yet operational on the remote
+        (table missing, no row for this probe).  This avoids spamming
+        useless syncs before the backend has shipped its first updatelog
+        write.  Returns False only when remote has a probe row and local
+        either lacks it or has an older timestamp.
+
         Uses a plain sqlite3 read-only connection for the local read to
         avoid any SQLAlchemy connection pool caching or replica-state issues.
-        Returns False on any error (missing table, connection failure, etc.).
         """
+        if not self.probe_table:
+            return True
+
+        # Read remote via Turso.  Treat any failure (table missing,
+        # connection drop) as "probe not operational" → skip the check.
         try:
-            # Read remote via Turso
             with self.remote_engine.connect() as conn:
                 row = conn.execute(
-                    text("SELECT timestamp FROM updatelog WHERE table_name = 'marketstats'")
+                    text(
+                        "SELECT MAX(timestamp) FROM updatelog "
+                        "WHERE table_name = :probe"
+                    ),
+                    {"probe": self.probe_table},
                 ).fetchone()
                 remote_ts = row[0] if row else None
+        except Exception as e:
+            logger.info(
+                f"local_matches_remote({self.alias}, probe={self.probe_table}): "
+                f"remote probe unavailable ({e}); skipping freshness check"
+            )
+            return True
 
-            # Read local via plain sqlite3 (bypasses libsql driver entirely)
+        if remote_ts is None:
+            logger.info(
+                f"local_matches_remote({self.alias}, probe={self.probe_table}): "
+                f"no remote probe row yet; skipping freshness check"
+            )
+            return True
+
+        # Read local via plain sqlite3 (bypasses libsql driver entirely).
+        try:
             local_conn = sql.connect(f"file:{self.path}?mode=ro", uri=True)
             try:
                 row = local_conn.execute(
-                    "SELECT timestamp FROM updatelog WHERE table_name = 'marketstats'"
+                    "SELECT MAX(timestamp) FROM updatelog WHERE table_name = ?",
+                    (self.probe_table,),
                 ).fetchone()
                 local_ts = row[0] if row else None
             finally:
                 local_conn.close()
-
-            logger.info(
-                f"local_matches_remote({self.alias}): "
-                f"remote={remote_ts}, local={local_ts}"
-            )
-            return remote_ts is not None and remote_ts == local_ts
         except Exception as e:
-            logger.warning(f"local_matches_remote check failed: {e}")
+            logger.warning(
+                f"local_matches_remote({self.alias}) local read failed: {e}"
+            )
             return False
+
+        logger.info(
+            f"local_matches_remote({self.alias}, probe={self.probe_table}): "
+            f"remote={remote_ts}, local={local_ts}"
+        )
+        return remote_ts == local_ts
 
     def _cleanup_empty_db_file(self):
         """Remove empty db file and libsql/WAL artifacts left by a failed sync."""
