@@ -1,4 +1,5 @@
-from sqlalchemy import create_engine, text, select, NullPool
+from sqlalchemy import create_engine, inspect, text, select, NullPool
+from sqlalchemy.exc import NoSuchTableError, OperationalError
 import streamlit as st
 import os
 
@@ -365,65 +366,77 @@ class DatabaseConfig:
         except Exception:
             return False
 
+    def _update_log_cls(self):
+        """Return the ``UpdateLog`` ORM class bound to this alias's ``Base``.
+
+        Each database has its own ``DeclarativeBase`` registry, so the
+        ``UpdateLog`` model lives alongside the rest of that database's
+        models (e.g. ``models.UpdateLog`` for market DBs,
+        ``build_cost_models.UpdateLog`` for build_cost).  Returns ``None``
+        when no probe is configured for this alias.
+        """
+        if not self.probe_table:
+            return None
+        if self.alias == "build_cost":
+            from build_cost_models import UpdateLog
+            return UpdateLog
+        from models import UpdateLog
+        return UpdateLog
+
     def local_matches_remote(self) -> bool:
         """Check if local updatelog timestamp matches remote after sync.
 
-        Probes the row whose ``table_name`` matches ``self.probe_table``
-        (configured in ``settings.toml`` ``[freshness_probes]``).  When no
-        probe is configured for this alias the check is skipped and True
-        is returned — sync is trusted as soon as libsql reports success.
+        Probes the single ``updatelog`` row whose ``table_name`` matches
+        ``self.probe_table`` (configured in ``settings.toml``
+        ``[freshness_probes]``).  When no probe is configured for this
+        alias the check is skipped and True is returned — sync is trusted
+        as soon as libsql reports success.
 
-        Returns True when the probe is not yet operational on the remote
-        (table missing, no row for this probe).  This avoids spamming
-        useless syncs before the backend has shipped its first updatelog
-        write.  Returns False only when remote has a probe row and local
-        either lacks it or has an older timestamp.
-
-        Uses a plain sqlite3 read-only connection for the local read to
-        avoid any SQLAlchemy connection pool caching or replica-state issues.
+        Returns True only when the probe is genuinely "not deployed yet":
+        the remote ``updatelog`` table is missing, or it exists but has
+        no row for this probe.  Returns False on local read failure or
+        when local and remote timestamps differ.  Connection-class errors
+        (auth, network, TLS, etc.) propagate to the caller so a real
+        failure is surfaced instead of masked as "synced".
         """
-        if not self.probe_table:
+        UpdateLog = self._update_log_cls()
+        if UpdateLog is None:
             return True
 
-        # Read remote via Turso.  Treat any failure (table missing,
-        # connection drop) as "probe not operational" → skip the check.
-        try:
-            with self.remote_engine.connect() as conn:
-                row = conn.execute(
-                    text(
-                        "SELECT MAX(timestamp) FROM updatelog "
-                        "WHERE table_name = :probe"
-                    ),
-                    {"probe": self.probe_table},
-                ).fetchone()
-                remote_ts = row[0] if row else None
-        except Exception as e:
-            logger.info(
+        # Pre-check that the remote probe table exists.  Doing this via
+        # the inspector means a missing table is a clean boolean signal
+        # rather than a connection-class OperationalError, so we can let
+        # auth/network failures from the actual query propagate naturally
+        # without swallowing them through error-type guessing.
+        if not inspect(self.remote_engine).has_table("updatelog"):
+            logger.warning(
                 f"local_matches_remote({self.alias}, probe={self.probe_table}): "
-                f"remote probe unavailable ({e}); skipping freshness check"
+                "remote updatelog table absent; skipping freshness check"
             )
             return True
+
+        stmt = select(UpdateLog.timestamp).where(
+            UpdateLog.table_name == self.probe_table
+        )
+
+        with Session(self.remote_engine) as session:
+            remote_ts = session.execute(stmt).scalar()
 
         if remote_ts is None:
-            logger.info(
+            logger.warning(
                 f"local_matches_remote({self.alias}, probe={self.probe_table}): "
-                f"no remote probe row yet; skipping freshness check"
+                "no remote probe row yet; skipping freshness check"
             )
             return True
 
-        # Read local via plain sqlite3 (bypasses libsql driver entirely).
+        # Local read fails closed: a missing table, malformed disk, or
+        # any other DB error post-sync means sync didn't deliver usable
+        # data, so the caller should resync.
         try:
-            local_conn = sql.connect(f"file:{self.path}?mode=ro", uri=True)
-            try:
-                row = local_conn.execute(
-                    "SELECT MAX(timestamp) FROM updatelog WHERE table_name = ?",
-                    (self.probe_table,),
-                ).fetchone()
-                local_ts = row[0] if row else None
-            finally:
-                local_conn.close()
-        except Exception as e:
-            logger.warning(
+            with Session(self.ro_engine) as session:
+                local_ts = session.execute(stmt).scalar()
+        except (OperationalError, NoSuchTableError) as e:
+            logger.error(
                 f"local_matches_remote({self.alias}) local read failed: {e}"
             )
             return False
@@ -508,46 +521,35 @@ class DatabaseConfig:
             conn.close()
             return column_info
 
-    def get_most_recent_update(self, table_name: str, remote: bool = False) -> datetime:
-        """
-        Get the most recent update time for a specific table
+    def get_most_recent_update(
+        self,
+        table_name: str,
+        update_log_cls,
+        remote: bool = False,
+    ) -> datetime | None:
+        """Return the updatelog timestamp for ``table_name``, or None if absent.
+
         Args:
-            table_name: str - The name of the table to get the most recent update time for
-            remote: bool - If True, get the most recent update time from the remote database, if False, get the most recent update time from the local database
+            table_name: Value to match against ``updatelog.table_name``.
+            update_log_cls: ORM ``UpdateLog`` class bound to the correct
+                ``Base``.  Callers pass the class from the module that
+                owns this database's models (e.g. ``models.UpdateLog`` for
+                market DBs, ``build_cost_models.UpdateLog`` for build_cost).
+            remote: Read from the Turso remote engine when True.
 
-        Returns:
-            The most recent update time for the table
+        Returns the timestamp as a tz-aware UTC ``datetime``, or None when
+        no row matches.  The column is stored as a naive datetime; UTC is
+        the contract enforced by the backend writer.
         """
-        from models import UpdateLog
-
         engine = self.remote_engine if remote else self.engine
-        session = Session(bind=engine)
-        with session.begin():
-            updates = (
-                select(UpdateLog.timestamp)
-                .where(UpdateLog.table_name == table_name)
-                .order_by(UpdateLog.timestamp.desc())
+        with Session(bind=engine) as session:
+            stmt = select(update_log_cls.timestamp).where(
+                update_log_cls.table_name == table_name
             )
-            result = session.execute(updates).fetchone()
-            update_time = result[0] if result is not None else None
-            update_time = (
-                update_time.replace(tzinfo=timezone.utc)
-                if update_time is not None
-                else None
-            )
-        session.close()
-        engine.dispose()
-        return update_time
-
-    def get_time_since_update(
-        self, table_name: str = "marketstats", remote: bool = False
-    ):
-        status = self.get_most_recent_update(table_name, remote=remote)
-        now = datetime.now(tz=timezone.utc)
-        time_since = now - status
-        logger.info(f"update_time: {status.strftime('%Y-%m-%d %H:%M')}")
-        logger.info(f"time_since: {round(time_since.total_seconds() / 60, 1)} minutes")
-        return time_since if time_since is not None else None
+            update_time = session.execute(stmt).scalar()
+        if update_time is None:
+            return None
+        return update_time.replace(tzinfo=timezone.utc)
 
 
 if __name__ == "__main__":

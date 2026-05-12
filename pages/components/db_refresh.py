@@ -12,6 +12,7 @@ import streamlit as st
 from config import DatabaseConfig
 from init_db import ensure_market_db_ready, init_db
 from logging_config import setup_logging
+from repositories import invalidate_build_cost_caches
 from state.market_state import refresh_market_caches
 from state.sync_state import update_wcmkt_state
 
@@ -76,14 +77,14 @@ def check_db(manual_override: bool = False):
     all of them regardless of which market is currently active.
     """
     from state.market_state import get_active_market
-    from settings_service import get_all_market_configs
+    from settings_service import get_all_market_configs, get_freshness_probe_aliases
 
     active_alias = get_active_market().database_alias
-    market_aliases = [cfg.database_alias for cfg in get_all_market_configs().values()]
-    # Shared (non-market) databases that also need staleness checks.
-    # Each must have a [freshness_probes] entry in settings.toml.
-    shared_aliases = ["build_cost"]
-    all_aliases = market_aliases + shared_aliases
+    market_aliases = {cfg.database_alias for cfg in get_all_market_configs().values()}
+    # Any alias with a freshness probe that isn't a market hub is a shared DB
+    # (e.g. build_cost, sde) that also needs periodic staleness checks.
+    shared_aliases = [a for a in get_freshness_probe_aliases() if a not in market_aliases]
+    all_aliases = list(market_aliases) + shared_aliases
 
     if manual_override:
         check_for_db_updates.clear()
@@ -140,10 +141,9 @@ def check_db(manual_override: bool = False):
         # Drop the freshness-check cache so the next run doesn't resync from
         # a stale "stale" verdict cached before the sync happened.
         check_for_db_updates.clear()
-        if any(a in market_aliases for a in synced_aliases):
+        if not market_aliases.isdisjoint(synced_aliases):
             refresh_market_caches()
         if "build_cost" in synced_aliases:
-            from repositories.build_cost_repo import invalidate_build_cost_caches
             invalidate_build_cost_caches()
         update_wcmkt_state()
         # Mark this run as having completed a check so the periodic guard

@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Integer, String, Float, DateTime
+from sqlalchemy import Integer, String, Float, DateTime, Index
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -72,6 +72,11 @@ class UpdateLog(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     table_name: Mapped[str] = mapped_column(String)
     timestamp: Mapped[datetime] = mapped_column(DateTime)
+
+    # Freshness-probe access pattern: lookup by table_name, read timestamp.
+    __table_args__ = (
+        Index("ix_updatelog_table_name", "table_name"),
+    )
 
     def __repr__(self) -> str:
         return (
