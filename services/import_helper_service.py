@@ -17,7 +17,7 @@ from logging_config import setup_logging
 from repositories import get_sde_repository
 from repositories.market_repo import MarketRepository
 from repositories.sde_repo import SDERepository
-from services.price_service import PriceResult, PriceService, get_price_service
+from services.price_service import PriceResult, JitaPriceService, get_price_service
 from services.type_name_localization import apply_localized_type_names
 from settings_service import SettingsService
 
@@ -170,7 +170,7 @@ class ImportHelperService:
         self,
         mkt_db: DatabaseConfig,
         sde_repo: SDERepository,
-        price_service: PriceService,
+        price_service: JitaPriceService,
         market_repo: MarketRepository,
         logger_instance: Optional[logging.Logger] = None,
     ):
@@ -337,7 +337,7 @@ class ImportHelperService:
         df["volume_floored"] = volume_floored
 
         try:
-            jita_prices = self._price_service.get_jita_price_data_map(type_ids)
+            jita_prices = self._price_service.get_jita_prices(type_ids).prices
         except Exception as e:
             self._logger.error(f"Jita price fetch failed: {e}")
             raise RuntimeError(f"Failed to fetch Jita prices: {e}") from e

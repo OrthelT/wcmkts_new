@@ -3,18 +3,23 @@
 import pandas as pd
 from unittest.mock import Mock, patch
 
-from services.price_service import PriceResult, PriceSource
+from services.price_service import BatchPriceResult, PriceResult, PriceSource
 
 
 class DummyPriceService:
     def __init__(self, prices: dict[int, PriceResult]):
         self._prices = prices
 
-    def get_jita_price_data_map(self, type_ids: list[int]) -> dict[int, PriceResult]:
-        return {
+    def get_jita_prices(self, type_ids: list[int]) -> BatchPriceResult:
+        resolved = {
             type_id: self._prices.get(type_id, PriceResult.failure_result(type_id, "Not found"))
             for type_id in type_ids
         }
+        return BatchPriceResult(
+            prices=resolved,
+            source=PriceSource.JITA_FUZZWORK,
+            failed_ids=[tid for tid, r in resolved.items() if not r.success],
+        )
 
 
 def _mock_market_repo(volume_map: dict[int, float] | None = None):

@@ -1,4 +1,4 @@
-"""Tests for PriceService caching behavior."""
+"""Tests for JitaPriceService caching behavior."""
 
 from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
@@ -66,10 +66,10 @@ class StaticPriceProvider:
 
 
 def test_price_cache_refreshes_only_after_entry_ttl_expires():
-    from services.price_service import PriceService
+    from services.price_service import JitaPriceService
 
     provider = DummyPriceProvider()
-    service = PriceService(jita_provider=provider, cache_ttl=7200)
+    service = JitaPriceService(jita_provider=provider, cache_ttl=7200)
 
     with patch("services.price_service.time.monotonic", side_effect=[100.0, 7299.0, 7301.0, 7301.5]):
         first = service.get_jita_price(34)
@@ -96,7 +96,7 @@ def test_get_price_service_reuses_process_wide_instance_across_calls():
         patch("state.market_state.get_active_market_key", return_value="primary"),
         patch("services.price_service.DatabaseConfig"),
         patch.object(
-            price_service_module.PriceService,
+            price_service_module.JitaPriceService,
             "create_default",
             return_value=shared_service,
         ) as create_default,
@@ -158,10 +158,10 @@ def test_fallback_provider_does_not_merge_partial_results():
 
 
 def test_get_jita_prices_dedupes_uncached_type_ids():
-    from services.price_service import PriceService
+    from services.price_service import JitaPriceService
 
     provider = DummyPriceProvider()
-    service = PriceService(jita_provider=provider, cache_ttl=3600)
+    service = JitaPriceService(jita_provider=provider, cache_ttl=3600)
 
     result = service.get_jita_prices([34, 34, 35, 35])
 

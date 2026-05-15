@@ -18,7 +18,7 @@ from pages.components.market_components import (
     get_fitting_col_config,
     get_display_formats,
 )
-from services import get_jita_price
+from services import get_price_service
 from services.type_name_localization import (
     apply_localized_names,
     get_localized_name_map,
@@ -173,7 +173,7 @@ def check_selected_item(
         st.session_state.selected_item = selected_item_label
         st.session_state.selected_item_en = selected_item_en
         st.session_state.selected_item_id = selected_item_id
-        jita_price = get_jita_price(selected_item_id)
+        jita_price = get_price_service().get_jita_price(selected_item_id).sell_price
         st.session_state.jita_price = jita_price if jita_price else None
         return selected_item_id
 

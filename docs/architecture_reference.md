@@ -60,8 +60,9 @@ All domain dataclasses use `frozen=True` for immutability and safe caching.
 | `doctrine_service.py` | `DoctrineService` + `FitDataBuilder` (7-step Builder pipeline), `BuildMetadata` |
 | `market_service.py` | `MarketService` -- 30-day metrics, ISK volume, outlier handling, Plotly chart creation |
 | `build_cost_service.py` | `BuildCostService` -- stored build-cost catalog and per-item snapshot summaries |
-| `price_service.py` | `PriceService` -- provider chain (Fuzzwork -> Janice) with `FallbackPriceProvider` |
-| `pricer_service.py` | `PricerService` -- EFT/multibuy parsing, dual-market price lookups |
+| `builder_helper_service.py` | `BuilderHelperService` -- profitability table (ROI, ISK/hour, 30-day profit/turnover) joining synced `buildcost.db` catalog with watchlist metadata; 30-day-avg / current price-basis toggle |
+| `price_service.py` | `JitaPriceService` -- provider chain (DB cache -> Fuzzwork -> Janice) with `FallbackPriceProvider`; single batch entry `get_jita_prices(type_ids) -> BatchPriceResult` |
+| `pricer_service.py` | `PricerService` -- EFT/multibuy parsing, dual-market price lookups, fit-availability computation (`compute_fit_availability`), doctrine cross-references |
 | `import_helper_service.py` | `ImportHelperService` -- local-vs-Jita price comparison, shipping cost, profit, capital utilisation |
 | `low_stock_service.py` | `LowStockService` -- low stock analysis with category/doctrine/tech2/faction filtering |
 | `categorization.py` | `ConfigBasedCategorizer` -- ship role categorization via Strategy pattern |
@@ -87,21 +88,33 @@ All domain dataclasses use `frozen=True` for immutability and safe caching.
 | `formatters.py` | Pure formatting functions for prices, percentages, image URLs, ship roles |
 | `column_definitions.py` | `st.column_config` definitions for data tables; `get_doctrine_report_column_config(language_code)` for localized headers |
 | `popovers.py` | Market data popover components (Jita fetching disabled by default for performance) |
-| `i18n.py` | `translate_text(language_code, key)` + `TRANSLATIONS` dict (~132 keys); `LANGUAGE_OPTIONS` dict mapping code to flag label |
+| `i18n.py` | `translate_text(language_code, key)` + `TRANSLATIONS` dict (~135 keys); `LANGUAGE_OPTIONS` dict mapping code to flag label |
 | `market_selector.py` | `render_market_selector()` -- sidebar pill toggle returning active `MarketConfig` |
+| `sync_display.py` | Sidebar sync status / last-update display |
 
 ### `pages/` -- Streamlit Pages
 
 | File | Page |
 |------|------|
+| `market_dashboard.py` | Default landing page: Doctrine Ships, Popular Modules, Minerals, Isotopes. Checkbox-driven deep links into Doctrine Status / Market Stats; constrained to low-stock doctrine items by default. |
 | `market_stats.py` | Primary market data visualization with Plotly charts; localized item names |
-| `doctrine_status.py` | Doctrine fit status tracking with stock levels; localized item names |
+| `doctrine_status.py` | Doctrine fit status tracking with stock levels; localized item names; supports `module_id` query-param filter |
 | `doctrine_report.py` | Detailed doctrine analysis and reporting; type_id-based module selection state |
 | `low_stock.py` | Low inventory alerting with category/doctrine filtering; category_id-based filtering |
-| `build_costs.py` | Manufacturing cost analysis with async API calls |
+| `build_costs.py` | Manufacturing cost analysis sourced from synced `buildcost.db` catalog |
+| `builder_helper.py` | Manufacturer profitability table (ROI, ISK/hour, profit/turnover) with price-basis toggle |
 | `downloads.py` | Centralized CSV export (uses callable pattern for lazy data loading) |
-| `pricer.py` | Item/fitting price calculator (EFT + multibuy input); localized item names |
+| `pricer.py` | Janice-style item/fitting price calculator. EFT input renders a Fit Availability hero (bottleneck callout, faction-equivalent aggregation); tab-/space-separated multibuy renders per-item grid with local + Jita totals. |
 | `import_helper.py` | Local-vs-Jita import opportunity finder; configurable shipping cost |
+
+### `pages/components/` -- Shared page components
+
+| File | Contents |
+|------|---------|
+| `dashboard_components.py` | Market Dashboard table builders (ships, modules, commodities) and styling helpers |
+| `db_refresh.py` | DB-init + staleness check used by `market_dashboard.py` and `market_stats.py` |
+| `header.py`, `layout.py` | Centralized page chrome (logo, language selector, page titles) shared across main pages |
+| `market_components.py` | Market Stats page rendering components |
 | `components/market_components.py` | Extracted Streamlit rendering functions for market_stats |
 
 ### Infrastructure (Root Level)

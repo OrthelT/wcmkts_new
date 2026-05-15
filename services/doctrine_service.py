@@ -7,7 +7,7 @@ testable architecture.
 
 Patterns Applied:
 1. Builder Pattern - FitDataBuilder for complex DataFrame construction
-2. Dependency Injection - Repository and PriceService injected
+2. Dependency Injection - Repository and JitaPriceService injected
 3. Service Layer - Orchestrates business operations
 4. Domain Models - Returns typed FitSummary objects
 
@@ -26,7 +26,7 @@ import pandas as pd
 from domain import FitItem, FitSummary, StockStatus
 from repositories import DoctrineRepository
 from repositories.doctrine_repo import get_doctrine_display_name as _repo_get_doctrine_display_name
-from services.price_service import PriceService, FitCostAnalysis
+from services.price_service import JitaPriceService, FitCostAnalysis
 from logging_config import setup_logging
 
 logger = setup_logging(__name__, log_file="doctrine_service.log")
@@ -60,7 +60,7 @@ class BuildMetadata:
         prices_filled_from_avg: Count filled from avg_price
         prices_filled_from_jita: Count filled from Jita API
         prices_defaulted_to_zero: Count defaulted to 0
-        has_price_service: Whether PriceService was available
+        has_price_service: Whether JitaPriceService was available
     """
 
     build_started_at: Optional[datetime] = None
@@ -222,7 +222,7 @@ class FitDataBuilder:
 
     ## Attributes:
     - `repository`: DoctrineRepository for database access
-    - `price_service`: Optional PriceService for Jita price lookups
+    - `price_service`: Optional JitaPriceService for Jita price lookups
     - `logger`: Logger instance for debug/info messages
 
     ## Example usage:
@@ -259,7 +259,7 @@ class FitDataBuilder:
     def __init__(
         self,
         repository: DoctrineRepository,
-        price_service: Optional[PriceService] = None,
+        price_service: Optional[JitaPriceService] = None,
         logger: Optional[logging.Logger] = None,
     ):
         """
@@ -268,7 +268,7 @@ class FitDataBuilder:
         Args:
             repository: DoctrineRepository instance for database access.
                        Required for loading fit data and targets.
-            price_service: Optional PriceService for Jita price lookups.
+            price_service: Optional JitaPriceService for Jita price lookups.
                           If not provided, null prices will only be filled
                           from avg_price or defaulted to 0.
             logger: Optional logger instance. If not provided, creates a
@@ -453,7 +453,7 @@ class FitDataBuilder:
 
         Fallback Chain:
             1. avg_price from marketstats table (via repository)
-            2. Jita sell price (via PriceService, if available)
+            2. Jita sell price (via JitaPriceService, if available)
             3. Default to 0 (final fallback)
 
         The method tracks statistics about how many prices were filled
@@ -983,7 +983,7 @@ class DoctrineService:
     def __init__(
         self,
         repository: DoctrineRepository,
-        price_service: Optional[PriceService] = None,
+        price_service: Optional[JitaPriceService] = None,
         logger: Optional[logging.Logger] = None,
     ):
         self._repo = repository
@@ -1015,9 +1015,9 @@ class DoctrineService:
 
         # Price service is optional but recommended
         try:
-            from services.price_service import PriceService
+            from services.price_service import JitaPriceService
 
-            price_service = PriceService.create_default(db_config=db)
+            price_service = JitaPriceService.create_default(db_config=db)
         except Exception:
             price_service = None
 
@@ -1355,7 +1355,7 @@ class DoctrineService:
         if jita_price_map is None:
             all_type_ids = result.raw_df["type_id"].dropna().unique().tolist()
             all_type_ids = [int(t) for t in all_type_ids]
-            jita_price_map = self._price_service.get_jita_prices_as_dict(all_type_ids)
+            jita_price_map = self._price_service.get_jita_prices(all_type_ids).to_dict()
 
         for summary in result.summaries:
             fit_df = result.raw_df[result.raw_df["fit_id"] == summary.fit_id]

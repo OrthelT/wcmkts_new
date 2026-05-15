@@ -27,6 +27,16 @@ def _load_settings(settings_path: Path = Path("settings.toml")) -> dict:
         raise
 
 
+def get_freshness_probe_aliases() -> list[str]:
+    """Return database aliases configured for post-sync freshness probes.
+
+    Source of truth for "which DBs participate in periodic staleness
+    checking" — driven by ``[freshness_probes]`` in settings.toml.
+    """
+    settings = _load_settings()
+    return list(settings.get("freshness_probes", {}).keys())
+
+
 def get_all_market_configs() -> dict:
     """Return a dict of MarketConfig keyed by market key (e.g. 'primary').
 

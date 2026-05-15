@@ -13,7 +13,7 @@ Each service module follows these principles:
 
 from services.price_service import (
     # Main service
-    PriceService,
+    JitaPriceService,
     get_price_service,
     # Domain models
     PriceResult,
@@ -25,8 +25,6 @@ from services.price_service import (
     JaniceProvider,
     LocalMarketProvider,
     FallbackPriceProvider,
-    # Backwards compatibility
-    get_jita_price,
 )
 
 from services.doctrine_service import (
@@ -130,7 +128,7 @@ from services.eve_sso_service import EveSSOConfig, EveSSOService, get_eve_sso_se
 
 __all__ = [
     # Price Service
-    "PriceService",
+    "JitaPriceService",
     "get_price_service",
     "PriceResult",
     "BatchPriceResult",
@@ -140,7 +138,6 @@ __all__ = [
     "JaniceProvider",
     "LocalMarketProvider",
     "FallbackPriceProvider",
-    "get_jita_price",
     # Doctrine Service
     "DoctrineService",
     "get_doctrine_service",

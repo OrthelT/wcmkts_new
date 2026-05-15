@@ -4,6 +4,85 @@ Historical record of releases, the architectural refactoring project (Phases 1-1
 
 ---
 
+## v0.6.2 (2026-05-11)
+
+Pricer overhaul release. Replaces the per-item price grid with a Janice-style fit availability hero, fixes a production crash on the Janice batch endpoint, and collapses three near-identical batch methods on the Jita price service into one.
+
+### New Features
+- **Fit Availability hero** (`pages/pricer.py`, `domain/pricer.py`): Pasting an EFT fit now shows a focal `fits-available` count, three supporting metrics, a progress bar, and a red/orange bottleneck callout for the lowest-stock module — answering "how many of this fit can I buy right now?" without forcing the user to read the per-item table. Backed by pure `compute_fit_availability` helper and `FitAvailabilitySummary` / `ItemAvailability` domain models with 10 dedicated unit tests.
+- **Faction-equivalent aggregation** on the pricer fit hero, toggleable (default on). Substitutes faction-equivalent modules into stock counts only where an equivalence group exists, reusing `ModuleEquivalentsService`.
+- **Janice-style page layout**: Single bordered card, results on top, input below with right-aligned submit, mirroring janice.e-351.com.
+- **Partial-data signals**: PricerResult now exposes `failed_jita_count` / `jita_provider_failed`; FitAvailabilitySummary exposes `unpriced_item_count`, `stock_unknown_count`, and `total_isk_complete`; ItemAvailability distinguishes "no local market data" from "zero stock". Headline totals no longer silently understate cost when partial data is missing -- honoring the *never lie to the user* rule.
+
+### Improvements
+- **Space-separated multibuy parsing**: Lines without tabs now resolve correctly. Walks tokens left-to-right, treating the first pure-integer token as quantity. Previously inputs like `Torpedo Launcher II 63` were treated as a single item name with qty=1 and failed to resolve against SDE.
+- **Summary card totals**: Replaced Buy / Split / Sell row with explicit `{market} Sell Total`, `Jita Sell Total`, and `Jita Buy Total` grand totals.
+- **Janice batch endpoint compatibility** (`services/price_service.py::JaniceProvider._parse_response`): Now accepts both the v2 `/pricer` top-level JSON list (`itemType.eid` + top-level `top5AveragePrices`) and the legacy `{"appraisalItems": [...]}` envelope. Fixes the production `'list' object has no attribute 'get'` crash. Defensive `isinstance` checks at every layer; missing fields no longer raise.
+- **Derived fields as properties**: `FitAvailabilitySummary.bottleneck_items`, `counted_item_count`, `used_equivalents`, and `stock_unknown_count` are now `@property` derivations from `items` rather than fields that `compute_fit_availability` could contradict. `ItemAvailability.__post_init__` rejects negative `quantity_per_fit` / `raw_stock` / `stock_used` / `fits_possible` instead of silently accepting inconsistent rows.
+
+### Refactoring
+- **Collapsed three batch Jita-price methods into one**: `PriceService` previously had `get_jita_prices`, `get_jita_prices_as_dict`, and `get_jita_price_data_map` — three near-identical batch entry points where callers picked arbitrarily. Now only `get_jita_prices(type_ids) -> BatchPriceResult` exists; callers use `.prices` (dict[TypeID, PriceResult]) or `.to_dict()` (dict[TypeID, Price]) as needed. 7 caller sites audited as read-only before switching from defensive copy to shared reference.
+- **Renamed `PriceService` → `JitaPriceService`**: The class identifier now reflects what it actually does — a Jita-specific price fetcher with provider chain (DB cache → Fuzzwork → Janice), distinct from the local-market aggregator in `MarketService`. The module file (`services/price_service.py`), factory function (`get_price_service()`), and session-state cache key are unchanged to minimize churn. Eliminates the long-standing one-letter confusion with `PricerService`.
+- **Removed duplicate `get_jita_price` wrappers**: The module-level `get_jita_price` shim in `services/price_service.py` and the local helper in `ui/popovers.py` (both wrapping the same `PriceService.get_jita_price()` method) are gone. Callers go through `get_price_service().get_jita_price(type_id).sell_price` directly.
+- **Single-source-of-truth tightening** on `domain/pricer.py`: dropped unused imports, collapsed multi-paragraph docstrings to one-liners, removed redundant fallback paths.
+
+### Documentation
+- Removed outdated docs: `code_simplification_review.md`, `docs.md`, `quick_reference.md`, `selectable-mkts.md` (~1,053 lines).
+
+### Bug Fixes
+- Parser tests now cover EFT charge stripping and space-separated multibuy edge cases.
+- Removed accidental imports, stray `print()` calls, and a duplicate header from pricer code.
+- Reverted a short-lived "clear Jita cache on each Price Items click" patch that broke the cross-session cache contract.
+
+---
+
+## v0.6.1 (2026-05-07)
+
+Doctrine modules table on the Market Dashboard now mirrors the Doctrine Ships pattern, replacing the click-via-iloc routing that misrouted clicks when the low-stock filter hid rows.
+
+### Improvements
+- **Modules table mirrors ships pattern**: Replaced row-selection routing with `_mkt` / `_doc` checkbox columns matching the Doctrine Ships table. Fixes the iloc/positional mismatch where filtering hid rows but click events still used positional indexes, routing users to the wrong item's Market Stats page.
+- **`fit_count` aggregation** added in `_compute_module_targets()`; modules now show how many doctrine fits use them.
+- **Module deep-link** (`module_id` query param) on `pages/doctrine_status.py` filters fits to those using a specific module and renders a banner naming the module — completing the round trip from dashboard click to filtered doctrine view.
+- **Column order**: `type_id`, image, item, % target, stock, fits, qty needed, prices, then `_mkt`/`_doc` checkbox columns.
+- **New i18n keys** (`column_fits`, `hint_click_doctrine_status_module`, `module_filter_banner`) across en/zh/de/fr/ru/es.
+
+### Bug Fixes
+- Addressed PR #63 review findings.
+- Minor dashboard table formatting tweaks.
+- Removed the 5-minute-to-update balloon animation introduced in v0.5.0 (was disruptive at scale).
+
+---
+
+## v0.6.0 (2026-05-05)
+
+Builder Helper release. Adds an importer-style profitability page for manufacturers, swaps the build-cost data source to the synced `buildcost.db` catalog, and replaces stacked toggle buttons with `st.menu_button` chord.
+
+### New Features
+- **Builder Helper page** (`pages/builder_helper.py`, `services/builder_helper_service.py`): EverRef-free profitability tool for manufacturers. Shows ROI, ISK/hour, 30-day profit, and turnover for items in the watchlist, sourced from the synced builder-cost catalog. Replaces the prototype that called EverRef live.
+- **Price-basis toggle** (`st.segmented_control`) on the Builder Helper: switch profitability calculations between 30-day average and current price. Defaults to 30-day average — manufacturing horizons span hours-to-days, so current-price spikes can mislead.
+- **Dashboard low-stock filter**: Market Dashboard now constrains to low-stock doctrine items by default with a filter override toggle, focusing FCs on the items that actually need attention.
+
+### Improvements
+- **Build-cost catalog from `buildcost.db`**: Switched both Build Costs and Builder Helper from the dead `wcmktprod.db.builder_costs` table to the synced `buildcost.db` catalog (the backend's source of truth). Item-name, group, and category metadata enriched in the service layer via watchlist + marketstats join. Old build-cost repository and industry-index fetch logic retired.
+- **Corrected ROI formula**: Builder Helper's `cap_utils` was previously `(sell-cost)/sell` (gross margin, capped at 100%); now `(sell-cost)/cost` (ROI, can exceed 100%). Help strings updated in all 6 translated languages.
+- **ISK/Hour column** added to Builder Helper (the description already promised it but the column was missing). Derived from `buildcost.db.builder_costs.time_per_unit`.
+- **Doctrine Status ship display revisions**: Tightened the ship display layout; swapped stacked toggle buttons for a single `st.menu_button` chord that respects column `vertical_alignment` (see `reference_streamlit_menu_button.md` in memory).
+- **Centralized shared page chrome** (`pages/components/page_chrome.py`): Logo, language selector, and page titles render through shared helpers. Removes duplicated Streamlit header code; main pages now visually consistent.
+- **TZ-bug fix in PriceService**: `time_until_next_db_update` now correctly handles tz-aware non-UTC inputs.
+- **Table formatting hygiene**: Replaced deprecated `use_container_width` calls with Streamlit native formats; cap_utils column no longer double-scaled (format="percent" already scales raw fractions).
+
+### Bug Fixes
+- Doctrine Ships row resolution now uses pandas `index` (not `iloc`) — fixes the same positional/index mismatch the v0.6.1 modules-table refactor addressed.
+- `pd.read_sql_query` syntax updated for list parameters.
+- Table styles render only when needed; eliminates flicker in narrow viewports.
+
+### Refactoring
+- **Repository cleanup**: `get_builder_cost_catalog` moved from `MarketRepository` to `BuildCostRepository` (correct domain).
+- **Removed unused functions and short-if expressions** flagged by review.
+
+---
+
 ## v0.5.1 (2026-05-04)
 
 Dashboard refinement release. Builds on the v0.5.0 dashboard with target % progress bars, full-width layout, and harder error handling.

@@ -19,7 +19,9 @@ from sqlalchemy import text
 
 from config import DatabaseConfig
 from domain.pricer import (
+    FitAvailabilitySummary,
     InputFormat,
+    ItemAvailability,
     ParsedItem,
     PricedItem,
     PricerResult,
@@ -33,7 +35,7 @@ from repositories.market_orders_repo import MarketOrdersRepository, get_market_o
 from logging_config import setup_logging
 import streamlit as st
 from domain.converters import get_image_url
-from services.price_service import PriceService, get_price_service, PriceResult
+from services.price_service import JitaPriceService, get_price_service, PriceResult
 
 logger = setup_logging(__name__, log_file="pricer_service.log")
 
@@ -172,7 +174,7 @@ class PricerService:
         sde_db: DatabaseConfig,
         mkt_db: DatabaseConfig,
         market_repo: MarketOrdersRepository,
-        price_service: PriceService,
+        price_service: JitaPriceService,
         logger_instance: Optional[logging.Logger] = None
     ):
         self._sde_lookup = SDELookupService(sde_db, logger_instance)
@@ -354,7 +356,7 @@ class PricerService:
         type_ids = [item.type_id for item in resolved if item.type_id]
 
         # Step 4: Fetch prices
-        jita_prices = self._price_service.get_jita_price_data_map(type_ids)
+        jita_prices = self._price_service.get_jita_prices(type_ids).prices
         local_prices = self._market_repo.get_local_prices(type_ids)
 
         # Step 5: Fetch market stats (avg volume, days remaining)
@@ -365,6 +367,7 @@ class PricerService:
 
         # Step 7: Combine into PricedItems
         priced_items = []
+        failed_jita_type_ids: list[int] = []
         for item in resolved:
             if not item.type_id:
                 continue
@@ -373,9 +376,13 @@ class PricerService:
             type_id: int = item.type_id
 
             jita_data = jita_prices.get(type_id, PriceResult.failure_result(type_id, "Not found"))
+            has_local_data = type_id in local_prices
             local_data = local_prices.get(type_id, LocalPriceData(type_id=type_id))
             stats = market_stats.get(type_id, {'avg_volume': 0.0, 'days_remaining': 0.0})
             doctrine = doctrine_info.get(type_id, {'is_doctrine': False, 'ships': []})
+
+            if not jita_data.success:
+                failed_jita_type_ids.append(type_id)
 
             category_name = item.category_name
             isship = True if category_name == "Ship" else False
@@ -393,11 +400,13 @@ class PricerService:
                 days_of_stock=stats['days_remaining'],
                 is_doctrine=doctrine['is_doctrine'],
                 doctrine_ships=tuple(doctrine['ships']),
+                has_local_data=has_local_data,
             ))
 
         self._logger.info(
             f"Priced {len(priced_items)} items "
-            f"({input_format.value} format, {len(parse_errors)} errors)"
+            f"({input_format.value} format, {len(parse_errors)} errors, "
+            f"{len(failed_jita_type_ids)} Jita lookups failed)"
         )
 
         return PricerResult(
@@ -406,6 +415,7 @@ class PricerService:
             input_type=input_format,
             ship_name=ship_name,
             fit_name=fit_name,
+            failed_jita_type_ids=tuple(failed_jita_type_ids),
         )
 
     def _resolve_items(self, raw_items: list[RawParsedItem]) -> list[ParsedItem]:
@@ -436,6 +446,121 @@ class PricerService:
                 ))
 
         return parsed_items
+
+
+# =============================================================================
+# Fit Availability - pure helper (no Streamlit, no DB)
+# =============================================================================
+
+def _empty_fit_availability(result: PricerResult) -> FitAvailabilitySummary:
+    return FitAvailabilitySummary(
+        fits_available=0,
+        items=(),
+        total_isk_per_fit=0.0,
+        ship_type_id=None,
+        ship_name=result.ship_name,
+    )
+
+
+def compute_fit_availability(
+    result: PricerResult,
+    *,
+    aggregated_stock: Optional[dict[int, int]] = None,
+    logger_instance: Optional[logging.Logger] = None,
+) -> FitAvailabilitySummary:
+    """How many copies of this EFT fit are available from current local stock.
+
+    Non-EFT or empty input returns an empty summary. `aggregated_stock` may
+    substitute equivalent-faction-module stock while preserving `raw_stock`
+    for display. Unpriced items (isk_per_unit == 0) are logged at WARNING via
+    the injected logger and excluded from `total_isk_per_fit`; the count is
+    surfaced on the summary as `unpriced_item_count` so callers can warn the
+    user that the total is partial.
+    """
+    log = logger_instance or logger
+
+    if result.input_type != InputFormat.EFT or not result.items:
+        return _empty_fit_availability(result)
+
+    raw_analyses: list[dict] = []
+    for priced in result.items:
+        type_id = priced.type_id
+        if type_id is None:
+            log.warning(
+                "Skipping item with no type_id in fit availability calc: %s",
+                priced.type_name,
+            )
+            continue
+
+        qty_per_fit = priced.quantity
+        raw_stock = priced.local_sell_volume or 0
+        has_aggregated = aggregated_stock is not None and type_id in aggregated_stock
+        stock_used = aggregated_stock[type_id] if has_aggregated else raw_stock
+        used_equivalents = stock_used > raw_stock
+        fits_possible = stock_used // qty_per_fit if qty_per_fit > 0 else 0
+        stock_unknown = (not priced.has_local_data) and (not has_aggregated)
+
+        raw_analyses.append({
+            "type_id": type_id,
+            "type_name": priced.type_name,
+            "image_url": priced.image_url,
+            "slot_type": priced.item.slot_type,
+            "quantity_per_fit": qty_per_fit,
+            "raw_stock": raw_stock,
+            "stock_used": stock_used,
+            "fits_possible": fits_possible,
+            "used_equivalents": used_equivalents,
+            "isk_per_unit": priced.local_sell,
+            "stock_unknown": stock_unknown,
+        })
+
+    if not raw_analyses:
+        return _empty_fit_availability(result)
+
+    fits_available = min(a["fits_possible"] for a in raw_analyses)
+
+    items = [
+        ItemAvailability(
+            type_id=a["type_id"],
+            type_name=a["type_name"],
+            image_url=a["image_url"],
+            slot_type=a["slot_type"],
+            quantity_per_fit=a["quantity_per_fit"],
+            raw_stock=a["raw_stock"],
+            stock_used=a["stock_used"],
+            fits_possible=a["fits_possible"],
+            used_equivalents=a["used_equivalents"],
+            is_bottleneck=(a["fits_possible"] == fits_available),
+            isk_per_unit=a["isk_per_unit"],
+            stock_unknown=a["stock_unknown"],
+        )
+        for a in raw_analyses
+    ]
+    items.sort(key=lambda i: (i.fits_possible, -i.quantity_per_fit))
+
+    total_isk_per_fit = 0.0
+    unpriced_item_count = 0
+    for i in items:
+        if i.isk_per_unit == 0:
+            log.warning("Unpriced item excluded from fit ISK total: %s", i.type_name)
+            unpriced_item_count += 1
+            continue
+        total_isk_per_fit += i.quantity_per_fit * i.isk_per_unit
+
+    ship_type_id: Optional[int] = None
+    for priced in result.items:
+        if priced.item.category_name == "Ship":
+            ship_type_id = priced.type_id
+            break
+
+    return FitAvailabilitySummary(
+        fits_available=fits_available,
+        items=tuple(items),
+        total_isk_per_fit=total_isk_per_fit,
+        ship_type_id=ship_type_id,
+        ship_name=result.ship_name,
+        unpriced_item_count=unpriced_item_count,
+    )
 
 
 # =============================================================================

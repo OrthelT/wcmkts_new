@@ -101,6 +101,14 @@
     "sde" = "sdelite_turso"
     "build_cost" = "buildcost_turso"
 
+# Maps db alias → table_name value to probe in its `updatelog` table for
+# post-sync freshness validation. Aliases without an entry skip the probe
+# (sync is trusted as soon as libsql.connect.sync() returns).
+[freshness_probes]
+    "wcmktprod" = "marketstats"
+    "wcmktnorth" = "marketstats"
+    "build_cost" = "buildcost"
+
 [env_db_aliases]
     "prod" = "wcmktprod"
     "dev" = "wcmkttest"
