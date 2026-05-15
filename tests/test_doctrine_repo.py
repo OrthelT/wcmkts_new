@@ -157,6 +157,18 @@ class TestDoctrineDisplayName:
 
         assert result == "Special Fits"
 
+    def test_display_name_returns_raw_name_when_active_market_unavailable(self):
+        from repositories import doctrine_repo
+
+        with patch("state.market_state.get_active_market", side_effect=RuntimeError("bad state")):
+            with patch(
+                "repositories.doctrine_repo.get_friendly_names_with_cache"
+            ) as mock_friendly_names:
+                result = doctrine_repo.get_doctrine_display_name("Special Fits")
+
+        assert result == "Special Fits"
+        mock_friendly_names.assert_not_called()
+
     def test_returns_empty_when_module_in_no_fits(self):
         db, repo = _make_repo()
 

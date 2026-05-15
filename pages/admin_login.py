@@ -7,7 +7,13 @@ import streamlit as st
 from logging_config import setup_logging
 from pages.components.header import render_page_title
 from services.eve_sso_service import get_eve_sso_service
-from state import clear_admin_auth_state, get_admin_identity, set_admin_identity
+from state import (
+    clear_admin_auth_state,
+    consume_pending_oauth_state,
+    get_admin_identity,
+    set_admin_identity,
+    set_pending_oauth_state,
+)
 
 logger = setup_logging(__name__, log_file="admin_login.log")
 
@@ -23,6 +29,25 @@ def _clear_callback_params() -> None:
     for key in ("code", "state", "error", "error_description"):
         if key in st.query_params:
             del st.query_params[key]
+
+
+def _build_authorization_url(service) -> str:
+    oauth_state = service.build_oauth_state()
+    set_pending_oauth_state(oauth_state)
+    return service.create_authorization_url(oauth_state)
+
+
+def _complete_callback_login(service, code: str, returned_state: str) -> dict:
+    expected_state = consume_pending_oauth_state()
+    if not expected_state or returned_state != expected_state:
+        raise ValueError("Invalid OAuth state")
+    if not service.verify_oauth_state(returned_state):
+        raise ValueError("Invalid OAuth state")
+    return service.complete_login(
+        code=code,
+        returned_state=returned_state,
+        expected_state=expected_state,
+    )
 
 
 def main() -> None:
@@ -53,13 +78,7 @@ def main() -> None:
     returned_state = _query_param("state")
     if code and returned_state:
         try:
-            if not service.verify_oauth_state(returned_state):
-                raise ValueError("Invalid OAuth state")
-            signed_identity = service.complete_login(
-                code=code,
-                returned_state=returned_state,
-                expected_state=returned_state,
-            )
+            signed_identity = _complete_callback_login(service, code, returned_state)
             set_admin_identity(signed_identity)
             _clear_callback_params()
             st.success("Admin login successful.")
@@ -71,10 +90,9 @@ def main() -> None:
             st.error(str(exc))
         return
 
-    oauth_state = service.build_oauth_state()
     st.link_button(
         "Sign in with EVE",
-        url=service.create_authorization_url(oauth_state),
+        url=_build_authorization_url(service),
         use_container_width=True,
     )
 

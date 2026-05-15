@@ -132,5 +132,9 @@
     callback_url = "http://localhost:8501/admin_login"
     allowed_character_ids = []
 
+[admin]
+    write_target = "remote"
+    session_ttl_minutes = 480
+
 [module_strategy]
   use_equivalent = true

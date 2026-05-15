@@ -63,13 +63,15 @@ DOCTRINE_COLUMNS = [
     "timestamp",
 ]
 
+ADMIN_WRITE_TARGETS = {"local", "remote"}
+
 
 class AdminRepository:
     """Repository for reading and replacing the watchlist table."""
 
-    def __init__(self, db: DatabaseConfig, *, write_target: str = "local"):
+    def __init__(self, db: DatabaseConfig, *, write_target: str = "remote"):
         self._db = db
-        self._write_target = write_target
+        self._write_target = self._normalize_write_target(write_target)
         self._reader = BaseRepository(db, logger)
 
     @classmethod
@@ -97,7 +99,7 @@ class AdminRepository:
             """
         )
         if getattr(self, "_reader", None) is not None:
-            return self._reader.read_df(query).reset_index(drop=True)
+            return self._reader.read_df(query, local=self._read_local()).reset_index(drop=True)
 
         with self._get_write_engine().connect() as conn:
             return pd.read_sql_query(query, conn).reset_index(drop=True)
@@ -197,7 +199,7 @@ class AdminRepository:
             """
         )
         if getattr(self, "_reader", None) is not None:
-            return self._reader.read_df(query).reset_index(drop=True)
+            return self._reader.read_df(query, local=self._read_local()).reset_index(drop=True)
         try:
             with self._get_write_engine().connect() as conn:
                 return pd.read_sql_query(query, conn).reset_index(drop=True)
@@ -224,7 +226,7 @@ class AdminRepository:
             """
         )
         if getattr(self, "_reader", None) is not None:
-            return self._reader.read_df(query).reset_index(drop=True)
+            return self._reader.read_df(query, local=self._read_local()).reset_index(drop=True)
         try:
             with self._get_write_engine().connect() as conn:
                 return pd.read_sql_query(query, conn).reset_index(drop=True)
@@ -283,8 +285,8 @@ class AdminRepository:
         params = {"fit_id": fit_id}
         try:
             if getattr(self, "_reader", None) is not None:
-                fit_df = self._reader.read_df(fit_query, params=params)
-                items_df = self._reader.read_df(items_query, params=params)
+                fit_df = self._reader.read_df(fit_query, params=params, local=self._read_local())
+                items_df = self._reader.read_df(items_query, params=params, local=self._read_local())
                 if fit_df.empty:
                     return ""
                 fit = fit_df.iloc[0].to_dict()
@@ -686,11 +688,29 @@ class AdminRepository:
         fit_id: int,
         ship_type_id: int,
     ) -> None:
-        exists = conn.execute(
-            text("SELECT 1 FROM lead_ships WHERE doctrine_id = :doctrine_id LIMIT 1"),
+        existing = conn.execute(
+            text("SELECT fit_id FROM lead_ships WHERE doctrine_id = :doctrine_id LIMIT 1"),
             {"doctrine_id": doctrine_id},
-        ).first()
-        if exists:
+        ).mappings().first()
+        if existing:
+            if int(existing["fit_id"] or -1) == fit_id:
+                conn.execute(
+                    text(
+                        """
+                        UPDATE lead_ships
+                        SET doctrine_name = :doctrine_name,
+                            lead_ship = :lead_ship,
+                            fit_id = :fit_id
+                        WHERE doctrine_id = :doctrine_id AND fit_id = :fit_id
+                        """
+                    ),
+                    {
+                        "doctrine_name": doctrine_name,
+                        "doctrine_id": doctrine_id,
+                        "lead_ship": ship_type_id,
+                        "fit_id": fit_id,
+                    },
+                )
             return
         conn.execute(
             text(
@@ -731,6 +751,16 @@ class AdminRepository:
         if self._write_target == "remote":
             return self._db.remote_engine
         return self._db.engine
+
+    def _read_local(self) -> bool:
+        return self._write_target != "remote"
+
+    @staticmethod
+    def _normalize_write_target(write_target: str) -> str:
+        target = str(write_target).strip().lower()
+        if target not in ADMIN_WRITE_TARGETS:
+            raise ValueError("write_target must be 'local' or 'remote'")
+        return target
 
     def _prepare_local_write(self) -> None:
         """Close stale local handles before local admin writes."""

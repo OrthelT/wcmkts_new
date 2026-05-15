@@ -90,7 +90,7 @@ class TestSettingsToml(unittest.TestCase):
         for ship_name, fit_mappings in special_cases.items():
             with self.subTest(ship=ship_name):
                 # Ship name should be a string
-                self.assertIsInstance(ship_name, str, f"Ship name should be a string")
+                self.assertIsInstance(ship_name, str, "Ship name should be a string")
 
                 # Fit mappings should be a dict
                 self.assertIsInstance(
@@ -109,7 +109,7 @@ class TestSettingsToml(unittest.TestCase):
                     )
 
                     # Role should be a string and one of the valid roles
-                    self.assertIsInstance(role, str, f"Role should be a string")
+                    self.assertIsInstance(role, str, "Role should be a string")
                     self.assertIn(
                         role,
                         ['DPS', 'Logi', 'Links', 'Support'],
@@ -173,6 +173,10 @@ class TestSettingsToml(unittest.TestCase):
                 # This should work without errors
                 result = fit_mappings.get(fit_id) or fit_mappings.get(str(fit_id))
                 self.assertIsNotNone(result)
+
+    def test_admin_writes_default_to_remote(self):
+        """Admin edits should write through to the configured Turso database."""
+        self.assertEqual(self.settings["admin"]["write_target"], "remote")
 
 
 if __name__ == "__main__":

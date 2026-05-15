@@ -647,15 +647,16 @@ def get_target_by_ship_id_with_cache(ship_id: int, default: int = DEFAULT_SHIP_T
         logger.error(f"Failed to get target for ship {ship_id}: {e}")
         return default
 
-def _resolve_doctrine_display_alias(db_alias: str | None = None) -> str:
+def _resolve_doctrine_display_alias(db_alias: str | None = None) -> str | None:
     if db_alias and db_alias != "wcmkt":
         return db_alias
     try:
         from state.market_state import get_active_market
 
         return get_active_market().database_alias
-    except Exception:
-        return "wcmktprod"
+    except Exception as exc:
+        logger.error("Failed to resolve active market for doctrine display names: %s", exc)
+        return None
 
 
 @st.cache_data(ttl=600)
@@ -683,6 +684,8 @@ def get_friendly_names_with_cache(db_alias: str = "wcmktprod") -> dict[str, str]
 def get_doctrine_display_name(raw_name: str, db_alias: str | None = None) -> str:
     """Return the user-friendly display name for a doctrine, or raw_name if unknown."""
     resolved_alias = _resolve_doctrine_display_alias(db_alias)
+    if resolved_alias is None:
+        return raw_name
     return get_friendly_names_with_cache(resolved_alias).get(raw_name, raw_name)
 
 

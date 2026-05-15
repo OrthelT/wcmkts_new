@@ -111,7 +111,10 @@ class SettingsService:
 
     @property
     def admin_write_target(self) -> str:
-        return str(self.settings.get("admin", {}).get("write_target", "local"))
+        target = str(self.settings.get("admin", {}).get("write_target", "remote")).strip().lower()
+        if target not in {"local", "remote"}:
+            raise ValueError("admin.write_target must be 'local' or 'remote'")
+        return target
 
     @property
     def admin_session_ttl_minutes(self) -> int:

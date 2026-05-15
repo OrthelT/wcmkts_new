@@ -173,6 +173,7 @@ def _create_doctrine_admin_db(path: Path) -> None:
                     (typeID, typeName, groupID, volume, groupName, categoryID, categoryName)
                 VALUES
                     (1, 'Vedmak', 25, 10000, 'Cruiser', 6, 'Ship'),
+                    (4, 'Caracal', 25, 10000, 'Cruiser', 6, 'Ship'),
                     (2, 'Damage Control II', 60, 5, 'Damage Control', 7, 'Module'),
                     (3, 'Entropic Radiation Sink II', 60, 5, 'Weapon Upgrade', 7, 'Module')
                 """
@@ -189,6 +190,7 @@ def _create_doctrine_admin_db(path: Path) -> None:
                     )
                 VALUES
                     (1, 12, 1.0, 100.0, 100.0, 2.0, 25, 'Vedmak', 'Cruiser', 6, 'Ship', 6.0, '2026-05-12'),
+                    (4, 8, 1.0, 90.0, 90.0, 2.0, 25, 'Caracal', 'Cruiser', 6, 'Ship', 6.0, '2026-05-12'),
                     (2, 10, 1.0, 20.0, 20.0, 5.0, 60, 'Damage Control II', 'Damage Control', 7, 'Module', 2.0, '2026-05-12'),
                     (3, 9, 1.0, 30.0, 30.0, 3.0, 60, 'Entropic Radiation Sink II', 'Weapon Upgrade', 7, 'Module', 3.0, '2026-05-12')
                 """
@@ -446,6 +448,27 @@ def test_prepare_local_write_disposes_stale_connections():
     db._dispose_local_connections.assert_called_once()
 
 
+def test_default_write_engine_uses_remote_target():
+    db = MagicMock()
+    db.engine = object()
+    db.remote_engine = object()
+    repo = AdminRepository(db)
+
+    assert repo._get_write_engine() is db.remote_engine
+
+
+def test_remote_admin_reader_reads_remote_source():
+    db = MagicMock()
+    repo = AdminRepository(db, write_target="remote")
+    repo._reader = MagicMock()
+    repo._reader.read_df.return_value = pd.DataFrame(columns=["type_id"])
+
+    repo.get_watchlist()
+
+    _, kwargs = repo._reader.read_df.call_args
+    assert kwargs["local"] is False
+
+
 def test_get_doctrine_fit_eft_returns_current_fit_text(tmp_path):
     db_path = tmp_path / "doctrine.db"
     _create_doctrine_admin_db(db_path)
@@ -612,3 +635,41 @@ def test_delete_doctrine_fit_promotes_remaining_fit_as_lead_ship(tmp_path):
     assert [row.fit_id for row in remaining_fits] == [99]
     assert lead_ship["lead_ship"] == 1
     assert lead_ship["fit_id"] == 99
+
+
+def test_update_doctrine_fit_refreshes_existing_lead_ship(tmp_path):
+    db_path = tmp_path / "doctrine.db"
+    _create_doctrine_admin_db(db_path)
+    repo = AdminRepository.from_sqlite_path(db_path)
+    repo.save_doctrine_fit(
+        doctrine_id=10,
+        doctrine_name="Doctrine Alpha",
+        fit_id=20,
+        fit_name="Lead Vedmak",
+        ship_name="Vedmak",
+        item_quantities={"Damage Control II": 1},
+        target=40,
+        market_flag="primary",
+        mode="update",
+    )
+
+    repo.save_doctrine_fit(
+        doctrine_id=10,
+        doctrine_name="Doctrine Alpha",
+        fit_id=20,
+        fit_name="Lead Caracal",
+        ship_name="Caracal",
+        item_quantities={"Damage Control II": 1},
+        target=40,
+        market_flag="primary",
+        mode="update",
+    )
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.connect() as conn:
+        lead_ship = conn.execute(
+            text("SELECT lead_ship, fit_id FROM lead_ships WHERE doctrine_id = 10")
+        ).mappings().one()
+
+    assert lead_ship["lead_ship"] == 4
+    assert lead_ship["fit_id"] == 20
