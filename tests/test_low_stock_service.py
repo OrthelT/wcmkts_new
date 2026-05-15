@@ -3,6 +3,8 @@
 import pandas as pd
 from unittest.mock import Mock, patch
 
+from sqlalchemy import create_engine, text
+
 
 def _mock_db():
     mock_conn = Mock()
@@ -34,6 +36,102 @@ def _mock_market_repo(volume_map: dict[int, tuple[float, float]] | None = None):
 
 
 class TestLowStockService:
+    def test_get_doctrine_options_ignores_empty_doctrine_placeholders(self, tmp_path):
+        from services.low_stock_service import LowStockService
+
+        db_path = tmp_path / "low_stock.db"
+        engine = create_engine(f"sqlite:///{db_path}")
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE doctrine_fits (
+                        doctrine_id INTEGER,
+                        doctrine_name TEXT,
+                        fit_id INTEGER
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE lead_ships (
+                        doctrine_id INTEGER,
+                        lead_ship INTEGER
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO doctrine_fits (doctrine_id, doctrine_name, fit_id)
+                    VALUES
+                        (10, 'Empty Doctrine', NULL),
+                        (11, 'Active Doctrine', 20)
+                    """
+                )
+            )
+            conn.execute(
+                text("INSERT INTO lead_ships (doctrine_id, lead_ship) VALUES (11, 1)")
+            )
+
+        db = Mock()
+        db.engine = engine
+        service = LowStockService(db, Mock(), _mock_market_repo())
+
+        result = service.get_doctrine_options()
+
+        assert [doctrine.doctrine_name for doctrine in result] == ["Active Doctrine"]
+        assert result[0].fit_ids == [20]
+
+    def test_get_doctrine_options_groups_fit_ids_by_doctrine_id(self, tmp_path):
+        from services.low_stock_service import LowStockService
+
+        db_path = tmp_path / "low_stock.db"
+        engine = create_engine(f"sqlite:///{db_path}")
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE doctrine_fits (
+                        doctrine_id INTEGER,
+                        doctrine_name TEXT,
+                        fit_id INTEGER
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE lead_ships (
+                        doctrine_id INTEGER,
+                        lead_ship INTEGER
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO doctrine_fits (doctrine_id, doctrine_name, fit_id)
+                    VALUES
+                        (10, 'Shared Name', 20),
+                        (11, 'Shared Name', 21)
+                    """
+                )
+            )
+
+        db = Mock()
+        db.engine = engine
+        service = LowStockService(db, Mock(), _mock_market_repo())
+
+        result = sorted(service.get_doctrine_options(), key=lambda doctrine: doctrine.doctrine_id)
+
+        assert [doctrine.fit_ids for doctrine in result] == [[20], [21]]
+
     @patch("services.low_stock_service.apply_localized_type_names")
     @patch("pandas.read_sql_query")
     def test_get_low_stock_items_hides_zero_volume_items_by_default(

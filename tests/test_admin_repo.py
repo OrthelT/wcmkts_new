@@ -366,6 +366,58 @@ def test_get_doctrine_fit_options_returns_current_fit_metadata(tmp_path):
     assert list(result["market_flag"]) == ["primary"]
 
 
+def test_create_doctrine_records_empty_doctrine_without_linked_fit_rows(tmp_path):
+    db_path = tmp_path / "doctrine.db"
+    _create_doctrine_admin_db(db_path)
+    repo = AdminRepository.from_sqlite_path(db_path)
+
+    repo.create_doctrine(doctrine_id=11, doctrine_name="Doctrine Beta")
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.connect() as conn:
+        doctrine = conn.execute(
+            text("SELECT * FROM doctrine_fits WHERE doctrine_id = 11")
+        ).mappings().one()
+        targets = conn.execute(text("SELECT COUNT(*) FROM ship_targets WHERE fit_id IS NULL")).scalar_one()
+        mapped = conn.execute(
+            text("SELECT COUNT(*) FROM doctrine_map WHERE doctrine_id = 11")
+        ).scalar_one()
+        lead_ship = conn.execute(
+            text("SELECT COUNT(*) FROM lead_ships WHERE doctrine_id = 11")
+        ).scalar_one()
+        doctrine_rows = conn.execute(
+            text("SELECT COUNT(*) FROM doctrines WHERE fit_id IS NULL")
+        ).scalar_one()
+
+    assert doctrine["doctrine_name"] == "Doctrine Beta"
+    assert doctrine["fit_id"] is None
+    assert doctrine["fit_name"] is None
+    assert doctrine["ship_type_id"] is None
+    assert targets == 0
+    assert mapped == 0
+    assert lead_ship == 0
+    assert doctrine_rows == 0
+
+
+def test_create_doctrine_rejects_duplicate_doctrine_name_case_insensitive(tmp_path):
+    db_path = tmp_path / "doctrine.db"
+    _create_doctrine_admin_db(db_path)
+    repo = AdminRepository.from_sqlite_path(db_path)
+
+    try:
+        repo.create_doctrine(doctrine_id=11, doctrine_name=" doctrine alpha ")
+    except ValueError as exc:
+        assert "doctrine_name already exists" in str(exc)
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.connect() as conn:
+        doctrine_count = conn.execute(
+            text("SELECT COUNT(*) FROM doctrine_fits WHERE doctrine_id = 11")
+        ).scalar_one()
+
+    assert doctrine_count == 0
+
+
 def test_get_doctrine_fit_options_returns_schema_on_disk_io_error():
     engine = MagicMock()
     engine.connect.side_effect = ValueError("disk I/O error")
@@ -447,3 +499,116 @@ def test_save_doctrine_fit_update_replaces_existing_fit_rows(tmp_path):
     assert fit["target"] == 40
     assert fit["market_flag"] == "deployment"
     assert [(row.type_id, row.fit_qty) for row in doctrines] == [(1, 1), (2, 1)]
+
+
+def test_save_doctrine_fit_add_removes_empty_doctrine_placeholder(tmp_path):
+    db_path = tmp_path / "doctrine.db"
+    _create_doctrine_admin_db(db_path)
+    repo = AdminRepository.from_sqlite_path(db_path)
+    repo.create_doctrine(doctrine_id=11, doctrine_name="Doctrine Beta")
+
+    repo.save_doctrine_fit(
+        doctrine_id=11,
+        doctrine_name="Doctrine Beta",
+        fit_id=99,
+        fit_name="Beta Vedmak",
+        ship_name="Vedmak",
+        item_quantities={"Damage Control II": 1},
+        target=30,
+        market_flag="primary",
+        mode="add",
+    )
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.connect() as conn:
+        fit_rows = conn.execute(
+            text("SELECT fit_id FROM doctrine_fits WHERE doctrine_id = 11 ORDER BY fit_id")
+        ).fetchall()
+
+    assert [row.fit_id for row in fit_rows] == [99]
+
+
+def test_delete_doctrine_fit_removes_last_fit_and_keeps_empty_doctrine_placeholder(tmp_path):
+    db_path = tmp_path / "doctrine.db"
+    _create_doctrine_admin_db(db_path)
+    repo = AdminRepository.from_sqlite_path(db_path)
+    repo.save_doctrine_fit(
+        doctrine_id=10,
+        doctrine_name="Doctrine Alpha",
+        fit_id=20,
+        fit_name="Updated Vedmak",
+        ship_name="Vedmak",
+        item_quantities={"Damage Control II": 1},
+        target=40,
+        market_flag="primary",
+        mode="update",
+    )
+
+    repo.delete_doctrine_fit(doctrine_id=10, fit_id=20)
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.connect() as conn:
+        fit_rows = conn.execute(
+            text("SELECT doctrine_name, fit_id FROM doctrine_fits WHERE doctrine_id = 10")
+        ).fetchall()
+        target_count = conn.execute(
+            text("SELECT COUNT(*) FROM ship_targets WHERE fit_id = 20")
+        ).scalar_one()
+        map_count = conn.execute(
+            text("SELECT COUNT(*) FROM doctrine_map WHERE doctrine_id = 10 AND fitting_id = 20")
+        ).scalar_one()
+        doctrine_count = conn.execute(
+            text("SELECT COUNT(*) FROM doctrines WHERE fit_id = 20")
+        ).scalar_one()
+        lead_count = conn.execute(
+            text("SELECT COUNT(*) FROM lead_ships WHERE doctrine_id = 10")
+        ).scalar_one()
+
+    assert [(row.doctrine_name, row.fit_id) for row in fit_rows] == [("Doctrine Alpha", None)]
+    assert target_count == 0
+    assert map_count == 0
+    assert doctrine_count == 0
+    assert lead_count == 0
+
+
+def test_delete_doctrine_fit_promotes_remaining_fit_as_lead_ship(tmp_path):
+    db_path = tmp_path / "doctrine.db"
+    _create_doctrine_admin_db(db_path)
+    repo = AdminRepository.from_sqlite_path(db_path)
+    repo.save_doctrine_fit(
+        doctrine_id=10,
+        doctrine_name="Doctrine Alpha",
+        fit_id=20,
+        fit_name="Lead Vedmak",
+        ship_name="Vedmak",
+        item_quantities={"Damage Control II": 1},
+        target=40,
+        market_flag="primary",
+        mode="update",
+    )
+    repo.save_doctrine_fit(
+        doctrine_id=10,
+        doctrine_name="Doctrine Alpha",
+        fit_id=99,
+        fit_name="Backup Vedmak",
+        ship_name="Vedmak",
+        item_quantities={"Entropic Radiation Sink II": 1},
+        target=35,
+        market_flag="primary",
+        mode="add",
+    )
+
+    repo.delete_doctrine_fit(doctrine_id=10, fit_id=20)
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.connect() as conn:
+        remaining_fits = conn.execute(
+            text("SELECT fit_id FROM doctrine_fits WHERE doctrine_id = 10 ORDER BY fit_id")
+        ).fetchall()
+        lead_ship = conn.execute(
+            text("SELECT lead_ship, fit_id FROM lead_ships WHERE doctrine_id = 10")
+        ).mappings().one()
+
+    assert [row.fit_id for row in remaining_fits] == [99]
+    assert lead_ship["lead_ship"] == 1
+    assert lead_ship["fit_id"] == 99

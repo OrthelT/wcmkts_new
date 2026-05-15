@@ -37,6 +37,11 @@ DOCTRINE_FIT_OPTION_COLUMNS = [
     "market_flag",
 ]
 
+DOCTRINE_OPTION_COLUMNS = [
+    "doctrine_id",
+    "doctrine_name",
+]
+
 
 DOCTRINE_COLUMNS = [
     "fit_id",
@@ -139,11 +144,38 @@ class AdminRepository:
             row = conn.execute(query, {"doctrine_id": doctrine_id}).first()
         return str(row[0]) if row and row[0] else None
 
+    def doctrine_id_exists(self, doctrine_id: int) -> bool:
+        """Return whether a doctrine_id is already registered."""
+        query = text("SELECT 1 FROM doctrine_fits WHERE doctrine_id = :doctrine_id LIMIT 1")
+        with self._get_write_engine().connect() as conn:
+            return conn.execute(query, {"doctrine_id": doctrine_id}).first() is not None
+
+    def doctrine_name_exists(self, doctrine_name: str) -> bool:
+        """Return whether a normalized doctrine name is already registered."""
+        query = text(
+            """
+            SELECT 1
+            FROM doctrine_fits
+            WHERE doctrine_name IS NOT NULL
+              AND LOWER(TRIM(doctrine_name)) = LOWER(TRIM(:doctrine_name))
+            LIMIT 1
+            """
+        )
+        with self._get_write_engine().connect() as conn:
+            return conn.execute(query, {"doctrine_name": doctrine_name}).first() is not None
+
     def doctrine_fit_id_exists(self, fit_id: int) -> bool:
         """Return whether a fit_id is already used by any doctrine fit."""
         query = text("SELECT 1 FROM doctrine_fits WHERE fit_id = :fit_id LIMIT 1")
         with self._get_write_engine().connect() as conn:
             return conn.execute(query, {"fit_id": fit_id}).first() is not None
+
+    def get_next_doctrine_id(self) -> int:
+        """Return the next available doctrine id."""
+        query = text("SELECT COALESCE(MAX(doctrine_id), 0) + 1 FROM doctrine_fits")
+        self._prepare_local_write()
+        with self._get_write_engine().connect() as conn:
+            return int(conn.execute(query).scalar_one())
 
     def get_next_doctrine_fit_id(self) -> int:
         """Return the next available doctrine fit id."""
@@ -151,6 +183,27 @@ class AdminRepository:
         self._prepare_local_write()
         with self._get_write_engine().connect() as conn:
             return int(conn.execute(query).scalar_one())
+
+    def get_doctrine_options(self) -> pd.DataFrame:
+        """Return current doctrine metadata for admin selectors."""
+        query = text(
+            """
+            SELECT DISTINCT doctrine_id, doctrine_name
+            FROM doctrine_fits
+            WHERE doctrine_id IS NOT NULL
+              AND doctrine_name IS NOT NULL
+              AND TRIM(doctrine_name) != ''
+            ORDER BY doctrine_name, doctrine_id
+            """
+        )
+        if getattr(self, "_reader", None) is not None:
+            return self._reader.read_df(query).reset_index(drop=True)
+        try:
+            with self._get_write_engine().connect() as conn:
+                return pd.read_sql_query(query, conn).reset_index(drop=True)
+        except Exception:
+            logger.exception("Failed to read doctrine options")
+            return pd.DataFrame(columns=DOCTRINE_OPTION_COLUMNS)
 
     def get_doctrine_fit_options(self) -> pd.DataFrame:
         """Return current doctrine and fit metadata for admin selectors."""
@@ -166,6 +219,7 @@ class AdminRepository:
                 target,
                 market_flag
             FROM doctrine_fits
+            WHERE fit_id IS NOT NULL
             ORDER BY doctrine_name, fit_name, fit_id
             """
         )
@@ -177,6 +231,36 @@ class AdminRepository:
         except Exception:
             logger.exception("Failed to read doctrine fit options")
             return pd.DataFrame(columns=DOCTRINE_FIT_OPTION_COLUMNS)
+
+    def create_doctrine(self, *, doctrine_id: int, doctrine_name: str) -> None:
+        """Register a doctrine before it has any fits."""
+        self._prepare_local_write()
+        doctrine_name = doctrine_name.strip()
+        if not doctrine_name:
+            raise ValueError("doctrine_name must be a non-empty string")
+        engine = self._get_write_engine()
+        with engine.begin() as conn:
+            exists = conn.execute(
+                text("SELECT 1 FROM doctrine_fits WHERE doctrine_id = :doctrine_id LIMIT 1"),
+                {"doctrine_id": doctrine_id},
+            ).first()
+            if exists:
+                raise ValueError(f"doctrine_id {doctrine_id} already exists")
+            duplicate_name = conn.execute(
+                text(
+                    """
+                    SELECT 1
+                    FROM doctrine_fits
+                    WHERE doctrine_name IS NOT NULL
+                      AND LOWER(TRIM(doctrine_name)) = LOWER(TRIM(:doctrine_name))
+                    LIMIT 1
+                    """
+                ),
+                {"doctrine_name": doctrine_name},
+            ).first()
+            if duplicate_name:
+                raise ValueError("doctrine_name already exists")
+            self._ensure_empty_doctrine_placeholder(conn, doctrine_id, doctrine_name)
 
     def get_doctrine_fit_eft(self, fit_id: int) -> str:
         """Return the current fit as a simple EFT-style text block."""
@@ -310,6 +394,7 @@ class AdminRepository:
                     fit_values,
                 )
 
+            self._delete_empty_doctrine_placeholders(conn, doctrine_id)
             conn.execute(text("DELETE FROM ship_targets WHERE fit_id = :fit_id"), {"fit_id": fit_id})
             conn.execute(
                 text(
@@ -363,6 +448,94 @@ class AdminRepository:
                 doctrine_rows,
             )
             self._add_doctrine_types_to_watchlist(conn, [ship, *items])
+
+    def delete_doctrine_fit(self, *, doctrine_id: int, fit_id: int) -> None:
+        """Delete one doctrine fit and clean all linked derived rows."""
+        self._prepare_local_write()
+        engine = self._get_write_engine()
+        with engine.begin() as conn:
+            existing_fit = conn.execute(
+                text(
+                    """
+                    SELECT doctrine_name, fit_id
+                    FROM doctrine_fits
+                    WHERE doctrine_id = :doctrine_id AND fit_id = :fit_id
+                    LIMIT 1
+                    """
+                ),
+                {"doctrine_id": doctrine_id, "fit_id": fit_id},
+            ).mappings().first()
+            if existing_fit is None:
+                raise ValueError(f"No doctrine fit found for doctrine_id={doctrine_id}, fit_id={fit_id}")
+
+            doctrine_name = str(existing_fit["doctrine_name"] or "").strip()
+            conn.execute(
+                text("DELETE FROM doctrine_fits WHERE doctrine_id = :doctrine_id AND fit_id = :fit_id"),
+                {"doctrine_id": doctrine_id, "fit_id": fit_id},
+            )
+            conn.execute(text("DELETE FROM ship_targets WHERE fit_id = :fit_id"), {"fit_id": fit_id})
+            conn.execute(
+                text("DELETE FROM doctrine_map WHERE doctrine_id = :doctrine_id AND fitting_id = :fit_id"),
+                {"doctrine_id": doctrine_id, "fit_id": fit_id},
+            )
+            conn.execute(text("DELETE FROM doctrines WHERE fit_id = :fit_id"), {"fit_id": fit_id})
+
+            remaining_fit = conn.execute(
+                text(
+                    """
+                    SELECT doctrine_name, fit_id, ship_type_id
+                    FROM doctrine_fits
+                    WHERE doctrine_id = :doctrine_id
+                      AND fit_id IS NOT NULL
+                    ORDER BY fit_id
+                    LIMIT 1
+                    """
+                ),
+                {"doctrine_id": doctrine_id},
+            ).mappings().first()
+
+            if remaining_fit is None:
+                conn.execute(
+                    text("DELETE FROM lead_ships WHERE doctrine_id = :doctrine_id"),
+                    {"doctrine_id": doctrine_id},
+                )
+                self._ensure_empty_doctrine_placeholder(conn, doctrine_id, doctrine_name)
+                return
+
+            self._delete_empty_doctrine_placeholders(conn, doctrine_id)
+            replacement_name = str(remaining_fit["doctrine_name"] or doctrine_name)
+            replacement_fit_id = int(remaining_fit["fit_id"])
+            replacement_ship_id = int(remaining_fit["ship_type_id"])
+            lead_ship = conn.execute(
+                text("SELECT fit_id FROM lead_ships WHERE doctrine_id = :doctrine_id LIMIT 1"),
+                {"doctrine_id": doctrine_id},
+            ).mappings().first()
+            if lead_ship is None:
+                self._ensure_lead_ship(
+                    conn,
+                    doctrine_id,
+                    replacement_name,
+                    replacement_fit_id,
+                    replacement_ship_id,
+                )
+            elif int(lead_ship["fit_id"] or -1) == fit_id:
+                conn.execute(
+                    text(
+                        """
+                        UPDATE lead_ships
+                        SET doctrine_name = :doctrine_name,
+                            lead_ship = :lead_ship,
+                            fit_id = :fit_id
+                        WHERE doctrine_id = :doctrine_id
+                        """
+                    ),
+                    {
+                        "doctrine_name": replacement_name,
+                        "lead_ship": replacement_ship_id,
+                        "fit_id": replacement_fit_id,
+                        "doctrine_id": doctrine_id,
+                    },
+                )
 
     def _resolve_type_metadata(self, type_name: str) -> dict:
         query = text(
@@ -468,6 +641,41 @@ class AdminRepository:
                 """
             ),
             {"id": next_id, "doctrine_id": doctrine_id, "fit_id": fit_id},
+        )
+
+    def _ensure_empty_doctrine_placeholder(
+        self,
+        conn,
+        doctrine_id: int,
+        doctrine_name: str,
+    ) -> None:
+        exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM doctrine_fits
+                WHERE doctrine_id = :doctrine_id AND fit_id IS NULL
+                LIMIT 1
+                """
+            ),
+            {"doctrine_id": doctrine_id},
+        ).first()
+        if exists:
+            return
+        conn.execute(
+            text(
+                """
+                INSERT INTO doctrine_fits (doctrine_name, doctrine_id)
+                VALUES (:doctrine_name, :doctrine_id)
+                """
+            ),
+            {"doctrine_name": doctrine_name, "doctrine_id": doctrine_id},
+        )
+
+    def _delete_empty_doctrine_placeholders(self, conn, doctrine_id: int) -> None:
+        conn.execute(
+            text("DELETE FROM doctrine_fits WHERE doctrine_id = :doctrine_id AND fit_id IS NULL"),
+            {"doctrine_id": doctrine_id},
         )
 
     def _ensure_lead_ship(

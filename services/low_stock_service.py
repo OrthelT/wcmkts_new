@@ -249,7 +249,8 @@ class LowStockService:
                 ls.lead_ship
             FROM doctrine_fits df
             LEFT JOIN lead_ships ls ON df.doctrine_id = ls.doctrine_id
-            ORDER BY df.doctrine_name
+            WHERE df.fit_id IS NOT NULL
+            ORDER BY df.doctrine_name, df.doctrine_id
         """
 
         try:
@@ -257,25 +258,26 @@ class LowStockService:
                 df = pd.read_sql_query(query, conn)
 
                 # Get fit_ids for each doctrine - must be inside the with block
-                fit_query = "SELECT doctrine_name, fit_id FROM doctrine_fits"
+                fit_query = "SELECT doctrine_id, fit_id FROM doctrine_fits WHERE fit_id IS NOT NULL"
                 fit_df = pd.read_sql_query(fit_query, conn)
 
             # Group fit_ids by doctrine (can be outside with block, uses DataFrame)
             fit_ids_map = (
-                fit_df.groupby("doctrine_name")["fit_id"].apply(list).to_dict()
+                fit_df.groupby("doctrine_id")["fit_id"].apply(list).to_dict()
             )
 
             result = []
             for _, row in df.iterrows():
+                doctrine_id = int(row["doctrine_id"])
                 doctrine_name = row["doctrine_name"]
                 result.append(
                     DoctrineFilterInfo(
-                        doctrine_id=int(row["doctrine_id"]),
+                        doctrine_id=doctrine_id,
                         doctrine_name=doctrine_name,
                         lead_ship_id=int(row["lead_ship"])
                         if pd.notna(row["lead_ship"])
                         else None,
-                        fit_ids=fit_ids_map.get(doctrine_name, []),
+                        fit_ids=fit_ids_map.get(doctrine_id, []),
                     )
                 )
 

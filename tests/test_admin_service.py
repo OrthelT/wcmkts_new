@@ -24,9 +24,20 @@ class StubRepo:
         self.fit_options = pd.DataFrame(
             [{"doctrine_id": 10, "doctrine_name": "Doctrine Alpha", "fit_id": 20}]
         )
+        self.doctrine_options = pd.DataFrame(
+            [{"doctrine_id": 10, "doctrine_name": "Doctrine Alpha"}]
+        )
+        self.next_doctrine_id = 11
+        self.doctrine_id_already_exists = False
+        self.doctrine_name_already_exists = False
+        self.created_doctrine = None
+        self.deleted_doctrine_fit = None
 
     def replace_watchlist(self, rows):
         self.rows = rows
+
+    def get_doctrine_options(self):
+        return self.doctrine_options
 
     def get_doctrine_fit_options(self):
         return self.fit_options
@@ -47,6 +58,21 @@ class StubRepo:
 
     def get_next_doctrine_fit_id(self):
         return self.next_fit_id
+
+    def get_next_doctrine_id(self):
+        return self.next_doctrine_id
+
+    def doctrine_id_exists(self, doctrine_id):
+        return self.doctrine_id_already_exists
+
+    def doctrine_name_exists(self, doctrine_name):
+        return self.doctrine_name_already_exists
+
+    def create_doctrine(self, **kwargs):
+        self.created_doctrine = kwargs
+
+    def delete_doctrine_fit(self, **kwargs):
+        self.deleted_doctrine_fit = kwargs
 
     def save_doctrine_fit(self, **kwargs):
         self.saved_doctrine_fit = kwargs
@@ -191,6 +217,15 @@ def test_get_doctrine_fit_options_delegates_to_repository():
     assert result.equals(repo.fit_options)
 
 
+def test_get_doctrine_options_delegates_to_repository():
+    repo = StubRepo()
+    service = AdminService(repo, StubAuthService(None), cache_invalidator=lambda: None)
+
+    result = service.get_doctrine_options()
+
+    assert result.equals(repo.doctrine_options)
+
+
 def test_get_doctrine_fit_eft_delegates_to_repository():
     repo = StubRepo()
     service = AdminService(repo, StubAuthService(None), cache_invalidator=lambda: None)
@@ -198,6 +233,58 @@ def test_get_doctrine_fit_eft_delegates_to_repository():
     result = service.get_doctrine_fit_eft(20)
 
     assert result == repo.fit_eft
+
+
+def test_create_doctrine_requires_admin_and_persists_empty_doctrine():
+    repo = StubRepo()
+    invalidated = {"called": False}
+    service = AdminService(
+        repo,
+        StubAuthService({"character_id": 2122333361, "character_name": "Orthel"}),
+        cache_invalidator=lambda: invalidated.__setitem__("called", True),
+    )
+
+    result = service.create_doctrine(
+        doctrine_name=" Doctrine Beta ",
+        signed_identity={"payload": {}, "signature": "x"},
+    )
+
+    assert repo.created_doctrine == {"doctrine_id": 11, "doctrine_name": "Doctrine Beta"}
+    assert result == {"doctrine_id": 11, "doctrine_name": "Doctrine Beta"}
+    assert invalidated["called"] is True
+
+
+def test_create_doctrine_rejects_existing_generated_doctrine_id():
+    repo = StubRepo()
+    repo.doctrine_id_already_exists = True
+    service = AdminService(
+        repo,
+        StubAuthService({"character_id": 2122333361, "character_name": "Orthel"}),
+        cache_invalidator=lambda: None,
+    )
+
+    with pytest.raises(ValueError, match="already exists"):
+        service.create_doctrine(
+            doctrine_name="Doctrine Beta",
+            signed_identity={"payload": {}, "signature": "x"},
+        )
+
+
+def test_create_doctrine_rejects_duplicate_doctrine_name():
+    repo = StubRepo()
+    repo.doctrine_name_already_exists = True
+    service = AdminService(
+        repo,
+        StubAuthService({"character_id": 2122333361, "character_name": "Orthel"}),
+        cache_invalidator=lambda: None,
+    )
+
+    with pytest.raises(ValueError, match="doctrine_name already exists"):
+        service.create_doctrine(
+            doctrine_name="doctrine alpha",
+            signed_identity={"payload": {}, "signature": "x"},
+        )
+    assert repo.created_doctrine is None
 
 
 def test_update_doctrine_fit_requires_existing_fit_pair():
@@ -215,6 +302,41 @@ def test_update_doctrine_fit_requires_existing_fit_pair():
             target=50,
             market_flag="primary",
             mode="update",
+            signed_identity={"payload": {}, "signature": "x"},
+        )
+
+
+def test_delete_doctrine_fit_requires_existing_pair_and_invalidates_cache():
+    repo = StubRepo()
+    invalidated = {"called": False}
+    service = AdminService(
+        repo,
+        StubAuthService({"character_id": 2122333361, "character_name": "Orthel"}),
+        cache_invalidator=lambda: invalidated.__setitem__("called", True),
+    )
+
+    result = service.delete_doctrine_fit(
+        doctrine_id=10,
+        fit_id=20,
+        signed_identity={"payload": {}, "signature": "x"},
+    )
+
+    assert repo.deleted_doctrine_fit == {"doctrine_id": 10, "fit_id": 20}
+    assert result == {"doctrine_id": 10, "fit_id": 20}
+    assert invalidated["called"] is True
+
+
+def test_delete_doctrine_fit_rejects_missing_fit_pair():
+    service = AdminService(
+        StubRepo(),
+        StubAuthService({"character_id": 2122333361, "character_name": "Orthel"}),
+        cache_invalidator=lambda: None,
+    )
+
+    with pytest.raises(ValueError, match="No doctrine fit found"):
+        service.delete_doctrine_fit(
+            doctrine_id=10,
+            fit_id=99,
             signed_identity={"payload": {}, "signature": "x"},
         )
 

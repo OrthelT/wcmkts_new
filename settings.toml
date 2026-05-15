@@ -127,5 +127,10 @@
 [i18n]
     default_language = "en"
 
+[eve_sso]
+    client_id = ""
+    callback_url = "http://localhost:8501/admin_login"
+    allowed_character_ids = []
+
 [module_strategy]
   use_equivalent = true

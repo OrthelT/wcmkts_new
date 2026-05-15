@@ -24,6 +24,10 @@ class AdminService:
         """Return the current watchlist."""
         return self._repository.get_watchlist()
 
+    def get_doctrine_options(self) -> pd.DataFrame:
+        """Return current doctrine metadata for admin selectors."""
+        return self._repository.get_doctrine_options()
+
     def get_doctrine_fit_options(self) -> pd.DataFrame:
         """Return current doctrine and fit metadata for admin selectors."""
         return self._repository.get_doctrine_fit_options()
@@ -40,6 +44,21 @@ class AdminService:
         self._repository.replace_watchlist(rows)
         self._cache_invalidator()
         return {"row_count": len(rows), "character_id": int(payload["character_id"])}
+
+    def create_doctrine(self, *, doctrine_name: str, signed_identity: dict | None) -> dict:
+        """Create an empty doctrine that can receive fits later."""
+        self._require_admin(signed_identity)
+        doctrine_name = doctrine_name.strip()
+        if not doctrine_name:
+            raise ValueError("doctrine_name must be a non-empty string")
+        if self._repository.doctrine_name_exists(doctrine_name):
+            raise ValueError("doctrine_name already exists")
+        doctrine_id = self._repository.get_next_doctrine_id()
+        if self._repository.doctrine_id_exists(doctrine_id):
+            raise ValueError(f"doctrine_id {doctrine_id} already exists")
+        self._repository.create_doctrine(doctrine_id=doctrine_id, doctrine_name=doctrine_name)
+        self._cache_invalidator()
+        return {"doctrine_id": doctrine_id, "doctrine_name": doctrine_name}
 
     def save_doctrine_fit(
         self,
@@ -98,6 +117,24 @@ class AdminService:
             "fit_id": fit_id,
             "item_count": len(parsed_fit.item_quantities),
         }
+
+    def delete_doctrine_fit(
+        self,
+        *,
+        doctrine_id: int,
+        fit_id: int,
+        signed_identity: dict | None,
+    ) -> dict:
+        """Delete one existing doctrine fit."""
+        self._require_admin(signed_identity)
+        doctrine_id = int(doctrine_id)
+        fit_id = int(fit_id)
+        existing_fit = self._repository.get_doctrine_fit(doctrine_id, fit_id)
+        if existing_fit is None:
+            raise ValueError(f"No doctrine fit found for doctrine_id={doctrine_id}, fit_id={fit_id}")
+        self._repository.delete_doctrine_fit(doctrine_id=doctrine_id, fit_id=fit_id)
+        self._cache_invalidator()
+        return {"doctrine_id": doctrine_id, "fit_id": fit_id}
 
     def _require_admin(self, signed_identity: dict | None) -> dict:
         payload = self._auth_service.verify_signed_admin_identity(signed_identity)
