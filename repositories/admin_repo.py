@@ -67,7 +67,16 @@ ADMIN_WRITE_TARGETS = {"local", "remote"}
 
 
 class AdminRepository:
-    """Repository for reading and replacing the watchlist table."""
+    """Repository for reading and replacing the watchlist + doctrine tables.
+
+    Transactional guarantees:
+        Writes use ``engine.begin()`` for atomicity. For local SQLite this is a
+        normal SQLite transaction. For the remote Turso engine, the libSQL
+        SQLAlchemy adapter wraps statements in a remote transaction; a network
+        failure mid-loop rolls back. Verify behavior against Turso staging when
+        making changes to multi-statement write methods (``save_doctrine_fit``,
+        ``delete_doctrine_fit``, ``replace_watchlist``).
+    """
 
     def __init__(self, db: DatabaseConfig, *, write_target: str = "remote"):
         self._db = db
@@ -351,6 +360,19 @@ class AdminRepository:
                 ),
                 {"doctrine_id": doctrine_id, "fit_id": fit_id},
             ).first()
+            if mode == "add" and existing_fit is None:
+                # Closing the race between the service's non-transactional
+                # MAX(fit_id)+1 pre-check and this transactional write.
+                # Two concurrent add calls could otherwise compute the same
+                # fit_id and each insert it under different doctrines.
+                fit_id_conflict = conn.execute(
+                    text("SELECT 1 FROM doctrine_fits WHERE fit_id = :fit_id LIMIT 1"),
+                    {"fit_id": fit_id},
+                ).first()
+                if fit_id_conflict:
+                    raise ValueError(
+                        f"fit_id {fit_id} already exists under a different doctrine"
+                    )
             fit_values = {
                 "doctrine_name": doctrine_name,
                 "fit_name": fit_name,
@@ -540,12 +562,15 @@ class AdminRepository:
                 )
 
     def _resolve_type_metadata(self, type_name: str) -> dict:
+        # Case-sensitive on purpose: EVE type names occasionally differ only by
+        # case (rare today, but COLLATE NOCASE + LIMIT 1 would silently pick an
+        # arbitrary row). Per the project no-wrong-data rule, fail loud.
         query = text(
             """
             SELECT typeID AS type_id, typeName AS type_name, groupID AS group_id,
                    groupName AS group_name, categoryID AS category_id, categoryName AS category_name
             FROM inv_info
-            WHERE typeName = :type_name COLLATE NOCASE
+            WHERE typeName = :type_name
             LIMIT 1
             """
         )

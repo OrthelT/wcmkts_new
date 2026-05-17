@@ -15,7 +15,10 @@ from urllib.parse import urlencode
 import requests
 import streamlit as st
 
+from logging_config import setup_logging
 from settings_service import SettingsService
+
+logger = setup_logging(__name__, log_file="eve_sso_service.log")
 
 SSO_METADATA_URL = "https://login.eveonline.com/.well-known/oauth-authorization-server"
 SSO_VERIFY_URL = "https://login.eveonline.com/v2/oauth/verify"
@@ -123,29 +126,49 @@ class EveSSOService:
         return {"payload": payload, "signature": self._sign_payload(payload)}
 
     def verify_signed_admin_identity(self, identity: dict | None) -> dict | None:
-        """Validate a signed admin identity payload."""
+        """Validate a signed admin identity payload.
+
+        Returns the verified payload on success or ``None`` for any failure mode.
+        Each failure mode is logged at ERROR with a distinct event tag so ops can
+        distinguish benign expirations from security-relevant tampering or revocation.
+        """
         if not identity or "payload" not in identity or "signature" not in identity:
+            logger.error("admin_identity_verify_failed: missing payload or signature envelope")
             return None
 
         payload = identity["payload"]
         expected_signature = self._sign_payload(payload)
         if not hmac.compare_digest(str(identity["signature"]), expected_signature):
+            logger.error(
+                "admin_identity_verify_failed: signature mismatch — possible tampering"
+            )
             return None
 
         try:
             expires_at = datetime.fromisoformat(payload["expires_at"])
         except (KeyError, TypeError, ValueError):
+            logger.error(
+                "admin_identity_verify_failed: malformed expires_at in signed payload"
+            )
             return None
 
         if expires_at <= self._now():
+            logger.error("admin_identity_verify_failed: session expired (expected re-login)")
             return None
 
         try:
             character_id = int(payload["character_id"])
         except (KeyError, TypeError, ValueError):
+            logger.error(
+                "admin_identity_verify_failed: malformed character_id in signed payload"
+            )
             return None
 
         if character_id not in self._config.allowed_character_ids:
+            logger.error(
+                "admin_identity_verify_failed: character_id=%s not in allow-list (revoked)",
+                character_id,
+            )
             return None
 
         return payload

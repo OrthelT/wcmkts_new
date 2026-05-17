@@ -116,9 +116,15 @@ def main() -> None:
             result = service.save_watchlist(edited_df, signed_identity=signed_identity)
             st.success(f"Saved {result['row_count']} watchlist rows.")
             st.rerun()
-        except Exception as exc:
-            logger.warning("Watchlist save failed: %s", exc)
+        except ValueError as exc:
+            logger.error("Watchlist save rejected: %s", exc, exc_info=True)
             st.error(str(exc))
+        except PermissionError as exc:
+            logger.error("Watchlist save unauthorized: %s", exc, exc_info=True)
+            st.error("Admin session expired or unauthorized. Please log in again.")
+        except Exception as exc:
+            logger.error("Watchlist save failed: %s", exc, exc_info=True)
+            st.error("Failed to save watchlist. Check admin logs for details.")
 
 
 if __name__ == "__main__":

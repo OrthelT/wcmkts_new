@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pandas as pd
+import pytest
 from sqlalchemy import create_engine, text
 
 from repositories.admin_repo import (
@@ -41,6 +42,13 @@ def _create_watchlist_db(path: Path) -> None:
         )
 
 
+# NOTE: The DDL below is a minimal SQLite fixture for unit tests; it does not
+# claim to match the production Turso schema column-for-column. Real schema
+# drift (added NOT NULL constraints, renamed columns, type changes) is not
+# detected here — those must be caught by an integration test against the
+# staging/preview Turso instance. See `test_admin_repo_fixture_covers_production_columns`
+# for a minimal sanity check that the fixture at least includes every column
+# the production code writes.
 def _create_doctrine_admin_db(path: Path) -> None:
     engine = create_engine(f"sqlite:///{path}")
     with engine.begin() as conn:
@@ -635,6 +643,117 @@ def test_delete_doctrine_fit_promotes_remaining_fit_as_lead_ship(tmp_path):
     assert [row.fit_id for row in remaining_fits] == [99]
     assert lead_ship["lead_ship"] == 1
     assert lead_ship["fit_id"] == 99
+
+
+def test_admin_repo_fixture_covers_production_columns(tmp_path):
+    """Sanity check: every column production code writes is present in the test fixture.
+
+    This is NOT a full schema-drift check — it cannot detect added NOT NULL
+    constraints, renamed columns, or type changes in the production Turso
+    schema. Run an integration test against staging to catch those. This test
+    only catches the obvious case of a new column being added to the code but
+    forgotten in the fixture DDL.
+    """
+    from repositories.admin_repo import DOCTRINE_COLUMNS, WATCHLIST_COLUMNS
+
+    db_path = tmp_path / "doctrine.db"
+    _create_doctrine_admin_db(db_path)
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.connect() as conn:
+        watchlist_cols = {
+            row[1] for row in conn.execute(text("PRAGMA table_info(watchlist)")).fetchall()
+        }
+        doctrines_cols = {
+            row[1] for row in conn.execute(text("PRAGMA table_info(doctrines)")).fetchall()
+        }
+        doctrine_fits_cols = {
+            row[1] for row in conn.execute(text("PRAGMA table_info(doctrine_fits)")).fetchall()
+        }
+
+    missing_watchlist = set(WATCHLIST_COLUMNS) - watchlist_cols
+    missing_doctrines = set(DOCTRINE_COLUMNS) - doctrines_cols
+    # doctrine_fits is harder to derive a single column list from; assert the
+    # known-required set the writers reference.
+    required_fits = {
+        "doctrine_id",
+        "doctrine_name",
+        "fit_id",
+        "fit_name",
+        "ship_type_id",
+        "ship_name",
+        "target",
+        "market_flag",
+    }
+    missing_fits = required_fits - doctrine_fits_cols
+
+    assert not missing_watchlist, f"fixture missing watchlist cols: {missing_watchlist}"
+    assert not missing_doctrines, f"fixture missing doctrines cols: {missing_doctrines}"
+    assert not missing_fits, f"fixture missing doctrine_fits cols: {missing_fits}"
+
+
+def test_resolve_type_metadata_requires_exact_case_match(tmp_path):
+    """Type lookup must be case-sensitive — silently coercing 'damage control ii'
+    to 'Damage Control II' violates the project's no-wrong-data rule (any future
+    EVE type name that differs only by case would resolve to the wrong row)."""
+    db_path = tmp_path / "doctrine.db"
+    _create_doctrine_admin_db(db_path)
+    repo = AdminRepository.from_sqlite_path(db_path)
+
+    with pytest.raises(ValueError, match="Unknown EVE type: damage control ii"):
+        repo.save_doctrine_fit(
+            doctrine_id=10,
+            doctrine_name="Doctrine Alpha",
+            fit_id=42,
+            fit_name="Lowercase Test",
+            ship_name="Vedmak",
+            item_quantities={"damage control ii": 1},
+            target=10,
+            market_flag="primary",
+            mode="add",
+        )
+
+
+def test_save_doctrine_fit_add_rejects_fit_id_used_by_another_doctrine(tmp_path):
+    """Race-condition guard: two concurrent add calls may compute the same MAX(fit_id)+1.
+
+    Service-layer pre-check is non-transactional, so the in-transaction repository
+    write must verify fit_id is globally unique before inserting in add mode.
+    """
+    db_path = tmp_path / "doctrine.db"
+    _create_doctrine_admin_db(db_path)
+    repo = AdminRepository.from_sqlite_path(db_path)
+    repo.create_doctrine(doctrine_id=11, doctrine_name="Doctrine Beta")
+    repo.save_doctrine_fit(
+        doctrine_id=10,
+        doctrine_name="Doctrine Alpha",
+        fit_id=99,
+        fit_name="First Vedmak",
+        ship_name="Vedmak",
+        item_quantities={"Damage Control II": 1},
+        target=30,
+        market_flag="primary",
+        mode="add",
+    )
+
+    with pytest.raises(ValueError, match="fit_id 99 already exists"):
+        repo.save_doctrine_fit(
+            doctrine_id=11,
+            doctrine_name="Doctrine Beta",
+            fit_id=99,
+            fit_name="Conflicting Vedmak",
+            ship_name="Vedmak",
+            item_quantities={"Damage Control II": 1},
+            target=20,
+            market_flag="primary",
+            mode="add",
+        )
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text("SELECT doctrine_id, fit_id FROM doctrine_fits WHERE fit_id = 99")
+        ).fetchall()
+    assert [(row.doctrine_id, row.fit_id) for row in rows] == [(10, 99)]
 
 
 def test_update_doctrine_fit_refreshes_existing_lead_ship(tmp_path):

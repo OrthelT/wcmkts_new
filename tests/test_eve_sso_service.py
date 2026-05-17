@@ -162,3 +162,120 @@ def test_signed_admin_identity_rejects_expired_session():
     expired_service = EveSSOService(make_config(), http_client=DummySession(), now_provider=lambda: later)
 
     assert expired_service.verify_signed_admin_identity(identity) is None
+
+
+# --- HTTP / OAuth error-path tests ---------------------------------------------------
+
+import json
+
+import requests
+
+
+class FailingResponse:
+    """Response that raises HTTPError on raise_for_status()."""
+
+    def __init__(self, status_code: int = 500):
+        self.status_code = status_code
+
+    def raise_for_status(self):
+        raise requests.HTTPError(f"{self.status_code} server error")
+
+    def json(self):
+        raise AssertionError("json() should not be called when raise_for_status raises")
+
+
+class MalformedJSONResponse:
+    """Response that raises JSONDecodeError when .json() is called."""
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        raise json.JSONDecodeError("expecting value", "<html>...", 0)
+
+
+def test_get_metadata_propagates_http_error():
+    """A 5xx from EVE SSO metadata endpoint must not be silently swallowed."""
+    session = DummySession()
+    session.get = lambda url, **kwargs: FailingResponse(503)
+    service = EveSSOService(make_config(), http_client=session)
+
+    with pytest.raises(requests.HTTPError, match="503"):
+        service.create_authorization_url("state-token")
+
+
+def test_exchange_code_propagates_http_error():
+    """A 5xx from the token endpoint must not be silently swallowed."""
+    session = DummySession()
+    session.post = lambda url, **kwargs: FailingResponse(502)
+    service = EveSSOService(make_config(), http_client=session)
+
+    with pytest.raises(requests.HTTPError, match="502"):
+        service.complete_login(code="auth-code", returned_state="state", expected_state="state")
+
+
+def test_exchange_code_raises_on_missing_access_token():
+    """A 200 OK with no access_token field must error, not return silently."""
+    session = DummySession()
+    session.post = lambda url, **kwargs: DummyResponse({"error": "invalid_grant"})
+    service = EveSSOService(make_config(), http_client=session)
+
+    with pytest.raises(ValueError, match="access token"):
+        service.complete_login(code="auth-code", returned_state="state", expected_state="state")
+
+
+def test_exchange_code_propagates_json_decode_error():
+    """Malformed token-endpoint body (e.g. HTML during EVE incident) must error."""
+    session = DummySession()
+    session.post = lambda url, **kwargs: MalformedJSONResponse()
+    service = EveSSOService(make_config(), http_client=session)
+
+    with pytest.raises(json.JSONDecodeError):
+        service.complete_login(code="auth-code", returned_state="state", expected_state="state")
+
+
+def test_verify_access_token_propagates_http_error():
+    """A 5xx from the verify endpoint must not be silently swallowed."""
+    session = DummySession()
+    original_get = session.get
+
+    def get_router(url, **kwargs):
+        if url.endswith("/v2/oauth/verify"):
+            return FailingResponse(500)
+        return original_get(url, **kwargs)
+
+    session.get = get_router
+    service = EveSSOService(make_config(), http_client=session)
+
+    with pytest.raises(requests.HTTPError, match="500"):
+        service.complete_login(code="auth-code", returned_state="state", expected_state="state")
+
+
+def test_verify_access_token_raises_on_missing_character_id():
+    """A 200 OK with no CharacterID must error, not return silently."""
+    session = DummySession()
+    original_get = session.get
+
+    def get_router(url, **kwargs):
+        if url.endswith("/v2/oauth/verify"):
+            return DummyResponse({"CharacterName": "Orthel"})  # missing CharacterID
+        return original_get(url, **kwargs)
+
+    session.get = get_router
+    service = EveSSOService(make_config(), http_client=session)
+
+    with pytest.raises(ValueError, match="character identity"):
+        service.complete_login(code="auth-code", returned_state="state", expected_state="state")
+
+
+def test_complete_login_invokes_token_exchange_before_verify():
+    """Guard against a regression that skips the token POST."""
+    session = DummySession()
+    service = EveSSOService(make_config(), http_client=session)
+
+    service.complete_login(code="auth-code", returned_state="state", expected_state="state")
+
+    call_methods = [call[0] for call in session.calls]
+    assert call_methods == ["GET", "POST", "GET"], (
+        f"Expected metadata GET, token POST, verify GET; got {call_methods}"
+    )

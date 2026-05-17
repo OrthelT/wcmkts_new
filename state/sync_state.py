@@ -7,7 +7,6 @@ import pandas as pd
 import streamlit as st
 from sqlalchemy import text
 
-from repositories.base import BaseRepository
 from state.session_state import ss_set
 from state.market_state import get_active_market
 logger = setup_logging(__name__)
@@ -26,6 +25,11 @@ def get_most_recent_update_resilient(
     remote: bool = False,
 ) -> datetime | None:
     """Return latest updatelog timestamp using sync/retry/remote fallback for local reads."""
+    # Deferred import: state/ must not import from repositories/ at module level
+    # (CLAUDE.md layered-architecture rule). The bidirectional state↔config import
+    # via DatabaseConfig is the documented exception; BaseRepository is not.
+    from repositories.base import BaseRepository
+
     db = DatabaseConfig(db_alias)
     reader = BaseRepository(db, logger)
     query = text(

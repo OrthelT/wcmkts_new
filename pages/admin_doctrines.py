@@ -104,9 +104,15 @@ def main() -> None:
                 f"{format_doctrine_name(result['doctrine_name'])}."
             )
             st.rerun()
-        except Exception as exc:
-            logger.warning("Doctrine create failed: %s", exc)
+        except ValueError as exc:
+            logger.error("Doctrine create rejected: %s", exc, exc_info=True)
             st.error(str(exc))
+        except PermissionError as exc:
+            logger.error("Doctrine create unauthorized: %s", exc, exc_info=True)
+            st.error("Admin session expired or unauthorized. Please log in again.")
+        except Exception as exc:
+            logger.error("Doctrine create failed: %s", exc, exc_info=True)
+            st.error("Failed to create doctrine. Check admin logs for details.")
 
     if doctrine_options.empty:
         st.warning("No doctrines found. Create one above before adding fits.")
@@ -207,9 +213,15 @@ def main() -> None:
                 )
                 st.session_state[LOADED_FIT_KEY] = None
                 st.rerun()
-            except Exception as exc:
-                logger.warning("Doctrine fit delete failed: %s", exc)
+            except ValueError as exc:
+                logger.error("Doctrine fit delete rejected: %s", exc, exc_info=True)
                 st.error(str(exc))
+            except PermissionError as exc:
+                logger.error("Doctrine fit delete unauthorized: %s", exc, exc_info=True)
+                st.error("Admin session expired or unauthorized. Please log in again.")
+            except Exception as exc:
+                logger.error("Doctrine fit delete failed: %s", exc, exc_info=True)
+                st.error("Failed to delete doctrine fit. Check admin logs for details.")
 
     if eft_text.strip():
         try:
@@ -248,9 +260,15 @@ def main() -> None:
             )
             st.session_state[LOADED_FIT_KEY] = None
             st.rerun()
-        except Exception as exc:
-            logger.warning("Doctrine fit save failed: %s", exc)
+        except ValueError as exc:
+            logger.error("Doctrine fit save rejected: %s", exc, exc_info=True)
             st.error(str(exc))
+        except PermissionError as exc:
+            logger.error("Doctrine fit save unauthorized: %s", exc, exc_info=True)
+            st.error("Admin session expired or unauthorized. Please log in again.")
+        except Exception as exc:
+            logger.error("Doctrine fit save failed: %s", exc, exc_info=True)
+            st.error("Failed to save doctrine fit. Check admin logs for details.")
 
 
 if __name__ == "__main__":
