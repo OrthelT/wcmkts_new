@@ -64,7 +64,7 @@ def main() -> None:
         with col_open:
             st.page_link("pages/admin.py", label="Open Admin Watchlist")
         with col_logout:
-            if st.button("Log out", use_container_width=True):
+            if st.button("Log out", width="stretch"):
                 clear_admin_auth_state()
                 st.rerun()
         return
@@ -103,7 +103,7 @@ def main() -> None:
     st.link_button(
         "Sign in with EVE",
         url=_build_authorization_url(service),
-        use_container_width=True,
+        width="stretch",
     )
 
 

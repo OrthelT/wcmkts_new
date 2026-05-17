@@ -74,11 +74,11 @@ def main() -> None:
 
     col_logout, col_watchlist = st.columns(2)
     with col_logout:
-        if st.button("Log out", use_container_width=True):
+        if st.button("Log out", width="stretch"):
             clear_admin_auth_state()
             st.switch_page("pages/admin_login.py")
     with col_watchlist:
-        st.page_link("pages/admin.py", label="Admin Watchlist", use_container_width=True)
+        st.page_link("pages/admin.py", label="Admin Watchlist", width="stretch")
 
     notice = st.session_state.pop(NOTICE_KEY, None)
     if notice:
@@ -91,7 +91,7 @@ def main() -> None:
         create_clicked = st.form_submit_button(
             "Create Doctrine",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         )
     if create_clicked:
         try:
@@ -187,10 +187,10 @@ def main() -> None:
         )
 
         add_col, update_col = st.columns(2)
-        add_clicked = add_col.form_submit_button("Add Fit", type="primary", use_container_width=True)
+        add_clicked = add_col.form_submit_button("Add Fit", type="primary", width="stretch")
         update_clicked = update_col.form_submit_button(
             "Update Fit",
-            use_container_width=True,
+            width="stretch",
             disabled=selected_fit_id is None,
         )
 
@@ -198,7 +198,7 @@ def main() -> None:
         confirm_delete = st.checkbox("Confirm delete selected fit")
         delete_clicked = st.button(
             "Delete Fit",
-            use_container_width=True,
+            width="stretch",
             disabled=not confirm_delete,
         )
         if delete_clicked:

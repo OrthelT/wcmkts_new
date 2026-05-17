@@ -78,17 +78,17 @@ def main() -> None:
 
     col_logout, col_login = st.columns(2)
     with col_logout:
-        if st.button("Log out", use_container_width=True):
+        if st.button("Log out", width="stretch"):
             clear_admin_auth_state()
             st.switch_page("pages/admin_login.py")
     with col_login:
-        st.page_link("pages/admin_login.py", label="Login Page", use_container_width=True)
+        st.page_link("pages/admin_login.py", label="Login Page", width="stretch")
 
     edited_df = st.data_editor(
         watchlist_df,
         hide_index=True,
         num_rows="dynamic",
-        use_container_width=True,
+        width="stretch",
         key="admin_watchlist_editor",
         column_config={
             "type_id": st.column_config.NumberColumn("Type ID", required=True, step=1, format="%d"),
@@ -111,7 +111,7 @@ def main() -> None:
     with col_removed:
         st.metric("Removed", summary["removed"])
 
-    if st.button("Save Watchlist", type="primary", use_container_width=True):
+    if st.button("Save Watchlist", type="primary", width="stretch"):
         try:
             result = service.save_watchlist(edited_df, signed_identity=signed_identity)
             st.success(f"Saved {result['row_count']} watchlist rows.")

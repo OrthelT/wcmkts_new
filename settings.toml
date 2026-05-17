@@ -128,9 +128,14 @@
     default_language = "en"
 
 [eve_sso]
-    client_id = ""
+    client_id = "31d3f05e35e442879bec5bdb227f524d"
     callback_url = "http://localhost:8501/admin_login"
-    allowed_character_ids = []
+    allowed_character_ids = [1387156123, 2116257395]
+
+#[eve_sso]
+#    client_id = "f9aae67fb3af430db7242e1f26d46f1d"
+#    callback_url = "https://wcmkts.streamlit.app/admin_login"
+#    allowed_character_ids = [1387156123, 2116257395]
 
 [admin]
     write_target = "remote"
