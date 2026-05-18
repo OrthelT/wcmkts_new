@@ -465,6 +465,20 @@ def test_default_write_engine_uses_remote_target():
     assert repo._get_write_engine() is db.remote_engine
 
 
+def test_write_target_property_exposes_normalized_remote_default():
+    db = MagicMock()
+    repo = AdminRepository(db)
+
+    assert repo.write_target == "remote"
+
+
+def test_write_target_property_exposes_normalized_local_target():
+    db = MagicMock()
+    repo = AdminRepository(db, write_target="local")
+
+    assert repo.write_target == "local"
+
+
 def test_remote_admin_reader_reads_remote_source():
     db = MagicMock()
     repo = AdminRepository(db, write_target="remote")

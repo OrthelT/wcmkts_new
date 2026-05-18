@@ -83,6 +83,11 @@ class AdminRepository:
         self._write_target = self._normalize_write_target(write_target)
         self._reader = BaseRepository(db, logger)
 
+    @property
+    def write_target(self) -> str:
+        """Return the normalized write target ('local' or 'remote')."""
+        return self._write_target
+
     @classmethod
     def from_sqlite_path(cls, path: str | Path) -> "AdminRepository":
         """Create a repository backed by an explicit SQLite file for tests."""

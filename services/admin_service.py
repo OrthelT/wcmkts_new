@@ -6,10 +6,13 @@ from collections.abc import Iterable
 
 import pandas as pd
 
+from logging_config import setup_logging
 from repositories.admin_repo import WATCHLIST_COLUMNS, get_admin_repository
 from services.eft_parser_service import parse_eft_fit
 from services.eve_sso_service import get_eve_sso_service
 from state.market_state import refresh_market_caches
+
+logger = setup_logging(__name__, log_file="admin_service.log")
 
 
 class AdminService:
@@ -41,9 +44,36 @@ class AdminService:
         payload = self._require_admin(signed_identity)
         rows = self._normalize_rows(watchlist_df)
         self._validate_rows(rows)
+
+        before_df = self._repository.get_watchlist()
+        before_ids = {int(tid) for tid in before_df["type_id"].tolist()} if not before_df.empty else set()
+        after_ids = {row["type_id"] for row in rows}
+        added_type_ids = sorted(after_ids - before_ids)
+        removed_type_ids = sorted(before_ids - after_ids)
+
         self._repository.replace_watchlist(rows)
         self._cache_invalidator()
-        return {"row_count": len(rows), "character_id": int(payload["character_id"])}
+
+        character_id = int(payload["character_id"])
+        character_name = payload.get("character_name", "")
+        logger.info(
+            "watchlist_saved character_id=%s character_name=%s write_target=%s "
+            "before=%d after=%d added=%s removed=%s",
+            character_id,
+            character_name,
+            self._repository.write_target,
+            len(before_ids),
+            len(after_ids),
+            added_type_ids,
+            removed_type_ids,
+        )
+
+        return {
+            "row_count": len(rows),
+            "character_id": character_id,
+            "added_type_ids": added_type_ids,
+            "removed_type_ids": removed_type_ids,
+        }
 
     def create_doctrine(self, *, doctrine_name: str, signed_identity: dict | None) -> dict:
         """Create an empty doctrine that can receive fits later."""

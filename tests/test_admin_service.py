@@ -1,5 +1,7 @@
 """Tests for watchlist admin service validation and auth guards."""
 
+import logging
+
 import pandas as pd
 import pytest
 
@@ -7,6 +9,8 @@ from services.admin_service import AdminService
 
 
 class StubRepo:
+    write_target = "remote"
+
     def __init__(self):
         self.rows = None
         self.saved_doctrine_fit = None
@@ -32,6 +36,19 @@ class StubRepo:
         self.doctrine_name_already_exists = False
         self.created_doctrine = None
         self.deleted_doctrine_fit = None
+        self.existing_watchlist = pd.DataFrame(
+            columns=[
+                "type_id",
+                "group_id",
+                "type_name",
+                "group_name",
+                "category_id",
+                "category_name",
+            ]
+        )
+
+    def get_watchlist(self):
+        return self.existing_watchlist.copy()
 
     def replace_watchlist(self, rows):
         self.rows = rows
@@ -206,6 +223,109 @@ def test_save_watchlist_persists_valid_rows_and_invalidates_cache():
     ]
     assert invalidated["called"] is True
     assert result["row_count"] == 1
+
+
+def _watchlist_row(type_id: int, type_name: str = "Item") -> dict:
+    return {
+        "type_id": type_id,
+        "group_id": 18,
+        "type_name": type_name,
+        "group_name": "Mineral",
+        "category_id": 4,
+        "category_name": "Material",
+    }
+
+
+def _make_service(repo, payload=None, cache_called=None):
+    payload = payload or {"character_id": 2122333361, "character_name": "Orthel"}
+    callback = (lambda: cache_called.__setitem__("called", True)) if cache_called is not None else (lambda: None)
+    return AdminService(repo, StubAuthService(payload), cache_invalidator=callback)
+
+
+def test_save_watchlist_returns_added_and_removed_type_ids_for_add_only():
+    repo = StubRepo()
+    repo.existing_watchlist = pd.DataFrame([_watchlist_row(34, "Tritanium")])
+    service = _make_service(repo)
+    df = pd.DataFrame(
+        [
+            _watchlist_row(34, "Tritanium"),
+            _watchlist_row(35, "Pyerite"),
+            _watchlist_row(36, "Mexallon"),
+        ]
+    )
+
+    result = service.save_watchlist(df, signed_identity={"payload": {}, "signature": "x"})
+
+    assert result["added_type_ids"] == [35, 36]
+    assert result["removed_type_ids"] == []
+    assert result["row_count"] == 3
+
+
+def test_save_watchlist_returns_added_and_removed_type_ids_for_remove_only():
+    repo = StubRepo()
+    repo.existing_watchlist = pd.DataFrame(
+        [_watchlist_row(34, "Tritanium"), _watchlist_row(35, "Pyerite")]
+    )
+    service = _make_service(repo)
+    df = pd.DataFrame([_watchlist_row(34, "Tritanium")])
+
+    result = service.save_watchlist(df, signed_identity={"payload": {}, "signature": "x"})
+
+    assert result["added_type_ids"] == []
+    assert result["removed_type_ids"] == [35]
+    assert result["row_count"] == 1
+
+
+def test_save_watchlist_returns_added_and_removed_type_ids_for_mixed_change():
+    repo = StubRepo()
+    repo.existing_watchlist = pd.DataFrame(
+        [_watchlist_row(34, "Tritanium"), _watchlist_row(35, "Pyerite")]
+    )
+    service = _make_service(repo)
+    df = pd.DataFrame(
+        [_watchlist_row(34, "Tritanium"), _watchlist_row(36, "Mexallon")]
+    )
+
+    result = service.save_watchlist(df, signed_identity={"payload": {}, "signature": "x"})
+
+    assert result["added_type_ids"] == [36]
+    assert result["removed_type_ids"] == [35]
+
+
+def test_save_watchlist_returns_empty_deltas_for_noop_save():
+    repo = StubRepo()
+    repo.existing_watchlist = pd.DataFrame([_watchlist_row(34, "Tritanium")])
+    service = _make_service(repo)
+    df = pd.DataFrame([_watchlist_row(34, "Tritanium")])
+
+    result = service.save_watchlist(df, signed_identity={"payload": {}, "signature": "x"})
+
+    assert result["added_type_ids"] == []
+    assert result["removed_type_ids"] == []
+
+
+def test_save_watchlist_emits_info_log_with_character_and_delta(caplog):
+    repo = StubRepo()
+    repo.existing_watchlist = pd.DataFrame([_watchlist_row(34, "Tritanium")])
+    service = _make_service(repo)
+    df = pd.DataFrame(
+        [_watchlist_row(34, "Tritanium"), _watchlist_row(35, "Pyerite")]
+    )
+
+    with caplog.at_level(logging.INFO, logger="services.admin_service"):
+        service.save_watchlist(df, signed_identity={"payload": {}, "signature": "x"})
+
+    info_records = [r for r in caplog.records if r.levelno == logging.INFO]
+    assert info_records, "Expected at least one INFO log line"
+    msg = info_records[0].getMessage()
+    assert "watchlist_saved" in msg
+    assert "character_id=2122333361" in msg
+    assert "character_name=Orthel" in msg
+    assert "write_target=remote" in msg
+    assert "before=1" in msg
+    assert "after=2" in msg
+    assert "added=[35]" in msg
+    assert "removed=[]" in msg
 
 
 def test_get_doctrine_fit_options_delegates_to_repository():
