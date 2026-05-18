@@ -18,13 +18,34 @@ logger = setup_logging(__name__)
 _UPDATE_INTERVAL_MINUTES = 60
 
 
+class SyncStatusUnavailableError(Exception):
+    """Sync-status read failed (DB unreachable, malformed row, parse error).
+
+    Distinct from a successful read that returned no rows. ``None`` means
+    "the system is healthy but has not yet ingested any updates"; this
+    exception means "we don't know what the sync status is" — so the UI
+    should render an explicit "unavailable" state rather than the last
+    cached timestamp, which would otherwise mislead the admin.
+    """
+
+
 def get_most_recent_update_resilient(
     db_alias: str,
     table_name: str = "marketstats",
     *,
     remote: bool = False,
 ) -> datetime | None:
-    """Return latest updatelog timestamp using sync/retry/remote fallback for local reads."""
+    """Return latest updatelog timestamp using sync/retry/remote fallback for local reads.
+
+    Returns:
+        Timezone-aware datetime for the most recent ``timestamp`` row, or
+        ``None`` when the query succeeded but the table held no rows.
+
+    Raises:
+        SyncStatusUnavailableError: the read itself failed or the timestamp
+            could not be parsed. Callers must render an explicit "unavailable"
+            state rather than treating this like a missing row.
+    """
     # Deferred import: state/ must not import from repositories/ at module level
     # (CLAUDE.md layered-architecture rule). The bidirectional state↔config import
     # via DatabaseConfig is the documented exception; BaseRepository is not.
@@ -41,10 +62,30 @@ def get_most_recent_update_resilient(
         LIMIT 1
         """
     )
-    df = reader.read_df(query, params={"table_name": table_name}, local=not remote)
+    try:
+        df = reader.read_df(query, params={"table_name": table_name}, local=not remote)
+    except Exception as exc:
+        logger.error(
+            "sync_status_read_failed alias=%s table=%s remote=%s: %s",
+            db_alias,
+            table_name,
+            remote,
+            exc,
+            exc_info=True,
+        )
+        raise SyncStatusUnavailableError(
+            f"updatelog read failed for alias={db_alias!r} table={table_name!r}"
+        ) from exc
+
     if df.empty or pd.isna(df.loc[0, "timestamp"]):
         return None
-    return _coerce_update_time(df.loc[0, "timestamp"])
+
+    parsed = _coerce_update_time(df.loc[0, "timestamp"])
+    if parsed is None:
+        raise SyncStatusUnavailableError(
+            f"updatelog timestamp for alias={db_alias!r} table={table_name!r} could not be parsed"
+        )
+    return parsed
 
 
 def _coerce_update_time(value) -> datetime | None:
@@ -54,6 +95,7 @@ def _coerce_update_time(value) -> datetime | None:
         return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
     parsed = pd.to_datetime(value, utc=True, errors="coerce")
     if pd.isna(parsed):
+        logger.error("sync_status_parse_failed: updatelog timestamp %r is not parseable", value)
         return None
     return parsed.to_pydatetime()
 
@@ -86,7 +128,11 @@ def update_wcmkt_state(db_alias: str = None, skip_remote: bool = False) -> None:
 
     now = datetime.now(timezone.utc)
 
-    local_update = get_most_recent_update_resilient(db.alias, "marketstats", remote=False)
+    try:
+        local_update = get_most_recent_update_resilient(db.alias, "marketstats", remote=False)
+    except SyncStatusUnavailableError as exc:
+        logger.warning(f"Local sync status unavailable for {db.alias}: {exc}")
+        local_update = None
     local_update_status['updated'] = local_update
     if local_update is not None:
         local_update_status['time_since'] = now - local_update
@@ -103,6 +149,8 @@ def update_wcmkt_state(db_alias: str = None, skip_remote: bool = False) -> None:
                 remote_update_status['needs_update'] = (
                     remote_update_status['time_since'] > timedelta(hours=2)
                 )
+        except SyncStatusUnavailableError as e:
+            logger.warning(f"Skipping remote sync state for {db.alias}: {e}")
         except Exception as e:
             logger.warning(f"Skipping remote sync state for {db.alias}: {e}")
     elif skip_remote:

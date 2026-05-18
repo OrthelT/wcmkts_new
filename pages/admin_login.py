@@ -6,7 +6,11 @@ import streamlit as st
 
 from logging_config import setup_logging
 from pages.components.header import render_page_title
-from services.eve_sso_service import get_eve_sso_service
+from services.eve_sso_service import (
+    InvalidOAuthStateError,
+    SSONetworkError,
+    get_eve_sso_service,
+)
 from state import (
     clear_admin_auth_state,
     get_admin_identity,
@@ -46,16 +50,7 @@ def _complete_callback_login(service, code: str, returned_state: str) -> dict:
     # trusted characters) and the alternative — storing pending state in
     # st.session_state — breaks login across tab refresh and server restart.
     # Re-evaluate if the allow-list grows beyond the in-circle trust boundary.
-    if not service.verify_oauth_state(returned_state):
-        logger.error(
-            "admin_oauth_callback_rejected: state failed HMAC/TTL verification"
-        )
-        raise ValueError("Invalid OAuth state (tampered, malformed, or expired)")
-    return service.complete_login(
-        code=code,
-        returned_state=returned_state,
-        expected_state=returned_state,
-    )
+    return service.complete_login(code=code, state=returned_state)
 
 
 def main() -> None:
@@ -97,18 +92,31 @@ def main() -> None:
     if code and returned_state:
         try:
             signed_identity = _complete_callback_login(service, code, returned_state)
-        except ValueError as exc:
-            logger.error("Admin login rejected: %s", exc, exc_info=True)
+        except InvalidOAuthStateError as exc:
+            logger.error("admin_login_invalid_state: %s", exc, exc_info=True)
             clear_admin_auth_state()
             _clear_callback_params()
-            st.error(str(exc))
+            st.error("OAuth state is invalid (tampered, malformed, or expired). Please sign in again.")
         except PermissionError as exc:
-            logger.error("Admin login unauthorized: %s", exc, exc_info=True)
+            logger.error("admin_login_unauthorized: %s", exc, exc_info=True)
             clear_admin_auth_state()
             _clear_callback_params()
             st.error("This character is not authorized to use the admin tools.")
+        except SSONetworkError as exc:
+            logger.error(
+                "admin_login_sso_unreachable: status=%s message=%s",
+                exc.status_code,
+                exc,
+                exc_info=True,
+            )
+            clear_admin_auth_state()
+            _clear_callback_params()
+            if exc.status_code in (401, 403):
+                st.error("EVE rejected our admin credentials. Notify ops to check the SSO client secret.")
+            else:
+                st.error("EVE SSO is temporarily unavailable. Try again in a few minutes.")
         except Exception as exc:
-            logger.error("Admin login failed: %s", exc, exc_info=True)
+            logger.error("admin_login_failed: %s", exc, exc_info=True)
             clear_admin_auth_state()
             _clear_callback_params()
             st.error("Admin login failed. Check admin logs for details.")

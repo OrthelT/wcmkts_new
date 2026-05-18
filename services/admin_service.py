@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import Literal
 
 import pandas as pd
 
@@ -10,6 +11,23 @@ from logging_config import setup_logging
 from repositories.admin_repo import WATCHLIST_COLUMNS, get_admin_repository
 from services.eft_parser_service import parse_eft_fit
 from services.eve_sso_service import get_eve_sso_service
+
+# Static-typing aliases for the small set of admin-write enums. Runtime guards
+# below still validate the actual values; Literal catches in-source typos.
+MarketFlag = Literal["primary", "deployment", "both"]
+SaveMode = Literal["add", "update"]
+
+
+class AdminWriteIntegrityError(Exception):
+    """Raised when a multi-statement admin write completes but read-back disagrees.
+
+    Catches the scenario where a libsql write appears to succeed (the
+    ``engine.begin()`` block exits without raising) but a later read shows
+    the change did not take effect — e.g. a network drop after the SQL was
+    sent but before the commit response was received, or a silent rollback.
+    The admin sees a distinct error rather than a deceptive success +
+    invisible partial state.
+    """
 
 # Deliberate exception to the services→state/ layering rule. The only consumers
 # of AdminService are Streamlit admin pages, so the transitive Streamlit import
@@ -59,6 +77,19 @@ class AdminService:
         removed_type_ids = sorted(before_ids - after_ids)
 
         self._repository.replace_watchlist(rows)
+
+        # Read-back verification: confirm the write actually committed by
+        # reading the row count. If it disagrees, raise BEFORE invalidating
+        # caches — otherwise the UI happily renders the stale (correct!) cache
+        # and the user never notices the write was lost.
+        actual_df = self._repository.get_watchlist()
+        actual_count = 0 if actual_df.empty else len(actual_df)
+        if actual_count != len(rows):
+            raise AdminWriteIntegrityError(
+                f"save_watchlist read-back mismatch: wrote {len(rows)} rows but "
+                f"read-back found {actual_count}"
+            )
+
         self._cache_invalidator()
 
         character_id = int(payload["character_id"])
@@ -84,7 +115,7 @@ class AdminService:
 
     def create_doctrine(self, *, doctrine_name: str, signed_identity: dict | None) -> dict:
         """Create an empty doctrine that can receive fits later."""
-        self._require_admin(signed_identity)
+        payload = self._require_admin(signed_identity)
         doctrine_name = doctrine_name.strip()
         if not doctrine_name:
             raise ValueError("doctrine_name must be a non-empty string")
@@ -94,7 +125,23 @@ class AdminService:
         if self._repository.doctrine_id_exists(doctrine_id):
             raise ValueError(f"doctrine_id {doctrine_id} already exists")
         self._repository.create_doctrine(doctrine_id=doctrine_id, doctrine_name=doctrine_name)
+
+        if not self._repository.doctrine_id_exists(doctrine_id):
+            raise AdminWriteIntegrityError(
+                f"create_doctrine read-back mismatch: doctrine_id={doctrine_id} "
+                "not visible after apparent successful write"
+            )
+
         self._cache_invalidator()
+        logger.info(
+            "doctrine_created character_id=%s character_name=%s write_target=%s "
+            "doctrine_id=%s doctrine_name=%r",
+            int(payload["character_id"]),
+            payload.get("character_name", ""),
+            self._repository.write_target,
+            doctrine_id,
+            doctrine_name,
+        )
         return {"doctrine_id": doctrine_id, "doctrine_name": doctrine_name}
 
     def save_doctrine_fit(
@@ -104,12 +151,12 @@ class AdminService:
         doctrine_id: int,
         fit_id: int | None,
         target: int,
-        market_flag: str,
-        mode: str,
+        market_flag: MarketFlag,
+        mode: SaveMode,
         signed_identity: dict | None,
     ) -> dict:
         """Add or update one fit within an existing doctrine."""
-        self._require_admin(signed_identity)
+        payload = self._require_admin(signed_identity)
         doctrine_id = int(doctrine_id)
         target = int(target)
         if target <= 0:
@@ -148,7 +195,30 @@ class AdminService:
             market_flag=market_flag,
             mode=mode,
         )
+
+        if self._repository.get_doctrine_fit(doctrine_id, fit_id) is None:
+            raise AdminWriteIntegrityError(
+                f"save_doctrine_fit read-back mismatch: doctrine_id={doctrine_id} "
+                f"fit_id={fit_id} not visible after apparent successful write"
+            )
+
         self._cache_invalidator()
+        logger.info(
+            "doctrine_fit_saved character_id=%s character_name=%s write_target=%s "
+            "mode=%s doctrine_id=%s fit_id=%s ship_name=%r fit_name=%r target=%d "
+            "market_flag=%s item_count=%d",
+            int(payload["character_id"]),
+            payload.get("character_name", ""),
+            self._repository.write_target,
+            mode,
+            doctrine_id,
+            fit_id,
+            parsed_fit.ship_name,
+            parsed_fit.fit_name,
+            target,
+            market_flag,
+            len(parsed_fit.item_quantities),
+        )
         return {
             "doctrine_id": doctrine_id,
             "fit_id": fit_id,
@@ -163,14 +233,31 @@ class AdminService:
         signed_identity: dict | None,
     ) -> dict:
         """Delete one existing doctrine fit."""
-        self._require_admin(signed_identity)
+        payload = self._require_admin(signed_identity)
         doctrine_id = int(doctrine_id)
         fit_id = int(fit_id)
         existing_fit = self._repository.get_doctrine_fit(doctrine_id, fit_id)
         if existing_fit is None:
             raise ValueError(f"No doctrine fit found for doctrine_id={doctrine_id}, fit_id={fit_id}")
         self._repository.delete_doctrine_fit(doctrine_id=doctrine_id, fit_id=fit_id)
+
+        if self._repository.get_doctrine_fit(doctrine_id, fit_id) is not None:
+            raise AdminWriteIntegrityError(
+                f"delete_doctrine_fit read-back mismatch: doctrine_id={doctrine_id} "
+                f"fit_id={fit_id} still visible after apparent successful delete"
+            )
+
         self._cache_invalidator()
+        logger.info(
+            "doctrine_fit_deleted character_id=%s character_name=%s write_target=%s "
+            "doctrine_id=%s fit_id=%s doctrine_name=%r",
+            int(payload["character_id"]),
+            payload.get("character_name", ""),
+            self._repository.write_target,
+            doctrine_id,
+            fit_id,
+            existing_fit.get("doctrine_name", ""),
+        )
         return {"doctrine_id": doctrine_id, "fit_id": fit_id}
 
     def _require_admin(self, signed_identity: dict | None) -> dict:

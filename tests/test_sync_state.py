@@ -1,10 +1,13 @@
 """Tests for the minutes_until_next_update helper in state.sync_state."""
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
+from unittest.mock import MagicMock
 
+import pandas as pd
 import pytest
 
 from state import sync_state
+from state.sync_state import SyncStatusUnavailableError
 
 
 def _stub_session_state(monkeypatch, state):
@@ -83,6 +86,72 @@ class TestMinutesUntilNextUpdate:
 
         monkeypatch.setattr(sync_state, "update_wcmkt_state", populate)
         assert sync_state.minutes_until_next_update() == 45
+
+
+class TestGetMostRecentUpdateResilient:
+    """SyncStatusUnavailableError must be raised distinctly from 'no rows yet'.
+
+    The UI uses this distinction to choose between "Last updated: 12 min ago"
+    and "Sync status unavailable" — confusing the two would silently re-render
+    a stale timestamp during a real outage.
+    """
+
+    def _patch_repo(self, monkeypatch, read_df_behavior):
+        """Replace BaseRepository.read_df with a controllable stub."""
+        import repositories.base as base_module
+
+        fake_repo = MagicMock()
+        fake_repo.read_df = MagicMock(side_effect=read_df_behavior)
+        monkeypatch.setattr(base_module, "BaseRepository", lambda *args, **kwargs: fake_repo)
+
+        fake_db = MagicMock()
+        monkeypatch.setattr(sync_state, "DatabaseConfig", lambda alias: fake_db)
+        return fake_repo
+
+    def test_returns_datetime_for_populated_row(self, monkeypatch):
+        timestamp = datetime(2026, 5, 17, 12, 0, tzinfo=timezone.utc)
+        df = pd.DataFrame({"timestamp": [timestamp]})
+        self._patch_repo(monkeypatch, lambda *a, **k: df)
+
+        result = sync_state.get_most_recent_update_resilient("wcmkt", "marketstats")
+
+        assert result == timestamp
+
+    def test_returns_none_for_empty_read(self, monkeypatch):
+        """No rows yet is a legitimate state — must be distinguishable from error."""
+        self._patch_repo(monkeypatch, lambda *a, **k: pd.DataFrame({"timestamp": []}))
+
+        result = sync_state.get_most_recent_update_resilient("wcmkt", "marketstats")
+
+        assert result is None
+
+    def test_returns_none_for_null_timestamp_value(self, monkeypatch):
+        """A null timestamp column is treated like an empty read."""
+        df = pd.DataFrame({"timestamp": [None]})
+        self._patch_repo(monkeypatch, lambda *a, **k: df)
+
+        result = sync_state.get_most_recent_update_resilient("wcmkt", "marketstats")
+
+        assert result is None
+
+    def test_raises_when_read_fails(self, monkeypatch):
+        """A DB read failure must surface as SyncStatusUnavailableError — not None."""
+
+        def boom(*args, **kwargs):
+            raise RuntimeError("connection refused")
+
+        self._patch_repo(monkeypatch, boom)
+
+        with pytest.raises(SyncStatusUnavailableError):
+            sync_state.get_most_recent_update_resilient("wcmkt", "marketstats")
+
+    def test_raises_when_timestamp_unparseable(self, monkeypatch):
+        """A non-null but garbage timestamp must surface as SyncStatusUnavailableError."""
+        df = pd.DataFrame({"timestamp": ["not-a-date"]})
+        self._patch_repo(monkeypatch, lambda *a, **k: df)
+
+        with pytest.raises(SyncStatusUnavailableError):
+            sync_state.get_most_recent_update_resilient("wcmkt", "marketstats")
 
 
 if __name__ == "__main__":

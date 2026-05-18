@@ -174,9 +174,9 @@ class TestSettingsToml(unittest.TestCase):
                 result = fit_mappings.get(fit_id) or fit_mappings.get(str(fit_id))
                 self.assertIsNotNone(result)
 
-    def test_admin_writes_default_to_remote(self):
-        """Admin edits should write through to the configured Turso database."""
-        self.assertEqual(self.settings["admin"]["write_target"], "remote")
+    def test_admin_writes_default_to_local(self):
+        """Repo default is local — prod deploys must explicitly opt into remote writes."""
+        self.assertEqual(self.settings["admin"]["write_target"], "local")
 
 
 if __name__ == "__main__":

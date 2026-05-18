@@ -137,9 +137,14 @@
 #    callback_url = "https://wcmkts.streamlit.app/admin_login"
 #    allowed_character_ids = [1387156123, 2116257395]
 
+# Admin writes default to the local replica so a developer who flips the
+# commented [eve_sso] block above to prod credentials does not also start
+# writing to the prod database. When deploying to production (or testing
+# against prod data on purpose), explicitly set write_target = "remote".
 [admin]
-    write_target = "remote"
+    write_target = "local"
     session_ttl_minutes = 480
+    oauth_state_ttl_minutes = 15
 
 [module_strategy]
   use_equivalent = true

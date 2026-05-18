@@ -258,6 +258,13 @@ def test_replace_watchlist_replaces_existing_rows(tmp_path):
 
 
 def test_replace_watchlist_is_transactional(tmp_path):
+    """Duplicate type_id must trigger an IntegrityError and roll back the whole batch.
+
+    Without ``engine.begin()`` atomicity, the DELETE FROM watchlist would commit
+    independently and the original row would be lost even though the INSERTs fail.
+    """
+    from sqlalchemy.exc import IntegrityError
+
     db_path = tmp_path / "watchlist.db"
     _create_watchlist_db(db_path)
 
@@ -281,10 +288,8 @@ def test_replace_watchlist_is_transactional(tmp_path):
         },
     ]
 
-    try:
+    with pytest.raises(IntegrityError):
         repo.replace_watchlist(invalid_rows)
-    except Exception:
-        pass
 
     result = repo.get_watchlist()
 
@@ -305,15 +310,14 @@ def test_replace_watchlist_is_transactional(tmp_path):
 
 
 def test_replace_watchlist_refuses_empty_rows(tmp_path):
+    """An empty replacement must raise ValueError, not silently wipe the table."""
     db_path = tmp_path / "watchlist.db"
     _create_watchlist_db(db_path)
 
     repo = AdminRepository.from_sqlite_path(db_path)
 
-    try:
+    with pytest.raises(ValueError, match="empty watchlist"):
         repo.replace_watchlist([])
-    except ValueError as exc:
-        assert "empty watchlist" in str(exc)
 
     result = repo.get_watchlist()
 
@@ -410,14 +414,13 @@ def test_create_doctrine_records_empty_doctrine_without_linked_fit_rows(tmp_path
 
 
 def test_create_doctrine_rejects_duplicate_doctrine_name_case_insensitive(tmp_path):
+    """Case-insensitive name uniqueness must hold even after whitespace trim."""
     db_path = tmp_path / "doctrine.db"
     _create_doctrine_admin_db(db_path)
     repo = AdminRepository.from_sqlite_path(db_path)
 
-    try:
+    with pytest.raises(ValueError, match="doctrine_name already exists"):
         repo.create_doctrine(doctrine_id=11, doctrine_name=" doctrine alpha ")
-    except ValueError as exc:
-        assert "doctrine_name already exists" in str(exc)
 
     engine = create_engine(f"sqlite:///{db_path}")
     with engine.connect() as conn:
@@ -426,6 +429,76 @@ def test_create_doctrine_rejects_duplicate_doctrine_name_case_insensitive(tmp_pa
         ).scalar_one()
 
     assert doctrine_count == 0
+
+
+# --- Existence-check coverage (I11) ---------------------------------------------------
+
+
+def test_doctrine_id_exists_true_and_false(tmp_path):
+    db_path = tmp_path / "doctrine.db"
+    _create_doctrine_admin_db(db_path)
+    repo = AdminRepository.from_sqlite_path(db_path)
+
+    assert repo.doctrine_id_exists(10) is True
+    assert repo.doctrine_id_exists(99) is False
+
+
+def test_doctrine_name_exists_case_insensitive_with_whitespace(tmp_path):
+    db_path = tmp_path / "doctrine.db"
+    _create_doctrine_admin_db(db_path)
+    repo = AdminRepository.from_sqlite_path(db_path)
+
+    assert repo.doctrine_name_exists("Doctrine Alpha") is True
+    assert repo.doctrine_name_exists(" doctrine alpha ") is True
+    assert repo.doctrine_name_exists("Doctrine Beta") is False
+
+
+def test_doctrine_fit_id_exists_true_and_false(tmp_path):
+    db_path = tmp_path / "doctrine.db"
+    _create_doctrine_admin_db(db_path)
+    repo = AdminRepository.from_sqlite_path(db_path)
+
+    assert repo.doctrine_fit_id_exists(20) is True
+    assert repo.doctrine_fit_id_exists(999) is False
+
+
+def test_get_next_doctrine_id_returns_max_plus_one(tmp_path):
+    db_path = tmp_path / "doctrine.db"
+    _create_doctrine_admin_db(db_path)
+    repo = AdminRepository.from_sqlite_path(db_path)
+
+    # Seed db has doctrine_id=10, so next should be 11.
+    assert repo.get_next_doctrine_id() == 11
+
+
+def test_get_doctrine_name_returns_existing_name(tmp_path):
+    db_path = tmp_path / "doctrine.db"
+    _create_doctrine_admin_db(db_path)
+    repo = AdminRepository.from_sqlite_path(db_path)
+
+    assert repo.get_doctrine_name(10) == "Doctrine Alpha"
+    assert repo.get_doctrine_name(99) is None
+
+
+def test_get_doctrine_fit_returns_full_row_for_existing_pair(tmp_path):
+    db_path = tmp_path / "doctrine.db"
+    _create_doctrine_admin_db(db_path)
+    repo = AdminRepository.from_sqlite_path(db_path)
+
+    fit = repo.get_doctrine_fit(10, 20)
+
+    assert fit is not None
+    assert fit["doctrine_name"] == "Doctrine Alpha"
+    assert fit["fit_id"] == 20
+
+
+def test_get_doctrine_fit_returns_none_for_missing_pair(tmp_path):
+    db_path = tmp_path / "doctrine.db"
+    _create_doctrine_admin_db(db_path)
+    repo = AdminRepository.from_sqlite_path(db_path)
+
+    assert repo.get_doctrine_fit(10, 999) is None
+    assert repo.get_doctrine_fit(999, 20) is None
 
 
 def test_get_doctrine_fit_options_raises_on_disk_io_error():
@@ -457,20 +530,20 @@ def test_prepare_local_write_disposes_stale_connections():
     db._dispose_local_connections.assert_called_once()
 
 
-def test_default_write_engine_uses_remote_target():
+def test_default_write_engine_uses_local_target():
     db = MagicMock()
     db.engine = object()
     db.remote_engine = object()
     repo = AdminRepository(db)
 
-    assert repo._get_write_engine() is db.remote_engine
+    assert repo._get_write_engine() is db.engine
 
 
-def test_write_target_property_exposes_normalized_remote_default():
+def test_write_target_property_exposes_normalized_local_default():
     db = MagicMock()
     repo = AdminRepository(db)
 
-    assert repo.write_target == "remote"
+    assert repo.write_target == "local"
 
 
 def test_write_target_property_exposes_normalized_local_target():

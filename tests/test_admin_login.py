@@ -3,12 +3,13 @@
 import pytest
 
 from pages import admin_login
+from services.eve_sso_service import InvalidOAuthStateError
 
 
 class StubSSOService:
-    def __init__(self, *, verify_returns: bool = True):
+    def __init__(self, *, complete_raises: Exception | None = None):
         self.completed = None
-        self._verify_returns = verify_returns
+        self._complete_raises = complete_raises
 
     def build_oauth_state(self):
         return "fresh-state"
@@ -16,15 +17,10 @@ class StubSSOService:
     def create_authorization_url(self, state):
         return f"https://login.example.test?state={state}"
 
-    def verify_oauth_state(self, state):
-        return self._verify_returns
-
-    def complete_login(self, *, code, returned_state, expected_state):
-        self.completed = {
-            "code": code,
-            "returned_state": returned_state,
-            "expected_state": expected_state,
-        }
+    def complete_login(self, *, code, state):
+        if self._complete_raises is not None:
+            raise self._complete_raises
+        self.completed = {"code": code, "state": state}
         return {"payload": {"character_id": 1}, "signature": "signed"}
 
 
@@ -35,22 +31,20 @@ def test_build_authorization_url_does_not_touch_session_state():
     assert url == "https://login.example.test?state=fresh-state"
 
 
-def test_complete_callback_succeeds_when_hmac_verifies():
-    service = StubSSOService(verify_returns=True)
+def test_complete_callback_passes_code_and_state_to_service():
+    """The page should forward the callback params verbatim to the service."""
+    service = StubSSOService()
 
     identity = admin_login._complete_callback_login(service, "auth-code", "signed-state")
 
     assert identity == {"payload": {"character_id": 1}, "signature": "signed"}
-    assert service.completed == {
-        "code": "auth-code",
-        "returned_state": "signed-state",
-        "expected_state": "signed-state",
-    }
+    assert service.completed == {"code": "auth-code", "state": "signed-state"}
 
 
-def test_complete_callback_rejects_when_hmac_fails():
-    service = StubSSOService(verify_returns=False)
+def test_complete_callback_propagates_invalid_state_error():
+    """State-verification failure raised by the service must propagate unchanged."""
+    service = StubSSOService(complete_raises=InvalidOAuthStateError("bad state"))
 
-    with pytest.raises(ValueError, match="Invalid OAuth state"):
+    with pytest.raises(InvalidOAuthStateError):
         admin_login._complete_callback_login(service, "auth-code", "tampered-state")
     assert service.completed is None

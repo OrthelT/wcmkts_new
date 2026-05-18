@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
 import pandas as pd
 from sqlalchemy import create_engine, text
@@ -16,6 +17,11 @@ from repositories.base import BaseRepository
 from settings_service import SettingsService, resolve_db_alias
 
 logger = setup_logging(__name__, log_file="admin_repo.log")
+
+# Static-typing alias: every code path that selects a write target must agree on
+# these two strings. Runtime guard (``_normalize_write_target``) catches deploy-
+# config typos; Literal catches in-source typos at type-check time.
+WriteTarget = Literal["local", "remote"]
 
 WATCHLIST_COLUMNS = [
     "type_id",
@@ -67,24 +73,15 @@ ADMIN_WRITE_TARGETS = {"local", "remote"}
 
 
 class AdminRepository:
-    """Repository for reading and replacing the watchlist + doctrine tables.
+    """Read + replace watchlist/doctrine tables. Multi-statement writes use ``engine.begin()`` for atomicity (libSQL wraps as a remote transaction; verify multi-statement changes against Turso staging)."""
 
-    Transactional guarantees:
-        Writes use ``engine.begin()`` for atomicity. For local SQLite this is a
-        normal SQLite transaction. For the remote Turso engine, the libSQL
-        SQLAlchemy adapter wraps statements in a remote transaction; a network
-        failure mid-loop rolls back. Verify behavior against Turso staging when
-        making changes to multi-statement write methods (``save_doctrine_fit``,
-        ``delete_doctrine_fit``, ``replace_watchlist``).
-    """
-
-    def __init__(self, db: DatabaseConfig, *, write_target: str = "remote"):
+    def __init__(self, db: DatabaseConfig, *, write_target: WriteTarget = "local"):
         self._db = db
         self._write_target = self._normalize_write_target(write_target)
         self._reader = BaseRepository(db, logger)
 
     @property
-    def write_target(self) -> str:
+    def write_target(self) -> WriteTarget:
         """Return the normalized write target ('local' or 'remote')."""
         return self._write_target
 
@@ -354,10 +351,9 @@ class AdminRepository:
                 {"doctrine_id": doctrine_id, "fit_id": fit_id},
             ).first()
             if mode == "add" and existing_fit is None:
-                # Closing the race between the service's non-transactional
-                # MAX(fit_id)+1 pre-check and this transactional write.
-                # Two concurrent add calls could otherwise compute the same
-                # fit_id and each insert it under different doctrines.
+                # Invariant: an "add" must not collide with an existing fit_id
+                # under a different doctrine. Two concurrent transactional adds
+                # computing the same MAX(fit_id)+1 would otherwise both succeed.
                 fit_id_conflict = conn.execute(
                     text("SELECT 1 FROM doctrine_fits WHERE fit_id = :fit_id LIMIT 1"),
                     {"fit_id": fit_id},

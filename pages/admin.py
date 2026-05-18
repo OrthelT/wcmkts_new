@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pandas as pd
 import streamlit as st
-from streamlit.elements.lib.layout_utils import WidthWithoutContent
 
 from init_db import ensure_market_db_ready
 from logging_config import setup_logging
@@ -61,12 +60,7 @@ def lookup_sde_row(
     type_id: int | None = None,
     type_name: str | None = None,
 ) -> dict | None:
-    """Resolve one sdeTypes row to a watchlist-shaped dict.
-
-    Exactly one of `type_id` or `type_name` must be provided. Type-name
-    matching is case-sensitive (mirrors AdminRepository._resolve_type_metadata
-    and the project no-wrong-data rule). Returns None when no row matches.
-    """
+    """Resolve one sdeTypes row to a watchlist-shaped dict (case-sensitive name match)."""
     if (type_id is None) == (type_name is None):
         raise ValueError("exactly one of type_id or type_name must be provided")
 

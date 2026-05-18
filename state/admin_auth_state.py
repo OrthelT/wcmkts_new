@@ -5,6 +5,7 @@ from __future__ import annotations
 import streamlit as st
 
 ADMIN_IDENTITY_STATE_KEY = "admin_identity"
+ADMIN_STATE_PREFIX = "admin_"
 
 
 def get_admin_identity() -> dict | None:
@@ -23,5 +24,17 @@ def clear_admin_identity() -> None:
 
 
 def clear_admin_auth_state() -> None:
-    """Remove all admin-auth state from the session."""
-    clear_admin_identity()
+    """Remove all admin-scoped session state (identity + pending edits + notices).
+
+    Sweeps every key prefixed ``admin_`` so a logout from Admin A on a shared
+    workstation cannot leave pending watchlist adds/removes or doctrine-fit
+    drafts queued for Admin B — which would otherwise be attributed to B in
+    the audit log on the next Save click.
+    """
+    stale_keys = [
+        key
+        for key in list(st.session_state.keys())
+        if isinstance(key, str) and key.startswith(ADMIN_STATE_PREFIX)
+    ]
+    for key in stale_keys:
+        st.session_state.pop(key, None)
