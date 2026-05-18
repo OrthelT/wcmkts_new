@@ -93,4 +93,3 @@ parser/
 notes.md
 .playwright-mcp/
 fitfix.sql
-settings.toml

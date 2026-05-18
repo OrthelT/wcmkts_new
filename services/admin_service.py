@@ -10,6 +10,13 @@ from logging_config import setup_logging
 from repositories.admin_repo import WATCHLIST_COLUMNS, get_admin_repository
 from services.eft_parser_service import parse_eft_fit
 from services.eve_sso_service import get_eve_sso_service
+
+# Deliberate exception to the services→state/ layering rule. The only consumers
+# of AdminService are Streamlit admin pages, so the transitive Streamlit import
+# is paid by callers who already depend on Streamlit. Avoiding this would mean
+# injecting a cache-invalidator callable through every callsite of
+# get_admin_service(), which added more complexity than it removed. Tests can
+# still override via the constructor's `cache_invalidator` parameter.
 from state.market_state import refresh_market_caches
 
 logger = setup_logging(__name__, log_file="admin_service.log")

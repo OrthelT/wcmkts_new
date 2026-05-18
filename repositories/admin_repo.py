@@ -214,12 +214,8 @@ class AdminRepository:
         )
         if getattr(self, "_reader", None) is not None:
             return self._reader.read_df(query, local=self._read_local()).reset_index(drop=True)
-        try:
-            with self._get_write_engine().connect() as conn:
-                return pd.read_sql_query(query, conn).reset_index(drop=True)
-        except Exception:
-            logger.exception("Failed to read doctrine options")
-            return pd.DataFrame(columns=DOCTRINE_OPTION_COLUMNS)
+        with self._get_write_engine().connect() as conn:
+            return pd.read_sql_query(query, conn).reset_index(drop=True)
 
     def get_doctrine_fit_options(self) -> pd.DataFrame:
         """Return current doctrine and fit metadata for admin selectors."""
@@ -241,12 +237,8 @@ class AdminRepository:
         )
         if getattr(self, "_reader", None) is not None:
             return self._reader.read_df(query, local=self._read_local()).reset_index(drop=True)
-        try:
-            with self._get_write_engine().connect() as conn:
-                return pd.read_sql_query(query, conn).reset_index(drop=True)
-        except Exception:
-            logger.exception("Failed to read doctrine fit options")
-            return pd.DataFrame(columns=DOCTRINE_FIT_OPTION_COLUMNS)
+        with self._get_write_engine().connect() as conn:
+            return pd.read_sql_query(query, conn).reset_index(drop=True)
 
     def create_doctrine(self, *, doctrine_id: int, doctrine_name: str) -> None:
         """Register a doctrine before it has any fits."""
@@ -297,21 +289,17 @@ class AdminRepository:
             """
         )
         params = {"fit_id": fit_id}
-        try:
-            if getattr(self, "_reader", None) is not None:
-                fit_df = self._reader.read_df(fit_query, params=params, local=self._read_local())
-                items_df = self._reader.read_df(items_query, params=params, local=self._read_local())
-                if fit_df.empty:
-                    return ""
-                fit = fit_df.iloc[0].to_dict()
-                items = items_df.to_dict(orient="records")
-            else:
-                with self._get_write_engine().connect() as conn:
-                    fit = conn.execute(fit_query, params).mappings().first()
-                    items = conn.execute(items_query, params).mappings().all()
-        except Exception:
-            logger.exception("Failed to read doctrine fit EFT for fit_id=%s", fit_id)
-            return ""
+        if getattr(self, "_reader", None) is not None:
+            fit_df = self._reader.read_df(fit_query, params=params, local=self._read_local())
+            items_df = self._reader.read_df(items_query, params=params, local=self._read_local())
+            if fit_df.empty:
+                return ""
+            fit = fit_df.iloc[0].to_dict()
+            items = items_df.to_dict(orient="records")
+        else:
+            with self._get_write_engine().connect() as conn:
+                fit = conn.execute(fit_query, params).mappings().first()
+                items = conn.execute(items_query, params).mappings().all()
         if fit is None:
             return ""
         ship_name = str(fit["ship_name"] or "").strip()

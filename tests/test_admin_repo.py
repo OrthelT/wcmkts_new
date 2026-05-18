@@ -428,15 +428,16 @@ def test_create_doctrine_rejects_duplicate_doctrine_name_case_insensitive(tmp_pa
     assert doctrine_count == 0
 
 
-def test_get_doctrine_fit_options_returns_schema_on_disk_io_error():
+def test_get_doctrine_fit_options_raises_on_disk_io_error():
+    # Per the project no-wrong-data rule: surface DB errors instead of returning
+    # an empty frame, which would look indistinguishable from "no doctrines yet"
+    # and could lead an admin to overwrite real fits thinking the editor is blank.
     engine = MagicMock()
     engine.connect.side_effect = ValueError("disk I/O error")
     repo = AdminRepository._from_engine(engine)
 
-    result = repo.get_doctrine_fit_options()
-
-    assert result.empty
-    assert list(result.columns) == DOCTRINE_FIT_OPTION_COLUMNS
+    with pytest.raises(ValueError, match="disk I/O error"):
+        repo.get_doctrine_fit_options()
 
 
 def test_get_next_doctrine_fit_id_uses_next_available_id(tmp_path):

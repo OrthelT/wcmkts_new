@@ -35,9 +35,17 @@ def _build_authorization_url(service) -> str:
 
 
 def _complete_callback_login(service, code: str, returned_state: str) -> dict:
-    # HMAC-signed state is self-validating (signature + TTL). No session-state
-    # equality check needed; storing pending state in st.session_state broke
-    # logins across tab refresh / server restart.
+    # OAuth state is verified by HMAC signature + 15-min TTL only; it is
+    # intentionally NOT bound to the originating browser session.
+    #
+    # Trade-off: strict OAuth (RFC 6749 §10.12) recommends binding state to the
+    # user agent to prevent login CSRF — an allow-listed admin tricking another
+    # admin into completing the attacker's login flow in the victim's browser,
+    # so subsequent actions are attributed to the attacker in the audit log.
+    # Accepted risk: the admin allow-list is intentionally small (currently 2
+    # trusted characters) and the alternative — storing pending state in
+    # st.session_state — breaks login across tab refresh and server restart.
+    # Re-evaluate if the allow-list grows beyond the in-circle trust boundary.
     if not service.verify_oauth_state(returned_state):
         logger.error(
             "admin_oauth_callback_rejected: state failed HMAC/TTL verification"
@@ -71,7 +79,17 @@ def main() -> None:
 
     error_code = _query_param("error")
     if error_code:
-        st.error(_query_param("error_description") or error_code)
+        # Do not echo EVE's error_description into st.error — st.error renders
+        # markdown, so a crafted ?error_description=[click+here](https://evil)
+        # would inject a phishing link into the trusted admin page before any
+        # auth check runs. Log the upstream detail and show a generic message.
+        error_description = _query_param("error_description") or ""
+        logger.error(
+            "admin_oauth_callback_error: error=%r error_description=%r",
+            error_code,
+            error_description,
+        )
+        st.error("EVE returned an authorization error. Check admin logs for details.")
         _clear_callback_params()
 
     code = _query_param("code")
@@ -79,10 +97,6 @@ def main() -> None:
     if code and returned_state:
         try:
             signed_identity = _complete_callback_login(service, code, returned_state)
-            set_admin_identity(signed_identity)
-            _clear_callback_params()
-            st.success("Admin login successful.")
-            st.switch_page("pages/admin.py")
         except ValueError as exc:
             logger.error("Admin login rejected: %s", exc, exc_info=True)
             clear_admin_auth_state()
@@ -98,6 +112,15 @@ def main() -> None:
             clear_admin_auth_state()
             _clear_callback_params()
             st.error("Admin login failed. Check admin logs for details.")
+        else:
+            # Side-effects run only after the auth code is successfully
+            # exchanged. If switch_page (or any later call) raises, the
+            # verified identity stays set so the admin can navigate manually
+            # rather than retrying OAuth with a now-consumed auth code.
+            set_admin_identity(signed_identity)
+            _clear_callback_params()
+            st.success("Admin login successful.")
+            st.switch_page("pages/admin.py")
         return
 
     st.link_button(
