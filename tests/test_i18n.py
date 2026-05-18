@@ -1,6 +1,7 @@
 """Tests for UI translation helpers."""
 
 from ui.i18n import (
+    TRANSLATIONS,
     get_language_label,
     get_language_options,
     translate_text,
@@ -76,3 +77,17 @@ def test_translate_text_returns_spanish_build_cost_label():
     result = translate_text("es", "build_costs.material_breakdown")
 
     assert result == "Desglose de materiales"
+
+
+def test_admin_translation_keys_exist_for_all_languages():
+    en_admin_keys = {key for key in TRANSLATIONS["en"] if key.startswith("admin.")}
+    assert "admin.watchlist.title" in en_admin_keys
+    assert "admin.login.sign_in" in en_admin_keys
+    for language_code in get_language_options():
+        missing = en_admin_keys - set(TRANSLATIONS[language_code])
+        assert not missing, f"{language_code} missing admin translation keys: {sorted(missing)}"
+
+
+def test_admin_translation_returns_localized_chinese_copy():
+    assert translate_text("zh", "admin.watchlist.title") == "管理观察列表"
+    assert translate_text("zh", "admin.common.logout") == "退出登录"

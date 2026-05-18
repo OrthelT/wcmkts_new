@@ -13,7 +13,8 @@ from config import DatabaseConfig
 from services.admin_service import get_admin_service
 from services.eve_sso_service import get_eve_sso_service
 from settings_service import SettingsService
-from state import clear_admin_auth_state, get_admin_identity
+from state import clear_admin_auth_state, get_active_language, get_admin_identity
+from ui.i18n import translate_text
 from ui.market_selector import render_market_selector
 
 logger = setup_logging(__name__, log_file="admin_page.log")
@@ -31,6 +32,10 @@ PENDING_ADDS_KEY = "admin_watchlist_pending_adds"
 PENDING_REMOVES_KEY = "admin_watchlist_pending_removes"
 REMOVE_EDITOR_KEY = "admin_watchlist_remove_editor"
 NOTICE_KEY = "admin_watchlist_notice"
+
+
+def _admin_text(language_code: str, key: str, **kwargs) -> str:
+    return translate_text(language_code, f"admin.{key}", **kwargs)
 
 
 def summarize_watchlist_changes(original_df: pd.DataFrame, edited_df: pd.DataFrame) -> dict[str, int]:
@@ -102,32 +107,43 @@ def _render_notice() -> None:
         st.success(notice)
 
 
-def _render_add_section(watchlist_df: pd.DataFrame, sdetypes_df: pd.DataFrame) -> dict | None:
+def _render_add_section(
+    watchlist_df: pd.DataFrame,
+    sdetypes_df: pd.DataFrame,
+    language_code: str,
+) -> dict | None:
     """Render the add-form + pending-queue UI. Returns a payload dict when the
     admin clicks 'Save all pending adds' (caller handles the actual save)."""
-    st.subheader("Add Items")
+    st.subheader(_admin_text(language_code, "watchlist.add_items"))
 
     pending: list[dict] = st.session_state[PENDING_ADDS_KEY]
 
     if pending:
-        st.markdown(f"**Pending adds ({len(pending)})**")
+        st.markdown(
+            f"**{_admin_text(language_code, 'watchlist.pending_adds', count=len(pending))}**"
+        )
         pending_df = pd.DataFrame(pending, columns=WATCHLIST_COLUMNS)
         st.dataframe(pending_df, hide_index=True, width="content")
 
         drop_label = st.selectbox(
-            "Drop one from queue",
-            options=["(none)"] + [f"{row['type_name']} ({row['type_id']})" for row in pending],
+            _admin_text(language_code, "watchlist.drop_one_from_queue"),
+            options=[_admin_text(language_code, "watchlist.none_option")]
+            + [f"{row['type_name']} ({row['type_id']})" for row in pending],
         )
         col_drop, col_clear = st.columns(2)
         with col_drop:
-            if st.button("Remove from queue", disabled=drop_label == "(none)", width="content"):
+            if st.button(
+                _admin_text(language_code, "watchlist.remove_from_queue"),
+                disabled=drop_label == _admin_text(language_code, "watchlist.none_option"),
+                width="content",
+            ):
                 st.session_state[PENDING_ADDS_KEY] = [
                     row for row in pending
                     if f"{row['type_name']} ({row['type_id']})" != drop_label
                 ]
                 st.rerun()
         with col_clear:
-            if st.button("Clear queue", width="content"):
+            if st.button(_admin_text(language_code, "watchlist.clear_queue"), width="content"):
                 st.session_state[PENDING_ADDS_KEY] = []
                 st.rerun()
 
@@ -138,28 +154,42 @@ def _render_add_section(watchlist_df: pd.DataFrame, sdetypes_df: pd.DataFrame) -
 
     with st.form("admin_add_watchlist_form", clear_on_submit=True):
         selected_name = st.selectbox(
-            "Type name",
+            _admin_text(language_code, "watchlist.type_name"),
             options=type_names,
             index=None,
-            placeholder="Start typing to filter…",
+            placeholder=_admin_text(language_code, "watchlist.type_name_placeholder"),
         )
-        queue_clicked = st.form_submit_button("Queue for add", type="primary", width="content")
+        queue_clicked = st.form_submit_button(
+            _admin_text(language_code, "watchlist.queue_for_add"),
+            type="primary",
+            width="content",
+        )
 
     if queue_clicked:
         try:
             if not selected_name:
-                raise ValueError("Select a type name from the dropdown.")
+                raise ValueError(_admin_text(language_code, "watchlist.select_type_name"))
             resolved = lookup_sde_row(sdetypes_df, type_name=selected_name)
 
             if resolved is None:
-                raise ValueError("Unknown EVE type — not found in sdeTypes.")
+                raise ValueError(_admin_text(language_code, "watchlist.unknown_type"))
             if resolved["type_id"] in existing_ids:
                 raise ValueError(
-                    f"{resolved['type_name']} ({resolved['type_id']}) is already in the watchlist."
+                    _admin_text(
+                        language_code,
+                        "watchlist.already_in_watchlist",
+                        type_name=resolved["type_name"],
+                        type_id=resolved["type_id"],
+                    )
                 )
             if resolved["type_id"] in pending_ids:
                 raise ValueError(
-                    f"{resolved['type_name']} ({resolved['type_id']}) is already in the pending queue."
+                    _admin_text(
+                        language_code,
+                        "watchlist.already_pending",
+                        type_name=resolved["type_name"],
+                        type_id=resolved["type_id"],
+                    )
                 )
 
             st.session_state[PENDING_ADDS_KEY] = pending + [resolved]
@@ -169,7 +199,7 @@ def _render_add_section(watchlist_df: pd.DataFrame, sdetypes_df: pd.DataFrame) -
 
     can_commit = bool(pending)
     if st.button(
-        "Save all pending adds",
+        _admin_text(language_code, "watchlist.save_pending_adds"),
         type="primary",
         width="content",
         disabled=not can_commit,
@@ -184,16 +214,17 @@ def _render_add_section(watchlist_df: pd.DataFrame, sdetypes_df: pd.DataFrame) -
     return None
 
 
-def _render_remove_section(watchlist_df: pd.DataFrame) -> dict | None:
+def _render_remove_section(watchlist_df: pd.DataFrame, language_code: str) -> dict | None:
     """Render the remove-table UI. Returns a payload when the admin confirms removal."""
-    st.subheader("Remove Items")
+    st.subheader(_admin_text(language_code, "watchlist.remove_items"))
 
     if watchlist_df.empty:
-        st.info("Watchlist is empty.")
+        st.info(_admin_text(language_code, "watchlist.empty"))
         return None
 
     display_df = watchlist_df[WATCHLIST_COLUMNS].copy()
-    display_df.insert(0, "Remove", False)
+    remove_column = _admin_text(language_code, "watchlist.column_remove")
+    display_df.insert(0, remove_column, False)
 
     edited = st.data_editor(
         display_df,
@@ -202,44 +233,61 @@ def _render_remove_section(watchlist_df: pd.DataFrame) -> dict | None:
         key=REMOVE_EDITOR_KEY,
         disabled=WATCHLIST_COLUMNS,
         column_config={
-            "Remove": st.column_config.CheckboxColumn("Remove", default=False),
-            "type_id": st.column_config.NumberColumn("Type ID", format="%d"),
-            "group_id": st.column_config.NumberColumn("Group ID", format="%d"),
-            "type_name": st.column_config.TextColumn("Type Name"),
-            "group_name": st.column_config.TextColumn("Group Name"),
-            "category_id": st.column_config.NumberColumn("Category ID", format="%d"),
-            "category_name": st.column_config.TextColumn("Category Name"),
+            remove_column: st.column_config.CheckboxColumn(remove_column, default=False),
+            "type_id": st.column_config.NumberColumn(
+                _admin_text(language_code, "watchlist.column_type_id"), format="%d"
+            ),
+            "group_id": st.column_config.NumberColumn(
+                _admin_text(language_code, "watchlist.column_group_id"), format="%d"
+            ),
+            "type_name": st.column_config.TextColumn(
+                _admin_text(language_code, "watchlist.column_type_name")
+            ),
+            "group_name": st.column_config.TextColumn(
+                _admin_text(language_code, "watchlist.column_group_name")
+            ),
+            "category_id": st.column_config.NumberColumn(
+                _admin_text(language_code, "watchlist.column_category_id"), format="%d"
+            ),
+            "category_name": st.column_config.TextColumn(
+                _admin_text(language_code, "watchlist.column_category_name")
+            ),
         },
     )
 
-    ticked_ids = [int(row["type_id"]) for row in edited.to_dict(orient="records") if row.get("Remove")]
+    ticked_ids = [
+        int(row["type_id"]) for row in edited.to_dict(orient="records") if row.get(remove_column)
+    ]
     pending_removes: list[int] = st.session_state[PENDING_REMOVES_KEY]
 
     if pending_removes:
         removed_rows = watchlist_df[watchlist_df["type_id"].isin(pending_removes)]
-        st.warning(
-            "About to remove "
-            + ", ".join(
+        removed_items = ", ".join(
                 f"{row['type_name']} ({row['type_id']})"
                 for _, row in removed_rows.iterrows()
             )
-            + ". Click 'Confirm remove' to proceed, or 'Cancel' to abort."
+        st.warning(
+            _admin_text(language_code, "watchlist.remove_warning", items=removed_items)
         )
         col_confirm, col_cancel = st.columns(2)
         with col_confirm:
-            if st.button("Confirm remove", type="primary", width="content"):
+            if st.button(
+                _admin_text(language_code, "watchlist.confirm_remove"),
+                type="primary",
+                width="content",
+            ):
                 new_full = watchlist_df[~watchlist_df["type_id"].isin(pending_removes)][
                     WATCHLIST_COLUMNS
                 ].reset_index(drop=True)
                 return {"action": "save_removes", "new_df": new_full}
         with col_cancel:
-            if st.button("Cancel", width="content"):
+            if st.button(_admin_text(language_code, "watchlist.cancel"), width="content"):
                 st.session_state[PENDING_REMOVES_KEY] = []
                 st.rerun()
         return None
 
     if st.button(
-        "Remove selected",
+        _admin_text(language_code, "watchlist.remove_selected"),
         type="secondary",
         width="content",
         disabled=not ticked_ids,
@@ -251,20 +299,31 @@ def _render_remove_section(watchlist_df: pd.DataFrame) -> dict | None:
     return None
 
 
-def _commit_save(service, payload: dict, signed_identity: dict | None) -> None:
+def _commit_save(
+    service,
+    payload: dict,
+    signed_identity: dict | None,
+    language_code: str = "en",
+) -> None:
     new_df = payload["new_df"]
     if new_df.empty:
-        st.error("Refusing to save an empty watchlist.")
+        st.error(_admin_text(language_code, "watchlist.refuse_empty"))
         return
     try:
         result = service.save_watchlist(new_df, signed_identity=signed_identity)
         added = result.get("added_type_ids", [])
         removed = result.get("removed_type_ids", [])
-        parts = [f"Saved {result['row_count']} watchlist rows."]
+        parts = [
+            _admin_text(
+                language_code,
+                "watchlist.save_success",
+                row_count=result["row_count"],
+            )
+        ]
         if added:
-            parts.append(f"Added: {added}.")
+            parts.append(_admin_text(language_code, "watchlist.added_ids", ids=added))
         if removed:
-            parts.append(f"Removed: {removed}.")
+            parts.append(_admin_text(language_code, "watchlist.removed_ids", ids=removed))
         st.session_state[NOTICE_KEY] = " ".join(parts)
         st.session_state[PENDING_ADDS_KEY] = []
         st.session_state[PENDING_REMOVES_KEY] = []
@@ -274,31 +333,31 @@ def _commit_save(service, payload: dict, signed_identity: dict | None) -> None:
         st.error(str(exc))
     except PermissionError as exc:
         logger.error("Watchlist save unauthorized: %s", exc, exc_info=True)
-        st.error("Admin session expired or unauthorized. Please log in again.")
+        st.error(_admin_text(language_code, "common.session_expired"))
     except Exception as exc:
         logger.error("Watchlist save failed: %s", exc, exc_info=True)
-        st.error("Failed to save watchlist. Check admin logs for details.")
+        st.error(_admin_text(language_code, "watchlist.save_failed"))
 
 
 def main() -> None:
+    language_code = get_active_language()
     market = render_market_selector()
     if not ensure_market_db_ready(market.database_alias):
         st.error(
-            f"Database for **{market.name}** is not available. "
-            "Check Turso credentials and network connectivity."
+            _admin_text(language_code, "common.database_unavailable", market_name=market.name)
         )
         st.stop()
 
     render_page_title(
-        "Admin Watchlist",
-        subtitle="Add items from sdeTypes; remove items via the table below.",
+        _admin_text(language_code, "watchlist.title"),
+        subtitle=_admin_text(language_code, "watchlist.subtitle"),
     )
     auth_service = get_eve_sso_service()
     signed_identity = get_admin_identity()
     verified_identity = auth_service.verify_signed_admin_identity(signed_identity)
     if verified_identity is None:
-        st.warning("Admin login required.")
-        st.page_link("pages/admin_login.py", label="Open Admin Login")
+        st.warning(_admin_text(language_code, "common.login_required"))
+        st.page_link("pages/admin_login.py", label=_admin_text(language_code, "common.open_login"))
         st.stop()
 
     _ensure_state()
@@ -311,30 +370,46 @@ def main() -> None:
     sdetypes_df = _get_sde_types_for_admin()
 
     st.caption(
-        f"Signed in as {verified_identity['character_name']} ({verified_identity['character_id']})"
+        _admin_text(
+            language_code,
+            "common.signed_in_as",
+            character_name=verified_identity["character_name"],
+            character_id=verified_identity["character_id"],
+        )
     )
-    st.caption(f"Write target: {settings.admin_write_target} | Market: {market.name}")
+    st.caption(
+        _admin_text(
+            language_code,
+            "common.write_target_market",
+            write_target=settings.admin_write_target,
+            market_name=market.name,
+        )
+    )
 
     col_logout, col_login = st.columns(2)
     with col_logout:
-        if st.button("Log out", width="content"):
+        if st.button(_admin_text(language_code, "common.logout"), width="content"):
             clear_admin_auth_state()
             st.switch_page("pages/admin_login.py")
     with col_login:
-        st.page_link("pages/admin_login.py", label="Login Page", width="content")
+        st.page_link(
+            "pages/admin_login.py",
+            label=_admin_text(language_code, "common.login_page"),
+            width="content",
+        )
 
     _render_notice()
 
     st.divider()
-    payload = _render_add_section(watchlist_df, sdetypes_df)
+    payload = _render_add_section(watchlist_df, sdetypes_df, language_code)
     if payload is not None:
-        _commit_save(service, payload, signed_identity)
+        _commit_save(service, payload, signed_identity, language_code)
         return
 
     st.divider()
-    payload = _render_remove_section(watchlist_df)
+    payload = _render_remove_section(watchlist_df, language_code)
     if payload is not None:
-        _commit_save(service, payload, signed_identity)
+        _commit_save(service, payload, signed_identity, language_code)
 
 
 if __name__ == "__main__":

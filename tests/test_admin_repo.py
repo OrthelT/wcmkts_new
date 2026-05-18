@@ -7,10 +7,7 @@ import pandas as pd
 import pytest
 from sqlalchemy import create_engine, text
 
-from repositories.admin_repo import (
-    DOCTRINE_FIT_OPTION_COLUMNS,
-    AdminRepository,
-)
+from repositories.admin_repo import AdminRepository
 
 
 def _create_watchlist_db(path: Path) -> None:
@@ -429,6 +426,66 @@ def test_create_doctrine_rejects_duplicate_doctrine_name_case_insensitive(tmp_pa
         ).scalar_one()
 
     assert doctrine_count == 0
+
+
+def test_rename_doctrine_updates_raw_names_for_all_fits_and_lead_ship(tmp_path):
+    db_path = tmp_path / "doctrine.db"
+    _create_doctrine_admin_db(db_path)
+    repo = AdminRepository.from_sqlite_path(db_path)
+    repo.save_doctrine_fit(
+        doctrine_id=10,
+        doctrine_name="Doctrine Alpha",
+        fit_id=20,
+        fit_name="Lead Vedmak",
+        ship_name="Vedmak",
+        item_quantities={"Damage Control II": 1},
+        target=40,
+        market_flag="primary",
+        mode="update",
+    )
+    repo.save_doctrine_fit(
+        doctrine_id=10,
+        doctrine_name="Doctrine Alpha",
+        fit_id=99,
+        fit_name="Backup Vedmak",
+        ship_name="Vedmak",
+        item_quantities={"Entropic Radiation Sink II": 1},
+        target=35,
+        market_flag="primary",
+        mode="add",
+    )
+
+    repo.rename_doctrine(doctrine_id=10, doctrine_name=" Doctrine Renamed ")
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.connect() as conn:
+        fit_names = conn.execute(
+            text("SELECT DISTINCT doctrine_name FROM doctrine_fits WHERE doctrine_id = 10")
+        ).scalars().all()
+        lead_ship_name = conn.execute(
+            text("SELECT doctrine_name FROM lead_ships WHERE doctrine_id = 10")
+        ).scalar_one()
+
+    assert fit_names == ["Doctrine Renamed"]
+    assert lead_ship_name == "Doctrine Renamed"
+
+
+def test_rename_doctrine_rejects_duplicate_name_case_insensitive(tmp_path):
+    db_path = tmp_path / "doctrine.db"
+    _create_doctrine_admin_db(db_path)
+    repo = AdminRepository.from_sqlite_path(db_path)
+    repo.create_doctrine(doctrine_id=11, doctrine_name="Doctrine Beta")
+
+    with pytest.raises(ValueError, match="doctrine_name already exists"):
+        repo.rename_doctrine(doctrine_id=10, doctrine_name=" doctrine beta ")
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.connect() as conn:
+        current_name = conn.execute(
+            text("SELECT DISTINCT doctrine_name FROM doctrine_fits WHERE doctrine_id = 10")
+        ).scalar_one()
+
+    assert current_name == "Doctrine Alpha"
 
 
 # --- Existence-check coverage (I11) ---------------------------------------------------
