@@ -128,21 +128,12 @@
     default_language = "en"
 
 [eve_sso]
-    client_id = "31d3f05e35e442879bec5bdb227f524d"
-    callback_url = "http://localhost:8501/admin_login"
+    client_id = "f9aae67fb3af430db7242e1f26d46f1d"
+    callback_url = "https://wcmkts.streamlit.app/admin_login"
     allowed_character_ids = [1387156123, 2116257395]
 
-#[eve_sso]
-#    client_id = "f9aae67fb3af430db7242e1f26d46f1d"
-#    callback_url = "https://wcmkts.streamlit.app/admin_login"
-#    allowed_character_ids = [1387156123, 2116257395]
-
-# Admin writes default to the local replica so a developer who flips the
-# commented [eve_sso] block above to prod credentials does not also start
-# writing to the prod database. When deploying to production (or testing
-# against prod data on purpose), explicitly set write_target = "remote".
 [admin]
-    write_target = "local"
+    write_target = "remote" #remote or local
     session_ttl_minutes = 480
     oauth_state_ttl_minutes = 15
 
