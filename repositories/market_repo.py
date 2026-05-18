@@ -304,6 +304,7 @@ def invalidate_market_caches():
     _get_history_by_type_cached.clear()
     _get_history_by_type_ids_cached.clear()
     _get_30day_volume_metrics_cached.clear()
+    _get_watchlist_type_ids_cached.clear()
     _get_market_type_ids_cached.clear()
     _get_local_price_cached.clear()
     _get_watchlist_cached.clear()

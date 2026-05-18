@@ -23,7 +23,26 @@ from config import DatabaseConfig, DEFAULT_SHIP_TARGET
 from domain import FitItem, ModuleStock, Doctrine, ShipStock
 import streamlit as st
 from logging_config import setup_logging
+from repositories.base import BaseRepository
 logger = setup_logging(__name__, log_file="doctrine_repo.log")
+
+DOCTRINE_FITS_COLUMNS = [
+    "id",
+    "doctrine_name",
+    "fit_name",
+    "ship_type_id",
+    "doctrine_id",
+    "fit_id",
+    "ship_name",
+    "target",
+    "market_flag",
+    "friendly_name",
+]
+
+
+def _empty_doctrine_fits_df() -> pd.DataFrame:
+    return pd.DataFrame(columns=DOCTRINE_FITS_COLUMNS)
+
 
 class DoctrineRepository:
     """
@@ -83,6 +102,7 @@ class DoctrineRepository:
         """
         self._db = db
         self._logger = logger or logging.getLogger(__name__)
+        self._reader = BaseRepository(db, self._logger)
 
     # =========================================================================
     # Core Fit Data
@@ -136,8 +156,7 @@ class DoctrineRepository:
         query = "SELECT * FROM doctrine_fits"
 
         try:
-            with self._db.engine.connect() as conn:
-                df = pd.read_sql_query(query, conn)
+            df = self._reader.read_df(query)
 
             # Filter by active market key
             try:
@@ -148,7 +167,7 @@ class DoctrineRepository:
                 market_key = "primary"
             except Exception:
                 logger.error("Failed to resolve active market key — returning empty DataFrame", exc_info=True)
-                return pd.DataFrame()
+                return _empty_doctrine_fits_df()
 
             if "market_flag" in df.columns:
                 df = df[df["market_flag"].isin([market_key, "both"])]
@@ -156,7 +175,7 @@ class DoctrineRepository:
             return df
         except Exception as e:
             self._logger.error(f"Failed to get doctrine compositions: {e}")
-            return pd.DataFrame()
+            return _empty_doctrine_fits_df()
 
     def get_doctrine_fit_ids(self, doctrine_name: str) -> list[int]:
         """
@@ -190,8 +209,7 @@ class DoctrineRepository:
         query = text("SELECT lead_ship FROM lead_ships WHERE doctrine_id = :doctrine_id")
 
         try:
-            with self._db.engine.connect() as conn:
-                df = pd.read_sql_query(query, conn, params={"doctrine_id": doctrine_id})
+            df = self._reader.read_df(query, params={"doctrine_id": doctrine_id})
 
             if not df.empty and pd.notna(df.loc[0, 'lead_ship']):
                 return int(df.loc[0, 'lead_ship'])
@@ -551,26 +569,26 @@ def get_all_fits_with_cache(db_alias: str = "wcmkt", market_key: str = "primary"
     """
     logger.info("Getting all fits for market_key=%s ...with cache", market_key)
     db = DatabaseConfig(db_alias)
-    engine = db.engine
+    reader = BaseRepository(db, logger)
     try:
-        with engine.connect() as conn:
-            # Get valid fit_ids for this market from doctrine_fits
-            fits_df = pd.read_sql_query("SELECT fit_id, market_flag FROM doctrine_fits", conn)
-            if "market_flag" in fits_df.columns:
-                valid_fit_ids = fits_df[
-                    fits_df["market_flag"].isin([market_key, "both"])
-                ]["fit_id"].unique()
-            else:
-                valid_fit_ids = fits_df["fit_id"].unique()
+        fits_df = reader.read_df("SELECT fit_id, market_flag FROM doctrine_fits")
+        if "market_flag" in fits_df.columns:
+            valid_fit_ids = fits_df[
+                fits_df["market_flag"].isin([market_key, "both"])
+            ]["fit_id"].unique()
+        else:
+            valid_fit_ids = fits_df["fit_id"].unique()
 
-            df = pd.read_sql_query("SELECT * FROM doctrines", conn, index_col='id')
+        df = reader.read_df("SELECT * FROM doctrines")
+        if "id" in df.columns:
+            df = df.set_index("id")
 
-            # Filter to only fits belonging to this market
-            df = df[df["fit_id"].isin(valid_fit_ids)]
-            if df.empty:
-                logger.warning("No valid fit_ids found for market_key=%s", market_key)
+        # Filter to only fits belonging to this market
+        df = df[df["fit_id"].isin(valid_fit_ids)]
+        if df.empty:
+            logger.warning("No valid fit_ids found for market_key=%s", market_key)
 
-            return df
+        return df
     except Exception as e:
         logger.error(f"Failed to get all fits: {e}")
         return pd.DataFrame()
@@ -580,11 +598,9 @@ def get_fit_by_id_with_cache(fit_id: int, db_alias: str = "wcmkt") -> pd.DataFra
     """Get all items for a specific fit."""
     logger.debug(f"Getting fit {fit_id}...with cache")
     query = text("SELECT * FROM doctrines WHERE fit_id = :fit_id")
-    engine = DatabaseConfig(db_alias).engine
+    reader = BaseRepository(DatabaseConfig(db_alias), logger)
     try:
-        with engine.connect() as conn:
-            df = pd.read_sql_query(query, conn, params={"fit_id": fit_id})
-            return df
+        return reader.read_df(query, params={"fit_id": fit_id})
     except Exception as e:
         logger.error(f"Failed to get fit {fit_id}: {e}")
         return pd.DataFrame()
@@ -594,11 +610,9 @@ def get_all_targets_with_cache(db_alias: str = "wcmkt") -> pd.DataFrame:
     """Get all ship targets."""
     logger.debug("Getting all ship targets...")
     query = text("SELECT * FROM ship_targets")
-    engine = DatabaseConfig(db_alias).engine
+    reader = BaseRepository(DatabaseConfig(db_alias), logger)
     try:
-        with engine.connect() as conn:
-            df = pd.read_sql_query(query, conn)
-            return df
+        return reader.read_df(query)
     except Exception as e:
         logger.error(f"Failed to get all targets: {e}")
         return pd.DataFrame()
@@ -608,13 +622,12 @@ def get_target_by_fit_id_with_cache(fit_id: int, default: int = DEFAULT_SHIP_TAR
     """Get target stock level for a specific fit."""
     logger.debug(f"Getting target for fit {fit_id}...")
     query = text("SELECT ship_target FROM ship_targets WHERE fit_id = :fit_id")
-    engine = DatabaseConfig(db_alias).engine
+    reader = BaseRepository(DatabaseConfig(db_alias), logger)
     try:
-        with engine.connect() as conn:
-            df = pd.read_sql_query(query, conn, params={"fit_id": fit_id})
-            if not df.empty:
-                return int(df.iloc[0]['ship_target'])
-            return default
+        df = reader.read_df(query, params={"fit_id": fit_id})
+        if not df.empty:
+            return int(df.iloc[0]['ship_target'])
+        return default
     except Exception as e:
         logger.error(f"Failed to get target for fit {fit_id}: {e}")
         return default
@@ -624,19 +637,30 @@ def get_target_by_ship_id_with_cache(ship_id: int, default: int = DEFAULT_SHIP_T
     """Get target stock level for a specific ship type."""
     logger.debug(f"Getting target for ship {ship_id}...")
     query = text("SELECT ship_target FROM ship_targets WHERE ship_id = :ship_id")
-    engine = DatabaseConfig(db_alias).engine
+    reader = BaseRepository(DatabaseConfig(db_alias), logger)
     try:
-        with engine.connect() as conn:
-            df = pd.read_sql_query(query, conn, params={"ship_id": ship_id})
-            if not df.empty:
-                return int(df.iloc[0]['ship_target'])
-            return default
+        df = reader.read_df(query, params={"ship_id": ship_id})
+        if not df.empty:
+            return int(df.iloc[0]['ship_target'])
+        return default
     except Exception as e:
         logger.error(f"Failed to get target for ship {ship_id}: {e}")
         return default
 
+def _resolve_doctrine_display_alias(db_alias: str | None = None) -> str | None:
+    if db_alias and db_alias != "wcmkt":
+        return db_alias
+    try:
+        from state.market_state import get_active_market
+
+        return get_active_market().database_alias
+    except Exception as exc:
+        logger.error("Failed to resolve active market for doctrine display names: %s", exc)
+        return None
+
+
 @st.cache_data(ttl=600)
-def get_friendly_names_with_cache(db_alias: str = "wcmkt") -> dict[str, str]:
+def get_friendly_names_with_cache(db_alias: str = "wcmktprod") -> dict[str, str]:
     """Load doctrine_name -> friendly_name mapping from the doctrine_fits table.
 
     Returns a dict of {doctrine_name: friendly_name} for all rows where
@@ -648,18 +672,21 @@ def get_friendly_names_with_cache(db_alias: str = "wcmkt") -> dict[str, str]:
         "WHERE friendly_name IS NOT NULL"
     )
     db = DatabaseConfig(db_alias)
+    reader = BaseRepository(db, logger)
     try:
-        with db.engine.connect() as conn:
-            rows = conn.execute(text(query)).fetchall()
-        return {row[0]: row[1] for row in rows}
+        df = reader.read_df(text(query))
+        return dict(zip(df["doctrine_name"], df["friendly_name"]))
     except Exception as e:
         logger.warning(f"Failed to load friendly names from DB: {e}")
         return {}
 
 
-def get_doctrine_display_name(raw_name: str, db_alias: str = "wcmkt") -> str:
+def get_doctrine_display_name(raw_name: str, db_alias: str | None = None) -> str:
     """Return the user-friendly display name for a doctrine, or raw_name if unknown."""
-    return get_friendly_names_with_cache(db_alias).get(raw_name, raw_name)
+    resolved_alias = _resolve_doctrine_display_alias(db_alias)
+    if resolved_alias is None:
+        return raw_name
+    return get_friendly_names_with_cache(resolved_alias).get(raw_name, raw_name)
 
 
 @st.cache_data(ttl=600, show_spinner="Getting fit name for {fit_id}...")

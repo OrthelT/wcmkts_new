@@ -9,10 +9,12 @@ from datetime import datetime, timedelta, timezone
 
 import streamlit as st
 
-from config import DatabaseConfig
 from logging_config import setup_logging
-from models import UpdateLog
-from state.sync_state import minutes_until_next_update
+from state.sync_state import (
+    SyncStatusUnavailableError,
+    get_most_recent_update_resilient,
+    minutes_until_next_update,
+)
 from ui.i18n import translate_text
 
 logger = setup_logging(__name__, log_file="sync_display.log")
@@ -42,40 +44,56 @@ def display_sync_status(language_code: str = "en"):
         except Exception as exc:
             logger.error(f"Error initializing local_update_status: {exc}")
 
+    # Distinguish three sync-status states for the UI:
+    #   - real timestamp → render as "Last ESI update: ..."
+    #   - None from a successful read → render as "Unavailable" (no rows yet)
+    #   - SyncStatusUnavailableError → render as "Unavailable" (the read itself
+    #     failed). Critically, we must NOT re-render a previously cached stale
+    #     timestamp when the underlying read is failing — that would tell the
+    #     admin "Last updated 12 minutes ago" while the DB has been silently
+    #     unreachable for an hour.
     status = st.session_state.get("local_update_status")
+    sync_status_unavailable = False
     if status is not None:
         update_time = status.get("updated")
         time_since = status.get("time_since")
         if update_time is None:
             try:
-                update_time = DatabaseConfig(active_alias).get_most_recent_update("marketstats", UpdateLog, remote=False)
+                update_time = get_most_recent_update_resilient(active_alias, "marketstats")
                 status["updated"] = update_time
-            except Exception as exc:
-                logger.error(f"Error fetching cached update time: {exc}")
+            except SyncStatusUnavailableError as exc:
+                logger.error(f"Sync status unavailable for {active_alias}: {exc}")
+                sync_status_unavailable = True
         if time_since is None and update_time is not None:
             time_since = datetime.now(tz=timezone.utc) - update_time
             status["time_since"] = time_since
     else:
         try:
-            update_time = DatabaseConfig(active_alias).get_most_recent_update("marketstats", UpdateLog, remote=False)
-        except Exception as exc:
-            logger.error(f"Error fetching update time: {exc}")
+            update_time = get_most_recent_update_resilient(active_alias, "marketstats")
+        except SyncStatusUnavailableError as exc:
+            logger.error(f"Sync status unavailable for {active_alias}: {exc}")
+            sync_status_unavailable = True
         if update_time is not None:
             time_since = datetime.now(tz=timezone.utc) - update_time
 
-    if update_time is not None:
-        try:
-            display_time = update_time.strftime("%m-%d | %H:%M UTC")
-        except Exception as exc:
-            logger.error(f"Error formatting update time: {exc}")
+    if sync_status_unavailable:
+        # Both fields stay at "Unavailable" — the literal default already set
+        # above. Avoid the temptation to fall back to whatever was last shown.
+        pass
+    else:
+        if update_time is not None:
+            try:
+                display_time = update_time.strftime("%m-%d | %H:%M UTC")
+            except Exception as exc:
+                logger.error(f"Error formatting update time: {exc}")
 
-    if time_since is not None:
-        try:
-            total_minutes = int(time_since.total_seconds() // 60)
-            suffix = "minute" if total_minutes == 1 else "minutes"
-            display_time_since = f"{total_minutes} {suffix}"
-        except Exception as exc:
-            logger.error(f"Error formatting time since update: {exc}")
+        if time_since is not None:
+            try:
+                total_minutes = int(time_since.total_seconds() // 60)
+                suffix = "minute" if total_minutes == 1 else "minutes"
+                display_time_since = f"{total_minutes} {suffix}"
+            except Exception as exc:
+                logger.error(f"Error formatting time since update: {exc}")
 
     st.sidebar.markdown(
         (
@@ -103,7 +121,7 @@ def display_sync_status(language_code: str = "en"):
         return
 
     percent_until_next = (_UPDATE_INTERVAL_MINUTES - minutes_remaining) / _UPDATE_INTERVAL_MINUTES
- 
+
     if minutes_remaining == 0:
         bar_text = translate_text(language_code, "sync_status.awaiting_update")
     elif minutes_remaining == 1:

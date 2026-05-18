@@ -96,6 +96,40 @@ class SettingsService:
     def default_language(self) -> str:
         return self.settings.get("i18n", {}).get("default_language", "en")
 
+    @property
+    def eve_sso_client_id(self) -> str:
+        return str(self.settings.get("eve_sso", {}).get("client_id", ""))
+
+    @property
+    def eve_sso_callback_url(self) -> str:
+        return str(self.settings.get("eve_sso", {}).get("callback_url", ""))
+
+    @property
+    def eve_sso_allowed_character_ids(self) -> tuple[int, ...]:
+        values = self.settings.get("eve_sso", {}).get("allowed_character_ids", [])
+        return tuple(int(value) for value in values)
+
+    @property
+    def admin_write_target(self) -> str:
+        target = str(self.settings.get("admin", {}).get("write_target", "local")).strip().lower()
+        if target not in {"local", "remote"}:
+            raise ValueError("admin.write_target must be 'local' or 'remote'")
+        return target
+
+    @property
+    def admin_session_ttl_minutes(self) -> int:
+        return int(self.settings.get("admin", {}).get("session_ttl_minutes", 480))
+
+    @property
+    def admin_oauth_state_ttl_minutes(self) -> int:
+        """How long an OAuth state token remains valid after generation (default 15).
+
+        Source of truth lives in ``[admin]`` so ops can tune the window without
+        a code change. Below 5 minutes risks racing tab-restore flows; above 60
+        minutes weakens replay resistance during incident rollback windows.
+        """
+        return int(self.settings.get("admin", {}).get("oauth_state_ttl_minutes", 15))
+
 def resolve_db_alias(db_alias: str | None = None, fallback: str = "wcmkt") -> str:
     """Resolve a database alias, falling back to the active market hub.
 

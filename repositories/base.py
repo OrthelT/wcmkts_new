@@ -92,7 +92,9 @@ class BaseRepository:
             if fallback_remote_on_malformed and (
                 "malform" in msg
                 or "database disk image is malformed" in msg
+                or "file is not a database" in msg
                 or "no such table" in msg
+                or "disk i/o error" in msg
             ):
                 self._logger.error(
                     f"Local DB error ('{msg}'); syncing and retrying, "
