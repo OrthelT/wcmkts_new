@@ -267,6 +267,57 @@ class AdminRepository:
                 raise ValueError("doctrine_name already exists")
             self._ensure_empty_doctrine_placeholder(conn, doctrine_id, doctrine_name)
 
+    def rename_doctrine(self, *, doctrine_id: int, doctrine_name: str) -> None:
+        """Rename a doctrine across tables that duplicate the raw doctrine name."""
+        self._prepare_local_write()
+        doctrine_id = int(doctrine_id)
+        doctrine_name = doctrine_name.strip()
+        if not doctrine_name:
+            raise ValueError("doctrine_name must be a non-empty string")
+        engine = self._get_write_engine()
+        with engine.begin() as conn:
+            exists = conn.execute(
+                text("SELECT 1 FROM doctrine_fits WHERE doctrine_id = :doctrine_id LIMIT 1"),
+                {"doctrine_id": doctrine_id},
+            ).first()
+            if exists is None:
+                raise ValueError(f"No doctrine found for doctrine_id={doctrine_id}")
+            duplicate_name = conn.execute(
+                text(
+                    """
+                    SELECT 1
+                    FROM doctrine_fits
+                    WHERE doctrine_name IS NOT NULL
+                      AND LOWER(TRIM(doctrine_name)) = LOWER(TRIM(:doctrine_name))
+                      AND (doctrine_id IS NULL OR doctrine_id != :doctrine_id)
+                    LIMIT 1
+                    """
+                ),
+                {"doctrine_id": doctrine_id, "doctrine_name": doctrine_name},
+            ).first()
+            if duplicate_name:
+                raise ValueError("doctrine_name already exists")
+            conn.execute(
+                text(
+                    """
+                    UPDATE doctrine_fits
+                    SET doctrine_name = :doctrine_name
+                    WHERE doctrine_id = :doctrine_id
+                    """
+                ),
+                {"doctrine_id": doctrine_id, "doctrine_name": doctrine_name},
+            )
+            conn.execute(
+                text(
+                    """
+                    UPDATE lead_ships
+                    SET doctrine_name = :doctrine_name
+                    WHERE doctrine_id = :doctrine_id
+                    """
+                ),
+                {"doctrine_id": doctrine_id, "doctrine_name": doctrine_name},
+            )
+
     def get_doctrine_fit_eft(self, fit_id: int) -> str:
         """Return the current fit as a simple EFT-style text block."""
         fit_query = text(

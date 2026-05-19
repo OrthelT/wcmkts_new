@@ -12,6 +12,14 @@ from repositories.admin_repo import WATCHLIST_COLUMNS, get_admin_repository
 from services.eft_parser_service import parse_eft_fit
 from services.eve_sso_service import get_eve_sso_service
 
+# Deliberate exception to the services→state/ layering rule. The only consumers
+# of AdminService are Streamlit admin pages, so the transitive Streamlit import
+# is paid by callers who already depend on Streamlit. Avoiding this would mean
+# injecting a cache-invalidator callable through every callsite of
+# get_admin_service(), which added more complexity than it removed. Tests can
+# still override via the constructor's `cache_invalidator` parameter.
+from state.market_state import refresh_market_caches
+
 # Static-typing aliases for the small set of admin-write enums. Runtime guards
 # below still validate the actual values; Literal catches in-source typos.
 MarketFlag = Literal["primary", "deployment", "both"]
@@ -28,14 +36,6 @@ class AdminWriteIntegrityError(Exception):
     The admin sees a distinct error rather than a deceptive success +
     invisible partial state.
     """
-
-# Deliberate exception to the services→state/ layering rule. The only consumers
-# of AdminService are Streamlit admin pages, so the transitive Streamlit import
-# is paid by callers who already depend on Streamlit. Avoiding this would mean
-# injecting a cache-invalidator callable through every callsite of
-# get_admin_service(), which added more complexity than it removed. Tests can
-# still override via the constructor's `cache_invalidator` parameter.
-from state.market_state import refresh_market_caches
 
 logger = setup_logging(__name__, log_file="admin_service.log")
 
@@ -140,6 +140,47 @@ class AdminService:
             payload.get("character_name", ""),
             self._repository.write_target,
             doctrine_id,
+            doctrine_name,
+        )
+        return {"doctrine_id": doctrine_id, "doctrine_name": doctrine_name}
+
+    def rename_doctrine(
+        self,
+        *,
+        doctrine_id: int,
+        doctrine_name: str,
+        signed_identity: dict | None,
+    ) -> dict:
+        """Rename an existing doctrine by updating its raw doctrine_name."""
+        payload = self._require_admin(signed_identity)
+        doctrine_id = int(doctrine_id)
+        doctrine_name = doctrine_name.strip()
+        if not doctrine_name:
+            raise ValueError("doctrine_name must be a non-empty string")
+        existing_name = self._repository.get_doctrine_name(doctrine_id)
+        if not existing_name:
+            raise ValueError(f"No doctrine found for doctrine_id={doctrine_id}")
+        if existing_name.strip().lower() != doctrine_name.lower():
+            if self._repository.doctrine_name_exists(doctrine_name):
+                raise ValueError("doctrine_name already exists")
+
+        self._repository.rename_doctrine(doctrine_id=doctrine_id, doctrine_name=doctrine_name)
+
+        if self._repository.get_doctrine_name(doctrine_id) != doctrine_name:
+            raise AdminWriteIntegrityError(
+                f"rename_doctrine read-back mismatch: doctrine_id={doctrine_id} "
+                "did not show the requested doctrine_name after apparent successful write"
+            )
+
+        self._cache_invalidator()
+        logger.info(
+            "doctrine_renamed character_id=%s character_name=%s write_target=%s "
+            "doctrine_id=%s old_doctrine_name=%r new_doctrine_name=%r",
+            int(payload["character_id"]),
+            payload.get("character_name", ""),
+            self._repository.write_target,
+            doctrine_id,
+            existing_name,
             doctrine_name,
         )
         return {"doctrine_id": doctrine_id, "doctrine_name": doctrine_name}

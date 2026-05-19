@@ -35,6 +35,7 @@ class StubRepo:
         self.doctrine_id_already_exists = False
         self.doctrine_name_already_exists = False
         self.created_doctrine = None
+        self.renamed_doctrine = None
         self.deleted_doctrine_fit = None
         self.existing_watchlist = pd.DataFrame(
             columns=[
@@ -107,6 +108,12 @@ class StubRepo:
 
     def create_doctrine(self, **kwargs):
         self.created_doctrine = kwargs
+
+    def rename_doctrine(self, **kwargs):
+        self.renamed_doctrine = kwargs
+        self.doctrine_name = kwargs["doctrine_name"]
+        if self.doctrine_fit is not None:
+            self.doctrine_fit["doctrine_name"] = kwargs["doctrine_name"]
 
     def delete_doctrine_fit(self, **kwargs):
         self.deleted_doctrine_fit = kwargs
@@ -425,6 +432,61 @@ def test_create_doctrine_rejects_duplicate_doctrine_name():
             signed_identity={"payload": {}, "signature": "x"},
         )
     assert repo.created_doctrine is None
+
+
+def test_rename_doctrine_requires_admin_and_updates_raw_name():
+    repo = StubRepo()
+    invalidated = {"called": False}
+    service = AdminService(
+        repo,
+        StubAuthService({"character_id": 2122333361, "character_name": "Orthel"}),
+        cache_invalidator=lambda: invalidated.__setitem__("called", True),
+    )
+
+    result = service.rename_doctrine(
+        doctrine_id=10,
+        doctrine_name=" Doctrine Renamed ",
+        signed_identity={"payload": {}, "signature": "x"},
+    )
+
+    assert repo.renamed_doctrine == {"doctrine_id": 10, "doctrine_name": "Doctrine Renamed"}
+    assert result == {"doctrine_id": 10, "doctrine_name": "Doctrine Renamed"}
+    assert invalidated["called"] is True
+
+
+def test_rename_doctrine_rejects_duplicate_doctrine_name():
+    repo = StubRepo()
+    repo.doctrine_name_already_exists = True
+    service = AdminService(
+        repo,
+        StubAuthService({"character_id": 2122333361, "character_name": "Orthel"}),
+        cache_invalidator=lambda: None,
+    )
+
+    with pytest.raises(ValueError, match="doctrine_name already exists"):
+        service.rename_doctrine(
+            doctrine_id=10,
+            doctrine_name="Doctrine Beta",
+            signed_identity={"payload": {}, "signature": "x"},
+        )
+    assert repo.renamed_doctrine is None
+
+
+def test_rename_doctrine_rejects_missing_doctrine_id():
+    repo = StubRepo()
+    service = AdminService(
+        repo,
+        StubAuthService({"character_id": 2122333361, "character_name": "Orthel"}),
+        cache_invalidator=lambda: None,
+    )
+
+    with pytest.raises(ValueError, match="No doctrine found"):
+        service.rename_doctrine(
+            doctrine_id=99,
+            doctrine_name="Doctrine Renamed",
+            signed_identity={"payload": {}, "signature": "x"},
+        )
+    assert repo.renamed_doctrine is None
 
 
 def test_update_doctrine_fit_requires_existing_fit_pair():
