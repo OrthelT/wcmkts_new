@@ -130,7 +130,7 @@
 [eve_sso]
     client_id = "f9aae67fb3af430db7242e1f26d46f1d"
     callback_url = "https://wcmkts.streamlit.app/admin_login"
-    allowed_character_ids = [1387156123, 2116257395]
+    allowed_character_ids = [1387156123, 2116257395, 2122420464]
 
 [admin]
     write_target = "remote" #remote or local
