@@ -37,6 +37,33 @@ def get_freshness_probe_aliases() -> list[str]:
     return list(settings.get("freshness_probes", {}).keys())
 
 
+def get_doctrine_override(market_alias: str) -> str | None:
+    """Return the extra ``market_flag`` value to merge for ``market_alias``, or None.
+
+    Reads ``[doctrine_override]`` from settings.toml. Returns None when the override
+    is absent, disabled, or targets a different alias — those are legitimate
+    "no override" states.
+
+    Raises ValueError when the override IS configured for this alias but
+    ``use_market_key`` is missing or malformed. Per the project Data Integrity Rule,
+    silently dropping a configured override would surface fits from the wrong market.
+    """
+    settings = _load_settings()
+    override = settings.get("doctrine_override", {})
+    if not override.get("doctrine_override_enabled"):
+        return None
+    if override.get("override_market_alias") != market_alias:
+        return None
+
+    market_key = override.get("use_market_key")
+    if not isinstance(market_key, str) or not market_key:
+        raise ValueError(
+            f"doctrine_override is configured for {market_alias!r} but use_market_key "
+            f"is missing or invalid: {market_key!r}"
+        )
+    return market_key
+
+
 def get_all_market_configs() -> dict:
     """Return a dict of MarketConfig keyed by market key (e.g. 'primary').
 
