@@ -14,10 +14,10 @@ Design Principles:
 4. Error handling - Logs errors and provides sensible defaults
 """
 
-from typing import Optional
+from typing import Optional, override
 import logging
 import pandas as pd
-from sqlalchemy import text
+from sqlalchemy import false, text
 
 from config import DatabaseConfig, DEFAULT_SHIP_TARGET
 from domain import FitItem, ModuleStock, Doctrine, ShipStock
@@ -528,6 +528,32 @@ def _load_preferred_fits() -> dict[int, int]:
         logger.error(f"Failed to load preferred fits from settings.toml: {e}")
         return {}
 
+def _load_doctrine_override(market_alias: str) -> tuple[bool, str | None]:
+    from pathlib import Path
+    import tomllib
+
+    try:
+        settings_path = Path("settings.toml")
+        if not settings_path.exists():
+            logger.warning("settings.toml not found, no doctrine override loaded")
+        
+
+        with open(settings_path, "rb") as f:
+            settings = tomllib.load(f)
+
+        override: dict = settings.get("doctrine_override", {})
+        alias: str = override["override_market_alias"]
+        mkt_key: str = override["use_market_key"]
+        enabled: bool = override["doctrine_override_enabled"]
+        if market_alias == alias:
+            return (enabled, mkt_key)
+
+        return (False, None)
+
+    except Exception as e:
+        logger.error(f"Failed to load preferred fits from settings.toml: {e}")
+        return (False, "Error")
+
 
 # =============================================================================
 # Streamlit Integration
@@ -562,19 +588,30 @@ def get_doctrine_repository() -> DoctrineRepository:
 # =============================================================================
 @st.cache_data(ttl=600, show_spinner="Getting all fits...")
 def get_all_fits_with_cache(db_alias: str = "wcmkt", market_key: str = "primary") -> pd.DataFrame:
+    
     """Get fit data from the doctrines table, filtered by market_flag.
 
     Only returns rows whose fit_id appears in doctrine_fits with a
     market_flag matching the active market key or 'both'.
     """
+
     logger.info("Getting all fits for market_key=%s ...with cache", market_key)
     db = DatabaseConfig(db_alias)
     reader = BaseRepository(db, logger)
     try:
         fits_df = reader.read_df("SELECT fit_id, market_flag FROM doctrine_fits")
         if "market_flag" in fits_df.columns:
+
+            ovveride, key = _load_doctrine_override(db_alias)
+
+            if ovveride and key is not None:
+                override_key = key
+                logger.info(f"override enabled using {db_alias}={key}")
+            else:
+                override_key = market_key
+
             valid_fit_ids = fits_df[
-                fits_df["market_flag"].isin([market_key, "both"])
+                fits_df["market_flag"].isin([market_key, "both", override_key])
             ]["fit_id"].unique()
         else:
             valid_fit_ids = fits_df["fit_id"].unique()
