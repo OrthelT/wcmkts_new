@@ -24,6 +24,7 @@ from domain import FitItem, ModuleStock, Doctrine, ShipStock
 import streamlit as st
 from logging_config import setup_logging
 from repositories.base import BaseRepository
+from settings_service import get_doctrine_override
 logger = setup_logging(__name__, log_file="doctrine_repo.log")
 
 DOCTRINE_FITS_COLUMNS = [
@@ -528,7 +529,6 @@ def _load_preferred_fits() -> dict[int, int]:
         logger.error(f"Failed to load preferred fits from settings.toml: {e}")
         return {}
 
-
 # =============================================================================
 # Streamlit Integration
 # =============================================================================
@@ -564,8 +564,9 @@ def get_doctrine_repository() -> DoctrineRepository:
 def get_all_fits_with_cache(db_alias: str = "wcmkt", market_key: str = "primary") -> pd.DataFrame:
     """Get fit data from the doctrines table, filtered by market_flag.
 
-    Only returns rows whose fit_id appears in doctrine_fits with a
-    market_flag matching the active market key or 'both'.
+    Returns rows whose fit_id appears in doctrine_fits with a market_flag matching
+    ``market_key``, the literal ``"both"``, or — when ``[doctrine_override]`` in
+    settings.toml targets ``db_alias`` — the override's ``use_market_key`` value.
     """
     logger.info("Getting all fits for market_key=%s ...with cache", market_key)
     db = DatabaseConfig(db_alias)
@@ -573,8 +574,17 @@ def get_all_fits_with_cache(db_alias: str = "wcmkt", market_key: str = "primary"
     try:
         fits_df = reader.read_df("SELECT fit_id, market_flag FROM doctrine_fits")
         if "market_flag" in fits_df.columns:
+            allowed_flags = [market_key, "both"]
+            override_key = get_doctrine_override(db_alias)
+            if override_key:
+                allowed_flags.append(override_key)
+                logger.info(
+                    "doctrine_override active: db_alias=%s including market_flag=%s",
+                    db_alias, override_key,
+                )
+
             valid_fit_ids = fits_df[
-                fits_df["market_flag"].isin([market_key, "both"])
+                fits_df["market_flag"].isin(allowed_flags)
             ]["fit_id"].unique()
         else:
             valid_fit_ids = fits_df["fit_id"].unique()
