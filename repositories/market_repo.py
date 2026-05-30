@@ -198,7 +198,7 @@ def _get_sell_order_summary_impl(type_ids: list[int], db_alias: str = "wcmkt") -
     cols = ["type_id", "order_type_name", "sell_order_price", "sell_order_volume"]
     if not type_ids:
         return pd.DataFrame(columns=cols)
-    db = DatabaseConfig(db_alias)
+    repo = BaseRepository(DatabaseConfig(db_alias), logger)
     query = text(
         """
         SELECT type_id,
@@ -210,10 +210,7 @@ def _get_sell_order_summary_impl(type_ids: list[int], db_alias: str = "wcmkt") -
         GROUP BY type_id
         """
     ).bindparams(bindparam("type_ids", expanding=True))
-    with db.engine.connect() as conn:
-        return pd.read_sql_query(
-            query, conn, params={"type_ids": [int(tid) for tid in type_ids]}
-        )
+    return repo.read_df(query, params={"type_ids": [int(tid) for tid in type_ids]})
 
 
 def _get_stats_for_type_ids_impl(type_ids: list[int], db_alias: str = "wcmkt") -> pd.DataFrame:
@@ -221,7 +218,7 @@ def _get_stats_for_type_ids_impl(type_ids: list[int], db_alias: str = "wcmkt") -
     cols = ["type_id", "type_name", "min_price", "total_volume_remain"]
     if not type_ids:
         return pd.DataFrame(columns=cols)
-    db = DatabaseConfig(db_alias)
+    repo = BaseRepository(DatabaseConfig(db_alias), logger)
     query = text(
         """
         SELECT type_id, type_name, min_price, total_volume_remain
@@ -229,21 +226,17 @@ def _get_stats_for_type_ids_impl(type_ids: list[int], db_alias: str = "wcmkt") -
         WHERE type_id IN :type_ids
         """
     ).bindparams(bindparam("type_ids", expanding=True))
-    with db.engine.connect() as conn:
-        return pd.read_sql_query(
-            query, conn, params={"type_ids": [int(tid) for tid in type_ids]}
-        )
+    return repo.read_df(query, params={"type_ids": [int(tid) for tid in type_ids]})
 
 
 def _get_order_counts_impl(db_alias: str = "wcmkt") -> dict:
     """Count active sell/buy orders via a SQL GROUP BY (no full-table load)."""
-    db = DatabaseConfig(db_alias)
+    repo = BaseRepository(DatabaseConfig(db_alias), logger)
     query = text(
         "SELECT is_buy_order, COUNT(*) AS n FROM marketorders GROUP BY is_buy_order"
     )
     try:
-        with db.engine.connect() as conn:
-            df = pd.read_sql_query(query, conn)
+        df = repo.read_df(query)
     except Exception as e:
         logger.error(f"Failed to fetch order counts: {e}")
         return {"active_sell_orders": 0, "active_buy_orders": 0}

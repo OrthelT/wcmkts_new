@@ -19,6 +19,7 @@ import streamlit as st
 
 from config import DatabaseConfig
 from logging_config import setup_logging
+from repositories.base import BaseRepository
 
 logger = setup_logging(__name__, log_file="module_equivalents_service.log")
 
@@ -272,13 +273,11 @@ class ModuleEquivalentsService:
         ).bindparams(bindparam("type_ids", expanding=True))
         result = {int(tid): 0 for tid in type_ids}
         try:
-            with self._mkt_db.engine.connect() as conn:
-                rows = conn.execute(
-                    query, {"type_ids": [int(tid) for tid in type_ids]}
-                ).fetchall()
-            for row in rows:
-                if row[1]:
-                    result[int(row[0])] = int(row[1])
+            repo = BaseRepository(self._mkt_db, self._logger)
+            df = repo.read_df(query, params={"type_ids": [int(tid) for tid in type_ids]})
+            for _, row in df.iterrows():
+                if row["total_volume_remain"]:
+                    result[int(row["type_id"])] = int(row["total_volume_remain"])
         except Exception as e:
             self._logger.error(f"Failed to batch-get stock for {len(type_ids)} modules: {e}")
         return result
