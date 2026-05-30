@@ -1,0 +1,4 @@
+poc_local.db
+poc_local.db-*
+__pycache__/
+*.pyc
