@@ -189,6 +189,73 @@ def _get_local_price_impl(type_id: int, db_alias: str = "wcmkt") -> Optional[flo
         return None
 
 
+def _get_sell_order_summary_impl(type_ids: list[int], db_alias: str = "wcmkt") -> pd.DataFrame:
+    """Aggregate sell orders (min price, summed volume) for specific type_ids.
+
+    Pushes the is_buy_order filter and per-type aggregation into SQL so the
+    full marketorders table is never loaded into pandas just to be filtered.
+    """
+    cols = ["type_id", "order_type_name", "sell_order_price", "sell_order_volume"]
+    if not type_ids:
+        return pd.DataFrame(columns=cols)
+    db = DatabaseConfig(db_alias)
+    query = text(
+        """
+        SELECT type_id,
+               MIN(type_name) AS order_type_name,
+               MIN(price) AS sell_order_price,
+               COALESCE(SUM(volume_remain), 0) AS sell_order_volume
+        FROM marketorders
+        WHERE is_buy_order = 0 AND type_id IN :type_ids
+        GROUP BY type_id
+        """
+    ).bindparams(bindparam("type_ids", expanding=True))
+    with db.engine.connect() as conn:
+        return pd.read_sql_query(
+            query, conn, params={"type_ids": [int(tid) for tid in type_ids]}
+        )
+
+
+def _get_stats_for_type_ids_impl(type_ids: list[int], db_alias: str = "wcmkt") -> pd.DataFrame:
+    """Fetch marketstats rows for specific type_ids (filtered in SQL)."""
+    cols = ["type_id", "type_name", "min_price", "total_volume_remain"]
+    if not type_ids:
+        return pd.DataFrame(columns=cols)
+    db = DatabaseConfig(db_alias)
+    query = text(
+        """
+        SELECT type_id, type_name, min_price, total_volume_remain
+        FROM marketstats
+        WHERE type_id IN :type_ids
+        """
+    ).bindparams(bindparam("type_ids", expanding=True))
+    with db.engine.connect() as conn:
+        return pd.read_sql_query(
+            query, conn, params={"type_ids": [int(tid) for tid in type_ids]}
+        )
+
+
+def _get_order_counts_impl(db_alias: str = "wcmkt") -> dict:
+    """Count active sell/buy orders via a SQL GROUP BY (no full-table load)."""
+    db = DatabaseConfig(db_alias)
+    query = text(
+        "SELECT is_buy_order, COUNT(*) AS n FROM marketorders GROUP BY is_buy_order"
+    )
+    try:
+        with db.engine.connect() as conn:
+            df = pd.read_sql_query(query, conn)
+    except Exception as e:
+        logger.error(f"Failed to fetch order counts: {e}")
+        return {"active_sell_orders": 0, "active_buy_orders": 0}
+    if df.empty:
+        return {"active_sell_orders": 0, "active_buy_orders": 0}
+    counts = df.set_index("is_buy_order")["n"].to_dict()
+    return {
+        "active_sell_orders": int(counts.get(0, 0)),
+        "active_buy_orders": int(counts.get(1, 0)),
+    }
+
+
 def _get_sde_info_impl(type_ids: list) -> pd.DataFrame:
     """Fetch SDE info (name, group, category) for given type_ids."""
     if not type_ids:
@@ -276,6 +343,21 @@ def _get_local_price_cached(type_id: int, db_alias: str = "wcmkt") -> Optional[f
     return _get_local_price_impl(type_id, db_alias)
 
 
+@st.cache_data(ttl=1800)
+def _get_sell_order_summary_cached(type_ids: tuple, db_alias: str = "wcmkt") -> pd.DataFrame:
+    return _get_sell_order_summary_impl(list(type_ids), db_alias)
+
+
+@st.cache_data(ttl=600)
+def _get_stats_for_type_ids_cached(type_ids: tuple, db_alias: str = "wcmkt") -> pd.DataFrame:
+    return _get_stats_for_type_ids_impl(list(type_ids), db_alias)
+
+
+@st.cache_data(ttl=1800)
+def _get_order_counts_cached(db_alias: str = "wcmkt") -> dict:
+    return _get_order_counts_impl(db_alias)
+
+
 @st.cache_resource
 def _get_sde_info_cached(type_ids: tuple) -> pd.DataFrame:
     return _get_sde_info_impl(list(type_ids))
@@ -308,6 +390,9 @@ def invalidate_market_caches():
     _get_market_type_ids_cached.clear()
     _get_local_price_cached.clear()
     _get_watchlist_cached.clear()
+    _get_sell_order_summary_cached.clear()
+    _get_stats_for_type_ids_cached.clear()
+    _get_order_counts_cached.clear()
     logger.info("Market caches invalidated")
 
 
@@ -427,6 +512,22 @@ class MarketRepository(BaseRepository):
     def get_market_type_ids(self) -> list:
         """Get all type_ids on market + watchlist (cached, TTL=1800s)."""
         return _get_market_type_ids_cached(self.db.alias)
+
+    def get_sell_order_summary(self, type_ids: list[int]) -> pd.DataFrame:
+        """Get aggregated sell-order price/volume for type_ids (cached, TTL=1800s).
+
+        Filtering and aggregation happen in SQL, so the full marketorders
+        table is never loaded into memory for a fixed-item snapshot.
+        """
+        return _get_sell_order_summary_cached(tuple(type_ids), self.db.alias)
+
+    def get_stats_for_type_ids(self, type_ids: list[int]) -> pd.DataFrame:
+        """Get marketstats rows for specific type_ids (cached, TTL=600s)."""
+        return _get_stats_for_type_ids_cached(tuple(type_ids), self.db.alias)
+
+    def get_order_counts(self) -> dict:
+        """Get active sell/buy order counts via SQL aggregation (cached, TTL=1800s)."""
+        return _get_order_counts_cached(self.db.alias)
 
     def get_sde_info(self, type_ids: list = None) -> pd.DataFrame:
         """Get SDE info for type_ids. If None, uses market type_ids."""

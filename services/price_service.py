@@ -192,7 +192,11 @@ class FuzzworkProvider:
     """
     Price provider using Fuzzwork API.
 
-    This is the primary Jita price source.
+    NOT in the default provider chain. Jita prices are served from the
+    backend-populated ``jita_prices`` table (see ``DatabasePriceProvider``
+    and ``JitaPriceService.create_default``). This class is retained for
+    explicit / out-of-band use only; wiring it back into the request path
+    reintroduces a blocking network call with a per-chunk ``time.sleep``.
     """
 
     BASE_URL = "https://market.fuzzwork.co.uk/aggregates/"
@@ -296,7 +300,10 @@ class JaniceProvider:
     """
     Price provider using Janice API.
 
-    Used as fallback when Fuzzwork fails.
+    NOT in the default provider chain. Jita prices are served from the
+    backend-populated ``jita_prices`` table (see ``DatabasePriceProvider``
+    and ``JitaPriceService.create_default``). This class is retained for
+    explicit / out-of-band use only.
     """
 
     BASE_URL = "https://janice.e-351.com/api/rest/v2/pricer"
@@ -748,19 +755,23 @@ class JitaPriceService:
         Factory method to create service with default configuration.
 
         This is the recommended way to instantiate the service.
+
+        Jita prices are served exclusively from the backend-populated
+        ``jita_prices`` table via ``DatabasePriceProvider``. The live-API
+        providers (Fuzzwork, Janice) are intentionally NOT wired into the
+        default chain: Jita data is now produced by the backend pipeline,
+        and falling back to a live API in the request path reintroduced the
+        blocking network call (and per-chunk ``time.sleep``) this app no
+        longer wants. The provider classes remain available for explicit /
+        out-of-band use, and ``janice_api_key`` is accepted only for
+        backward-compatible call sites (it is ignored here).
         """
         logger = logging.getLogger(__name__)
 
-        # Build provider chain: DB cache (fast) -> Fuzzwork -> Janice
+        # Provider chain: backend jita_prices DB cache only.
         providers = []
-
         if db_config:
             providers.append(DatabasePriceProvider(db_config, logger))
-
-        providers.append(FuzzworkProvider(logger))
-
-        if janice_api_key:
-            providers.append(JaniceProvider(janice_api_key, logger))
 
         jita_provider = FallbackPriceProvider(providers, logger)
 

@@ -54,9 +54,56 @@ def _get_eve_icon_url(type_id: int) -> str:
     return f"https://images.evetech.net/types/{int(type_id)}/icon?size=32"
 
 
-def _add_jita_prices(df: pd.DataFrame, price_service, type_ids: list[int]) -> pd.DataFrame:
-    """Add jita_sell_price, jita_buy_price, and pct_diff_vs_jita_sell columns to a DataFrame."""
+class JitaDataUnavailableError(RuntimeError):
+    """Raised when the backend jita_prices table has no data for requested items.
+
+    The dashboard renders curated, backend-priced item sets (minerals,
+    isotopes, doctrine ships/modules). A missing Jita price for these is not
+    a normal "unpriced item" case — it means the backend pricing pipeline is
+    broken or the jita_prices table is empty/stale. Per the data-integrity
+    rule, we fail loudly rather than render 0 / N/A, which would silently
+    misreport prices to the user.
+    """
+
+
+def _require_jita_prices(price_service, type_ids: list[int]) -> dict:
+    """Fetch Jita prices from the backend and assert the data is present.
+
+    Returns the ``{type_id: PriceResult}`` map. Raises if the backend returns
+    no usable price for ANY requested id — a wholesale outage of the
+    backend-populated jita_prices table (individual unpriced oddities still
+    pass through and surface as 0).
+
+    Raises:
+        JitaDataUnavailableError: when no requested item has a usable price.
+    """
     jita_price_map = price_service.get_jita_prices(type_ids).prices
+    requested = [int(t) for t in dict.fromkeys(type_ids)]
+    has_any_price = any(
+        (pr := jita_price_map.get(tid)) is not None
+        and getattr(pr, "success", False)
+        and getattr(pr, "sell_price", 0) > 0
+        for tid in requested
+    )
+    if requested and not has_any_price:
+        raise JitaDataUnavailableError(
+            f"No Jita prices available from the backend for any of "
+            f"{len(requested)} requested items. The jita_prices table may be "
+            f"empty or stale."
+        )
+    return jita_price_map
+
+
+def _add_jita_prices(df: pd.DataFrame, price_service, type_ids: list[int]) -> pd.DataFrame:
+    """Add jita_sell_price, jita_buy_price, and pct_diff_vs_jita_sell columns.
+
+    Raises:
+        JitaDataUnavailableError: if the backend jita_prices table returns no
+            usable price for any requested type_id. Jita data now comes solely
+            from the backend pipeline; an empty/stale table is surfaced loudly.
+    """
+    jita_price_map = _require_jita_prices(price_service, type_ids)
+
     df["jita_sell_price"] = df["type_id"].map(
         lambda tid: _get_price_result_value(jita_price_map.get(int(tid)), "sell_price")
     )
@@ -168,7 +215,16 @@ def render_comparison_table(
     if comparison_df.empty:
         return None
 
-    comparison_df = _add_jita_prices(comparison_df, price_service, type_ids)
+    try:
+        comparison_df = _add_jita_prices(comparison_df, price_service, type_ids)
+    except JitaDataUnavailableError as e:
+        logger.error("Jita data unavailable for comparison table: %s", e)
+        st.error(
+            "Jita price data is unavailable (backend pricing pipeline may be "
+            "down or the jita_prices table is empty/stale). Prices are hidden "
+            "rather than shown as zero."
+        )
+        return None
 
     comparison_df["order_volume"] = (
         pd.to_numeric(comparison_df["order_volume"], errors="coerce").fillna(0).round().astype(int)
@@ -396,7 +452,16 @@ def render_popular_modules_table(
     if snapshot.empty:
         return None, None
 
-    snapshot = _add_jita_prices(snapshot, price_service, type_ids)
+    try:
+        snapshot = _add_jita_prices(snapshot, price_service, type_ids)
+    except JitaDataUnavailableError as e:
+        logger.error("Jita data unavailable for popular modules table: %s", e)
+        st.error(
+            "Jita price data is unavailable (backend pricing pipeline may be "
+            "down or the jita_prices table is empty/stale). Prices are hidden "
+            "rather than shown as zero."
+        )
+        return None, None
     snapshot["order_volume"] = (
         pd.to_numeric(snapshot["order_volume"], errors="coerce").fillna(0).round().astype(int)
     )
@@ -522,14 +587,15 @@ def _apply_equivalents_to_fits(fits_df: pd.DataFrame) -> pd.DataFrame:
     fits_df = fits_df.copy()
     aggregated_stocks = equiv_service.get_aggregated_stock(list(modules_to_update))
 
-    for type_id, total_stock in aggregated_stocks.items():
-        mask = fits_df["type_id"] == type_id
-        for idx in fits_df.loc[mask].index:
-            fit_qty = fits_df.at[idx, "fit_qty"]
-            if fit_qty > 0:
-                fits_df.at[idx, "fits_on_mkt"] = total_stock // fit_qty
-            else:
-                fits_df.at[idx, "fits_on_mkt"] = total_stock
+    # Vectorized update: rows whose type_id has an aggregated equivalent stock
+    # get fits_on_mkt = total_stock // fit_qty (or total_stock when fit_qty<=0).
+    mask = fits_df["type_id"].isin(aggregated_stocks)
+    if mask.any():
+        total_stock = fits_df.loc[mask, "type_id"].map(aggregated_stocks).astype("int64")
+        fit_qty = pd.to_numeric(fits_df.loc[mask, "fit_qty"], errors="coerce").fillna(0).astype("int64")
+        fits_df.loc[mask, "fits_on_mkt"] = total_stock.where(
+            fit_qty <= 0, total_stock // fit_qty.where(fit_qty > 0, 1)
+        )
 
     return fits_df
 
@@ -583,8 +649,18 @@ def render_doctrine_ships_table(
     # Local prices via snapshot
     snapshot = market_service.get_current_market_snapshot(ship_type_ids)
 
-    # Jita prices — batch fetch
-    jita_map = price_service.get_jita_prices(ship_type_ids).prices
+    # Jita prices — batch fetch from the backend jita_prices table.
+    # Fail loudly if the backend has no data for any doctrine ship.
+    try:
+        jita_map = _require_jita_prices(price_service, ship_type_ids)
+    except JitaDataUnavailableError as e:
+        logger.error("Jita data unavailable for doctrine ships table: %s", e)
+        st.error(
+            "Jita price data is unavailable (backend pricing pipeline may be "
+            "down or the jita_prices table is empty/stale). Prices are hidden "
+            "rather than shown as zero."
+        )
+        return None, None
 
     # Build result DataFrame — one row per fit_id
     rows = []

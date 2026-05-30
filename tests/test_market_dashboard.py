@@ -14,12 +14,19 @@ import pytest
 class TestGetMarketOverviewKpis:
     """Tests for MarketService.get_market_overview_kpis()."""
 
-    def _make_service(self, stats_df=None, orders_df=None, update_time="12:00 UTC"):
+    def _make_service(
+        self, stats_df=None, order_counts=None, update_time="12:00 UTC",
+    ):
         from services.market_service import MarketService
 
         repo = MagicMock()
         repo.get_all_stats.return_value = stats_df
-        repo.get_all_orders.return_value = orders_df
+        # Order counts now come from a SQL GROUP BY in the repository, not a
+        # full-table pandas load. Default to zeros when not provided.
+        repo.get_order_counts.return_value = order_counts or {
+            "active_sell_orders": 0,
+            "active_buy_orders": 0,
+        }
         repo.get_update_time.return_value = update_time
         return MarketService(repo)
 
@@ -29,10 +36,10 @@ class TestGetMarketOverviewKpis:
             "min_price": [10.0, 20.0],
             "total_volume_remain": [100, 200],
         })
-        orders = pd.DataFrame({
-            "is_buy_order": [0, 0, 1],
-        })
-        service = self._make_service(stats_df=stats, orders_df=orders)
+        service = self._make_service(
+            stats_df=stats,
+            order_counts={"active_sell_orders": 2, "active_buy_orders": 1},
+        )
         kpis = service.get_market_overview_kpis()
 
         assert kpis["total_market_value"] == pytest.approx(10.0 * 100 + 20.0 * 200)
@@ -43,7 +50,7 @@ class TestGetMarketOverviewKpis:
 
     def test_empty_data_returns_zeros(self):
         service = self._make_service(
-            stats_df=pd.DataFrame(), orders_df=pd.DataFrame(), update_time=None,
+            stats_df=pd.DataFrame(), order_counts=None, update_time=None,
         )
         kpis = service.get_market_overview_kpis()
 
@@ -54,7 +61,7 @@ class TestGetMarketOverviewKpis:
         assert kpis["last_updated"] is None
 
     def test_none_dataframes(self):
-        service = self._make_service(stats_df=None, orders_df=None)
+        service = self._make_service(stats_df=None, order_counts=None)
         kpis = service.get_market_overview_kpis()
 
         assert kpis["total_market_value"] == 0.0
@@ -68,7 +75,7 @@ class TestGetMarketOverviewKpis:
             "min_price": ["not_a_number"],
             "total_volume_remain": [100],
         })
-        service = self._make_service(stats_df=stats, orders_df=pd.DataFrame())
+        service = self._make_service(stats_df=stats, order_counts=None)
         kpis = service.get_market_overview_kpis()
 
         assert kpis["total_market_value"] == 0.0
