@@ -54,28 +54,28 @@ def _get_eve_icon_url(type_id: int) -> str:
     return f"https://images.evetech.net/types/{int(type_id)}/icon?size=32"
 
 
-class JitaDataUnavailableError(RuntimeError):
-    """Raised when the backend jita_prices table has no data for requested items.
-
-    The dashboard renders curated, backend-priced item sets (minerals,
-    isotopes, doctrine ships/modules). A missing Jita price for these is not
-    a normal "unpriced item" case — it means the backend pricing pipeline is
-    broken or the jita_prices table is empty/stale. Per the data-integrity
-    rule, we fail loudly rather than render 0 / N/A, which would silently
-    misreport prices to the user.
-    """
+_JITA_UNAVAILABLE_MESSAGE = (
+    "Jita price data is unavailable — the backend pricing pipeline may be down "
+    "or the jita_prices table is empty/stale. Prices are hidden rather than "
+    "shown as zero."
+)
 
 
-def _require_jita_prices(price_service, type_ids: list[int]) -> dict:
-    """Fetch Jita prices from the backend and assert the data is present.
+def _require_jita_prices(price_service, type_ids: list[int]) -> dict | None:
+    """Fetch Jita prices from the backend, surfacing a wholesale outage to the UI.
 
-    Returns the ``{type_id: PriceResult}`` map. Raises if the backend returns
-    no usable price for ANY requested id — a wholesale outage of the
-    backend-populated jita_prices table (individual unpriced oddities still
-    pass through and surface as 0).
+    The dashboard renders curated, backend-priced item sets (minerals, isotopes,
+    doctrine ships/modules). If the backend returns no usable price for ANY
+    requested id, the jita_prices table is empty/stale or the pricing pipeline
+    is broken — not a normal "unpriced item" case. Per the data-integrity rule
+    we refuse to render 0 / N/A (which would silently misreport prices): we log
+    the failure and show ``st.error`` to the user, returning ``None`` so the
+    caller can skip the table gracefully. Individual unpriced oddities still
+    pass through and surface as 0.
 
-    Raises:
-        JitaDataUnavailableError: when no requested item has a usable price.
+    Returns:
+        The ``{type_id: PriceResult}`` map, or ``None`` when no requested item
+        has a usable Jita price (after logging and showing ``st.error``).
     """
     jita_price_map = price_service.get_jita_prices(type_ids).prices
     requested = [int(t) for t in dict.fromkeys(type_ids)]
@@ -86,24 +86,22 @@ def _require_jita_prices(price_service, type_ids: list[int]) -> dict:
         for tid in requested
     )
     if requested and not has_any_price:
-        raise JitaDataUnavailableError(
-            f"No Jita prices available from the backend for any of "
-            f"{len(requested)} requested items. The jita_prices table may be "
-            f"empty or stale."
+        logger.error(
+            "No Jita prices available from the backend for any of %d requested "
+            "items; jita_prices table may be empty or stale.",
+            len(requested),
         )
+        st.error(_JITA_UNAVAILABLE_MESSAGE)
+        return None
     return jita_price_map
 
 
-def _add_jita_prices(df: pd.DataFrame, price_service, type_ids: list[int]) -> pd.DataFrame:
+def _add_jita_prices(df: pd.DataFrame, jita_price_map: dict) -> pd.DataFrame:
     """Add jita_sell_price, jita_buy_price, and pct_diff_vs_jita_sell columns.
 
-    Raises:
-        JitaDataUnavailableError: if the backend jita_prices table returns no
-            usable price for any requested type_id. Jita data now comes solely
-            from the backend pipeline; an empty/stale table is surfaced loudly.
+    Expects an already-fetched/validated ``{type_id: PriceResult}`` map (see
+    ``_require_jita_prices``); this function only applies the price columns.
     """
-    jita_price_map = _require_jita_prices(price_service, type_ids)
-
     df["jita_sell_price"] = df["type_id"].map(
         lambda tid: _get_price_result_value(jita_price_map.get(int(tid)), "sell_price")
     )
@@ -215,16 +213,10 @@ def render_comparison_table(
     if comparison_df.empty:
         return None
 
-    try:
-        comparison_df = _add_jita_prices(comparison_df, price_service, type_ids)
-    except JitaDataUnavailableError as e:
-        logger.error("Jita data unavailable for comparison table: %s", e)
-        st.error(
-            "Jita price data is unavailable (backend pricing pipeline may be "
-            "down or the jita_prices table is empty/stale). Prices are hidden "
-            "rather than shown as zero."
-        )
+    jita_price_map = _require_jita_prices(price_service, type_ids)
+    if jita_price_map is None:
         return None
+    comparison_df = _add_jita_prices(comparison_df, jita_price_map)
 
     comparison_df["order_volume"] = (
         pd.to_numeric(comparison_df["order_volume"], errors="coerce").fillna(0).round().astype(int)
@@ -452,16 +444,10 @@ def render_popular_modules_table(
     if snapshot.empty:
         return None, None
 
-    try:
-        snapshot = _add_jita_prices(snapshot, price_service, type_ids)
-    except JitaDataUnavailableError as e:
-        logger.error("Jita data unavailable for popular modules table: %s", e)
-        st.error(
-            "Jita price data is unavailable (backend pricing pipeline may be "
-            "down or the jita_prices table is empty/stale). Prices are hidden "
-            "rather than shown as zero."
-        )
+    jita_price_map = _require_jita_prices(price_service, type_ids)
+    if jita_price_map is None:
         return None, None
+    snapshot = _add_jita_prices(snapshot, jita_price_map)
     snapshot["order_volume"] = (
         pd.to_numeric(snapshot["order_volume"], errors="coerce").fillna(0).round().astype(int)
     )
@@ -650,16 +636,9 @@ def render_doctrine_ships_table(
     snapshot = market_service.get_current_market_snapshot(ship_type_ids)
 
     # Jita prices — batch fetch from the backend jita_prices table.
-    # Fail loudly if the backend has no data for any doctrine ship.
-    try:
-        jita_map = _require_jita_prices(price_service, ship_type_ids)
-    except JitaDataUnavailableError as e:
-        logger.error("Jita data unavailable for doctrine ships table: %s", e)
-        st.error(
-            "Jita price data is unavailable (backend pricing pipeline may be "
-            "down or the jita_prices table is empty/stale). Prices are hidden "
-            "rather than shown as zero."
-        )
+    # Surfaces st.error + logs and bails if the backend has no data at all.
+    jita_map = _require_jita_prices(price_service, ship_type_ids)
+    if jita_map is None:
         return None, None
 
     # Build result DataFrame — one row per fit_id
