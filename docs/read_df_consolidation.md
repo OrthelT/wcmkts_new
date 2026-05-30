@@ -35,22 +35,30 @@ logic should change; only *how* each query is executed.
   uniform.
 - Params are **named**; `IN` clauses use `bindparam(name, expanding=True)`.
 
-## Scope: ~39 direct-`engine.connect()` read sites across 10 files
+## Scope: 53 direct-`engine.connect()` local read sites across 10 files
 
-Counts captured at the time of writing (`grep -c "engine.connect()"`):
+Counts verified via `grep -c "engine.connect()"` minus `remote_engine.connect()`,
+excluding `repositories/base.py` (its 2 connects *are* the `read_df()` chokepoint —
+the source of truth, not a migration target):
 
-| File | Sites | Notes |
+| File | Local read sites | Notes |
 |---|---:|---|
-| `repositories/market_repo.py` | 12 | mix of `wcmkt` and `sde` reads; `_get_watchlist_impl` already shows the correct `read_df()` form to copy |
-| `repositories/doctrine_repo.py` | 8 | |
-| `repositories/build_cost_repo.py` | 4 | `build_cost` alias |
-| `repositories/sde_repo.py` | 3 | `sde` alias; note `@st.cache_resource` (no TTL) on SDE reads |
-| `repositories/admin_repo.py` | 3 | **reads** here should move to `read_df`; the **write** path (`DELETE` + `sqlite_insert(Watchlist)`) stays on a direct transactional connection — `read_df` is read-only |
-| `repositories/market_orders_repo.py` | 2 | |
-| `services/type_resolution_service.py` | 3 | service-level DB access; consider pushing into a repo while here |
+| `repositories/sde_repo.py` | 10 | `sde` alias; mostly `@st.cache_resource` (no TTL); one `remote_engine.connect()` already used as a manual fallback |
+| `repositories/market_repo.py` | 9 | mix of `wcmkt` and `sde` reads; `_get_watchlist_impl` / the snapshot+KPI impls already show the correct `read_df()` form to copy |
+| `services/low_stock_service.py` | 7 | service-level DB access; reads `wcmkt` + `sde` |
+| `repositories/doctrine_repo.py` | 6 | several methods already use `read_df()` — finish the stragglers |
+| `repositories/build_cost_repo.py` | 5 | `build_cost` alias |
+| `repositories/market_orders_repo.py` | 4 | |
+| `services/pricer_service.py` | 4 | `wcmkt` + `sde` reads |
+| `services/import_helper_service.py` | 3 | `wcmkt` + `sde` reads |
+| `services/module_equivalents_service.py` | 3 | cached equivalence-group helpers that take a passed-in `engine`; `_get_module_stocks` was already migrated to `read_df()` |
 | `services/price_service.py` | 2 | `DatabasePriceProvider` reads `jita_prices`; keep provider abstraction, just swap execution |
-| `services/import_helper_service.py` | 1 | |
-| `services/module_equivalents_service.py` | 1 | `_get_equivalent_type_ids` / equivalence-group cached helpers still use a passed-in `engine`; `_get_module_stocks` was already migrated to `read_df()` |
+
+> **Already compliant (no work):** `repositories/admin_repo.py` (all reads go
+> through `self._reader.read_df(...)`; its **writes** — `DELETE` +
+> `sqlite_insert(Watchlist)` — correctly stay on a direct transactional
+> connection, since `read_df` is read-only) and
+> `services/type_resolution_service.py` (no direct `engine.connect()`).
 
 > Regenerate the live list before starting:
 > ```bash
