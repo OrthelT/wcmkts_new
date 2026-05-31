@@ -13,11 +13,17 @@ from services.eve_sso_service import (
 )
 from state import (
     clear_admin_auth_state,
+    get_active_language,
     get_admin_identity,
     set_admin_identity,
 )
+from ui.i18n import translate_text
 
 logger = setup_logging(__name__, log_file="admin_login.log")
+
+
+def _admin_text(language_code: str, key: str, **kwargs) -> str:
+    return translate_text(language_code, f"admin.{key}", **kwargs)
 
 
 def _query_param(name: str) -> str | None:
@@ -54,20 +60,28 @@ def _complete_callback_login(service, code: str, returned_state: str) -> dict:
 
 
 def main() -> None:
-    render_page_title("Admin Login", subtitle="Sign in with EVE to edit the watchlist.")
+    language_code = get_active_language()
+    render_page_title(
+        _admin_text(language_code, "login.title"),
+        subtitle=_admin_text(language_code, "login.subtitle"),
+    )
     service = get_eve_sso_service()
     verified_identity = service.verify_signed_admin_identity(get_admin_identity())
 
     if verified_identity is not None:
         st.info(
-            f"Signed in as {verified_identity['character_name']} "
-            f"({verified_identity['character_id']})."
+            _admin_text(
+                language_code,
+                "login.signed_in",
+                character_name=verified_identity["character_name"],
+                character_id=verified_identity["character_id"],
+            )
         )
         col_open, col_logout = st.columns(2)
         with col_open:
-            st.page_link("pages/admin.py", label="Open Admin Watchlist")
+            st.page_link("pages/admin.py", label=_admin_text(language_code, "login.open_watchlist"))
         with col_logout:
-            if st.button("Log out", width="stretch"):
+            if st.button(_admin_text(language_code, "common.logout"), width="stretch"):
                 clear_admin_auth_state()
                 st.rerun()
         return
@@ -84,7 +98,7 @@ def main() -> None:
             error_code,
             error_description,
         )
-        st.error("EVE returned an authorization error. Check admin logs for details.")
+        st.error(_admin_text(language_code, "login.authorization_error"))
         _clear_callback_params()
 
     code = _query_param("code")
@@ -96,12 +110,12 @@ def main() -> None:
             logger.error("admin_login_invalid_state: %s", exc, exc_info=True)
             clear_admin_auth_state()
             _clear_callback_params()
-            st.error("OAuth state is invalid (tampered, malformed, or expired). Please sign in again.")
+            st.error(_admin_text(language_code, "login.invalid_state"))
         except PermissionError as exc:
             logger.error("admin_login_unauthorized: %s", exc, exc_info=True)
             clear_admin_auth_state()
             _clear_callback_params()
-            st.error("This character is not authorized to use the admin tools.")
+            st.error(_admin_text(language_code, "login.unauthorized"))
         except SSONetworkError as exc:
             logger.error(
                 "admin_login_sso_unreachable: status=%s message=%s",
@@ -112,14 +126,14 @@ def main() -> None:
             clear_admin_auth_state()
             _clear_callback_params()
             if exc.status_code in (401, 403):
-                st.error("EVE rejected our admin credentials. Notify ops to check the SSO client secret.")
+                st.error(_admin_text(language_code, "login.credentials_rejected"))
             else:
-                st.error("EVE SSO is temporarily unavailable. Try again in a few minutes.")
+                st.error(_admin_text(language_code, "login.sso_unavailable"))
         except Exception as exc:
             logger.error("admin_login_failed: %s", exc, exc_info=True)
             clear_admin_auth_state()
             _clear_callback_params()
-            st.error("Admin login failed. Check admin logs for details.")
+            st.error(_admin_text(language_code, "login.failed"))
         else:
             # Side-effects run only after the auth code is successfully
             # exchanged. If switch_page (or any later call) raises, the
@@ -127,12 +141,12 @@ def main() -> None:
             # rather than retrying OAuth with a now-consumed auth code.
             set_admin_identity(signed_identity)
             _clear_callback_params()
-            st.success("Admin login successful.")
+            st.success(_admin_text(language_code, "login.success"))
             st.switch_page("pages/admin.py")
         return
 
     st.link_button(
-        "Sign in with EVE",
+        _admin_text(language_code, "login.sign_in"),
         url=_build_authorization_url(service),
         width="stretch",
     )
