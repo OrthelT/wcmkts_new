@@ -121,7 +121,7 @@ def test_jita_cache_persists_across_market_switches():
     with (
         patch("services.price_service.DatabaseConfig", return_value=SimpleNamespace()),
         patch("services.price_service.LocalMarketProvider", return_value=Mock()),
-        patch("services.price_service.FuzzworkProvider", return_value=shared_provider),
+        patch("services.price_service.DatabasePriceProvider", return_value=shared_provider),
     ):
         b9_service = price_service_module.get_price_service(
             db_alias="wcmktprod",
@@ -167,6 +167,31 @@ def test_get_jita_prices_dedupes_uncached_type_ids():
 
     assert sorted(result.prices) == [34, 35]
     assert provider.calls == 2
+
+
+def test_default_chain_excludes_live_api_providers():
+    """create_default must NOT wire Fuzzwork/Janice into the request path.
+
+    Jita prices come solely from the backend-populated jita_prices table via
+    DatabasePriceProvider; live-API fallback was removed to eliminate blocking
+    network calls (and per-chunk sleeps) during page renders.
+    """
+    from types import SimpleNamespace
+
+    from services.price_service import (
+        JitaPriceService,
+        DatabasePriceProvider,
+        FuzzworkProvider,
+        JaniceProvider,
+    )
+
+    service = JitaPriceService.create_default(
+        db_config=SimpleNamespace(), janice_api_key="ignored"
+    )
+    providers = service._jita_provider._providers
+
+    assert any(isinstance(p, DatabasePriceProvider) for p in providers)
+    assert not any(isinstance(p, (FuzzworkProvider, JaniceProvider)) for p in providers)
 
 
 def test_fuzzwork_provider_chunks_requests_and_sleeps_between_chunks():

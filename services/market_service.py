@@ -121,15 +121,17 @@ class MarketService:
         requested_ids = [int(type_id) for type_id in dict.fromkeys(type_ids)]
         base_df = pd.DataFrame({"type_id": requested_ids})
 
-        stats_df = self._repo.get_all_stats()
+        # Fetch only the requested rows — filtering and (for orders) the sell
+        # aggregation happen in SQL via the repository, so the full
+        # marketstats / marketorders tables are never loaded into pandas.
+        stats_df = self._repo.get_stats_for_type_ids(requested_ids)
         if stats_df is None or stats_df.empty:
             stats_df = pd.DataFrame(
                 columns=["type_id", "type_name", "min_price", "total_volume_remain"]
             )
         else:
             stats_df = (
-                stats_df[stats_df["type_id"].isin(requested_ids)]
-                [["type_id", "type_name", "min_price", "total_volume_remain"]]
+                stats_df[["type_id", "type_name", "min_price", "total_volume_remain"]]
                 .drop_duplicates(subset=["type_id"])
                 .copy()
             )
@@ -139,30 +141,19 @@ class MarketService:
                 errors="coerce",
             )
 
-        orders_df = self._repo.get_all_orders()
-        if orders_df is None or orders_df.empty:
+        sell_summary = self._repo.get_sell_order_summary(requested_ids)
+        if sell_summary is None or sell_summary.empty:
             sell_summary = pd.DataFrame(
                 columns=["type_id", "order_type_name", "sell_order_price", "sell_order_volume"]
             )
         else:
-            sell_orders = orders_df[
-                (orders_df["is_buy_order"] == 0) & (orders_df["type_id"].isin(requested_ids))
-            ].copy()
-            if sell_orders.empty:
-                sell_summary = pd.DataFrame(
-                    columns=["type_id", "order_type_name", "sell_order_price", "sell_order_volume"]
-                )
-            else:
-                sell_orders["price"] = pd.to_numeric(sell_orders["price"], errors="coerce")
-                sell_orders["volume_remain"] = pd.to_numeric(
-                    sell_orders["volume_remain"],
-                    errors="coerce",
-                )
-                sell_summary = sell_orders.groupby("type_id", as_index=False).agg(
-                    order_type_name=("type_name", "first"),
-                    sell_order_price=("price", "min"),
-                    sell_order_volume=("volume_remain", "sum"),
-                )
+            sell_summary = sell_summary.copy()
+            sell_summary["sell_order_price"] = pd.to_numeric(
+                sell_summary["sell_order_price"], errors="coerce"
+            )
+            sell_summary["sell_order_volume"] = pd.to_numeric(
+                sell_summary["sell_order_volume"], errors="coerce"
+            )
 
         result = base_df.merge(stats_df, on="type_id", how="left").merge(
             sell_summary,
@@ -192,7 +183,6 @@ class MarketService:
             active_buy_orders, items_listed, last_updated.
         """
         stats_df = self._repo.get_all_stats()
-        orders_df = self._repo.get_all_orders()
 
         total_market_value = 0.0
         items_listed = 0
@@ -202,11 +192,11 @@ class MarketService:
             total_market_value = float((prices * volumes).sum())
             items_listed = int(stats_df["type_id"].nunique())
 
-        active_sell_orders = 0
-        active_buy_orders = 0
-        if orders_df is not None and not orders_df.empty:
-            active_sell_orders = int((orders_df["is_buy_order"] == 0).sum())
-            active_buy_orders = int((orders_df["is_buy_order"] == 1).sum())
+        # Order counts come from a SQL GROUP BY rather than loading the full
+        # marketorders table just to count rows by is_buy_order.
+        counts = self._repo.get_order_counts()
+        active_sell_orders = int(counts.get("active_sell_orders", 0))
+        active_buy_orders = int(counts.get("active_buy_orders", 0))
 
         last_updated = self._repo.get_update_time()
 

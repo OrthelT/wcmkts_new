@@ -49,21 +49,91 @@ def _get_price_result_value(price_result, field_name: str) -> float:
         return 0.0
 
 
+def _jita_price_or_na(price_result, field_name: str) -> float:
+    """Return a Jita price field, or NaN when there is no usable Jita price.
+
+    A missing (``None``) or failed/backfilled (``success`` is False) result
+    yields NaN so the cell renders blank ("—") rather than a misleading 0 — a
+    missing Jita price does not mean the item is free at Jita (data-integrity
+    rule). Unlike ``_get_price_result_value`` (which returns 0.0 for absent
+    prices), this is used for the dashboard comparison columns, where a 0 would
+    compute a nonsense "% vs Jita".
+    """
+    if price_result is None or not getattr(price_result, "success", False):
+        return float("nan")
+    return _get_price_result_value(price_result, field_name)
+
+
 def _get_eve_icon_url(type_id: int) -> str:
     """Return the EVE icon URL for an item type."""
     return f"https://images.evetech.net/types/{int(type_id)}/icon?size=32"
 
 
-def _add_jita_prices(df: pd.DataFrame, price_service, type_ids: list[int]) -> pd.DataFrame:
-    """Add jita_sell_price, jita_buy_price, and pct_diff_vs_jita_sell columns to a DataFrame."""
+_JITA_UNAVAILABLE_MESSAGE = (
+    "Jita price data is unavailable — the backend pricing pipeline may be down "
+    "or the jita_prices table is empty/stale. Prices are hidden rather than "
+    "shown as zero."
+)
+
+
+def _require_jita_prices(price_service, type_ids: list[int]) -> dict | None:
+    """Fetch Jita prices from the backend, surfacing a wholesale outage to the UI.
+
+    The dashboard renders curated, backend-priced item sets (minerals, isotopes,
+    doctrine ships/modules). If the backend returns no usable price for ANY
+    requested id, the jita_prices table is empty/stale or the pricing pipeline
+    is broken — not a normal "unpriced item" case. Per the data-integrity rule
+    we refuse to render a table of fabricated zeros: we log the failure and show
+    ``st.error``, returning ``None`` so the caller can skip the table gracefully.
+    Individual unpriced items still pass through and render blank ("—"), never 0
+    (see ``_add_jita_prices`` / ``_jita_price_or_na``).
+
+    This loud, all-or-nothing guard lives ONLY on the dashboard on purpose: the
+    dashboard is the landing page, so a total outage is surfaced to every user
+    on normal navigation. The other Jita-consuming pages (Pricer, Builder
+    Helper, Import Helper, Doctrine) do not repeat the guard — they degrade
+    per-item to blank rather than 0, which is correct for a partial outage. The
+    only way to miss this alert is a direct deep-link straight to one of those
+    pages during a full outage — a negligible edge case.
+
+    Returns:
+        The ``{type_id: PriceResult}`` map, or ``None`` when no requested item
+        has a usable Jita price (after logging and showing ``st.error``).
+    """
     jita_price_map = price_service.get_jita_prices(type_ids).prices
+    requested = [int(t) for t in dict.fromkeys(type_ids)]
+    has_any_price = any(
+        (pr := jita_price_map.get(tid)) is not None
+        and getattr(pr, "success", False)
+        and getattr(pr, "sell_price", 0) > 0
+        for tid in requested
+    )
+    if requested and not has_any_price:
+        logger.error(
+            "No Jita prices available from the backend for any of %d requested "
+            "items; jita_prices table may be empty or stale.",
+            len(requested),
+        )
+        st.error(_JITA_UNAVAILABLE_MESSAGE)
+        return None
+    return jita_price_map
+
+
+def _add_jita_prices(df: pd.DataFrame, jita_price_map: dict) -> pd.DataFrame:
+    """Add jita_sell_price, jita_buy_price, and pct_diff_vs_jita_sell columns.
+
+    Expects an already-fetched/validated ``{type_id: PriceResult}`` map (see
+    ``_require_jita_prices``); this function only applies the price columns.
+    """
     df["jita_sell_price"] = df["type_id"].map(
-        lambda tid: _get_price_result_value(jita_price_map.get(int(tid)), "sell_price")
+        lambda tid: _jita_price_or_na(jita_price_map.get(int(tid)), "sell_price")
     )
     df["jita_buy_price"] = df["type_id"].map(
-        lambda tid: _get_price_result_value(jita_price_map.get(int(tid)), "buy_price")
+        lambda tid: _jita_price_or_na(jita_price_map.get(int(tid)), "buy_price")
     )
-    df["pct_diff_vs_jita_sell"] = 0.0
+    # NaN (not 0) where there is no usable Jita sell price — a missing price is
+    # not a 0% difference. Only rows with a real Jita sell get a computed value.
+    df["pct_diff_vs_jita_sell"] = float("nan")
     has_jita_sell = df["jita_sell_price"] > 0
     df.loc[has_jita_sell, "pct_diff_vs_jita_sell"] = (
         (
@@ -75,10 +145,18 @@ def _add_jita_prices(df: pd.DataFrame, price_service, type_ids: list[int]) -> pd
     return df
 
 
-def _coerce_numeric(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
-    """Coerce columns to numeric, filling NaN with 0."""
+def _coerce_numeric(
+    df: pd.DataFrame, columns: list[str], fill_value: float | None = 0.0
+) -> pd.DataFrame:
+    """Coerce columns to numeric, filling NaN with ``fill_value``.
+
+    Pass ``fill_value=None`` to preserve NaN — used for Jita price columns,
+    where a fabricated 0 would misreport "no Jita data" as "free at Jita"
+    (data-integrity rule). NaN renders as a blank cell ("—") instead.
+    """
     for col in columns:
-        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
+        series = pd.to_numeric(df[col], errors="coerce")
+        df[col] = series if fill_value is None else series.fillna(fill_value)
     return df
 
 
@@ -134,6 +212,8 @@ def _jita_diff_cell_style(diff_value: float) -> str:
         value = float(diff_value)
     except (TypeError, ValueError):
         return ""
+    if pd.isna(value):
+        return ""
     if value > 5:
         return "color: #66bb6a"
     if value < 0:
@@ -168,7 +248,10 @@ def render_comparison_table(
     if comparison_df.empty:
         return None
 
-    comparison_df = _add_jita_prices(comparison_df, price_service, type_ids)
+    jita_price_map = _require_jita_prices(price_service, type_ids)
+    if jita_price_map is None:
+        return None
+    comparison_df = _add_jita_prices(comparison_df, jita_price_map)
 
     comparison_df["order_volume"] = (
         pd.to_numeric(comparison_df["order_volume"], errors="coerce").fillna(0).round().astype(int)
@@ -180,10 +263,13 @@ def render_comparison_table(
         comparison_df["type_id"].astype(str)
     )
     comparison_df["image_url"] = comparison_df["type_id"].map(_get_eve_icon_url)
-    comparison_df = _coerce_numeric(comparison_df, [
-        "current_sell_price", "order_volume",
-        "jita_sell_price", "jita_buy_price", "pct_diff_vs_jita_sell",
-    ])
+    comparison_df = _coerce_numeric(comparison_df, ["current_sell_price", "order_volume"])
+    # Jita columns keep NaN — a missing Jita price renders blank, never 0.
+    comparison_df = _coerce_numeric(
+        comparison_df,
+        ["jita_sell_price", "jita_buy_price", "pct_diff_vs_jita_sell"],
+        fill_value=None,
+    )
 
     display_cols = [
         "image_url", "type_name", "current_sell_price", "order_volume",
@@ -396,7 +482,10 @@ def render_popular_modules_table(
     if snapshot.empty:
         return None, None
 
-    snapshot = _add_jita_prices(snapshot, price_service, type_ids)
+    jita_price_map = _require_jita_prices(price_service, type_ids)
+    if jita_price_map is None:
+        return None, None
+    snapshot = _add_jita_prices(snapshot, jita_price_map)
     snapshot["order_volume"] = (
         pd.to_numeric(snapshot["order_volume"], errors="coerce").fillna(0).round().astype(int)
     )
@@ -410,10 +499,13 @@ def render_popular_modules_table(
     snapshot = apply_localized_type_names(snapshot, sde_repo, language_code, logger)
     snapshot["type_name"] = snapshot["type_name"].fillna(snapshot["type_id"].astype(str))
     snapshot["image_url"] = snapshot["type_id"].map(_get_eve_icon_url)
-    snapshot = _coerce_numeric(snapshot, [
-        "current_sell_price", "order_volume",
-        "jita_sell_price", "jita_buy_price", "pct_diff_vs_jita_sell",
-    ])
+    snapshot = _coerce_numeric(snapshot, ["current_sell_price", "order_volume"])
+    # Jita columns keep NaN — a missing Jita price renders blank, never 0.
+    snapshot = _coerce_numeric(
+        snapshot,
+        ["jita_sell_price", "jita_buy_price", "pct_diff_vs_jita_sell"],
+        fill_value=None,
+    )
 
     # Sort alphabetically by item name
     snapshot = snapshot.sort_values("type_name", key=lambda s: s.str.lower())
@@ -522,14 +614,15 @@ def _apply_equivalents_to_fits(fits_df: pd.DataFrame) -> pd.DataFrame:
     fits_df = fits_df.copy()
     aggregated_stocks = equiv_service.get_aggregated_stock(list(modules_to_update))
 
-    for type_id, total_stock in aggregated_stocks.items():
-        mask = fits_df["type_id"] == type_id
-        for idx in fits_df.loc[mask].index:
-            fit_qty = fits_df.at[idx, "fit_qty"]
-            if fit_qty > 0:
-                fits_df.at[idx, "fits_on_mkt"] = total_stock // fit_qty
-            else:
-                fits_df.at[idx, "fits_on_mkt"] = total_stock
+    # Vectorized update: rows whose type_id has an aggregated equivalent stock
+    # get fits_on_mkt = total_stock // fit_qty (or total_stock when fit_qty<=0).
+    mask = fits_df["type_id"].isin(aggregated_stocks)
+    if mask.any():
+        total_stock = fits_df.loc[mask, "type_id"].map(aggregated_stocks).astype("int64")
+        fit_qty = pd.to_numeric(fits_df.loc[mask, "fit_qty"], errors="coerce").fillna(0).astype("int64")
+        fits_df.loc[mask, "fits_on_mkt"] = total_stock.where(
+            fit_qty <= 0, total_stock // fit_qty.where(fit_qty > 0, 1)
+        )
 
     return fits_df
 
@@ -583,8 +676,11 @@ def render_doctrine_ships_table(
     # Local prices via snapshot
     snapshot = market_service.get_current_market_snapshot(ship_type_ids)
 
-    # Jita prices — batch fetch
-    jita_map = price_service.get_jita_prices(ship_type_ids).prices
+    # Jita prices — batch fetch from the backend jita_prices table.
+    # Surfaces st.error + logs and bails if the backend has no data at all.
+    jita_map = _require_jita_prices(price_service, ship_type_ids)
+    if jita_map is None:
+        return None, None
 
     # Build result DataFrame — one row per fit_id
     rows = []
@@ -611,7 +707,7 @@ def render_doctrine_ships_table(
         stock = int(hull.get("total_stock", 0) or 0)
         fits_on_mkt = int(bottleneck_fits.get(fid, 0))
         target = int(targets_map[fid])
-        jita_sell = _get_price_result_value(jita_map.get(sid), "sell_price")
+        jita_sell = _jita_price_or_na(jita_map.get(sid), "sell_price")
         status = StockStatus.from_stock_and_target(fits_on_mkt, target)
         status_icons = {
             StockStatus.CRITICAL: "🔴",

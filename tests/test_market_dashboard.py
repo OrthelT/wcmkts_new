@@ -14,12 +14,19 @@ import pytest
 class TestGetMarketOverviewKpis:
     """Tests for MarketService.get_market_overview_kpis()."""
 
-    def _make_service(self, stats_df=None, orders_df=None, update_time="12:00 UTC"):
+    def _make_service(
+        self, stats_df=None, order_counts=None, update_time="12:00 UTC",
+    ):
         from services.market_service import MarketService
 
         repo = MagicMock()
         repo.get_all_stats.return_value = stats_df
-        repo.get_all_orders.return_value = orders_df
+        # Order counts now come from a SQL GROUP BY in the repository, not a
+        # full-table pandas load. Default to zeros when not provided.
+        repo.get_order_counts.return_value = order_counts or {
+            "active_sell_orders": 0,
+            "active_buy_orders": 0,
+        }
         repo.get_update_time.return_value = update_time
         return MarketService(repo)
 
@@ -29,10 +36,10 @@ class TestGetMarketOverviewKpis:
             "min_price": [10.0, 20.0],
             "total_volume_remain": [100, 200],
         })
-        orders = pd.DataFrame({
-            "is_buy_order": [0, 0, 1],
-        })
-        service = self._make_service(stats_df=stats, orders_df=orders)
+        service = self._make_service(
+            stats_df=stats,
+            order_counts={"active_sell_orders": 2, "active_buy_orders": 1},
+        )
         kpis = service.get_market_overview_kpis()
 
         assert kpis["total_market_value"] == pytest.approx(10.0 * 100 + 20.0 * 200)
@@ -43,7 +50,7 @@ class TestGetMarketOverviewKpis:
 
     def test_empty_data_returns_zeros(self):
         service = self._make_service(
-            stats_df=pd.DataFrame(), orders_df=pd.DataFrame(), update_time=None,
+            stats_df=pd.DataFrame(), order_counts=None, update_time=None,
         )
         kpis = service.get_market_overview_kpis()
 
@@ -54,7 +61,7 @@ class TestGetMarketOverviewKpis:
         assert kpis["last_updated"] is None
 
     def test_none_dataframes(self):
-        service = self._make_service(stats_df=None, orders_df=None)
+        service = self._make_service(stats_df=None, order_counts=None)
         kpis = service.get_market_overview_kpis()
 
         assert kpis["total_market_value"] == 0.0
@@ -68,7 +75,7 @@ class TestGetMarketOverviewKpis:
             "min_price": ["not_a_number"],
             "total_volume_remain": [100],
         })
-        service = self._make_service(stats_df=stats, orders_df=pd.DataFrame())
+        service = self._make_service(stats_df=stats, order_counts=None)
         kpis = service.get_market_overview_kpis()
 
         assert kpis["total_market_value"] == 0.0
@@ -312,6 +319,12 @@ class TestJitaDiffCellStyle:
 
         assert _jita_diff_cell_style(0.0) == "color: #728049"
 
+    def test_nan_returns_empty(self):
+        """A missing % vs Jita (NaN) gets no color — the cell renders blank."""
+        from pages.components.dashboard_components import _jita_diff_cell_style
+
+        assert _jita_diff_cell_style(float("nan")) == ""
+
 
 class TestComputeShipTargetPct:
     """Tests for _compute_ship_target_pct() — the per-ship progress helper."""
@@ -514,3 +527,178 @@ class TestRenderPopularModulesTableEarlyExits:
         with patch.object(dc, "_compute_module_targets", return_value=targets):
             result = dc.render_popular_modules_table(**kwargs)
         assert result == (None, None)
+
+
+# =========================================================================
+# Jita price NA handling (missing Jita price must render blank, never 0)
+# =========================================================================
+
+
+class TestJitaPriceOrNa:
+    """_jita_price_or_na: a missing/failed Jita result is NaN, not a fake 0."""
+
+    def test_none_returns_nan(self):
+        from pages.components.dashboard_components import _jita_price_or_na
+
+        assert pd.isna(_jita_price_or_na(None, "sell_price"))
+
+    def test_failed_result_returns_nan(self):
+        from types import SimpleNamespace
+        from pages.components.dashboard_components import _jita_price_or_na
+
+        failed = SimpleNamespace(success=False, sell_price=0.0, buy_price=0.0)
+        assert pd.isna(_jita_price_or_na(failed, "sell_price"))
+        assert pd.isna(_jita_price_or_na(failed, "buy_price"))
+
+    def test_successful_result_returns_value(self):
+        from types import SimpleNamespace
+        from pages.components.dashboard_components import _jita_price_or_na
+
+        ok = SimpleNamespace(success=True, sell_price=8.0, buy_price=7.0)
+        assert _jita_price_or_na(ok, "sell_price") == 8.0
+        assert _jita_price_or_na(ok, "buy_price") == 7.0
+
+
+class TestAddJitaPrices:
+    """_add_jita_prices: missing/failed prices stay NaN so they render '—'."""
+
+    def test_missing_or_failed_prices_render_as_nan_not_zero(self):
+        from types import SimpleNamespace
+        from pages.components.dashboard_components import _add_jita_prices
+
+        df = pd.DataFrame({
+            "type_id": [34, 35, 36],
+            "current_sell_price": [10.0, 20.0, 30.0],
+        })
+        price_map = {
+            34: SimpleNamespace(success=True, sell_price=8.0, buy_price=7.0),
+            # 35: a backfilled failure result (success False, price 0)
+            35: SimpleNamespace(success=False, sell_price=0.0, buy_price=0.0),
+            # 36: absent from the map entirely
+        }
+
+        result = _add_jita_prices(df, price_map).set_index("type_id")
+
+        # Priced item keeps real values and a computed % diff
+        assert result.loc[34, "jita_sell_price"] == 8.0
+        assert result.loc[34, "pct_diff_vs_jita_sell"] == pytest.approx(
+            (10.0 - 8.0) / 8.0 * 100
+        )
+        # A missing Jita price is NOT "free at Jita" — must be NaN, never 0
+        for missing_tid in (35, 36):
+            assert pd.isna(result.loc[missing_tid, "jita_sell_price"])
+            assert pd.isna(result.loc[missing_tid, "jita_buy_price"])
+            assert pd.isna(result.loc[missing_tid, "pct_diff_vs_jita_sell"])
+
+
+class TestCoerceNumericFillValue:
+    """_coerce_numeric: fill_value=None preserves NaN (for Jita columns)."""
+
+    def test_default_fills_nan_with_zero(self):
+        from pages.components.dashboard_components import _coerce_numeric
+
+        df = pd.DataFrame({"x": [1.0, None]})
+        out = _coerce_numeric(df, ["x"])
+        assert out["x"].tolist() == [1.0, 0.0]
+
+    def test_fill_value_none_preserves_nan(self):
+        from pages.components.dashboard_components import _coerce_numeric
+
+        df = pd.DataFrame({"x": [1.0, None]})
+        out = _coerce_numeric(df, ["x"], fill_value=None)
+        assert out["x"].iloc[0] == 1.0
+        assert pd.isna(out["x"].iloc[1])
+
+
+# =========================================================================
+# _apply_equivalents_to_fits (vectorized) — regression lock vs the old loop
+# =========================================================================
+
+
+class TestApplyEquivalentsToFits:
+    """The vectorized update must reproduce the original per-row loop:
+    fit_qty > 0 -> total_stock // fit_qty; fit_qty <= 0 -> total_stock;
+    type_id with no aggregated stock -> left untouched.
+    """
+
+    def test_vectorized_update_matches_loop_semantics(self):
+        from pages.components import dashboard_components as dc
+
+        fits_df = pd.DataFrame({
+            "type_id": [100, 101, 102, 999],
+            "fit_qty": [3, 1, 0, 2],
+            "fits_on_mkt": [-1, -1, -1, 7],  # 999 has no equivalent -> stays 7
+        })
+        aggregated = {100: 10, 101: 5, 102: 8}  # 999 absent
+
+        equiv = MagicMock()
+        equiv.get_type_ids_with_equivalents.return_value = [100, 101, 102]
+        equiv.get_aggregated_stock.return_value = aggregated
+
+        with patch("settings_service.SettingsService") as mock_settings, patch(
+            "services.module_equivalents_service.get_module_equivalents_service",
+            return_value=equiv,
+        ):
+            mock_settings.return_value.use_equivalents = True
+            result = dc._apply_equivalents_to_fits(fits_df).set_index("type_id")
+
+        assert result.loc[100, "fits_on_mkt"] == 10 // 3  # floor division -> 3
+        assert result.loc[101, "fits_on_mkt"] == 5 // 1   # -> 5
+        assert result.loc[102, "fits_on_mkt"] == 8        # fit_qty 0 -> total_stock
+        assert result.loc[999, "fits_on_mkt"] == 7        # untouched
+
+
+# =========================================================================
+# _require_jita_prices — total-outage guard (data-integrity)
+# =========================================================================
+
+
+class TestRequireJitaPrices:
+    """Bails (None + st.error) only on a TOTAL outage; passes the map through
+    when at least one item is priced; an empty request is not an outage.
+    """
+
+    def _price_service(self, prices):
+        ps = MagicMock()
+        ps.get_jita_prices.return_value.prices = prices
+        return ps
+
+    def test_total_outage_returns_none_and_surfaces_error(self):
+        from types import SimpleNamespace
+        from pages.components import dashboard_components as dc
+
+        prices = {
+            34: SimpleNamespace(success=False, sell_price=0.0),
+            35: SimpleNamespace(success=False, sell_price=0.0),
+        }
+        ps = self._price_service(prices)
+        with patch.object(dc, "st") as mock_st:
+            result = dc._require_jita_prices(ps, [34, 35])
+
+        assert result is None
+        mock_st.error.assert_called_once()
+
+    def test_partial_availability_returns_map_without_error(self):
+        from types import SimpleNamespace
+        from pages.components import dashboard_components as dc
+
+        prices = {
+            34: SimpleNamespace(success=True, sell_price=8.0),
+            35: SimpleNamespace(success=False, sell_price=0.0),
+        }
+        ps = self._price_service(prices)
+        with patch.object(dc, "st") as mock_st:
+            result = dc._require_jita_prices(ps, [34, 35])
+
+        assert result is prices
+        mock_st.error.assert_not_called()
+
+    def test_empty_type_ids_is_not_an_outage(self):
+        from pages.components import dashboard_components as dc
+
+        ps = self._price_service({})
+        with patch.object(dc, "st") as mock_st:
+            result = dc._require_jita_prices(ps, [])
+
+        assert result == {}
+        mock_st.error.assert_not_called()

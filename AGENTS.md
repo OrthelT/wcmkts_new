@@ -343,28 +343,57 @@ if __name__ == "__main__":
 
 **Best Practices:**
 - Access data through repository and service layers, not direct `DatabaseConfig`
-- Use context managers for database sessions
 - Implement proper error handling and logging
 - Use targeted cache invalidation after sync (e.g., `invalidate_market_caches()`), not global `st.cache_data.clear()`
 
-**Example:**
+#### Read Convention: raw SQL via `text()`, executed through `read_df()`
+
+This app is **read-only analytics**: its job is `SELECT … GROUP BY` feeding pandas
+DataFrames. We deliberately do **not** use the SQLAlchemy ORM for reads — the
+ORM's value (identity map, unit-of-work, lazy relationships, change tracking) is
+about object writes and graphs, none of which apply when the output is a
+DataFrame. The ORM models in `models.py` / `sdemodels.py` / `build_cost_models.py`
+exist for **schema definition/seeding** (`demo_data.py`), the **one write path**
+(`admin_repo.py`'s `sqlite_insert(Watchlist)`), and as living schema docs — not
+for queries. Don't grow ORM into reads.
+
+The convention for every read is:
+
+1. Express the query as raw SQL with `sqlalchemy.text(...)`.
+2. Use **named** params, and `bindparam("ids", expanding=True)` for `IN` clauses
+   (never string-interpolate values into SQL).
+3. Execute it through **`BaseRepository.read_df()`** — the single chokepoint that
+   provides malformed-DB recovery → sync-and-retry → remote fallback. A bare
+   `db.engine.connect()` + `pd.read_sql_query` gets **none** of that resilience,
+   so a corrupt local `.db` makes those queries throw "no such table" instead of
+   self-healing.
+
 ```python
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import text, bindparam
 from config import DatabaseConfig
-from models import MarketStats
+from repositories.base import BaseRepository
 
-# Reading data via DatabaseConfig
-mkt_db = DatabaseConfig("wcmktprod")
-with Session(mkt_db.engine) as session:
-    stmt = select(MarketStats).where(MarketStats.type_id == 34)
-    results = session.execute(stmt).scalars().all()
+# CORRECT — raw SQL through read_df() (recovery + remote fallback included)
+repo = BaseRepository(DatabaseConfig("wcmktprod"))
+query = text(
+    "SELECT type_id, min_price FROM marketstats WHERE type_id IN :ids"
+).bindparams(bindparam("ids", expanding=True))
+df = repo.read_df(query, params={"ids": [34, 35]})
 
-# Or use repository cached methods (preferred)
+# Or, preferred at call sites, a cached repository method
 from repositories import get_market_repository
-repo = get_market_repository()
-df = repo.get_all_stats()  # Returns cached pandas DataFrame
+df = get_market_repository().get_all_stats()  # cached DataFrame
 ```
+
+```python
+# AVOID — bypasses read_df(), so no malformed-DB recovery / remote fallback
+with DatabaseConfig("wcmktprod").engine.connect() as conn:
+    df = pd.read_sql_query(query, conn, params={"ids": [34, 35]})
+```
+
+> **Known drift (future refactor):** many existing read sites still use the
+> bare-`engine.connect()` form. See `docs/read_df_consolidation.md` for the full
+> inventory and migration plan. New reads should follow the convention above.
 
 ### Performance Considerations
 

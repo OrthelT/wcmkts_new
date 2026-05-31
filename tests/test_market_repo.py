@@ -438,3 +438,151 @@ class TestMarketRepositoryFactory:
             from repositories.market_repo import get_market_repository
             repo = get_market_repository()
             assert isinstance(repo, MarketRepository)
+
+
+class TestSellOrderSummaryImpl:
+    """Test the SQL-aggregated sell-order summary used by the dashboard snapshot."""
+
+    def test_empty_type_ids_returns_empty_frame_without_query(self):
+        """Empty input short-circuits — no DB access, correct columns."""
+        from repositories.market_repo import _get_sell_order_summary_impl
+
+        with patch("repositories.market_repo.BaseRepository") as mock_repo_cls:
+            result = _get_sell_order_summary_impl([])
+
+        assert list(result.columns) == [
+            "type_id", "order_type_name", "sell_order_price", "sell_order_volume"
+        ]
+        assert result.empty
+        mock_repo_cls.assert_not_called()
+
+    @patch("repositories.market_repo.BaseRepository")
+    @patch("repositories.market_repo.DatabaseConfig")
+    def test_pushes_sell_filter_and_aggregation_into_sql(self, mock_db_cls, mock_repo_cls):
+        """Query filters to sell orders and aggregates per type_id; ids coerced to int."""
+        expected = pd.DataFrame({
+            "type_id": [34],
+            "order_type_name": ["Tritanium"],
+            "sell_order_price": [5.0],
+            "sell_order_volume": [300],
+        })
+        mock_repo = Mock()
+        mock_repo.read_df.return_value = expected
+        mock_repo_cls.return_value = mock_repo
+        mock_db_cls.return_value = Mock()
+
+        from repositories.market_repo import _get_sell_order_summary_impl
+        result = _get_sell_order_summary_impl(["34"])
+
+        assert result.equals(expected)
+        query = str(mock_repo.read_df.call_args[0][0])
+        assert "is_buy_order = 0" in query
+        assert "GROUP BY type_id" in query
+        assert mock_repo.read_df.call_args[1]["params"]["type_ids"] == [34]
+
+
+class TestStatsForTypeIdsImpl:
+    """Test the SQL-filtered marketstats fetch."""
+
+    def test_empty_type_ids_returns_empty_frame_without_query(self):
+        from repositories.market_repo import _get_stats_for_type_ids_impl
+
+        with patch("repositories.market_repo.BaseRepository") as mock_repo_cls:
+            result = _get_stats_for_type_ids_impl([])
+
+        assert list(result.columns) == [
+            "type_id", "type_name", "min_price", "total_volume_remain"
+        ]
+        assert result.empty
+        mock_repo_cls.assert_not_called()
+
+    @patch("repositories.market_repo.BaseRepository")
+    @patch("repositories.market_repo.DatabaseConfig")
+    def test_filters_marketstats_by_type_ids(self, mock_db_cls, mock_repo_cls):
+        expected = pd.DataFrame({
+            "type_id": [34, 35],
+            "type_name": ["Tritanium", "Pyerite"],
+            "min_price": [5.0, 6.0],
+            "total_volume_remain": [1000, 2000],
+        })
+        mock_repo = Mock()
+        mock_repo.read_df.return_value = expected
+        mock_repo_cls.return_value = mock_repo
+        mock_db_cls.return_value = Mock()
+
+        from repositories.market_repo import _get_stats_for_type_ids_impl
+        result = _get_stats_for_type_ids_impl([34, 35])
+
+        assert result.equals(expected)
+        query = str(mock_repo.read_df.call_args[0][0])
+        assert "FROM marketstats" in query
+        assert mock_repo.read_df.call_args[1]["params"]["type_ids"] == [34, 35]
+
+
+class TestOrderCountsImpl:
+    """Test the SQL GROUP BY order-count aggregation."""
+
+    @patch("repositories.market_repo.BaseRepository")
+    @patch("repositories.market_repo.DatabaseConfig")
+    def test_maps_is_buy_order_to_sell_and_buy_counts(self, mock_db_cls, mock_repo_cls):
+        """is_buy_order 0 -> active_sell_orders, 1 -> active_buy_orders."""
+        mock_repo = Mock()
+        mock_repo.read_df.return_value = pd.DataFrame(
+            {"is_buy_order": [0, 1], "n": [5, 3]}
+        )
+        mock_repo_cls.return_value = mock_repo
+        mock_db_cls.return_value = Mock()
+
+        from repositories.market_repo import _get_order_counts_impl
+        result = _get_order_counts_impl()
+
+        assert result == {"active_sell_orders": 5, "active_buy_orders": 3}
+
+    @patch("repositories.market_repo.BaseRepository")
+    @patch("repositories.market_repo.DatabaseConfig")
+    def test_missing_buy_group_defaults_to_zero(self, mock_db_cls, mock_repo_cls):
+        """A market with only sell orders reports buy count 0 (a true zero)."""
+        mock_repo = Mock()
+        mock_repo.read_df.return_value = pd.DataFrame({"is_buy_order": [0], "n": [5]})
+        mock_repo_cls.return_value = mock_repo
+        mock_db_cls.return_value = Mock()
+
+        from repositories.market_repo import _get_order_counts_impl
+        result = _get_order_counts_impl()
+
+        assert result == {"active_sell_orders": 5, "active_buy_orders": 0}
+
+    @patch("repositories.market_repo.BaseRepository")
+    @patch("repositories.market_repo.DatabaseConfig")
+    def test_empty_frame_returns_zeros(self, mock_db_cls, mock_repo_cls):
+        """A genuinely empty result is a true zero, not an error."""
+        mock_repo = Mock()
+        mock_repo.read_df.return_value = pd.DataFrame(columns=["is_buy_order", "n"])
+        mock_repo_cls.return_value = mock_repo
+        mock_db_cls.return_value = Mock()
+
+        from repositories.market_repo import _get_order_counts_impl
+        result = _get_order_counts_impl()
+
+        assert result == {"active_sell_orders": 0, "active_buy_orders": 0}
+
+    @patch("repositories.market_repo.BaseRepository")
+    @patch("repositories.market_repo.DatabaseConfig")
+    def test_read_failure_propagates_rather_than_reporting_zero(
+        self, mock_db_cls, mock_repo_cls
+    ):
+        """An unrecoverable read failure must NOT be reported as 0 orders.
+
+        read_df() already attempts sync + remote recovery before raising; if it
+        still raises, the failure is genuine. Returning {0, 0} would misreport a
+        broken read as a real empty market (data-integrity rule). The error must
+        propagate so the page surfaces it instead of a fake KPI.
+        """
+        mock_repo = Mock()
+        mock_repo.read_df.side_effect = RuntimeError("database disk image is malformed")
+        mock_repo_cls.return_value = mock_repo
+        mock_db_cls.return_value = Mock()
+
+        from repositories.market_repo import _get_order_counts_impl
+        with pytest.raises(RuntimeError):
+            _get_order_counts_impl()

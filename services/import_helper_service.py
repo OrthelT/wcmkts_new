@@ -78,19 +78,32 @@ PACKAGED_SHIP_VOLUMES_M3: dict[str, float] = {
 
 
 def _get_jita_sell_price(jita_prices: dict, type_id) -> float:
-    """Safely extract Jita sell price from a provider result map."""
+    """Jita sell price from a provider result map, or NaN when unavailable.
+
+    A missing or failed/backfilled result (``None`` or ``success`` False)
+    yields NaN, not 0: a 0 would make an unpriced item look free at Jita and
+    fabricate a huge import margin (data-integrity rule). NaN profit rows are
+    dropped by the profitable-only filter and sink in the sort order.
+    """
     if pd.isna(type_id):
-        return 0.0
+        return float("nan")
     result: Optional[PriceResult] = jita_prices.get(int(type_id))
-    return result.sell_price if result else 0.0
+    if result is None or not getattr(result, "success", False):
+        return float("nan")
+    return result.sell_price
 
 
 def _get_jita_buy_price(jita_prices: dict, type_id) -> float:
-    """Safely extract Jita buy price from a provider result map."""
+    """Jita buy price from a provider result map, or NaN when unavailable.
+
+    See ``_get_jita_sell_price`` — missing/failed prices are NaN, never 0.
+    """
     if pd.isna(type_id):
-        return 0.0
+        return float("nan")
     result: Optional[PriceResult] = jita_prices.get(int(type_id))
-    return result.buy_price if result else 0.0
+    if result is None or not getattr(result, "success", False):
+        return float("nan")
+    return result.buy_price
 
 
 def _apply_packaged_ship_volumes(

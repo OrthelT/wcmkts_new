@@ -451,7 +451,11 @@ class TestGetCurrentMarketSnapshot:
     """Test fixed-item current market snapshot aggregation."""
 
     def test_prefers_live_sell_orders_for_price_and_volume(self, mock_repo):
-        mock_repo.get_all_stats.return_value = pd.DataFrame(
+        # Snapshot now pulls only the requested rows via SQL-filtered repo
+        # methods (get_stats_for_type_ids / get_sell_order_summary). The
+        # sell-order aggregation (min price, summed volume) happens in SQL,
+        # so the mock returns the already-aggregated summary.
+        mock_repo.get_stats_for_type_ids.return_value = pd.DataFrame(
             {
                 "type_id": [34],
                 "type_name": ["Tritanium"],
@@ -459,13 +463,12 @@ class TestGetCurrentMarketSnapshot:
                 "total_volume_remain": [1000],
             }
         )
-        mock_repo.get_all_orders.return_value = pd.DataFrame(
+        mock_repo.get_sell_order_summary.return_value = pd.DataFrame(
             {
-                "type_id": [34, 34, 34],
-                "type_name": ["Tritanium", "Tritanium", "Tritanium"],
-                "price": [5.0, 5.2, 4.8],
-                "volume_remain": [100, 200, 300],
-                "is_buy_order": [0, 0, 1],
+                "type_id": [34],
+                "order_type_name": ["Tritanium"],
+                "sell_order_price": [5.0],
+                "sell_order_volume": [300],
             }
         )
 
@@ -479,7 +482,7 @@ class TestGetCurrentMarketSnapshot:
         assert result.iloc[0]["order_volume"] == pytest.approx(300.0)
 
     def test_falls_back_to_marketstats_when_no_sell_orders_exist(self, mock_repo):
-        mock_repo.get_all_stats.return_value = pd.DataFrame(
+        mock_repo.get_stats_for_type_ids.return_value = pd.DataFrame(
             {
                 "type_id": [34, 35],
                 "type_name": ["Tritanium", "Pyerite"],
@@ -487,8 +490,8 @@ class TestGetCurrentMarketSnapshot:
                 "total_volume_remain": [1000, 2000],
             }
         )
-        mock_repo.get_all_orders.return_value = pd.DataFrame(
-            columns=["type_id", "type_name", "price", "volume_remain", "is_buy_order"]
+        mock_repo.get_sell_order_summary.return_value = pd.DataFrame(
+            columns=["type_id", "order_type_name", "sell_order_price", "sell_order_volume"]
         )
 
         from services.market_service import MarketService

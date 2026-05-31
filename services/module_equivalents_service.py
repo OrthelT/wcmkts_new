@@ -14,11 +14,12 @@ from dataclasses import dataclass
 from typing import Optional
 import logging
 import pandas as pd
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
 import streamlit as st
 
 from config import DatabaseConfig
 from logging_config import setup_logging
+from repositories.base import BaseRepository
 
 logger = setup_logging(__name__, log_file="module_equivalents_service.log")
 
@@ -198,6 +199,24 @@ class ModuleEquivalentsService:
         equiv_ids = self.get_equivalent_type_ids(type_id)
         return len(equiv_ids) > 1
 
+    def _build_group_map(self) -> dict[int, EquivalenceGroup]:
+        """Map every type_id in any equivalence group to its group.
+
+        Built from the single cached get_all_equivalence_groups() call so
+        callers can resolve many type_ids without a per-item DB lookup.
+
+        Unlike get_equivalence_group(), this does NOT apply the _is_faction()
+        early-exit — it maps every member of every group. Current callers
+        pre-filter their inputs to faction type_ids (via
+        get_type_ids_with_equivalents()), so results match; a future caller
+        passing arbitrary type_ids would resolve any group member here.
+        """
+        group_map: dict[int, EquivalenceGroup] = {}
+        for group in self.get_all_equivalence_groups():
+            for tid in group.type_ids:
+                group_map[tid] = group
+        return group_map
+
     def get_aggregated_stock(self, type_ids: list[int]) -> dict[int, int]:
         """
         Get aggregated stock for each type_id across its equivalents.
@@ -206,22 +225,29 @@ class ModuleEquivalentsService:
         across all equivalent modules. If no equivalents, returns the
         individual module's stock.
 
+        Resolves all groups from one cached query and batches the stock
+        lookup for non-grouped type_ids into a single SQL query, avoiding
+        the previous per-type_id (N+1) round-trips.
+
         Args:
             type_ids: List of type IDs to look up
 
         Returns:
             Dict mapping type_id to aggregated stock
         """
-        result = {}
+        group_map = self._build_group_map()
 
+        result: dict[int, int] = {}
+        ungrouped: list[int] = []
         for type_id in type_ids:
-            group = self.get_equivalence_group(type_id)
+            group = group_map.get(type_id)
             if group:
                 result[type_id] = group.total_stock
             else:
-                # No equivalents, get individual stock
-                stock = self._get_single_module_stock(type_id)
-                result[type_id] = stock
+                ungrouped.append(type_id)
+
+        if ungrouped:
+            result.update(self._get_module_stocks(ungrouped))
 
         return result
 
@@ -232,30 +258,43 @@ class ModuleEquivalentsService:
             Dict mapping type_id to lowest price among in-stock equivalents.
             Only includes entries where a lower-priced equivalent exists.
         """
+        group_map = self._build_group_map()
         result = {}
         for type_id in type_ids:
-            group = self.get_equivalence_group(type_id)
+            group = group_map.get(type_id)
             if group and group.lowest_price > 0:
                 result[type_id] = group.lowest_price
         return result
 
-    def _get_single_module_stock(self, type_id: int) -> int:
-        """Get stock for a single module without equivalents."""
-        query = text("""
-            SELECT total_volume_remain
-            FROM marketstats
-            WHERE type_id = :type_id
-        """)
+    def _get_module_stocks(self, type_ids: list[int]) -> dict[int, int]:
+        """Batch-fetch marketstats stock for modules without equivalents.
 
+        A type_id the query returns no row for is a genuine 0 (not listed in
+        marketstats). But on a read failure the affected ids are OMITTED, not
+        reported as 0: a failed read must not make a stocked module look
+        out-of-stock (data-integrity rule). Callers treat a missing key as
+        unknown and leave existing values untouched.
+        """
+        if not type_ids:
+            return {}
+        query = text(
+            """
+            SELECT type_id, total_volume_remain
+            FROM marketstats
+            WHERE type_id IN :type_ids
+            """
+        ).bindparams(bindparam("type_ids", expanding=True))
         try:
-            with self._mkt_db.engine.connect() as conn:
-                result = conn.execute(query, {"type_id": type_id}).fetchone()
-                if result and result[0]:
-                    return int(result[0])
-                return 0
+            repo = BaseRepository(self._mkt_db, self._logger)
+            df = repo.read_df(query, params={"type_ids": [int(tid) for tid in type_ids]})
         except Exception as e:
-            self._logger.error(f"Failed to get stock for type_id {type_id}: {e}")
-            return 0
+            self._logger.error(f"Failed to batch-get stock for {len(type_ids)} modules: {e}")
+            return {}
+        result = {int(tid): 0 for tid in type_ids}
+        for _, row in df.iterrows():
+            if row["total_volume_remain"]:
+                result[int(row["type_id"])] = int(row["total_volume_remain"])
+        return result
 
     # -------------------------------------------------------------------------
     # Batch Operations
