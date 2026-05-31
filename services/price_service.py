@@ -957,7 +957,16 @@ class JitaPriceService:
         return df
 
     def _cache_result(self, type_id: TypeID, result: PriceResult) -> None:
-        """Store a price result with its cache timestamp."""
+        """Store a price result with its cache timestamp.
+
+        Note: failure results are cached too (negative caching), for the same
+        ``cache_ttl``. So after the backend repopulates an empty/stale
+        ``jita_prices`` table, an in-memory "unavailable" entry can persist for
+        up to ``cache_ttl`` seconds before it is re-fetched. This is accepted:
+        it bounds request pressure, and a stale unavailable is shown as a blank
+        ("—"), never a misleading 0. Lower ``cache_ttl`` if faster recovery is
+        needed.
+        """
         with _PRICE_CACHE_LOCK:
             self._price_cache[type_id] = CachedPriceEntry(
                 result=result,

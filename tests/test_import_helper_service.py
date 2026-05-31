@@ -741,3 +741,75 @@ class TestImportHelperService:
 
         assert result["category_id"].tolist() == [4, 7]
         assert result["category_name"].tolist() == ["Mineral", "Ship Equipment"]
+
+
+class TestJitaPriceHelpersReturnNaNForMissing:
+    """_get_jita_sell_price/_get_jita_buy_price: missing/failed -> NaN, not 0.
+
+    A 0 would make an unpriced item look free at Jita and fabricate a huge
+    import margin (data-integrity rule).
+    """
+
+    def test_missing_id_returns_nan(self):
+        from services.import_helper_service import (
+            _get_jita_buy_price,
+            _get_jita_sell_price,
+        )
+
+        assert pd.isna(_get_jita_sell_price({}, 34))
+        assert pd.isna(_get_jita_buy_price({}, 34))
+
+    def test_failed_result_returns_nan(self):
+        from services.import_helper_service import (
+            _get_jita_buy_price,
+            _get_jita_sell_price,
+        )
+
+        prices = {34: PriceResult.failure_result(34, "Not found")}
+        assert pd.isna(_get_jita_sell_price(prices, 34))
+        assert pd.isna(_get_jita_buy_price(prices, 34))
+
+    def test_successful_result_returns_value(self):
+        from services.import_helper_service import (
+            _get_jita_buy_price,
+            _get_jita_sell_price,
+        )
+
+        prices = {
+            34: PriceResult.success_result(
+                type_id=34, sell_price=20.0, buy_price=18.0,
+                source=PriceSource.JITA_FUZZWORK,
+            )
+        }
+        assert _get_jita_sell_price(prices, 34) == 20.0
+        assert _get_jita_buy_price(prices, 34) == 18.0
+
+
+class TestMissingJitaPriceIsNotFakeMargin:
+    """An item with a local price but no Jita price must not top the list."""
+
+    def test_item_without_jita_price_is_excluded_not_shown_as_fake_margin(self):
+        from services.import_helper_service import ImportHelperService
+
+        service = ImportHelperService(
+            Mock(), Mock(), DummyPriceService({}), _mock_market_repo({34: 150.0})
+        )
+        service._price_service = DummyPriceService({})  # no Jita price for 34
+        with patch.object(
+            service,
+            "_get_import_candidates",
+            return_value=pd.DataFrame({
+                "type_id": [34],
+                "type_name": ["Tritanium"],
+                "price": [30.0],
+                "volume_m3": [0.01],
+                "category_name": ["Mineral"],
+                "group_name": ["Mineral"],
+            }),
+        ):
+            base_df = service.fetch_base_data()
+            result = service.get_import_items(base_df)
+
+        # No Jita price -> profit is NaN, so the item must NOT masquerade as a
+        # screaming-margin opportunity; profitable_only (default) excludes it.
+        assert 34 not in result["type_id"].values
