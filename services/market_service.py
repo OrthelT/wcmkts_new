@@ -124,13 +124,7 @@ class MarketService:
         # Fetch only the requested rows — filtering and (for orders) the sell
         # aggregation happen in SQL via the repository, so the full
         # marketstats / marketorders tables are never loaded into pandas.
-        if hasattr(self._repo, "get_stats_for_type_ids"):
-            stats_df = self._repo.get_stats_for_type_ids(requested_ids)
-        else:
-            # Fallback for repositories without the targeted query (e.g. test mocks)
-            stats_df = self._repo.get_all_stats()
-            if stats_df is not None and not stats_df.empty:
-                stats_df = stats_df[stats_df["type_id"].isin(requested_ids)]
+        stats_df = self._repo.get_stats_for_type_ids(requested_ids)
         if stats_df is None or stats_df.empty:
             stats_df = pd.DataFrame(
                 columns=["type_id", "type_name", "min_price", "total_volume_remain"]
@@ -147,24 +141,7 @@ class MarketService:
                 errors="coerce",
             )
 
-        if hasattr(self._repo, "get_sell_order_summary"):
-            sell_summary = self._repo.get_sell_order_summary(requested_ids)
-        else:
-            # Fallback path for repositories without the targeted query.
-            orders_df = self._repo.get_all_orders()
-            if orders_df is None or orders_df.empty:
-                sell_summary = pd.DataFrame(
-                    columns=["type_id", "order_type_name", "sell_order_price", "sell_order_volume"]
-                )
-            else:
-                sell_orders = orders_df[
-                    (orders_df["is_buy_order"] == 0) & (orders_df["type_id"].isin(requested_ids))
-                ].copy()
-                sell_summary = sell_orders.groupby("type_id", as_index=False).agg(
-                    order_type_name=("type_name", "first"),
-                    sell_order_price=("price", "min"),
-                    sell_order_volume=("volume_remain", "sum"),
-                )
+        sell_summary = self._repo.get_sell_order_summary(requested_ids)
         if sell_summary is None or sell_summary.empty:
             sell_summary = pd.DataFrame(
                 columns=["type_id", "order_type_name", "sell_order_price", "sell_order_volume"]
@@ -217,17 +194,9 @@ class MarketService:
 
         # Order counts come from a SQL GROUP BY rather than loading the full
         # marketorders table just to count rows by is_buy_order.
-        if hasattr(self._repo, "get_order_counts"):
-            counts = self._repo.get_order_counts()
-            active_sell_orders = int(counts.get("active_sell_orders", 0))
-            active_buy_orders = int(counts.get("active_buy_orders", 0))
-        else:
-            orders_df = self._repo.get_all_orders()
-            active_sell_orders = 0
-            active_buy_orders = 0
-            if orders_df is not None and not orders_df.empty:
-                active_sell_orders = int((orders_df["is_buy_order"] == 0).sum())
-                active_buy_orders = int((orders_df["is_buy_order"] == 1).sum())
+        counts = self._repo.get_order_counts()
+        active_sell_orders = int(counts.get("active_sell_orders", 0))
+        active_buy_orders = int(counts.get("active_buy_orders", 0))
 
         last_updated = self._repo.get_update_time()
 
