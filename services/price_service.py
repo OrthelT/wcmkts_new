@@ -221,7 +221,6 @@ class FuzzworkProvider:
         """Batch fetch prices from Fuzzwork API."""
         if not type_ids:
             return BatchPriceResult()
-        logger.debug(f"Fuzzwork get_prices: {type_ids}")
         all_prices: dict[TypeID, PriceResult] = {}
         failed_ids: set[TypeID] = set()
         chunks = _chunked(type_ids, self.BATCH_SIZE)
@@ -476,7 +475,6 @@ class DatabasePriceProvider:
         return result.prices.get(type_id, PriceResult.failure_result(type_id, "Not found"))
 
     def get_prices(self, type_ids: list[TypeID]) -> BatchPriceResult:
-        logger.debug(f"DatabasePriceProvider get_prices: {type_ids}")
         if not type_ids:
             return BatchPriceResult(source=PriceSource.JITA_DATABASE)
 
@@ -487,7 +485,6 @@ class DatabasePriceProvider:
             ).bindparams(bindparam("ids", expanding=True))
             with self._db.engine.connect() as conn:
                 df = pd.read_sql_query(query, conn, params={"ids": list(type_ids)})
-            logger.debug(f"DatabasePriceProvider get_prices df: {df}")
             if not df.empty:
                 max_updated = df['last_updated'].max()
                 try:
@@ -795,7 +792,7 @@ class JitaPriceService:
         """
         Get Jita price for a single item.
 
-        Uses cache if available, otherwise fetches from providers.
+        Uses cache if available, otherwise fetches from database.
         """
         cached_result = self._get_cached_result(type_id)
         if cached_result is not None:
@@ -811,12 +808,7 @@ class JitaPriceService:
 
         Optimizes by only fetching uncached items.
 
-        Note: concurrent callers may both fetch the same uncached ids
-        (cache is checked then released before the API call).  This is
-        acceptable — Fuzzwork is idempotent and the second write simply
-        refreshes the same cache entry.
         """
-        logger.debug(f"JitaPriceService get_jita_prices: {type_ids}")
         # Dedupe first so large multibuy lists do not resend the same type IDs.
         unique_type_ids = list(dict.fromkeys(type_ids))
 
@@ -830,17 +822,16 @@ class JitaPriceService:
                 uncached.append(type_id)
                 continue
             cached[type_id] = cached_result
-        logger.debug(f"Cached: {cached}")
-        logger.debug(f"Uncached: {uncached}")
 
         # Fetch uncached
         if uncached:
-            logger.debug(f"Fetching uncached: {uncached}")
             result = self._jita_provider.get_prices(uncached)
             for type_id, price_result in result.prices.items():
                 self._cache_result(type_id, price_result)
             cached.update(result.prices)
-
+        # Note that the FuzzworkProvider is currentlu dissabled, however the plumbing is maintained in a dormant state in case 
+        # we ever want to wire it up again. The default to PriceSource.JITA_FUZZWORK here is impotent. All Jita price calls resolve
+        # to the database price provider. 
         return BatchPriceResult(
             prices=cached,
             source=PriceSource.JITA_FUZZWORK,
