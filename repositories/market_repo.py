@@ -230,16 +230,19 @@ def _get_stats_for_type_ids_impl(type_ids: list[int], db_alias: str = "wcmkt") -
 
 
 def _get_order_counts_impl(db_alias: str = "wcmkt") -> dict:
-    """Count active sell/buy orders via a SQL GROUP BY (no full-table load)."""
+    """Count active sell/buy orders via a SQL GROUP BY (no full-table load).
+
+    No try/except here: read_df() already attempts sync + remote-fallback
+    recovery and only raises on genuinely unrecoverable failures. Swallowing
+    that to {0, 0} would misreport a broken read as a real empty market
+    (data-integrity rule) — let it propagate so the caller can surface it. A
+    legitimately empty result (no rows) is still a true zero, handled below.
+    """
     repo = BaseRepository(DatabaseConfig(db_alias), logger)
     query = text(
         "SELECT is_buy_order, COUNT(*) AS n FROM marketorders GROUP BY is_buy_order"
     )
-    try:
-        df = repo.read_df(query)
-    except Exception as e:
-        logger.error(f"Failed to fetch order counts: {e}")
-        return {"active_sell_orders": 0, "active_buy_orders": 0}
+    df = repo.read_df(query)
     if df.empty:
         return {"active_sell_orders": 0, "active_buy_orders": 0}
     counts = df.set_index("is_buy_order")["n"].to_dict()

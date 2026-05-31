@@ -204,6 +204,12 @@ class ModuleEquivalentsService:
 
         Built from the single cached get_all_equivalence_groups() call so
         callers can resolve many type_ids without a per-item DB lookup.
+
+        Unlike get_equivalence_group(), this does NOT apply the _is_faction()
+        early-exit — it maps every member of every group. Current callers
+        pre-filter their inputs to faction type_ids (via
+        get_type_ids_with_equivalents()), so results match; a future caller
+        passing arbitrary type_ids would resolve any group member here.
         """
         group_map: dict[int, EquivalenceGroup] = {}
         for group in self.get_all_equivalence_groups():
@@ -261,7 +267,14 @@ class ModuleEquivalentsService:
         return result
 
     def _get_module_stocks(self, type_ids: list[int]) -> dict[int, int]:
-        """Batch-fetch marketstats stock for modules without equivalents."""
+        """Batch-fetch marketstats stock for modules without equivalents.
+
+        A type_id the query returns no row for is a genuine 0 (not listed in
+        marketstats). But on a read failure the affected ids are OMITTED, not
+        reported as 0: a failed read must not make a stocked module look
+        out-of-stock (data-integrity rule). Callers treat a missing key as
+        unknown and leave existing values untouched.
+        """
         if not type_ids:
             return {}
         query = text(
@@ -271,20 +284,17 @@ class ModuleEquivalentsService:
             WHERE type_id IN :type_ids
             """
         ).bindparams(bindparam("type_ids", expanding=True))
-        result = {int(tid): 0 for tid in type_ids}
         try:
             repo = BaseRepository(self._mkt_db, self._logger)
             df = repo.read_df(query, params={"type_ids": [int(tid) for tid in type_ids]})
-            for _, row in df.iterrows():
-                if row["total_volume_remain"]:
-                    result[int(row["type_id"])] = int(row["total_volume_remain"])
         except Exception as e:
             self._logger.error(f"Failed to batch-get stock for {len(type_ids)} modules: {e}")
+            return {}
+        result = {int(tid): 0 for tid in type_ids}
+        for _, row in df.iterrows():
+            if row["total_volume_remain"]:
+                result[int(row["type_id"])] = int(row["total_volume_remain"])
         return result
-
-    def _get_single_module_stock(self, type_id: int) -> int:
-        """Get stock for a single module without equivalents."""
-        return self._get_module_stocks([type_id]).get(type_id, 0)
 
     # -------------------------------------------------------------------------
     # Batch Operations
