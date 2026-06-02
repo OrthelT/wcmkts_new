@@ -98,6 +98,9 @@ def init_db():
         alias = key
         db_path = value
         db = DatabaseConfig(alias)
+        logger.debug("===========================")
+        logger.debug(f"alias: {alias}; path: {db.path}")
+        logger.debug("===========================")
 
         try:
             if verify_db_content(db_path):
