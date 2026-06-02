@@ -74,7 +74,6 @@
     database_file = "wcmktprod.db"
     turso_secret_key = "wcmktprod_turso"
 
-
 [markets.deployment]
     name = "4-HWWF - WinterCo Central Station"
     short_name = "4H-New"
@@ -85,20 +84,20 @@
     database_file = "wcmktnewkeep.db"
     turso_secret_key = "wcmktnewkeep_turso"
     
+[markets.market3]
+   name = "X47L-Q - Rogue Threshold"
+   short_name = "X47"
+    region_id = 10000023
+    system_id = 30001967
+    structure_id = 1041669946862
+    database_alias = "market3"
+    database_file = "wcmktnorth2.db"
+    turso_secret_key = "wcmktnorth_turso"
+
 [doctrine_override]
     doctrine_override_enabled = true
     override_market_alias = 'wcmktnewkeep'
     use_market_key = 'primary'
-
-#[markets.deployment]
-#   name = "X47L-Q - Rogue Threshold"
-#   short_name = "X47"
-#    region_id = 10000023
-#    system_id = 30001967
-#    structure_id = 1041669946862
-#    database_alias = "wcmktnorth"
-#    database_file = "wcmktnorth2.db"
-#    turso_secret_key = "wcmktnorth_turso"
 
 [db_paths]
     "wcmktprod" = "wcmktprod.db" #production database
@@ -107,6 +106,8 @@
     "build_cost" = "buildcost.db"
     "wcmkttest" = "wcmkttest.db" #testing db
     "wcmktnewkeep" = "wcmktnewkeep.db"
+    "market3" = "wcmktnorth2.db"
+
 
 [db_update]
   "frequency" = 1 # frequency of scheduled db updates in hours 
@@ -126,6 +127,7 @@
     "wcmktnewkeep" = "marketstats"
 #    "wcmktnorth" = "marketstats"
     "build_cost" = "buildcost"
+    "market3" = "marketstats"
 
 [env_db_aliases]
     "prod" = "wcmktprod"
@@ -133,7 +135,7 @@
 
 [env]
     env = "prod"
-    log_level = "INFO" #INFO or DEBUG (case sensitive)
+    log_level = "DEBUG" #INFO or DEBUG (case sensitive)
 
 [market]
     name = "4-HWWF"
