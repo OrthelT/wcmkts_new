@@ -63,18 +63,11 @@
     "72812" = 473
     # Hurricane Fleet Issue
     "33157" = 494
+# [markets]
+#  default = "primary"
+# valid_aliases = ["primary", "deployment", "market3"]
 
 [markets.primary]
-    name = "4-HWWF Platestar"
-    short_name = "4H-plates"
-    region_id = 10000003
-    system_id = 30000240
-    structure_id = 1053654548169
-    database_alias = "wcmktprod"
-    database_file = "wcmktprod.db"
-    turso_secret_key = "wcmktprod_turso"
-
-[markets.deployment]
     name = "4-HWWF - WinterCo Central Station"
     short_name = "4H-New"
     region_id = 10000003
@@ -84,7 +77,7 @@
     database_file = "wcmktnewkeep.db"
     turso_secret_key = "wcmktnewkeep_turso"
     
-[markets.market3]
+[markets.deployment]
    name = "X47L-Q - Rogue Threshold"
    short_name = "X47"
     region_id = 10000023
@@ -94,6 +87,17 @@
     database_file = "wcmktnorth2.db"
     turso_secret_key = "wcmktnorth_turso"
 
+[markets.market3]
+    name = "4-HWWF Platestar"
+    short_name = "4H-plates"
+    region_id = 10000003
+    system_id = 30000240
+    structure_id = 1053654548169
+    database_alias = "wcmktprod"
+    database_file = "wcmktprod.db"
+    turso_secret_key = "wcmktprod_turso"
+
+
 [doctrine_override]
     doctrine_override_enabled = true
     override_market_alias = 'wcmktnewkeep'
@@ -101,13 +105,11 @@
 
 [db_paths]
     "wcmktprod" = "wcmktprod.db" #production database
-#    "wcmktnorth" = "wcmktnorth2.db" #deployment market database
+    "market3" = "wcmktnorth2.db" #deployment market database
     "sde" = "sdelite.db"
     "build_cost" = "buildcost.db"
     "wcmkttest" = "wcmkttest.db" #testing db
     "wcmktnewkeep" = "wcmktnewkeep.db"
-    "market3" = "wcmktnorth2.db"
-
 
 [db_update]
   "frequency" = 1 # frequency of scheduled db updates in hours 
