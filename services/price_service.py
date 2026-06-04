@@ -476,7 +476,6 @@ class DatabasePriceProvider:
         return result.prices.get(type_id, PriceResult.failure_result(type_id, "Not found"))
 
     def get_prices(self, type_ids: list[TypeID]) -> BatchPriceResult:
-        logger.debug(f"DatabasePriceProvider get_prices: {type_ids}")
         if not type_ids:
             return BatchPriceResult(source=PriceSource.JITA_DATABASE)
 
@@ -487,7 +486,6 @@ class DatabasePriceProvider:
             ).bindparams(bindparam("ids", expanding=True))
             with self._db.engine.connect() as conn:
                 df = pd.read_sql_query(query, conn, params={"ids": list(type_ids)})
-            logger.debug(f"DatabasePriceProvider get_prices df: {df}")
             if not df.empty:
                 max_updated = df['last_updated'].max()
                 try:
@@ -816,7 +814,6 @@ class JitaPriceService:
         acceptable — Fuzzwork is idempotent and the second write simply
         refreshes the same cache entry.
         """
-        logger.debug(f"JitaPriceService get_jita_prices: {type_ids}")
         # Dedupe first so large multibuy lists do not resend the same type IDs.
         unique_type_ids = list(dict.fromkeys(type_ids))
 
@@ -830,12 +827,9 @@ class JitaPriceService:
                 uncached.append(type_id)
                 continue
             cached[type_id] = cached_result
-        logger.debug(f"Cached: {cached}")
-        logger.debug(f"Uncached: {uncached}")
 
         # Fetch uncached
         if uncached:
-            logger.debug(f"Fetching uncached: {uncached}")
             result = self._jita_provider.get_prices(uncached)
             for type_id, price_result in result.prices.items():
                 self._cache_result(type_id, price_result)
