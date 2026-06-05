@@ -1,10 +1,11 @@
 # Winter Coalition Market Stats Settings
-# This file contains configuration for ship role categorization and other settings
-
+# Global setting for handeling chart outliers
 [outliers]
     # Method: none, remove, cap
     default_method = 'none'
 
+
+#doctrine role catagoriezation used with doctrine_report page.
 [ship_roles]
     # DPS - Primary damage dealers
     dps = [
@@ -63,10 +64,9 @@
     "72812" = 473
     # Hurricane Fleet Issue
     "33157" = 494
-# [markets]
-#  default = "primary"
-# valid_aliases = ["primary", "deployment", "market3"]
 
+
+# Market configurations
 [markets.primary]
     name = "4-HWWF - WinterCo Central Station"
     short_name = "4H-New"
@@ -78,8 +78,8 @@
     turso_secret_key = "wcmktnewkeep_turso"
     
 [markets.deployment]
-   name = "X47L-Q - Rogue Threshold"
-   short_name = "X47"
+    name = "X47L-Q - Rogue Threshold"
+    short_name = "X47"
     region_id = 10000023
     system_id = 30001967
     structure_id = 1041669946862
@@ -95,49 +95,48 @@
     structure_id = 1053654548169
     database_alias = "wcmktprod"
     database_file = "wcmktprod.db"
-    turso_secret_key = "wcmktprod_turso"
+    turso_secret_key = "market3_turso"
 
+# Maps faction modules to identical substitutes in fit supply calculations. 
+[module_strategy]
+  use_equivalent = true
 
+# Use to mirror doctrine assignments for two markets. 
 [doctrine_override]
     doctrine_override_enabled = true
-    override_market_alias = 'wcmktnewkeep'
+    override_market_alias = 'wcmktprod'
     use_market_key = 'primary'
 
+# database configurations, including utility databases other than for markets. 
 [db_paths]
-    "wcmktprod" = "wcmktprod.db" #production database
-    "market3" = "wcmktnorth2.db" #deployment market database
+    "wcmktprod" = "wcmktprod.db"
+    "market3" = "wcmktnorth2.db"
     "sde" = "sdelite.db"
     "build_cost" = "buildcost.db"
-    "wcmkttest" = "wcmkttest.db" #testing db
+    "wcmkttest" = "wcmkttest.db"
     "wcmktnewkeep" = "wcmktnewkeep.db"
 
 [db_update]
   "frequency" = 1 # frequency of scheduled db updates in hours 
   "time" = 20 # minutes after the hour of scheduled updates 
 
-# Maps db alias → secrets.toml section name for Turso credentials.
-# Only needed when the secret key doesn't follow the {alias}_turso pattern.
 [db_turso_keys]
     "sde" = "sdelite_turso"
     "build_cost" = "buildcost_turso"
 
-# Maps db alias → table_name value to probe in its `updatelog` table for
-# post-sync freshness validation. Aliases without an entry skip the probe
-# (sync is trusted as soon as libsql.connect.sync() returns).
 [freshness_probes]
     "wcmktprod" = "marketstats"
     "wcmktnewkeep" = "marketstats"
-#    "wcmktnorth" = "marketstats"
     "build_cost" = "buildcost"
     "market3" = "marketstats"
 
 [env_db_aliases]
-    "prod" = "wcmktprod"
+    "prod" = "wcmktnewkeep"
     "dev" = "wcmkttest"
 
 [env]
     env = "prod"
-    log_level = "DEBUG" #INFO or DEBUG (case sensitive)
+    log_level = "INFO" #INFO or DEBUG (case sensitive)
 
 [market]
     name = "4-HWWF"
@@ -159,5 +158,4 @@
     session_ttl_minutes = 480
     oauth_state_ttl_minutes = 15
 
-[module_strategy]
-  use_equivalent = true
+

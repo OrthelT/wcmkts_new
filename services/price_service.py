@@ -659,6 +659,7 @@ class FallbackPriceProvider:
         """
         all_prices: dict[TypeID, PriceResult] = {}
         remaining_ids = set(type_ids)
+        batch_source: PriceSource | None = None
 
         for provider in self._providers:
             if not remaining_ids:
@@ -666,6 +667,9 @@ class FallbackPriceProvider:
 
             try:
                 result = provider.get_prices(list(remaining_ids))
+                if batch_source is None:
+                    # Report the source of the primary provider
+                    batch_source = result.source
 
                 for type_id, price_result in result.prices.items():
                     if not price_result.has_sell_price and not price_result.has_buy_price:
@@ -692,7 +696,7 @@ class FallbackPriceProvider:
 
         return BatchPriceResult(
             prices=all_prices,
-            source=PriceSource.JITA_FUZZWORK,  # Primary source
+            source=batch_source or PriceSource.JITA_DATABASE,
             failed_ids=failed_ids
         )
 
@@ -803,12 +807,7 @@ class JitaPriceService:
         return result
 
     def get_jita_prices(self, type_ids: list[TypeID]) -> BatchPriceResult:
-        """
-        Get Jita prices for multiple items.
 
-        Optimizes by only fetching uncached items.
-
-        """
         # Dedupe first so large multibuy lists do not resend the same type IDs.
         unique_type_ids = list(dict.fromkeys(type_ids))
 
@@ -823,18 +822,18 @@ class JitaPriceService:
                 continue
             cached[type_id] = cached_result
 
-        # Fetch uncached
+        # Fetch uncached. The Fuzzwork/Janice live-API providers are intentionally disabled since we now resolve on the backend. 
+        # The plumbing is maintained in case Jita prices are needed by a future feature. 
+        batch_source = PriceSource.JITA_DATABASE
         if uncached:
             result = self._jita_provider.get_prices(uncached)
+            batch_source = result.source
             for type_id, price_result in result.prices.items():
                 self._cache_result(type_id, price_result)
             cached.update(result.prices)
-        # Note that the FuzzworkProvider is currentlu dissabled, however the plumbing is maintained in a dormant state in case 
-        # we ever want to wire it up again. The default to PriceSource.JITA_FUZZWORK here is impotent. All Jita price calls resolve
-        # to the database price provider. 
         return BatchPriceResult(
             prices=cached,
-            source=PriceSource.JITA_FUZZWORK,
+            source=batch_source,
             failed_ids=[tid for tid in unique_type_ids if tid not in cached or not cached[tid].success]
         )
 

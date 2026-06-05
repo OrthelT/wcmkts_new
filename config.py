@@ -8,7 +8,6 @@ import libsql
 from logging_config import setup_logging
 import sqlite3 as sql
 from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session
 import threading
 from contextlib import suppress
@@ -21,8 +20,6 @@ logger = setup_logging(__name__)
 # =============================================================================
 
 # Default ship target stock level when not explicitly configured
-# This value is used as the fallback when a fit or ship doesn't have a
-# target defined in the ship_targets table
 DEFAULT_SHIP_TARGET = 20
 
 # =============================================================================
@@ -39,6 +36,27 @@ def get_settings() -> dict:
     return SettingsService().settings_dict
 
 
+def _resolve_turso_section(
+    alias: str,
+    market_secret_keys: dict[str, str],
+    turso_key_overrides: dict[str, str],
+) -> str:
+    """Return the secrets.toml section name holding ``alias``'s Turso creds.
+
+    Resolution order (single source of truth first):
+      1. Market hubs: the ``turso_secret_key`` their MarketConfig advertises in
+         settings.toml ``[markets.*]`` — so the config the app reasons about and
+         the config that drives sync can never drift.
+      2. Utility DBs: a ``[db_turso_keys]`` override (e.g. sde -> sdelite_turso).
+      3. Convention: ``{alias}_turso``.
+    """
+    return (
+        market_secret_keys.get(alias)
+        or turso_key_overrides.get(alias)
+        or f"{alias}_turso"
+    )
+
+
 class DatabaseConfig:
     settings = get_settings()
     # master config variable for the database to use
@@ -47,14 +65,21 @@ class DatabaseConfig:
     # Build database paths dynamically from settings.toml [db_paths]
     _db_paths = {alias: path for alias, path in settings["db_paths"].items()}
 
-    # Build Turso credentials dynamically — not all aliases need Turso
-    # Use [db_turso_keys] overrides where secret name ≠ {alias}_turso
     _turso_key_overrides = settings.get("db_turso_keys", {})
+    try:
+        from settings_service import get_all_market_configs
+        _market_secret_keys = {
+            cfg.database_alias: cfg.turso_secret_key
+            for cfg in get_all_market_configs().values()
+        }
+    except Exception as _exc:  # bad/missing [markets.*] — degrade, but make it visible
+        logger.error("Failed to load market Turso secret keys: %s", _exc)
+        _market_secret_keys = {}
     _db_turso_urls: dict[str, str] = {}
     _db_turso_auth_tokens: dict[str, str] = {}
     for _alias in _db_paths:
         _turso_key = f"{_alias}_turso"
-        _secret_key = _turso_key_overrides.get(_alias, _turso_key)
+        _secret_key = _resolve_turso_section(_alias, _market_secret_keys, _turso_key_overrides)
         try:
             _db_turso_urls[_turso_key] = st.secrets[_secret_key].url
             _db_turso_auth_tokens[_turso_key] = st.secrets[_secret_key].token
