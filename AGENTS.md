@@ -304,6 +304,11 @@ If a context lookup fails (e.g. active market key, hub selection, language), ret
 
 The only acceptable default is when the context module is genuinely unavailable (`ImportError` in test/CLI environments), not as a catch-all for unexpected runtime errors.
 
+### Global Configuration Rule
+**For global configuration parameters, always use the `settings.toml` → `settings_service` path unless there is a strong reason to configure it separately.** Do not introduce a parallel config mechanism (a hard-coded constant, a second mapping, an env-only switch) when the value belongs alongside the rest of app config. Parallel mechanisms drift: the config the app reasons about and the config that actually drives behavior diverge, and the gap is invisible until something silently breaks.
+
+Concretely, a config value should have a single source of truth that every consumer reads. For market hubs this means `DatabaseConfig` resolves Turso credentials from the same `MarketConfig.turso_secret_key` the rest of the app reads (see `config._resolve_turso_section`), rather than a separate `{alias}_turso` convention that can disagree with the market config. Add a `SettingsService` accessor for new global params; don't scatter `settings_dict[...]` reads or second copies of a default.
+
 ### Coding Style & Naming Conventions
 - **Python style**: PEP 8, 4-space indents, max line length 100
 - **Naming conventions**:
@@ -434,7 +439,7 @@ with DatabaseConfig("wcmktprod").engine.connect() as conn:
 
 ### Current Test Coverage
 The test suite covers repositories, services, database config, i18n, parser, pricer/fit-availability, and infrastructure:
-- 329 tests + 16 subtests passing (`uv run pytest -q`)
+- 501 tests + 22 subtests passing (`uv run pytest -q`)
 
 ## Commit & Pull Request Guidelines
 
@@ -674,7 +679,7 @@ from state.session_state import ss_get  # ✗ state!
 - **`pages/`**: Streamlit application pages
 - **`pages/components/`**: Extracted Streamlit rendering components (market_components, dashboard_components, db_refresh, page_chrome)
 - **`parser/`**: EFT fitting and item list parser (open source contribution)
-- **`tests/`**: pytest unit tests (329 tests, 16 subtests as of v0.6.1)
+- **`tests/`**: pytest unit tests (501 tests, 22 subtests)
 - **`docs/`**: Documentation
 - **`logs/`**: Application logs (git-ignored)
 - **`images/`**: UI assets

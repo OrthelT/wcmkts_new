@@ -1,9 +1,9 @@
 """Lightweight CLI for wcmkts database operations.
 
 Usage:
-    mkts sync              # sync both market databases (primary + deployment)
-    mkts sync --primary    # sync primary market only (4-HWWF)
-    mkts sync --deployment # sync deployment market only (B-9C24)
+    mkts sync              # sync all configured market databases
+    mkts sync --primary    # sync primary market only (4-HWWF WinterCo Central Station)
+    mkts sync --deployment # sync deployment market only (X47L-Q Rogue Threshold)
     mkts sync --north      # alias for --deployment
     mkts seed-demo-data    # create local demo databases for browser testing
     mkts log-level DEBUG   # set log level in settings.toml
@@ -52,6 +52,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
         t0 = perf_counter()
         try:
             db = DatabaseConfig(alias)
+            print(f"alias: {db.alias}; path: {db.path}; url: {db.turso_url}")
             ok = db.sync()
             elapsed = round((perf_counter() - t0) * 1000)
             if ok:

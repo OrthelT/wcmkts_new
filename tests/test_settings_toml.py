@@ -148,6 +148,40 @@ class TestSettingsToml(unittest.TestCase):
                 # This is informational - may or may not be an error depending on requirements
                 pass
 
+    def test_every_market_database_alias_is_in_db_paths(self):
+        """Each [markets.*] database_alias must have a [db_paths] entry.
+
+        Without it, DatabaseConfig(alias) raises 'Unknown database alias' the
+        moment a user selects that hub. Guards against the alias-typo class of
+        bug when market hubs are added or reshuffled.
+        """
+        markets = self.settings.get("markets", {})
+        db_paths = self.settings.get("db_paths", {})
+        self.assertTrue(markets, "no [markets.*] sections found")
+        for key, vals in markets.items():
+            with self.subTest(market=key):
+                self.assertIn(
+                    vals["database_alias"],
+                    db_paths,
+                    f"market '{key}' database_alias "
+                    f"'{vals['database_alias']}' is missing from [db_paths]",
+                )
+
+    def test_every_market_declares_a_turso_secret_key(self):
+        """Each market hub must declare a non-empty turso_secret_key.
+
+        It is the sole source DatabaseConfig uses to resolve that hub's Turso
+        credentials (see config._resolve_turso_section). A missing key means the
+        hub silently never syncs.
+        """
+        markets = self.settings.get("markets", {})
+        for key, vals in markets.items():
+            with self.subTest(market=key):
+                self.assertTrue(
+                    vals.get("turso_secret_key"),
+                    f"market '{key}' is missing turso_secret_key",
+                )
+
     def test_settings_compatible_with_categorize_function(self):
         """Test that settings structure works with the categorize_ship_by_role usage pattern."""
         ship_roles = self.settings['ship_roles']
