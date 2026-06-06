@@ -1,4 +1,4 @@
-# Winter Coalition Market App (v.0.6.2)
+# Winter Coalition Market App (v.0.6.3)
 A Streamlit application for viewing EVE Online market statistics for Winter Coalition. This tool provides real-time market data analysis, historical price tracking, and fitting information for various items in EVE Online markets.
 
 SUPPORT: Join the Discord for support https://discord.gg/BxatJE572Y
@@ -7,7 +7,11 @@ CONTRIBUTING: Contributors welcome. This project is fully open source under MIT 
 
 
 # UPDATES:
-## version 0.6.2 (unreleased)
+## version 0.6.3
+### Feature 
+Adds support for three markets (primary, deployment, market3)
+
+## version 0.6.2
 ### New Features
 - **Fit Availability hero on Pricer**: Pasting an EFT fit now shows a focal `fits-available` count, three supporting metrics, a progress bar, and a red/orange bottleneck callout for the lowest-stock module -- a Janice-style layout that answers "how many of this fit can I buy right now?" without forcing the user to read the per-item table.
 - **Faction-equivalent aggregation** on the pricer (toggle, default on): substitutes faction-equivalent modules into stock counts where an equivalence group exists.
