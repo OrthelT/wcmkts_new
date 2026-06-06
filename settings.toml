@@ -83,7 +83,7 @@
     region_id = 10000023
     system_id = 30001967
     structure_id = 1041669946862
-    database_alias = "market3"
+    database_alias = "wcmktnorth"
     database_file = "wcmktnorth2.db"
     turso_secret_key = "wcmktnorth_turso"
 
@@ -110,7 +110,7 @@
 # database configurations, including utility databases other than for markets. 
 [db_paths]
     "wcmktprod" = "wcmktprod.db"
-    "market3" = "wcmktnorth2.db"
+    "wcmktnorth" = "wcmktnorth2.db"
     "sde" = "sdelite.db"
     "build_cost" = "buildcost.db"
     "wcmkttest" = "wcmkttest.db"
@@ -128,7 +128,7 @@
     "wcmktprod" = "marketstats"
     "wcmktnewkeep" = "marketstats"
     "build_cost" = "buildcost"
-    "market3" = "marketstats"
+    "wcmktnorth" = "marketstats"
 
 [env_db_aliases]
     "prod" = "wcmktnewkeep"

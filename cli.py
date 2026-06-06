@@ -52,6 +52,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
         t0 = perf_counter()
         try:
             db = DatabaseConfig(alias)
+            print(f"alias: {db.alias}; path: {db.path}; url: {db.turso_url}")
             ok = db.sync()
             elapsed = round((perf_counter() - t0) * 1000)
             if ok:
