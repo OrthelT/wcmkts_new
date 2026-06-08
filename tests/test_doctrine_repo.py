@@ -322,3 +322,89 @@ class TestLoadPreferredFits:
         assert result == {72812: 473, 33157: 494}
         assert all(isinstance(k, int) for k in result)
         assert all(isinstance(v, int) for v in result.values())
+
+
+# ---------------------------------------------------------------------------
+# get_target_quantities_with_cache (market-scoped doctrine demand)
+# ---------------------------------------------------------------------------
+
+class TestGetTargetQuantitiesWithCache:
+    """The aggregation must be restricted to the active market's fits, mirroring
+    get_all_fits_with_cache — other-hub fits must not inflate target_qty."""
+
+    @staticmethod
+    def _fits_df():
+        return pd.DataFrame([
+            {"fit_id": 1, "market_flag": "primary"},
+            {"fit_id": 2, "market_flag": "both"},
+            {"fit_id": 3, "market_flag": "secondary"},  # other hub — must be excluded
+        ])
+
+    @staticmethod
+    def _agg_df():
+        return pd.DataFrame([
+            {"type_id": 100, "target_qty": 50},
+            {"type_id": 200, "target_qty": 30},
+        ])
+
+    def _call(self, reader, market_key="primary", override=None, db_alias="test_a"):
+        from repositories.doctrine_repo import get_target_quantities_with_cache
+
+        with patch("repositories.doctrine_repo.BaseRepository", return_value=reader), \
+             patch("repositories.doctrine_repo.DatabaseConfig"), \
+             patch("repositories.doctrine_repo.get_doctrine_override", return_value=override):
+            # __wrapped__ bypasses the st.cache_data decorator (see TestLoadPreferredFits).
+            return get_target_quantities_with_cache.__wrapped__(db_alias=db_alias, market_key=market_key)
+
+    def test_excludes_other_market_fits(self):
+        reader = MagicMock()
+        reader.read_df.side_effect = [self._fits_df(), self._agg_df()]
+
+        result = self._call(reader, market_key="primary", override=None)
+
+        # Aggregation (2nd read_df call) must receive only primary + both fit_ids.
+        agg_params = reader.read_df.call_args_list[1].kwargs["params"]
+        assert sorted(int(x) for x in agg_params["fit_ids"]) == [1, 2]
+        assert list(result["type_id"]) == [100, 200]
+
+    def test_override_includes_extra_market_flag(self):
+        reader = MagicMock()
+        reader.read_df.side_effect = [self._fits_df(), self._agg_df()]
+
+        self._call(reader, market_key="primary", override="secondary", db_alias="test_b")
+
+        agg_params = reader.read_df.call_args_list[1].kwargs["params"]
+        assert sorted(int(x) for x in agg_params["fit_ids"]) == [1, 2, 3]
+
+    def test_no_market_flag_column_falls_back_to_all_fits(self):
+        reader = MagicMock()
+        fits_no_flag = pd.DataFrame([{"fit_id": 1}, {"fit_id": 2}, {"fit_id": 3}])
+        reader.read_df.side_effect = [fits_no_flag, self._agg_df()]
+
+        self._call(reader, market_key="primary", override=None, db_alias="test_c")
+
+        agg_params = reader.read_df.call_args_list[1].kwargs["params"]
+        assert sorted(int(x) for x in agg_params["fit_ids"]) == [1, 2, 3]
+
+    def test_no_valid_fits_returns_empty_without_aggregating(self):
+        reader = MagicMock()
+        # Only other-market fits, no override -> nothing valid.
+        reader.read_df.side_effect = [
+            pd.DataFrame([{"fit_id": 3, "market_flag": "secondary"}])
+        ]
+
+        result = self._call(reader, market_key="primary", override=None, db_alias="test_d")
+
+        assert result.empty
+        assert list(result.columns) == ["type_id", "target_qty"]
+        # The aggregation query must NOT run when there are no valid fits.
+        assert reader.read_df.call_count == 1
+
+    def test_returns_empty_schema_on_exception(self):
+        reader = MagicMock()
+        reader.read_df.side_effect = Exception("db down")
+
+        result = self._call(reader, market_key="primary", override=None, db_alias="test_e")
+
+        assert result.empty
+        assert list(result.columns) == ["type_id", "target_qty"]
