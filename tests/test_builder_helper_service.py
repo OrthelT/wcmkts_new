@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-from services.builder_helper_service import BuilderHelperService
+from services.builder_helper_service import BuilderHelperService, _compute_need
 from services.price_service import BatchPriceResult, PriceResult, PriceSource
 
 
@@ -293,4 +293,127 @@ class TestBuilderHelperService:
         assert row["item_name"] == "Stats Name"
         assert row["group"] == "Stats Group"
         assert row["category"] == "Stats Cat"
+        assert mock_async_client.call_count == 0
+
+
+class TestComputeNeed:
+    def test_doctrine_item_below_target_returns_shortfall(self):
+        # current_stock < target_qty -> build the shortfall.
+        assert _compute_need(current_stock=30, target_qty=100, avg_daily=3.0, min_days=7) == 70
+
+    def test_doctrine_item_at_or_above_target_returns_zero(self):
+        assert _compute_need(current_stock=80, target_qty=50, avg_daily=8.0, min_days=7) == 0
+
+    def test_non_doctrine_item_covers_min_days(self):
+        # target_qty == 0 -> build enough to cover min_days of sales, net of stock.
+        # round(5 * 7) - 10 == 25
+        assert _compute_need(current_stock=10, target_qty=0, avg_daily=5.0, min_days=7) == 25
+
+    def test_non_doctrine_item_already_covered_returns_zero(self):
+        assert _compute_need(current_stock=100, target_qty=0, avg_daily=5.0, min_days=7) == 0
+
+    def test_non_doctrine_with_zero_min_days_returns_zero(self):
+        assert _compute_need(current_stock=0, target_qty=0, avg_daily=5.0, min_days=0) == 0
+
+
+class TestBuilderDataSupplyColumns:
+    @patch("httpx.AsyncClient", side_effect=AssertionError("EverRef must not be called"))
+    def test_supply_columns_populated_for_each_scenario(self, mock_async_client):
+        doctrine_short = 100
+        doctrine_met = 200
+        non_doctrine = 300
+
+        market_repo = MagicMock()
+        build_cost_repo = MagicMock()
+        doctrine_repo = MagicMock()
+        build_cost_repo.get_builder_cost_catalog.return_value = pd.DataFrame(
+            [
+                _catalog_row(doctrine_short, 1_000_000.0),
+                _catalog_row(doctrine_met, 1_000_000.0),
+                _catalog_row(non_doctrine, 1_000_000.0),
+            ]
+        )
+        market_repo.get_watchlist.return_value = pd.DataFrame(
+            [
+                _watchlist_row(doctrine_short, "Short"),
+                _watchlist_row(doctrine_met, "Met"),
+                _watchlist_row(non_doctrine, "Other"),
+            ]
+        )
+        market_repo.get_all_stats.return_value = pd.DataFrame(
+            [
+                {"type_id": doctrine_short, "price": 2_000_000.0, "avg_price": 2_000_000.0, "total_volume_remain": 30},
+                {"type_id": doctrine_met, "price": 2_000_000.0, "avg_price": 2_000_000.0, "total_volume_remain": 80},
+                {"type_id": non_doctrine, "price": 2_000_000.0, "avg_price": 2_000_000.0, "total_volume_remain": 10},
+            ]
+        )
+        market_repo.get_30day_volume_metrics.return_value = pd.DataFrame(
+            [
+                {"type_id": doctrine_short, "volume_30d": 90.0, "avg_volume_30d": 3.0},
+                {"type_id": doctrine_met, "volume_30d": 240.0, "avg_volume_30d": 8.0},
+                {"type_id": non_doctrine, "volume_30d": 150.0, "avg_volume_30d": 5.0},
+            ]
+        )
+        doctrine_repo.get_target_quantities.return_value = pd.DataFrame(
+            [
+                {"type_id": doctrine_short, "target_qty": 100},
+                {"type_id": doctrine_met, "target_qty": 50},
+            ]
+        )
+
+        price_service = _make_price_service({
+            doctrine_short: 1_500_000.0,
+            doctrine_met: 1_500_000.0,
+            non_doctrine: 1_500_000.0,
+        })
+
+        service = BuilderHelperService(
+            market_repo, price_service, build_cost_repo, doctrine_repo=doctrine_repo
+        )
+        result = service.get_builder_data(min_days=7).set_index("type_id")
+
+        # Doctrine item below target -> need = 100 - 30.
+        short = result.loc[doctrine_short]
+        assert short["current_stock"] == 30
+        assert short["target_qty"] == 100
+        assert short["days"] == pytest.approx(10.0)  # 30 / 3.0
+        assert short["need"] == 70
+
+        # Doctrine item at/above target -> need = 0.
+        met = result.loc[doctrine_met]
+        assert met["current_stock"] == 80
+        assert met["target_qty"] == 50
+        assert met["need"] == 0
+
+        # Non-doctrine item -> cover min_days: round(5 * 7) - 10 = 25.
+        other = result.loc[non_doctrine]
+        assert other["current_stock"] == 10
+        assert other["target_qty"] == 0
+        assert other["days"] == pytest.approx(2.0)  # 10 / 5.0
+        assert other["need"] == 25
+
+        assert mock_async_client.call_count == 0
+
+    @patch("httpx.AsyncClient", side_effect=AssertionError("EverRef must not be called"))
+    def test_days_blank_without_recent_sales(self, mock_async_client):
+        type_id = 24698
+        market_repo = MagicMock()
+        build_cost_repo = MagicMock()
+        build_cost_repo.get_builder_cost_catalog.return_value = pd.DataFrame(
+            [_catalog_row(type_id, 1_000_000.0)]
+        )
+        market_repo.get_watchlist.return_value = pd.DataFrame([_watchlist_row(type_id, "Item")])
+        market_repo.get_all_stats.return_value = pd.DataFrame(
+            [{"type_id": type_id, "price": 2_000_000.0, "avg_price": 2_000_000.0, "total_volume_remain": 40}]
+        )
+        market_repo.get_30day_volume_metrics.return_value = pd.DataFrame(
+            [{"type_id": type_id, "volume_30d": 0.0, "avg_volume_30d": 0.0}]
+        )
+        price_service = _make_price_service({type_id: 1_500_000.0})
+
+        service = BuilderHelperService(market_repo, price_service, build_cost_repo)
+        row = service.get_builder_data(min_days=7).iloc[0]
+
+        assert row["current_stock"] == 40
+        assert row["days"] is None  # no avg daily volume -> undefined cover, not 0
         assert mock_async_client.call_count == 0

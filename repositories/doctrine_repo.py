@@ -62,6 +62,7 @@ class DoctrineRepository:
     - `get_fit_by_id(fit_id)`: Get all items for a specific fit
     - `get_fits_by_type_id(type_id)`: Get all fits containing a specific type
     - `get_all_targets()`: Get all ship targets
+    - `get_target_quantities()`: Get total doctrine demand (MAX fit_qty*ship_target) per type_id
     - `get_target_by_fit_id(fit_id)`: Get target stock level for a specific fit
     - `get_target_by_ship_id(ship_id)`: Get target stock level for a specific ship type
     - `get_fit_name(fit_id)`: Get the display name for a fit
@@ -127,6 +128,9 @@ class DoctrineRepository:
 
     def get_all_targets(self) -> pd.DataFrame:
         return get_all_targets_with_cache(self._db.alias)
+
+    def get_target_quantities(self) -> pd.DataFrame:
+        return get_target_quantities_with_cache(self._db.alias)
 
     def get_target_by_fit_id(self, fit_id: int, default: int = DEFAULT_SHIP_TARGET) -> int:
         return get_target_by_fit_id_with_cache(fit_id, default, self._db.alias)
@@ -626,6 +630,29 @@ def get_all_targets_with_cache(db_alias: str = "wcmkt") -> pd.DataFrame:
     except Exception as e:
         logger.error(f"Failed to get all targets: {e}")
         return pd.DataFrame()
+
+@st.cache_data(ttl=600, show_spinner="Getting doctrine target quantities...")
+def get_target_quantities_with_cache(db_alias: str = "wcmkt") -> pd.DataFrame:
+    """Total doctrine demand per type_id: MAX(fit_qty * ship_target) across the
+    fits that use each type. Joins doctrines to ship_targets on fit_id.
+
+    Returns a DataFrame with columns: type_id, target_qty.
+    """
+    logger.debug("Getting doctrine target quantities...")
+    query = text(
+        """
+        SELECT d.type_id, MAX(d.fit_qty * t.ship_target) AS target_qty
+        FROM doctrines d
+        JOIN ship_targets t ON d.fit_id = t.fit_id
+        GROUP BY d.type_id
+        """
+    )
+    reader = BaseRepository(DatabaseConfig(db_alias), logger)
+    try:
+        return reader.read_df(query)
+    except Exception as e:
+        logger.error(f"Failed to get doctrine target quantities: {e}")
+        return pd.DataFrame(columns=["type_id", "target_qty"])
 
 @st.cache_data(ttl=600, show_spinner="Getting target for fit {fit_id}...")
 def get_target_by_fit_id_with_cache(fit_id: int, default: int = DEFAULT_SHIP_TARGET, db_alias: str = "wcmkt") -> int:

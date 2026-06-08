@@ -477,6 +477,12 @@ def get_low_stock_column_config(language_code: str = "en") -> dict:
 def get_builder_helper_column_config(language_code: str = "en") -> dict:
     """Get column configuration for Builder Helper table display."""
     return {
+        "select": st.column_config.CheckboxColumn(
+            translate_text(language_code, "common.select"),
+            help=translate_text(language_code, "builder_helper.column_select_help"),
+            default=False,
+            width="small",
+        ),
         "type_id": st.column_config.NumberColumn(
             "ID",
             format="%d",
@@ -533,6 +539,26 @@ def get_builder_helper_column_config(language_code: str = "en") -> dict:
         "volume_30d": st.column_config.NumberColumn(
             translate_text(language_code, "builder_helper.column_volume_30d"),
             help=translate_text(language_code, "builder_helper.column_volume_30d_help"),
+            format="localized",
+        ),
+        "current_stock": st.column_config.NumberColumn(
+            translate_text(language_code, "builder_helper.column_current_stock"),
+            help=translate_text(language_code, "builder_helper.column_current_stock_help"),
+            format="localized",
+        ),
+        "days": st.column_config.NumberColumn(
+            translate_text(language_code, "builder_helper.column_days"),
+            help=translate_text(language_code, "builder_helper.column_days_help"),
+            format="%.1f",
+        ),
+        "target_qty": st.column_config.NumberColumn(
+            translate_text(language_code, "builder_helper.column_target_qty"),
+            help=translate_text(language_code, "builder_helper.column_target_qty_help"),
+            format="localized",
+        ),
+        "need": st.column_config.NumberColumn(
+            translate_text(language_code, "builder_helper.column_need"),
+            help=translate_text(language_code, "builder_helper.column_need_help"),
             format="localized",
         ),
     }
