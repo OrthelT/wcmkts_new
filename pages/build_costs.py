@@ -14,6 +14,7 @@ from services.build_cost_service import (
     get_build_cost_service,
     PRICE_SOURCE_MAP,
 )
+from pages.components.layout import render_legal_notice
 from logging_config import setup_logging
 import pathlib
 
@@ -881,6 +882,7 @@ def main():
             unsafe_allow_html=True,
         )
 
+    render_legal_notice()
 
 if __name__ == "__main__":
     main()

@@ -18,6 +18,7 @@ from pages.components.market_components import (
     get_fitting_col_config,
     get_display_formats,
 )
+from pages.components.layout import render_legal_notice
 from services import get_price_service
 from services.type_name_localization import (
     apply_localized_names,
@@ -700,6 +701,7 @@ def main():
         st.markdown(f"### {translate_text(language_code, 'nav.page.downloads').lstrip('📥')}")
         st.markdown(translate_text(language_code, "market_stats.downloads_hint"))
 
+    render_legal_notice()
 
 if __name__ == "__main__":
     main()

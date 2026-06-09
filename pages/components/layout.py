@@ -27,3 +27,7 @@ def render_global_layout_styles() -> None:
 def render_sidebar_branding(*, logo_path: str = _SIDEBAR_LOGO_PATH) -> None:
     """Render the app logo in Streamlit's sidebar chrome."""
     st.logo(logo_path, size="large", icon_image=logo_path)
+
+def render_legal_notice():
+    return st.markdown("All EVE related materials are property of Fenris Creations. &copy; 2026 Fenris Creations All rights reserved.")
+

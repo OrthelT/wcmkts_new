@@ -26,6 +26,7 @@ from pages.components.dashboard_components import (
     render_doctrine_ships_table,
     render_popular_modules_table,
 )
+from pages.components.layout import render_legal_notice
 from state import get_active_language
 from repositories import get_sde_repository, get_doctrine_repository
 from ui.i18n import translate_text
@@ -216,5 +217,6 @@ def main():
         if db_check:
             check_db(manual_override=True)
 
+    render_legal_notice()
 
 main()

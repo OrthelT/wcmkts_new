@@ -21,6 +21,7 @@ from state import get_active_language, ss_init, ss_get, ss_set
 from ui.market_selector import render_market_selector
 from ui.i18n import translate_text
 from pages.components.header import render_page_title
+from pages.components.layout import render_legal_notice
 from ui.column_definitions import get_low_stock_column_config
 from init_db import ensure_market_db_ready
 from ui.sync_display import display_sync_status
@@ -471,6 +472,7 @@ def main():
     st.sidebar.markdown("---")
     display_sync_status(language_code=language_code)
 
+    render_legal_notice()
 
 if __name__ == "__main__":
     main()

@@ -16,6 +16,7 @@ from ui.i18n import translate_text
 from ui.market_selector import render_market_selector
 from ui.sync_display import display_sync_status
 from pages.components.header import render_page_title
+from pages.components.layout import render_legal_notice
 
 logger = setup_logging(__name__, log_file="builder_helper.log")
 
@@ -177,6 +178,8 @@ def main():
     st.sidebar.markdown("---")
     display_sync_status(language_code=language_code)
 
+
+    render_legal_notice()
 
 if __name__ == "__main__":
     main()

@@ -25,7 +25,7 @@ from repositories.base import BaseRepository
 from ui.market_selector import render_market_selector
 from init_db import ensure_market_db_ready
 from pages.components.header import render_page_title
-
+from pages.components.layout import render_legal_notice
 logger = setup_logging(__name__, log_file="downloads.log")
 
 # =============================================================================
@@ -583,6 +583,8 @@ def main():
 
     sde_downloads_section()
 
+
+    render_legal_notice()
 
 if __name__ == "__main__":
     main()

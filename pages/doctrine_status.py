@@ -23,6 +23,7 @@ from ui.sync_display import display_sync_status
 from services.module_equivalents_service import get_module_equivalents_service
 from ui.formatters import drop_localized_backup_columns
 from pages.components.header import render_page_title
+from pages.components.layout import render_legal_notice
 
 # Insert centralized logging configuration
 logger = setup_logging(__name__, log_file="doctrine_status.log")
@@ -883,6 +884,7 @@ def main():
     st.sidebar.markdown("---")
     display_sync_status(language_code=language_code)
 
+    render_legal_notice()
 
 if __name__ == "__main__":
     main()

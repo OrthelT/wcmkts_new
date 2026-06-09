@@ -25,6 +25,7 @@ from domain.pricer import FitAvailabilitySummary, ItemAvailability, PricerResult
 from init_db import ensure_market_db_ready
 from logging_config import setup_logging
 from pages.components.header import render_page_title
+from pages.components.layout import render_legal_notice
 from repositories import get_sde_repository
 from services import get_pricer_service
 from services.module_equivalents_service import get_module_equivalents_service
@@ -891,6 +892,7 @@ def main():
         else:
             st.warning("Please paste some items to price.")
 
+    render_legal_notice()
 
 if __name__ == "__main__":
     main()

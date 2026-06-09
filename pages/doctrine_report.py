@@ -22,6 +22,8 @@ from init_db import ensure_market_db_ready
 from ui.sync_display import display_sync_status
 from ui.formatters import drop_localized_backup_columns
 from pages.components.header import render_page_title
+from pages.components.layout import render_legal_notice
+
 logger = setup_logging(__name__, log_file="doctrine_report.log")
 
 icon_id = 0
@@ -555,5 +557,8 @@ def main():
 
     display_sync_status(language_code=language_code)
     st.sidebar.markdown("---")
+
+    render_legal_notice()
+
 if __name__ == "__main__":
     main()
