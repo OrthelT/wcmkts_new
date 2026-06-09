@@ -60,11 +60,10 @@ class SdeTypes(Base):
     volume: Mapped[float] = mapped_column(Float)
     metaGroupID: Mapped[int] = mapped_column(Integer, nullable=True)
     metaGroupName: Mapped[str] = mapped_column(String, nullable=True)
-
-    # metaGroupID: Mapped[int] = mapped_column(Integer, nullable=True)
+    repackagedVolume: Mapped[float] = mapped_column(Float, nullable=True)
 
     def __repr__(self) -> str:
-        return f"sdeTypes(typeID={self.typeID!r}, typeName={self.typeName!r}, groupID={self.groupID!r}, groupName={self.groupName!r}, categoryID={self.categoryID!r}, categoryName={self.categoryName!r}, volume={self.volume!r}, metaGroupID={self.metaGroupID!r}, metaGroupName={self.metaGroupName!r})"
+        return f"sdeTypes(typeID={self.typeID!r}, typeName={self.typeName!r}, groupID={self.groupID!r}, groupName={self.groupName!r}, categoryID={self.categoryID!r}, categoryName={self.categoryName!r}, volume={self.volume!r}, metaGroupID={self.metaGroupID!r}, metaGroupName={self.metaGroupName!r}, repackagedVolume={self.repackagedVolume!r})"
 
 class InvMetaTypes(Base):
     __tablename__ = "invMetaTypes"
