@@ -1,4 +1,4 @@
-# Winter Coalition Market App (v.0.6.3)
+# Winter Coalition Market App (v.0.6.4)
 A Streamlit application for viewing EVE Online market statistics for Winter Coalition. This tool provides real-time market data analysis, historical price tracking, and fitting information for various items in EVE Online markets.
 
 SUPPORT: Join the Discord for support https://discord.gg/BxatJE572Y
@@ -7,6 +7,14 @@ CONTRIBUTING: Contributors welcome. This project is fully open source under MIT 
 
 
 # UPDATES:
+## version 0.6.4
+### New Features
+- **Builder Helper stock filters**: New sidebar filters let manufacturers narrow the table to what actually needs building -- `Min days of stock`, `Doctrine items only`, `Below doctrine target`, and `Low stock only`. `Min days` also sizes the suggested `need` column, so it is read before the data is built.
+- **Multibuy / CSV export from Builder Helper**: Ticking rows in the table now produces an EVE-Multibuy / JEveAssets stockpile-compatible code block (`item_name<TAB>need`, paste-ready) plus a CSV download mirroring the Doctrine Status export.
+
+### Other
+- Added `repackagedVolume` to the SDE types ORM model.
+
 ## version 0.6.3
 ### Feature 
 Adds support for three markets (primary, deployment, market3)
