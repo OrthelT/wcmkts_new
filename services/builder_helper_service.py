@@ -32,6 +32,10 @@ BUILDER_HELPER_COLUMNS = [
     "profit_30d",
     "turnover_30d",
     "volume_30d",
+    "current_stock",
+    "days",
+    "target_qty",
+    "need",
 ]
 
 
@@ -115,6 +119,25 @@ def _build_metadata_index(
     return index
 
 
+def _compute_need(
+    current_stock: int,
+    target_qty: int,
+    avg_daily: float,
+    min_days: int,
+) -> int:
+    """Quantity a builder should produce to restock an item.
+
+    - Doctrine item below demand (current_stock < target_qty): the shortfall.
+    - Non-doctrine item (target_qty <= 0): enough to cover ``min_days`` of sales.
+    - Doctrine item already at/above demand: nothing.
+    """
+    if current_stock < target_qty:
+        return target_qty - current_stock
+    if target_qty <= 0:
+        return max(0, round(avg_daily * min_days) - current_stock)
+    return 0
+
+
 # =============================================================================
 # Service
 # =============================================================================
@@ -122,16 +145,18 @@ def _build_metadata_index(
 class BuilderHelperService:
     """Aggregates stored build cost, market price, and Jita price data."""
 
-    def __init__(self, market_repo, price_service, build_cost_repo, sde_repo=None):
+    def __init__(self, market_repo, price_service, build_cost_repo, sde_repo=None, doctrine_repo=None):
         self._market_repo = market_repo
         self._price_service = price_service
         self._build_cost_repo = build_cost_repo
         self._sde_repo = sde_repo
+        self._doctrine_repo = doctrine_repo
 
     def get_builder_data(
         self,
         language_code: str = "en",
         price_basis: str = "avg",
+        min_days: int = 0,
     ) -> pd.DataFrame:
         """Fetch and combine all builder helper data into a single DataFrame.
 
@@ -144,6 +169,10 @@ class BuilderHelperService:
         columns (cap_utils, isk_per_hour, profit_30d):
           - "avg":     marketstats.avg_price (30-day mean) — default
           - "current": marketstats.price (current best sell)
+
+        Supply columns (current_stock, days, target_qty, need) add market-stock
+        context. ``min_days`` is the desired days of cover used to size ``need``
+        for non-doctrine items (build enough to cover ``min_days`` of sales).
         """
         if price_basis not in ("avg", "current"):
             logger.warning("Unknown price_basis %r, falling back to 'avg'", price_basis)
@@ -167,11 +196,11 @@ class BuilderHelperService:
         stats_df = self._market_repo.get_all_stats()
         price_column = "avg_price" if price_basis == "avg" else "price"
         local_prices = _build_numeric_map(stats_df, "type_id", price_column)
-        volume_index = _build_numeric_map(
-            self._market_repo.get_30day_volume_metrics(type_ids),
-            "type_id",
-            "volume_30d",
-        )
+        stock_index = _build_numeric_map(stats_df, "type_id", "total_volume_remain")
+        volume_metrics = self._market_repo.get_30day_volume_metrics(type_ids)
+        volume_index = _build_numeric_map(volume_metrics, "type_id", "volume_30d")
+        avg_daily_index = _build_numeric_map(volume_metrics, "type_id", "avg_volume_30d")
+        target_index = self._fetch_target_quantities()
         metadata_index = _build_metadata_index(
             self._market_repo.get_watchlist(),
             stats_df,
@@ -214,6 +243,12 @@ class BuilderHelperService:
             if jita_sell_price is not None and volume_30d is not None:
                 turnover_30d = jita_sell_price * volume_30d
 
+            current_stock = int(stock_index.get(type_id, 0.0))
+            avg_daily = avg_daily_index.get(type_id, 0.0)
+            target_qty = int(target_index.get(type_id, 0.0))
+            days = current_stock / avg_daily if avg_daily > 0 else None
+            need = _compute_need(current_stock, target_qty, avg_daily, min_days)
+
             metadata = metadata_index.get(type_id, {})
             rows.append(
                 {
@@ -229,6 +264,10 @@ class BuilderHelperService:
                     "profit_30d": profit_30d,
                     "turnover_30d": turnover_30d,
                     "volume_30d": volume_30d,
+                    "current_stock": current_stock,
+                    "days": days,
+                    "target_qty": target_qty,
+                    "need": need,
                 }
             )
 
@@ -269,6 +308,18 @@ class BuilderHelperService:
             if result.has_sell_price
         }
 
+    def _fetch_target_quantities(self) -> dict[int, float]:
+        """Map type_id -> total doctrine demand (MAX fit_qty*ship_target).
+
+        Returns an empty map when no doctrine repository is wired in, so the
+        supply columns degrade to non-doctrine behavior rather than failing.
+        """
+        if self._doctrine_repo is None:
+            return {}
+        return _build_numeric_map(
+            self._doctrine_repo.get_target_quantities(), "type_id", "target_qty"
+        )
+
 
 # =============================================================================
 # Factory Function
@@ -279,6 +330,7 @@ def get_builder_helper_service() -> BuilderHelperService:
 
     def _create() -> BuilderHelperService:
         from repositories.build_cost_repo import get_build_cost_repository
+        from repositories.doctrine_repo import get_doctrine_repository
         from repositories.market_repo import get_market_repository
         from repositories.sde_repo import get_sde_repository
         from services.price_service import get_price_service
@@ -288,6 +340,7 @@ def get_builder_helper_service() -> BuilderHelperService:
             price_service=get_price_service(),
             build_cost_repo=get_build_cost_repository(),
             sde_repo=get_sde_repository(),
+            doctrine_repo=get_doctrine_repository(),
         )
 
     try:

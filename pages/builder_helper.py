@@ -20,6 +20,35 @@ from pages.components.layout import render_legal_notice
 
 logger = setup_logging(__name__, log_file="builder_helper.log")
 
+EXPORT_CSV_COLUMNS = ["type_id", "item_name", "current_stock", "target_qty", "need"]
+
+
+def _render_export(edited_df, language_code: str) -> None:
+    """Render an EVE-Multibuy code block and CSV download for ticked rows.
+
+    The multibuy block is ``item_name<TAB>need`` per line — paste-ready for EVE
+    Multibuy or JEveAssets stockpiles. CSV mirrors the Doctrine Status export.
+    """
+    st.subheader(translate_text(language_code, "builder_helper.export_header"))
+    selected = edited_df[edited_df["select"]]
+    if selected.empty:
+        st.caption(translate_text(language_code, "builder_helper.export_no_selection"))
+        return
+
+    multibuy = "\n".join(
+        f"{row.item_name}\t{int(row.need)}"
+        for row in selected.itertuples(index=False)
+    )
+    st.code(multibuy, language=None)
+
+    csv = selected[EXPORT_CSV_COLUMNS].to_csv(index=False)
+    st.download_button(
+        label=translate_text(language_code, "doctrine_report.download_csv"),
+        data=csv,
+        file_name="builder_helper_export.csv",
+        mime="text/csv",
+    )
+
 
 def main():
     language_code = get_active_language()
@@ -52,11 +81,40 @@ def main():
     if price_basis not in price_basis_options:
         price_basis = "avg"
 
+    # Stock filters live at the top of the sidebar because min_days also sizes
+    # the Need column, so it must be known before the data is built.
+    st.sidebar.header(translate_text(language_code, "builder_helper.filters_header"))
+    min_days = int(
+        st.sidebar.number_input(
+            translate_text(language_code, "builder_helper.min_days"),
+            min_value=0,
+            value=0,
+            step=1,
+            help=translate_text(language_code, "builder_helper.min_days_help"),
+        )
+    )
+    doctrine_only = st.sidebar.checkbox(
+        translate_text(language_code, "builder_helper.doctrine_only"),
+        value=False,
+        help=translate_text(language_code, "builder_helper.doctrine_only_help"),
+    )
+    below_target_only = st.sidebar.checkbox(
+        translate_text(language_code, "builder_helper.below_target_only"),
+        value=False,
+        help=translate_text(language_code, "builder_helper.below_target_only_help"),
+    )
+    low_stock_only = st.sidebar.checkbox(
+        translate_text(language_code, "builder_helper.low_stock_only"),
+        value=False,
+        help=translate_text(language_code, "builder_helper.low_stock_only_help"),
+    )
+
     with st.spinner(translate_text(language_code, "builder_helper.loading")):
         try:
             df = service.get_builder_data(
                 language_code=language_code,
                 price_basis=price_basis,
+                min_days=min_days,
             )
         except Exception as exc:
             logger.error("Builder helper data load failed: %s", exc)
@@ -69,10 +127,8 @@ def main():
         return
 
     # -----------------------------------------------------------------------
-    # Sidebar filters
+    # Sidebar filters (continued — stock filters rendered above the data load)
     # -----------------------------------------------------------------------
-    st.sidebar.header(translate_text(language_code, "builder_helper.filters_header"))
-
     category_options = sorted(df["category"].dropna().unique().tolist())
     selected_categories = st.sidebar.multiselect(
         translate_text(language_code, "builder_helper.categories"),
@@ -141,6 +197,18 @@ def main():
     if min_turnover_30d > 0:
         filtered_df = filtered_df[filtered_df["turnover_30d"].fillna(0) >= min_turnover_30d]
 
+    if doctrine_only:
+        filtered_df = filtered_df[filtered_df["target_qty"].fillna(0) > 0]
+
+    if below_target_only:
+        filtered_df = filtered_df[
+            filtered_df["current_stock"].fillna(0) < filtered_df["target_qty"].fillna(0)
+        ]
+
+    if low_stock_only and min_days > 0:
+        # NaN days (no recent sales) are excluded — those items never deplete.
+        filtered_df = filtered_df[filtered_df["days"] < min_days]
+
     # Sort by cap_utils descending by default (NaN last)
     filtered_df = filtered_df.sort_values("cap_utils", ascending=False, na_position="last")
 
@@ -162,18 +230,26 @@ def main():
     # Column config and display
     # -----------------------------------------------------------------------
     display_df = filtered_df.copy()
-    isk_cols = ["market_sell_price", "jita_sell_price", "build_cost"]
-    display_df[isk_cols] = display_df[isk_cols].round().astype("Int64")
+    int_cols = [
+        "market_sell_price", "jita_sell_price", "build_cost",
+        "current_stock", "target_qty", "need",
+    ]
+    display_df[int_cols] = display_df[int_cols].round().astype("Int64")
+    display_df.insert(0, "select", False)
 
-    st.dataframe(
+    edited_df = st.data_editor(
         display_df,
         hide_index=True,
         width="stretch",
         height=600,
         column_config=get_builder_helper_column_config(language_code=language_code),
+        disabled=[col for col in display_df.columns if col != "select"],
+        key="builder_helper_editor",
     )
 
     st.caption(translate_text(language_code, "builder_helper.footer"))
+
+    _render_export(edited_df, language_code)
 
     st.sidebar.markdown("---")
     display_sync_status(language_code=language_code)

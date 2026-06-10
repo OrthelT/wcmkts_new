@@ -17,7 +17,7 @@ Design Principles:
 from typing import Optional
 import logging
 import pandas as pd
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
 
 from config import DatabaseConfig, DEFAULT_SHIP_TARGET
 from domain import FitItem, ModuleStock, Doctrine, ShipStock
@@ -62,6 +62,7 @@ class DoctrineRepository:
     - `get_fit_by_id(fit_id)`: Get all items for a specific fit
     - `get_fits_by_type_id(type_id)`: Get all fits containing a specific type
     - `get_all_targets()`: Get all ship targets
+    - `get_target_quantities()`: Get the active market's total doctrine demand (MAX fit_qty*ship_target) per type_id
     - `get_target_by_fit_id(fit_id)`: Get target stock level for a specific fit
     - `get_target_by_ship_id(ship_id)`: Get target stock level for a specific ship type
     - `get_fit_name(fit_id)`: Get the display name for a fit
@@ -127,6 +128,18 @@ class DoctrineRepository:
 
     def get_all_targets(self) -> pd.DataFrame:
         return get_all_targets_with_cache(self._db.alias)
+
+    def get_target_quantities(self) -> pd.DataFrame:
+        try:
+            from state.market_state import get_active_market_key
+            market_key = get_active_market_key()
+        except ImportError:
+            logger.debug("state.market_state unavailable, defaulting to 'primary'")
+            market_key = "primary"
+        except Exception:
+            logger.error("Failed to resolve active market key — returning empty DataFrame", exc_info=True)
+            return pd.DataFrame(columns=["type_id", "target_qty"])
+        return get_target_quantities_with_cache(self._db.alias, market_key)
 
     def get_target_by_fit_id(self, fit_id: int, default: int = DEFAULT_SHIP_TARGET) -> int:
         return get_target_by_fit_id_with_cache(fit_id, default, self._db.alias)
@@ -626,6 +639,55 @@ def get_all_targets_with_cache(db_alias: str = "wcmkt") -> pd.DataFrame:
     except Exception as e:
         logger.error(f"Failed to get all targets: {e}")
         return pd.DataFrame()
+
+@st.cache_data(ttl=600, show_spinner="Getting doctrine target quantities...")
+def get_target_quantities_with_cache(db_alias: str = "wcmkt", market_key: str = "primary") -> pd.DataFrame:
+    """Total doctrine demand per type_id: MAX(fit_qty * ship_target) across the
+    active market's fits that use each type. Joins doctrines to ship_targets on
+    fit_id.
+
+    Mirrors get_all_fits_with_cache market scoping: only fits whose
+    doctrine_fits.market_flag matches ``market_key``, the literal ``"both"``, or —
+    when ``[doctrine_override]`` in settings.toml targets ``db_alias`` — the
+    override's ``use_market_key`` contribute. Without this filter, fits flagged for
+    another hub would inflate target_qty and surface as doctrine items.
+
+    Returns a DataFrame with columns: type_id, target_qty.
+    """
+    logger.debug("Getting doctrine target quantities for market_key=%s...", market_key)
+    reader = BaseRepository(DatabaseConfig(db_alias), logger)
+    try:
+        fits_df = reader.read_df("SELECT fit_id, market_flag FROM doctrine_fits")
+        if "market_flag" in fits_df.columns:
+            allowed_flags = [market_key, "both"]
+            override_key = get_doctrine_override(db_alias)
+            if override_key:
+                allowed_flags.append(override_key)
+            valid_fit_ids = fits_df[
+                fits_df["market_flag"].isin(allowed_flags)
+            ]["fit_id"].unique().tolist()
+        else:
+            valid_fit_ids = fits_df["fit_id"].unique().tolist()
+
+        if not valid_fit_ids:
+            logger.warning(
+                "No valid doctrine fit_ids for market_key=%s — no target quantities", market_key
+            )
+            return pd.DataFrame(columns=["type_id", "target_qty"])
+
+        query = text(
+            """
+            SELECT d.type_id, MAX(d.fit_qty * t.ship_target) AS target_qty
+            FROM doctrines d
+            JOIN ship_targets t ON d.fit_id = t.fit_id
+            WHERE d.fit_id IN :fit_ids
+            GROUP BY d.type_id
+            """
+        ).bindparams(bindparam("fit_ids", expanding=True))
+        return reader.read_df(query, params={"fit_ids": valid_fit_ids})
+    except Exception as e:
+        logger.error(f"Failed to get doctrine target quantities: {e}")
+        return pd.DataFrame(columns=["type_id", "target_qty"])
 
 @st.cache_data(ttl=600, show_spinner="Getting target for fit {fit_id}...")
 def get_target_by_fit_id_with_cache(fit_id: int, default: int = DEFAULT_SHIP_TARGET, db_alias: str = "wcmkt") -> int:
