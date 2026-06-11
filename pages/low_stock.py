@@ -28,6 +28,7 @@ from ui.sync_display import display_sync_status
 logger = setup_logging(__name__, log_file="low_stock.log")
 
 # Columns written to the export CSV (visible table + the computed restock qty).
+# Keep in sync with columns_to_show in main().
 EXPORT_CSV_COLUMNS = [
     "type_id",
     "type_name",
@@ -35,19 +36,24 @@ EXPORT_CSV_COLUMNS = [
     "price",
     "days_remaining",
     "total_volume_remain",
+    "fits_on_mkt",
     "avg_volume",
     "category_name",
     "group_name",
     "ships",
 ]
+# Columns only present in some page modes (fits_on_mkt appears in single-fit mode).
+OPTIONAL_EXPORT_COLUMNS = {"fits_on_mkt"}
 
 
 def compute_restock_qty(avg_volume: float, max_days: float, current_stock: float) -> int:
     """Quantity to buy to restock an item to ``max_days`` days of stock.
 
     ``avg_volume`` is 30-day average daily sales, ``current_stock`` is the
-    quantity currently on the market. Floored at 1 so a ticked row never
-    exports as a zero/negative multibuy quantity.
+    quantity currently on the market. Floored at 1 by design: a 0 quantity
+    breaks the multibuy format for third-party tools, and a ticked row is an
+    explicit request to include the item even if the stock math says it
+    needs nothing (decided 2026-06-10, PR #73 review).
     """
     return max(1, int(round(avg_volume * max_days - current_stock)))
 
@@ -186,6 +192,12 @@ def _render_low_stock_export(edited_df, max_days: float, language_code: str) -> 
     export["ships"] = export["ships"].apply(
         lambda s: "; ".join(s) if isinstance(s, list) else (s or "")
     )
+    missing = [
+        c for c in EXPORT_CSV_COLUMNS
+        if c not in export.columns and c not in OPTIONAL_EXPORT_COLUMNS
+    ]
+    if missing:
+        logger.error("Low stock export is missing expected columns: %s", missing)
     csv_cols = [c for c in EXPORT_CSV_COLUMNS if c in export.columns]
     csv = export[csv_cols].to_csv(index=False)
     st.download_button(

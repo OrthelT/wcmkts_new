@@ -181,9 +181,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.column_used_in_fits_help": "Doctrine ships that use this item.",
         "low_stock.column_category_help": "Category of the item.",
         "low_stock.column_group_help": "Group of the item.",
-        "low_stock.selected_items": (
-            "{count} items selected. Visit the **Downloads** page for bulk CSV exports."
-        ),
         "low_stock.export_header": "Export selected items",
         "low_stock.export_no_selection": "Select one or more rows to enable export.",
         "low_stock.export_qty_caption": (
@@ -920,7 +917,11 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.column_used_in_fits_help": "使用该物品的舰船配置。",
         "low_stock.column_category_help": "物品类别。",
         "low_stock.column_group_help": "物品分组。",
-        "low_stock.selected_items": "已选择 {count} 个物品。可前往 **Downloads** 页面批量导出 CSV。",
+        "low_stock.export_header": "导出所选物品",
+        "low_stock.export_no_selection": "选择一行或多行以启用导出。",
+        "low_stock.export_qty_caption": (
+            "数量将每件物品补货至 {days} 天的库存（日均成交量 × {days} − 当前库存）。"
+        ),
         "low_stock.chart_section": "按物品显示剩余天数",
         "low_stock.chart_title": "库存剩余天数",
         "low_stock.chart_days_label": "剩余天数",
@@ -1583,8 +1584,11 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.column_used_in_fits_help": "Doktrinschiffe, die diesen Artikel verwenden.",
         "low_stock.column_category_help": "Kategorie des Artikels.",
         "low_stock.column_group_help": "Gruppe des Artikels.",
-        "low_stock.selected_items": (
-            "{count} Artikel ausgewählt. Besuche die **Downloads**-Seite für CSV-Sammel-Exporte."
+        "low_stock.export_header": "Ausgewählte Artikel exportieren",
+        "low_stock.export_no_selection": "Wähle eine oder mehrere Zeilen aus, um den Export zu aktivieren.",
+        "low_stock.export_qty_caption": (
+            "Die Mengen füllen jeden Artikel auf {days} Tage Bestand auf "
+            "(durchschn. Tagesvolumen × {days} − aktueller Bestand)."
         ),
         "low_stock.chart_section": "Verbleibende Tage nach Artikel",
         "low_stock.chart_title": "Verbleibende Bestandstage",
@@ -2156,7 +2160,12 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.column_used_in_fits_help": "Vaisseaux de doctrine utilisant cet objet.",
         "low_stock.column_category_help": "Catégorie de l'objet.",
         "low_stock.column_group_help": "Groupe de l'objet.",
-        "low_stock.selected_items": "{count} objets sélectionnés. Consultez **Downloads** pour les exports CSV.",
+        "low_stock.export_header": "Exporter les objets sélectionnés",
+        "low_stock.export_no_selection": "Sélectionnez une ou plusieurs lignes pour activer l'export.",
+        "low_stock.export_qty_caption": (
+            "Les quantités réapprovisionnent chaque objet à {days} jours de stock "
+            "(volume quotidien moyen × {days} − stock actuel)."
+        ),
         "low_stock.chart_section": "Jours restants par objet",
         "low_stock.chart_title": "Jours de stock restants",
         "low_stock.chart_days_label": "Jours restants",
@@ -2725,7 +2734,12 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.column_used_in_fits_help": "Доктринные корабли, использующие этот предмет.",
         "low_stock.column_category_help": "Категория предмета.",
         "low_stock.column_group_help": "Группа предмета.",
-        "low_stock.selected_items": "Выбрано предметов: {count}. Откройте **Downloads** для CSV экспортов.",
+        "low_stock.export_header": "Экспорт выбранных предметов",
+        "low_stock.export_no_selection": "Выберите одну или несколько строк, чтобы включить экспорт.",
+        "low_stock.export_qty_caption": (
+            "Количество пополняет запас каждого предмета до {days} дней "
+            "(средний дневной объём × {days} − текущий запас)."
+        ),
         "low_stock.chart_section": "Оставшиеся дни по предметам",
         "low_stock.chart_title": "Дни оставшегося запаса",
         "low_stock.chart_days_label": "Дни",

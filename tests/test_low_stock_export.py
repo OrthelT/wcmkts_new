@@ -1,10 +1,12 @@
 """Tests for the Low Stock page export helpers."""
 
+import io
 from unittest.mock import patch
 
 import pandas as pd
+import pytest
 
-from pages.low_stock import _render_low_stock_export, compute_restock_qty
+from pages.low_stock import EXPORT_CSV_COLUMNS, _render_low_stock_export, compute_restock_qty
 
 
 class TestComputeRestockQty:
@@ -29,6 +31,16 @@ class TestComputeRestockQty:
     def test_rounds_to_nearest_integer(self):
         # 3.4/day * 2 days = 6.8 -> rounds to 7.
         assert compute_restock_qty(avg_volume=3.4, max_days=2.0, current_stock=0.0) == 7
+
+    def test_nan_input_raises(self):
+        # Deliberately unhandled: the service sanitizes avg_volume and
+        # total_volume_remain with fillna(0.0) before they reach this function
+        # (services/low_stock_service.py). If that upstream invariant breaks,
+        # a loud ValueError beats silently exporting a garbage quantity.
+        with pytest.raises(ValueError):
+            compute_restock_qty(avg_volume=float("nan"), max_days=7.0, current_stock=0.0)
+        with pytest.raises(ValueError):
+            compute_restock_qty(avg_volume=10.0, max_days=7.0, current_stock=float("nan"))
 
 
 def _editor_frame():
@@ -68,16 +80,72 @@ class TestRenderLowStockExport:
         # Only the two ticked rows, name<TAB>restock_qty, unselected row absent.
         assert multibuy == "Tritanium\t500\nMexallon\t1"
 
+    def test_caption_states_target_days(self):
+        # A typo'd i18n key would render the raw key string and still "pass"
+        # every widget-call assertion, so pin the actual caption text — this
+        # also pins the f"{max_days:g}" formatting (7.0 -> "7").
+        with patch("pages.low_stock.st") as mock_st:
+            _render_low_stock_export(_editor_frame(), max_days=7.0, language_code="en")
+
+        caption = mock_st.caption.call_args.args[0]
+        assert "7 days" in caption
+
     def test_csv_includes_restock_qty_and_joined_ships(self):
         with patch("pages.low_stock.st") as mock_st:
             _render_low_stock_export(_editor_frame(), max_days=7.0, language_code="en")
 
         csv_text = mock_st.download_button.call_args.kwargs["data"]
-        rows = pd.read_csv(pd.io.common.StringIO(csv_text))
+        rows = pd.read_csv(io.StringIO(csv_text))
+        # Pin the exact header so a rename in columns_to_show can't silently
+        # drop a column from the export (default mode: no fits_on_mkt).
+        assert list(rows.columns) == [
+            "type_id", "type_name", "restock_qty", "price", "days_remaining",
+            "total_volume_remain", "avg_volume", "category_name", "group_name", "ships",
+        ]
         assert list(rows["type_name"]) == ["Tritanium", "Mexallon"]
         assert list(rows["restock_qty"]) == [500, 1]
         # The ships list column is flattened to a single CSV-safe string.
         assert rows.loc[rows["type_name"] == "Mexallon", "ships"].iloc[0] == "Rifter (3); Punisher (1)"
+
+    def test_single_fit_frame_exports_fits_on_mkt(self):
+        # In single-fit mode the visible table gains fits_on_mkt; the CSV must
+        # include it (in table order) rather than silently dropping it.
+        frame = _editor_frame()
+        frame.insert(6, "fits_on_mkt", [4, 2, 9])
+        with patch("pages.low_stock.st") as mock_st:
+            _render_low_stock_export(frame, max_days=7.0, language_code="en")
+
+        csv_text = mock_st.download_button.call_args.kwargs["data"]
+        rows = pd.read_csv(io.StringIO(csv_text))
+        assert list(rows.columns) == EXPORT_CSV_COLUMNS
+        assert list(rows["fits_on_mkt"]) == [4, 9]
+
+    def test_missing_required_column_logs_error_and_still_exports(self):
+        # A drift between columns_to_show and EXPORT_CSV_COLUMNS must fail
+        # loudly (logged) instead of silently shrinking the CSV schema.
+        frame = _editor_frame().drop(columns=["price"])
+        with patch("pages.low_stock.st") as mock_st, \
+                patch("pages.low_stock.logger") as mock_logger:
+            _render_low_stock_export(frame, max_days=7.0, language_code="en")
+
+        mock_logger.error.assert_called_once()
+        assert "price" in str(mock_logger.error.call_args)
+        csv_text = mock_st.download_button.call_args.kwargs["data"]
+        rows = pd.read_csv(io.StringIO(csv_text))
+        assert "price" not in rows.columns
+        assert list(rows["type_name"]) == ["Tritanium", "Mexallon"]
+
+    def test_none_ships_cells_export_as_empty(self):
+        # The page fills missing columns with None; a None ships cell must
+        # export as an empty CSV cell, not crash or leak "None" text.
+        frame = _editor_frame()
+        frame["ships"] = None
+        with patch("pages.low_stock.st") as mock_st:
+            _render_low_stock_export(frame, max_days=7.0, language_code="en")
+
+        csv_text = mock_st.download_button.call_args.kwargs["data"]
+        rows = pd.read_csv(io.StringIO(csv_text))
+        assert rows["ships"].isna().all()
 
     def test_no_selection_shows_caption_and_skips_export(self):
         frame = _editor_frame()
