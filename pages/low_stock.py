@@ -27,6 +27,29 @@ from init_db import ensure_market_db_ready
 from ui.sync_display import display_sync_status
 logger = setup_logging(__name__, log_file="low_stock.log")
 
+# Columns written to the export CSV (visible table + the computed restock qty).
+EXPORT_CSV_COLUMNS = [
+    "type_id",
+    "type_name",
+    "restock_qty",
+    "price",
+    "days_remaining",
+    "total_volume_remain",
+    "avg_volume",
+    "category_name",
+    "group_name",
+    "ships",
+]
+
+
+def compute_restock_qty(avg_volume: float, max_days: float, current_stock: float) -> int:
+    """Quantity to buy to restock an item to ``max_days`` days of stock.
+
+    ``avg_volume`` is 30-day average daily sales, ``current_stock`` is the
+    quantity currently on the market. Floored at 1 so a ticked row never
+    exports as a zero/negative multibuy quantity.
+    """
+    return max(1, int(round(avg_volume * max_days - current_stock)))
 
 
 def create_days_remaining_chart(df: pd.DataFrame, language_code: str):
@@ -124,6 +147,53 @@ def display_fit_data(selected_fit):
         st.markdown(
             f"fits: :orange[{fits}] | hulls: :orange[{hulls}] | target: :orange[{target}]"
         )
+
+
+def _render_low_stock_export(edited_df, max_days: float, language_code: str) -> None:
+    """Render an EVE-Multibuy code block and CSV download for ticked rows.
+
+    Each multibuy line is ``type_name<TAB>restock_qty``, where the quantity
+    restocks the item to ``max_days`` days of stock — paste-ready for EVE
+    Multibuy / JEveAssets. The CSV mirrors the visible table plus the computed
+    restock quantity.
+    """
+    st.subheader(translate_text(language_code, "low_stock.export_header"))
+    selected = edited_df[edited_df["select"]]
+    if selected.empty:
+        st.caption(translate_text(language_code, "low_stock.export_no_selection"))
+        return
+
+    st.caption(
+        translate_text(language_code, "low_stock.export_qty_caption", days=f"{max_days:g}")
+    )
+
+    export = selected.copy()
+    export["restock_qty"] = [
+        compute_restock_qty(
+            avg_volume=row.avg_volume,
+            max_days=max_days,
+            current_stock=row.total_volume_remain,
+        )
+        for row in export.itertuples(index=False)
+    ]
+
+    multibuy = "\n".join(
+        f"{row.type_name}\t{row.restock_qty}"
+        for row in export.itertuples(index=False)
+    )
+    st.code(multibuy, language=None)
+
+    export["ships"] = export["ships"].apply(
+        lambda s: "; ".join(s) if isinstance(s, list) else (s or "")
+    )
+    csv_cols = [c for c in EXPORT_CSV_COLUMNS if c in export.columns]
+    csv = export[csv_cols].to_csv(index=False)
+    st.download_button(
+        label=translate_text(language_code, "doctrine_report.download_csv"),
+        data=csv,
+        file_name="low_stock_export.csv",
+        mime="text/csv",
+    )
 
 
 def main():
@@ -452,12 +522,8 @@ def main():
             key="low_stock_editor",
         )
 
-        # Selected items info
-        selected_rows = edited_df[edited_df["select"]]
-        if len(selected_rows) > 0:
-            st.info(
-                translate_text(language_code, "low_stock.selected_items", count=len(selected_rows))
-            )
+        # Export selected items (multibuy block + CSV)
+        _render_low_stock_export(edited_df, max_days_remaining, language_code)
 
         # Display chart
         st.subheader(translate_text(language_code, "low_stock.chart_section"))

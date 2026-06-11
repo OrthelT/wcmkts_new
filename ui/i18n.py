@@ -184,6 +184,12 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.selected_items": (
             "{count} items selected. Visit the **Downloads** page for bulk CSV exports."
         ),
+        "low_stock.export_header": "Export selected items",
+        "low_stock.export_no_selection": "Select one or more rows to enable export.",
+        "low_stock.export_qty_caption": (
+            "Quantities restock each item to {days} days of stock "
+            "(avg daily volume × {days} − current stock)."
+        ),
         "low_stock.chart_section": "Days Remaining by Item",
         "low_stock.chart_title": "Days of Stock Remaining",
         "low_stock.chart_days_label": "Days Remaining",
