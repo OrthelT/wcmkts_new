@@ -182,6 +182,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.column_category_help": "Category of the item.",
         "low_stock.column_group_help": "Group of the item.",
         "low_stock.export_header": "Export selected items",
+        "low_stock.reset_selections": "Reset selections",
+        "low_stock.reset_selections_help": "Clear all ticked rows and the export below.",
         "low_stock.export_no_selection": "Select one or more rows to enable export.",
         "low_stock.export_qty_caption": (
             "Quantities restock each item to {days} days of stock "
@@ -918,6 +920,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.column_category_help": "物品类别。",
         "low_stock.column_group_help": "物品分组。",
         "low_stock.export_header": "导出所选物品",
+        "low_stock.reset_selections": "重置选择",
+        "low_stock.reset_selections_help": "清除所有勾选的行以及下方的导出内容。",
         "low_stock.export_no_selection": "选择一行或多行以启用导出。",
         "low_stock.export_qty_caption": (
             "数量将每件物品补货至 {days} 天的库存（日均成交量 × {days} − 当前库存）。"
@@ -1585,6 +1589,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.column_category_help": "Kategorie des Artikels.",
         "low_stock.column_group_help": "Gruppe des Artikels.",
         "low_stock.export_header": "Ausgewählte Artikel exportieren",
+        "low_stock.reset_selections": "Auswahl zurücksetzen",
+        "low_stock.reset_selections_help": "Alle markierten Zeilen und den Export unten löschen.",
         "low_stock.export_no_selection": "Wähle eine oder mehrere Zeilen aus, um den Export zu aktivieren.",
         "low_stock.export_qty_caption": (
             "Die Mengen füllen jeden Artikel auf {days} Tage Bestand auf "
@@ -2161,6 +2167,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.column_category_help": "Catégorie de l'objet.",
         "low_stock.column_group_help": "Groupe de l'objet.",
         "low_stock.export_header": "Exporter les objets sélectionnés",
+        "low_stock.reset_selections": "Réinitialiser la sélection",
+        "low_stock.reset_selections_help": "Effacer toutes les lignes cochées et l'export ci-dessous.",
         "low_stock.export_no_selection": "Sélectionnez une ou plusieurs lignes pour activer l'export.",
         "low_stock.export_qty_caption": (
             "Les quantités réapprovisionnent chaque objet à {days} jours de stock "
@@ -2735,6 +2743,8 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "low_stock.column_category_help": "Категория предмета.",
         "low_stock.column_group_help": "Группа предмета.",
         "low_stock.export_header": "Экспорт выбранных предметов",
+        "low_stock.reset_selections": "Сбросить выбор",
+        "low_stock.reset_selections_help": "Очистить все отмеченные строки и экспорт ниже.",
         "low_stock.export_no_selection": "Выберите одну или несколько строк, чтобы включить экспорт.",
         "low_stock.export_qty_caption": (
             "Количество пополняет запас каждого предмета до {days} дней "

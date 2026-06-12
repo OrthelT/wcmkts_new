@@ -58,6 +58,17 @@ def compute_restock_qty(avg_volume: float, max_days: float, current_stock: float
     return max(1, int(round(avg_volume * max_days - current_stock)))
 
 
+def _reset_low_stock_selections() -> None:
+    """Clear the low stock data_editor's ticked rows (and thus the export).
+
+    Runs as an ``on_click`` callback, so it fires before the data_editor is
+    re-instantiated on the rerun. Popping the widget key resets every row's
+    ``select`` checkbox to its ``False`` default; the export block reads those
+    same ticks, so it clears too.
+    """
+    st.session_state.pop("low_stock_editor", None)
+
+
 def create_days_remaining_chart(df: pd.DataFrame, language_code: str):
     """Create a bar chart showing days of stock remaining."""
     if df.empty:
@@ -523,6 +534,12 @@ def main():
         style_paramater = "fits_on_mkt" if ss_get("single_fit") else "days_remaining"
         styled_df = display_df.style.map(highlight_critical, subset=[style_paramater])
         styled_df = styled_df.apply(highlight_doctrine, axis=1)
+
+        st.button(
+            translate_text(language_code, "low_stock.reset_selections"),
+            help=translate_text(language_code, "low_stock.reset_selections_help"),
+            on_click=_reset_low_stock_selections,
+        )
 
         # Display the dataframe with editable checkbox column
         edited_df = st.data_editor(
