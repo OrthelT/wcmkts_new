@@ -49,25 +49,22 @@ OPTIONAL_EXPORT_COLUMNS = {"fits_on_mkt"}
 def compute_restock_qty(avg_volume: float, max_days: float, current_stock: float) -> int:
     """Quantity to buy to restock an item to ``max_days`` days of stock.
 
-    ``avg_volume`` is 30-day average daily sales, ``current_stock`` is the
-    quantity currently on the market. Floored at 1 by design: a 0 quantity
-    breaks the multibuy format for third-party tools, and a ticked row is an
-    explicit request to include the item even if the stock math says it
-    needs nothing (decided 2026-06-10, PR #73 review).
+    Floored at 1: a 0 breaks the multibuy format for third-party tools, and a
+    ticked row is an explicit request to include the item even if the stock
+    math says it needs nothing (decided 2026-06-10, PR #73 review).
     """
     return max(1, int(round(avg_volume * max_days - current_stock)))
 
 
+# key (num used once) to bust the cache on the low_stock editor df
+_EDITOR_NONCE_KEY: str = "low_stock_editor_nonce"
+
+
 def _reset_low_stock_selections() -> None:
-    """Clear the low stock data_editor's ticked rows (and thus the export).
-
-    Runs as an ``on_click`` callback, so it fires before the data_editor is
-    re-instantiated on the rerun. Popping the widget key resets every row's
-    ``select`` checkbox to its ``False`` default; the export block reads those
-    same ticks, so it clears too.
+    """Clear the low stock data_editor's ticked rows and the export.
+    Bumps a nonce key to force reset cache and reload df. 
     """
-    st.session_state.pop("low_stock_editor", None)
-
+    ss_set(_EDITOR_NONCE_KEY, ss_get(_EDITOR_NONCE_KEY, 0) + 1)
 
 def create_days_remaining_chart(df: pd.DataFrame, language_code: str):
     """Create a bar chart showing days of stock remaining."""
@@ -548,7 +545,7 @@ def main():
             height=600,
             column_config=column_config,
             disabled=[col for col in display_df.columns if col != "select"],
-            key="low_stock_editor",
+            key=f"low_stock_editor_{ss_get(_EDITOR_NONCE_KEY, 0)}",
         )
 
         # Export selected items (multibuy block + CSV)

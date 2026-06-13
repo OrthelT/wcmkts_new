@@ -6,7 +6,14 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 
-from pages.low_stock import EXPORT_CSV_COLUMNS, _render_low_stock_export, compute_restock_qty
+import state.session_state as session_state_module
+from pages.low_stock import (
+    EXPORT_CSV_COLUMNS,
+    _EDITOR_NONCE_KEY,
+    _render_low_stock_export,
+    _reset_low_stock_selections,
+    compute_restock_qty,
+)
 
 
 class TestComputeRestockQty:
@@ -156,3 +163,39 @@ class TestRenderLowStockExport:
         mock_st.caption.assert_called_once()
         mock_st.code.assert_not_called()
         mock_st.download_button.assert_not_called()
+
+
+class TestResetSelections:
+    """Reset must change the data_editor's widget key, not just pop its state.
+
+    Popping the widget's session_state key clears the Python-side return value
+    (so the export empties) but leaves the canvas-rendered grid still showing
+    the ticks -- the frontend grid is keyed by the stable widget key and reused
+    across reruns (verified in-browser, 2026-06-12). The fix bumps a nonce
+    baked into the key so Streamlit remounts the grid and clears the checkboxes.
+    """
+
+    def test_reset_bumps_nonce_from_default(self, monkeypatch):
+        state = {}
+        monkeypatch.setattr(session_state_module.st, "session_state", state, raising=False)
+        _reset_low_stock_selections()
+        # An absent nonce reads as 0, so the first reset moves the editor key
+        # from low_stock_editor_0 to low_stock_editor_1.
+        assert state[_EDITOR_NONCE_KEY] == 1
+
+    def test_reset_increments_existing_nonce(self, monkeypatch):
+        state = {_EDITOR_NONCE_KEY: 4}
+        monkeypatch.setattr(session_state_module.st, "session_state", state, raising=False)
+        _reset_low_stock_selections()
+        assert state[_EDITOR_NONCE_KEY] == 5
+
+    def test_consecutive_resets_each_yield_a_new_key(self, monkeypatch):
+        # A key that ever repeats would let the frontend reuse a stale grid and
+        # re-strand the ticks, so every reset must produce a distinct key.
+        state = {}
+        monkeypatch.setattr(session_state_module.st, "session_state", state, raising=False)
+        keys = []
+        for _ in range(3):
+            _reset_low_stock_selections()
+            keys.append(f"low_stock_editor_{state[_EDITOR_NONCE_KEY]}")
+        assert len(set(keys)) == 3
