@@ -701,3 +701,31 @@ class TestRequireJitaPrices:
 
         assert result == {}
         mock_st.error.assert_not_called()
+
+
+class TestGetSelectedTypeId:
+    """Lock the on_select extraction contract reused by the doctrine tables."""
+
+    def _df(self):
+        return pd.DataFrame({"type_id": [11, 22, 33]})
+
+    def _event(self, rows):
+        from types import SimpleNamespace
+        return SimpleNamespace(selection={"rows": rows})
+
+    def test_none_event_returns_none(self):
+        from pages.components.dashboard_components import _get_selected_type_id
+        assert _get_selected_type_id(None, self._df()) is None
+
+    def test_empty_selection_returns_none(self):
+        from pages.components.dashboard_components import _get_selected_type_id
+        assert _get_selected_type_id(self._event([]), self._df()) is None
+
+    def test_valid_row_returns_positional_type_id(self):
+        from pages.components.dashboard_components import _get_selected_type_id
+        # row index 1 → second row → type_id 22 (positional, index-label agnostic)
+        assert _get_selected_type_id(self._event([1]), self._df()) == 22
+
+    def test_out_of_range_row_returns_none(self):
+        from pages.components.dashboard_components import _get_selected_type_id
+        assert _get_selected_type_id(self._event([99]), self._df()) is None
