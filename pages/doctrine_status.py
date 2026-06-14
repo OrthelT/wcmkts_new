@@ -28,6 +28,58 @@ from pages.components.layout import render_legal_notice
 # Insert centralized logging configuration
 logger = setup_logging(__name__, log_file="doctrine_status.log")
 
+_DEEPLINK_SHIP_KEY = "ds_deeplink_ship_id"
+_DEEPLINK_MODULE_KEY = "ds_deeplink_module_id"
+
+
+def _consume_int_param(query_params, key: str) -> int | None:
+    """Pop ``key`` from query params, returning it as int (or None if absent/invalid).
+
+    The param is always removed from the URL once seen, so the URL stays clean
+    and the value lives only in session_state thereafter.
+    """
+    if key not in query_params:
+        return None
+    raw = query_params[key]
+    try:
+        value = int(raw)
+    except (ValueError, TypeError):
+        logger.warning("Invalid %s query param: %s", key, raw)
+        value = None
+    del query_params[key]
+    return value
+
+
+def resolve_deeplink_filter(query_params, session_state) -> tuple[int | None, int | None]:
+    """Resolve the active (ship_id, module_id) deep-link filter.
+
+    Consumes ship_id/module_id from the URL once and stores it in session_state,
+    so the filter survives later reruns (e.g. the per-row Details menu button)
+    instead of vanishing after a single render. A new deep-link of one kind
+    clears the other. When no param is present, falls back to the persisted
+    session_state value. The two are mutually exclusive (ship wins if both).
+    """
+    ship_id = _consume_int_param(query_params, "ship_id")
+    module_id = _consume_int_param(query_params, "module_id")
+
+    if ship_id is not None:
+        session_state[_DEEPLINK_SHIP_KEY] = ship_id
+        session_state.pop(_DEEPLINK_MODULE_KEY, None)
+    elif module_id is not None:
+        session_state[_DEEPLINK_MODULE_KEY] = module_id
+        session_state.pop(_DEEPLINK_SHIP_KEY, None)
+
+    return (
+        session_state.get(_DEEPLINK_SHIP_KEY),
+        session_state.get(_DEEPLINK_MODULE_KEY),
+    )
+
+
+def _clear_deeplink_filter() -> None:
+    """Clear any active deep-link filter (used by the 'Show all fits' button)."""
+    st.session_state.pop(_DEEPLINK_SHIP_KEY, None)
+    st.session_state.pop(_DEEPLINK_MODULE_KEY, None)
+
 
 def _localize_summary_df(
     df: pd.DataFrame,
