@@ -7,6 +7,7 @@ class TestResolveDeeplinkFilter:
 
     def _call(self, query_params, session_state):
         from pages.doctrine_status import resolve_deeplink_filter
+
         return resolve_deeplink_filter(query_params, session_state)
 
     def test_ship_param_is_stored_and_url_cleared(self):
