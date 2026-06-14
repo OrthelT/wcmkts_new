@@ -266,7 +266,6 @@ class TestDoctrineShipsColumnConfig:
             "image_url", "fit_id", "type_name", "target_pct",
             "current_sell_price", "order_volume",
             "jita_sell_price", "ship_target", "fits_on_mkt",
-            "_mkt", "_doc",
         }
         assert set(config.keys()) == expected_keys
 
@@ -372,7 +371,7 @@ class TestDoctrineModulesColumnConfig:
         expected_keys = {
             "type_id", "image_url", "type_name", "target_pct", "order_volume",
             "fit_count", "qty_needed", "current_sell_price", "jita_sell_price",
-            "jita_buy_price", "pct_diff_vs_jita_sell", "_mkt", "_doc",
+            "jita_buy_price", "pct_diff_vs_jita_sell",
         }
         assert set(config.keys()) == expected_keys
 

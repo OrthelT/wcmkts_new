@@ -330,18 +330,6 @@ def get_doctrine_ships_column_config(language_code: str = "en") -> dict:
             translate_text(language_code, "import_helper.column_jita_sell"),
             format="compact",
         ),
-        "_mkt": st.column_config.CheckboxColumn(
-            "📈",
-            help=translate_text(language_code, "dashboard.hint_click_market_stats"),
-            default=False,
-            width=15,
-        ),
-        "_doc": st.column_config.CheckboxColumn(
-            "⚔️",
-            help=translate_text(language_code, "dashboard.hint_click_doctrine_status"),
-            default=False,
-            width=15,
-        ),
     }
 
 
@@ -397,16 +385,6 @@ def get_doctrine_modules_column_config(language_code: str = "en") -> dict:
         "pct_diff_vs_jita_sell": st.column_config.NumberColumn(
             translate_text(language_code, "market_stats.delta_vs_jita_sell_column"),
             format="%.2f%%",
-        ),
-        "_mkt": st.column_config.CheckboxColumn(
-            "📈",
-            help=translate_text(language_code, "dashboard.hint_click_market_stats"),
-            default=False,
-        ),
-        "_doc": st.column_config.CheckboxColumn(
-            "⚔️",
-            help=translate_text(language_code, "dashboard.hint_click_doctrine_status_module"),
-            default=False,
         ),
     }
 
