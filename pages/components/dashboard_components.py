@@ -634,6 +634,7 @@ def render_doctrine_ships_table(
     sde_repo,
     language_code: str,
     dataframe_key: str | None = None,
+    destination: str = "doctrine_status",
 ) -> tuple[int | None, str | None]:
     """Render doctrine ships stock vs targets table with dual navigation.
 
@@ -729,8 +730,6 @@ def render_doctrine_ships_table(
             "ship_target": target,
             "fits_on_mkt": fits_on_mkt,
             "status": f"{status_icons.get(status, '')} {status.display_name}",
-            "_mkt": False,
-            "_doc": False,
         })
 
     if missing_target_fids:
@@ -755,9 +754,7 @@ def render_doctrine_ships_table(
     display_cols = [
         "fit_id", "image_url", "type_name", "target_pct", "order_volume",
         "fits_on_mkt", "ship_target", "current_sell_price", "jita_sell_price",
-        "_mkt", "_doc",
     ]
-    
 
     display_df = result_df[display_cols].copy()
     st.subheader(
@@ -767,46 +764,37 @@ def render_doctrine_ships_table(
     if doc_dash_filter_selection == "low_stock":
         display_df = display_df[display_df["target_pct"] < 100]
 
-    if dataframe_key:
-        st.caption(
-            "📈 = "
-            + translate_text(language_code, "dashboard.hint_click_market_stats")
-            + "  ·  ⚔️ = "
-            + translate_text(language_code, "dashboard.hint_click_doctrine_status")
+    table_df = drop_localized_backup_columns(display_df)
+    status_labels = result_df["status"]
+    if doc_dash_filter_selection == "all":
+        styled_table = table_df.style.apply(
+            lambda col: _fits_avail_column_style(col, status_labels), axis=0
         )
-        table_df = drop_localized_backup_columns(display_df)
-        status_labels = result_df["status"]
-
-        if doc_dash_filter_selection == "all":
-           styled_table = table_df.style.apply(
-                lambda col: _fits_avail_column_style(col, status_labels), axis=0
-            )
-        else:
-            styled_table = table_df
-
-        edited_df = st.data_editor(
-            styled_table,
-            hide_index=True,
-            column_config=get_doctrine_ships_column_config(language_code),
-            disabled=[c for c in display_cols if c not in ("_mkt", "_doc")],
-            key=dataframe_key,
-        )
-        return _resolve_table_selection(edited_df, result_df)
     else:
-        table_df = drop_localized_backup_columns(result_df[display_cols[:9]].copy())
-        status_labels = result_df["status"]
-        
-        if doc_dash_filter_selection == "all":
-           styled_table = table_df.style.apply(
-                lambda col: _fits_avail_column_style(col, status_labels), axis=0
-            )
-        else:
-            styled_table = table_df
-        
-        st.dataframe(
+        styled_table = table_df
+
+    if dataframe_key:
+        event = st.dataframe(
             styled_table,
             hide_index=True,
             column_config=get_doctrine_ships_column_config(language_code),
+            on_select="rerun",
+            selection_mode="single-row",
+            key=dataframe_key,
             width="content",
         )
+        # source_df must match the displayed row ORDER (positional on_select index),
+        # so realign result_df to the filtered display_df.index before extracting.
+        selection_source = result_df.loc[display_df.index]
+        selected = _get_selected_type_id(event, selection_source)
+        if selected is not None:
+            return selected, destination
         return None, None
+
+    st.dataframe(
+        styled_table,
+        hide_index=True,
+        column_config=get_doctrine_ships_column_config(language_code),
+        width="content",
+    )
+    return None, None
