@@ -81,6 +81,34 @@ def _clear_deeplink_filter() -> None:
     st.session_state.pop(_DEEPLINK_MODULE_KEY, None)
 
 
+def _render_deeplink_banner(
+    icon_type_id: int,
+    banner_text: str,
+    language_code: str,
+) -> None:
+    """Render the blue deep-link filter banner with a 'Show all fits' clear button."""
+    icon_url = f"https://images.evetech.net/types/{icon_type_id}/icon?size=32"
+    banner_html = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", banner_text)
+    banner_col, clear_col = st.columns([0.8, 0.2], vertical_alignment="center")
+    with banner_col:
+        st.markdown(
+            f'<div style="background-color: rgba(28, 131, 225, 0.1); '
+            f'border-left: 0.25em solid #1c83e1; padding: 0.6em 1em; '
+            f'border-radius: 0.25em; display: flex; align-items: center; gap: 0.6em;">'
+            f'<img src="{icon_url}" width="32" height="32" '
+            f'style="border-radius: 4px; flex-shrink: 0;" alt="">'
+            f'<span>{banner_html}</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+    with clear_col:
+        st.button(
+            translate_text(language_code, "doctrine_status.show_all_fits"),
+            key=f"clear_deeplink_{icon_type_id}",
+            on_click=_clear_deeplink_filter,
+        )
+
+
 def _localize_summary_df(
     df: pd.DataFrame,
     sde_repo,
@@ -402,22 +430,10 @@ def main():
     market = render_market_selector()
     sde_repo = get_sde_repository()
 
-    # Read deep-link query params from dashboard
-    qp_ship_id = None
-    if "ship_id" in st.query_params:
-        try:
-            qp_ship_id = int(st.query_params["ship_id"])
-        except (ValueError, TypeError):
-            logger.warning("Invalid ship_id query param: %s", st.query_params["ship_id"])
-        del st.query_params["ship_id"]
-
-    qp_module_id = None
-    if "module_id" in st.query_params:
-        try:
-            qp_module_id = int(st.query_params["module_id"])
-        except (ValueError, TypeError):
-            logger.warning("Invalid module_id query param: %s", st.query_params["module_id"])
-        del st.query_params["module_id"]
+    # Resolve deep-link filter: consume the query param once, then persist it
+    # in session_state so the filter survives reruns (e.g. the per-row Details
+    # menu button) instead of vanishing after a single render.
+    qp_ship_id, qp_module_id = resolve_deeplink_filter(st.query_params, st.session_state)
 
     if not ensure_market_db_ready(market.database_alias):
         st.error(
@@ -576,6 +592,23 @@ def main():
         ship_match = filtered_df[filtered_df["ship_id"] == qp_ship_id]
         if not ship_match.empty:
             filtered_df = ship_match
+            ship_name = get_localized_name(
+                qp_ship_id,
+                str(ship_match.iloc[0].get("ship_name") or qp_ship_id),
+                sde_repo,
+                language_code,
+                logger,
+            )
+            _render_deeplink_banner(
+                icon_type_id=qp_ship_id,
+                banner_text=translate_text(
+                    language_code,
+                    "doctrine_status.ship_filter_banner",
+                    ship_name=ship_name,
+                    fit_count=len(ship_match),
+                ),
+                language_code=language_code,
+            )
 
     # Apply deep-link module filter from dashboard (show only fits using the module)
     if qp_module_id is not None:
@@ -599,23 +632,15 @@ def main():
         module_name = get_localized_name(
             qp_module_id, fallback_name, sde_repo, language_code, logger,
         )
-        icon_url = f"https://images.evetech.net/types/{qp_module_id}/icon?size=32"
-        banner_text = translate_text(
-            language_code,
-            "doctrine_status.module_filter_banner",
-            module_name=module_name,
-            fit_count=len(module_fit_ids),
-        )
-        banner_html = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", banner_text)
-        st.markdown(
-            f'<div style="background-color: rgba(28, 131, 225, 0.1); '
-            f'border-left: 0.25em solid #1c83e1; padding: 0.6em 1em; '
-            f'border-radius: 0.25em; display: flex; align-items: center; gap: 0.6em;">'
-            f'<img src="{icon_url}" width="32" height="32" '
-            f'style="border-radius: 4px; flex-shrink: 0;" alt="">'
-            f'<span>{banner_html}</span>'
-            f'</div>',
-            unsafe_allow_html=True,
+        _render_deeplink_banner(
+            icon_type_id=qp_module_id,
+            banner_text=translate_text(
+                language_code,
+                "doctrine_status.module_filter_banner",
+                module_name=module_name,
+                fit_count=len(module_fit_ids),
+            ),
+            language_code=language_code,
         )
 
     # Update the displayed ships based on filters
