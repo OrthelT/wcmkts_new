@@ -395,32 +395,6 @@ def _compute_module_targets(doctrine_repo) -> pd.DataFrame:
 
     return agg
 
-def _resolve_table_selection(
-    edited_df: pd.DataFrame, source_df: pd.DataFrame,
-) -> tuple[int | None, str | None]:
-    """Resolve which row in the data_editor was clicked, by preserved pandas index.
-
-    edited_df.index carries the source_df index even when display_df was
-    filtered; positional iloc on source_df would misalign whenever any rows
-    were dropped before render. Returns (type_id, "market_stats" | "doctrine_status")
-    or (None, None) when neither checkbox is checked.
-    """
-    for idx in range(len(edited_df)):
-        row = edited_df.iloc[idx]
-        if not (row["_mkt"] or row["_doc"]):
-            continue
-        source_idx = edited_df.index[idx]
-        if source_idx not in source_df.index:
-            logger.error(
-                "Selected row index %r not found in source DataFrame; skipping",
-                source_idx,
-            )
-            continue
-        type_id = int(source_df.loc[source_idx, "type_id"])
-        target = "market_stats" if row["_mkt"] else "doctrine_status"
-        return type_id, target
-    return None, None
-
 
 _FILTER_OPTIONS = ("low_stock", "all")
 
@@ -459,6 +433,7 @@ def render_popular_modules_table(
     sde_repo,
     language_code: str,
     dataframe_key: str | None = None,
+    destination: str = "doctrine_status",
 ) -> tuple[int | None, str | None]:
     """Render doctrine modules table with stock, target %, qty needed, and fit count.
 
@@ -509,13 +484,11 @@ def render_popular_modules_table(
 
     # Sort alphabetically by item name
     snapshot = snapshot.sort_values("type_name", key=lambda s: s.str.lower())
-    snapshot["_mkt"] = False
-    snapshot["_doc"] = False
 
     display_cols = [
         "type_id", "image_url", "type_name", "target_pct", "order_volume",
         "fit_count", "qty_needed", "current_sell_price", "jita_sell_price",
-        "jita_buy_price", "pct_diff_vs_jita_sell", "_mkt", "_doc",
+        "jita_buy_price", "pct_diff_vs_jita_sell",
     ]
 
     st.subheader(
@@ -527,38 +500,35 @@ def render_popular_modules_table(
     if mod_dash_filter_selection == "low_stock":
         display_df = display_df[display_df["target_pct"] < 100]
 
-    if dataframe_key:
-        st.caption(
-            "📈 = "
-            + translate_text(language_code, "dashboard.hint_click_market_stats")
-            + "  ·  ⚔️ = "
-            + translate_text(language_code, "dashboard.hint_click_doctrine_status")
-        )
-        table_df = drop_localized_backup_columns(display_df)
-        styled_table = table_df.style.map(
-            _jita_diff_cell_style, subset=["pct_diff_vs_jita_sell"]
-        )
+    table_df = drop_localized_backup_columns(display_df)
+    styled_table = table_df.style.map(
+        _jita_diff_cell_style, subset=["pct_diff_vs_jita_sell"]
+    )
 
-        edited_df = st.data_editor(
+    if dataframe_key:
+        event = st.dataframe(
             styled_table,
             hide_index=True,
             column_config=get_doctrine_modules_column_config(language_code),
-            disabled=[c for c in display_cols if c not in ("_mkt", "_doc")],
+            on_select="rerun",
+            selection_mode="single-row",
             key=dataframe_key,
-        )
-        return _resolve_table_selection(edited_df, snapshot)
-    else:
-        table_df = drop_localized_backup_columns(display_df)
-        styled_table = table_df.style.map(
-            _jita_diff_cell_style, subset=["pct_diff_vs_jita_sell"]
-        )
-        st.dataframe(
-            styled_table,
-            hide_index=True,
-            column_config=get_doctrine_modules_column_config(language_code),
             width="content",
         )
+        # Realign to the filtered display order before positional extraction.
+        selection_source = snapshot.loc[display_df.index]
+        selected = _get_selected_type_id(event, selection_source)
+        if selected is not None:
+            return selected, destination
         return None, None
+
+    st.dataframe(
+        styled_table,
+        hide_index=True,
+        column_config=get_doctrine_modules_column_config(language_code),
+        width="content",
+    )
+    return None, None
 
 
 # =========================================================================

@@ -419,68 +419,6 @@ class TestComputeModuleTargetsMissingTargets:
             _compute_module_targets(repo)
 
 
-class TestResolveTableSelection:
-    """Regression tests for `_resolve_table_selection`.
-
-    Guards the bug where iloc-based row resolution returned the wrong type_id
-    when display_df was filtered (low-stock filter dropped rows from source_df).
-    """
-
-    def _source_df(self):
-        # Source uses non-contiguous index to simulate a row-filter result;
-        # the bugfix relies on edited_df.index aligning with source_df.index.
-        return pd.DataFrame(
-            {"type_id": [11, 22, 33, 44]},
-            index=[0, 1, 2, 3],
-        )
-
-    def test_returns_market_stats_target_for_correct_row(self):
-        from pages.components.dashboard_components import _resolve_table_selection
-
-        source_df = self._source_df()
-        # Filtered display kept only rows at index 2 and 3 (low-stock subset)
-        edited_df = pd.DataFrame(
-            {"_mkt": [False, True], "_doc": [False, False], "type_id": [33, 44]},
-            index=[2, 3],
-        )
-        # iloc[1] → type_id 44, the correct answer.
-        # Pre-fix code did `source_df.iloc[1]` which would have returned 22.
-        assert _resolve_table_selection(edited_df, source_df) == (44, "market_stats")
-
-    def test_returns_doctrine_status_target(self):
-        from pages.components.dashboard_components import _resolve_table_selection
-
-        source_df = self._source_df()
-        edited_df = pd.DataFrame(
-            {"_mkt": [False, False], "_doc": [True, False], "type_id": [33, 44]},
-            index=[2, 3],
-        )
-        assert _resolve_table_selection(edited_df, source_df) == (33, "doctrine_status")
-
-    def test_returns_none_none_when_no_checkbox_set(self):
-        from pages.components.dashboard_components import _resolve_table_selection
-
-        source_df = self._source_df()
-        edited_df = pd.DataFrame(
-            {"_mkt": [False, False], "_doc": [False, False], "type_id": [11, 22]},
-            index=[0, 1],
-        )
-        assert _resolve_table_selection(edited_df, source_df) == (None, None)
-
-    def test_skips_rows_with_missing_source_index(self):
-        # Latent guard: future refactor that resets indices shouldn't crash.
-        from pages.components.dashboard_components import _resolve_table_selection
-
-        source_df = self._source_df()
-        # Index 99 is not in source_df — should be skipped, falling through
-        # to None, None rather than raising KeyError.
-        edited_df = pd.DataFrame(
-            {"_mkt": [True], "_doc": [False], "type_id": [99]},
-            index=[99],
-        )
-        assert _resolve_table_selection(edited_df, source_df) == (None, None)
-
-
 # =========================================================================
 # render_popular_modules_table — early exit contract
 # =========================================================================
