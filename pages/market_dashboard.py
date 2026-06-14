@@ -119,6 +119,17 @@ def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_rep
         if selected:
             _navigate_to_market_stats(selected)
 
+    dest = st.segmented_control(
+        translate_text(language_code, "dashboard.row_destination_label"),
+        options=["doctrine_status", "market_stats"],
+        format_func=lambda token: translate_text(language_code, f"nav.page.{token}"),
+        default="doctrine_status",
+        key="dash_row_destination",
+    )
+    # segmented_control returns None if the user deselects — default to the
+    # dashboard's primary use case.
+    dest = dest or "doctrine_status"
+
     ship_id, target = render_doctrine_ships_table(
         doctrine_repo=doctrine_repo,
         market_service=market_service,
@@ -126,6 +137,7 @@ def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_rep
         sde_repo=sde_repo,
         language_code=language_code,
         dataframe_key="dash_doctrine_ships",
+        destination=dest,
     )
     if ship_id and target == "market_stats":
         _navigate_to_market_stats(ship_id)
@@ -139,6 +151,7 @@ def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_rep
         sde_repo=sde_repo,
         language_code=language_code,
         dataframe_key="dash_popular_modules",
+        destination=dest,
     )
     if module_type_id and module_target == "market_stats":
         _navigate_to_market_stats(module_type_id)
