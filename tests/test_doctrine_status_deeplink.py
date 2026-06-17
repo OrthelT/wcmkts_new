@@ -80,3 +80,87 @@ class TestClearDeeplinkFilter:
         with patch.object(ds.st, "session_state", state):
             ds._clear_deeplink_filter()
         assert state == {"unrelated": 1}
+
+
+class TestClearDeeplinkModule:
+    """_clear_deeplink_module drops only the module key — used when a deep-linked
+    module turns out to have no fit info — leaving any ship filter intact."""
+
+    def test_clears_only_module_key(self):
+        from unittest.mock import patch
+
+        from pages import doctrine_status as ds
+
+        state = {"ds_deeplink_module_id": 13001}
+        with patch.object(ds.st, "session_state", state):
+            ds._clear_deeplink_module()
+        assert state == {}
+
+    def test_leaves_ship_key_untouched(self):
+        from unittest.mock import patch
+
+        from pages import doctrine_status as ds
+
+        state = {"ds_deeplink_ship_id": 603}
+        with patch.object(ds.st, "session_state", state):
+            ds._clear_deeplink_module()
+        assert state == {"ds_deeplink_ship_id": 603}
+
+    def test_invalid_module_cleared_so_next_visit_is_not_stuck(self):
+        # Reproduces the stale-bookmark stuck loop: a module_id is persisted on
+        # the first visit, proves invalid (no fit info), is cleared before
+        # st.stop(), and a later param-less visit no longer re-applies the bad
+        # filter (the page would otherwise be stuck on the error every visit).
+        from unittest.mock import patch
+
+        from pages import doctrine_status as ds
+
+        ss = {}
+        assert ds.resolve_deeplink_filter({"module_id": "999999"}, ss) == (None, 999999)
+        assert ss["ds_deeplink_module_id"] == 999999
+        # main() discovers empty fit info -> clears the bad key before stopping.
+        with patch.object(ds.st, "session_state", ss):
+            ds._clear_deeplink_module()
+        # Next visit with no query params must NOT re-apply the stale filter.
+        assert ds.resolve_deeplink_filter({}, ss) == (None, None)
+
+
+class TestClearDeeplinkShip:
+    """_clear_deeplink_ship drops only the ship key — used when a deep-linked
+    ship matches no fits (e.g. a bookmark from another market) — leaving any
+    module filter intact."""
+
+    def test_clears_only_ship_key(self):
+        from unittest.mock import patch
+
+        from pages import doctrine_status as ds
+
+        state = {"ds_deeplink_ship_id": 603}
+        with patch.object(ds.st, "session_state", state):
+            ds._clear_deeplink_ship()
+        assert state == {}
+
+    def test_leaves_module_key_untouched(self):
+        from unittest.mock import patch
+
+        from pages import doctrine_status as ds
+
+        state = {"ds_deeplink_module_id": 13001}
+        with patch.object(ds.st, "session_state", state):
+            ds._clear_deeplink_ship()
+        assert state == {"ds_deeplink_module_id": 13001}
+
+    def test_unmatched_ship_cleared_so_next_visit_is_clean(self):
+        # A bookmarked ship that matches nothing in the current market lingers
+        # invisibly (shows all fits, no banner/clear button). Clearing it on the
+        # empty-match path keeps the next param-less visit clean.
+        from unittest.mock import patch
+
+        from pages import doctrine_status as ds
+
+        ss = {}
+        assert ds.resolve_deeplink_filter({"ship_id": "603"}, ss) == (603, None)
+        assert ss["ds_deeplink_ship_id"] == 603
+        with patch.object(ds.st, "session_state", ss):
+            ds._clear_deeplink_ship()
+        assert ds.resolve_deeplink_filter({}, ss) == (None, None)

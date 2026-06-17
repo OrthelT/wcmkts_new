@@ -82,6 +82,17 @@ def _clear_deeplink_filter() -> None:
     st.session_state.pop(_DEEPLINK_MODULE_KEY, None)
 
 
+def _clear_deeplink_module() -> None:
+    """Drop only the persisted module deep-link to avoid sticking if a stale bookmarked
+    module no longer has any fits associated."""
+    st.session_state.pop(_DEEPLINK_MODULE_KEY, None)
+
+
+def _clear_deeplink_ship() -> None:
+    """Drop only the persisted ship deep-link. Mirrors [_clear_deeplink_module] for the ship filter."""
+    st.session_state.pop(_DEEPLINK_SHIP_KEY, None)
+
+
 def _render_deeplink_banner(
     icon_type_id: int,
     banner_text: str,
@@ -610,6 +621,13 @@ def main():
                 ),
                 language_code=language_code,
             )
+        else:
+            # Stale ship deep-link (e.g. bookmarked from another market) — drop
+            # it so it doesn't linger invisibly across later visits.
+            logger.warning(
+                "ship_id=%s matched no fits; clearing stale deep-link", qp_ship_id,
+            )
+            _clear_deeplink_ship()
 
     # Apply deep-link module filter from dashboard (show only fits using the module)
     if qp_module_id is not None:
@@ -619,6 +637,9 @@ def main():
                 "module_id=%s returned no fit info; refusing to show unfiltered list",
                 qp_module_id,
             )
+            # Drop the (now-known-invalid) persisted module id so a stale
+            # bookmark doesn't keep the page stuck on this error every visit.
+            _clear_deeplink_module()
             st.error(
                 translate_text(
                     language_code,
