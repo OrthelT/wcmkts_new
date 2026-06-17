@@ -129,6 +129,7 @@ def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_rep
     # segmented_control returns None if the user deselects — default to the
     # dashboard's primary use case.
     dest = dest or "doctrine_status"
+    st.caption(translate_text(language_code, "dashboard.row_select_hint"))
 
     ship_id, target = render_doctrine_ships_table(
         doctrine_repo=doctrine_repo,
@@ -143,6 +144,11 @@ def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_rep
         _navigate_to_market_stats(ship_id)
     elif ship_id and target == "doctrine_status":
         _navigate_to_doctrine_status(ship_id)
+    elif ship_id:
+        logger.error(
+            "Unknown ship target=%r for type_id=%s; ignoring click",
+            target, ship_id,
+        )
 
     module_type_id, module_target = render_popular_modules_table(
         market_service=market_service,

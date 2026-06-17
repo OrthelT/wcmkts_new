@@ -667,3 +667,78 @@ class TestGetSelectedTypeId:
     def test_out_of_range_row_returns_none(self):
         from pages.components.dashboard_components import _get_selected_type_id
         assert _get_selected_type_id(self._event([99]), self._df()) is None
+
+    def test_negative_row_returns_none(self):
+        # Streamlit never emits a negative on_select index, but the guard must
+        # reject it rather than letting iloc[-1] silently wrap to the last row.
+        from pages.components.dashboard_components import _get_selected_type_id
+        assert _get_selected_type_id(self._event([-1]), self._df()) is None
+
+    def test_out_of_range_row_logs_error(self):
+        # An out-of-range index means realignment drift (a legit click cannot
+        # produce one), so it must be logged loudly, not swallowed.
+        from pages.components import dashboard_components as dc
+        with patch.object(dc.logger, "error") as mock_err:
+            assert dc._get_selected_type_id(self._event([99]), self._df()) is None
+        mock_err.assert_called_once()
+
+    def test_normal_no_selection_does_not_log(self):
+        # None-event and empty-rows are normal "nothing selected" states — silent.
+        from pages.components import dashboard_components as dc
+        with patch.object(dc.logger, "error") as mock_err:
+            assert dc._get_selected_type_id(None, self._df()) is None
+            assert dc._get_selected_type_id(self._event([]), self._df()) is None
+        mock_err.assert_not_called()
+
+
+class TestResolveSelection:
+    """Realignment guard for the doctrine tables' on_select handling.
+
+    on_select returns a POSITIONAL index into the *displayed* (possibly
+    low-stock-filtered, alphabetically-sorted) rows, but the source frame is the
+    full unfiltered frame. _resolve_selection must realign source -> display
+    order before positional extraction. Restores the protection of the deleted
+    TestResolveTableSelection, which guarded the same off-by-row navigation bug.
+    """
+
+    def _event(self, rows):
+        from types import SimpleNamespace
+        return SimpleNamespace(selection={"rows": rows})
+
+    def test_filtered_frame_maps_position_to_displayed_row(self):
+        from pages.components.dashboard_components import _resolve_selection
+
+        # Full source: 4 rows. Low-stock filter kept only labels 2 and 3.
+        source_df = pd.DataFrame({"type_id": [11, 22, 33, 44]}, index=[0, 1, 2, 3])
+        display_df = source_df.loc[[2, 3]]
+        # Displayed position 1 -> label 3 -> type_id 44.
+        # The pre-fix bug (source_df.iloc[1] on the full frame) would return 22.
+        assert _resolve_selection(
+            self._event([1]), source_df, display_df, "market_stats",
+        ) == (44, "market_stats")
+
+    def test_reordered_display_maps_by_position_not_label(self):
+        from pages.components.dashboard_components import _resolve_selection
+
+        # Alphabetical sort can leave labels non-monotonic in display order.
+        source_df = pd.DataFrame({"type_id": [11, 22, 33]}, index=[0, 1, 2])
+        display_df = source_df.loc[[2, 0, 1]]  # display order: 33, 11, 22
+        assert _resolve_selection(
+            self._event([0]), source_df, display_df, "doctrine_status",
+        ) == (33, "doctrine_status")
+
+    def test_returns_destination_passed_through(self):
+        from pages.components.dashboard_components import _resolve_selection
+
+        source_df = pd.DataFrame({"type_id": [11, 22]}, index=[0, 1])
+        assert _resolve_selection(
+            self._event([0]), source_df, source_df, "doctrine_status",
+        ) == (11, "doctrine_status")
+
+    def test_no_selection_returns_none_none(self):
+        from pages.components.dashboard_components import _resolve_selection
+
+        source_df = pd.DataFrame({"type_id": [11, 22]}, index=[0, 1])
+        assert _resolve_selection(
+            self._event([]), source_df, source_df, "market_stats",
+        ) == (None, None)

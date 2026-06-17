@@ -35,8 +35,9 @@ _DEEPLINK_MODULE_KEY = "ds_deeplink_module_id"
 def _consume_int_param(query_params, key: str) -> int | None:
     """Pop ``key`` from query params, returning it as int (or None if absent/invalid).
 
-    The param is always removed from the URL once seen, so the URL stays clean
-    and the value lives only in session_state thereafter.
+    The param is always removed from the URL once seen (on every path, including
+    the invalid-int path), so a stale value can't linger across reruns. Callers
+    are responsible for persisting the returned value if needed.
     """
     if key not in query_params:
         return None

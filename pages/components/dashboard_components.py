@@ -165,7 +165,8 @@ def _get_selected_type_id(event, source_df: pd.DataFrame) -> int | None:
 
     Args:
         event: The return value from st.dataframe(on_select="rerun").
-        source_df: The full DataFrame (with type_id column) that was displayed.
+        source_df: A DataFrame (with a type_id column) whose row order matches
+            the displayed table — on_select returns a positional index.
 
     Returns:
         The selected type_id, or None if nothing was selected.
@@ -177,8 +178,37 @@ def _get_selected_type_id(event, source_df: pd.DataFrame) -> int | None:
         return None
     row_idx = rows[0]
     if row_idx < 0 or row_idx >= len(source_df):
+        # A legitimate click cannot produce an out-of-range index — this means
+        # source_df is misaligned with the rendered table (realignment drift or
+        # a stale event). Log loudly rather than silently navigating nowhere.
+        logger.error(
+            "on_select row_idx %r out of range for source_df of length %d "
+            "(realignment drift?)",
+            row_idx, len(source_df),
+        )
         return None
     return int(source_df.iloc[row_idx]["type_id"])
+
+
+def _resolve_selection(
+    event, source_df: pd.DataFrame, display_df: pd.DataFrame, destination: str,
+) -> tuple[int | None, str | None]:
+    """Map a dataframe selection event back to ``(type_id, destination)``.
+
+    on_select returns a *positional* index into the displayed rows, but
+    ``source_df`` is the full (unfiltered) frame. ``display_df`` may be filtered
+    (low-stock) and sorted (alphabetical), so its index is a subset of
+    source_df's labels in display order. Realign source_df to that order before
+    positional extraction, so a click on a filtered table resolves to the row
+    the user actually saw rather than the same position in the full frame.
+
+    Returns ``(None, None)`` when nothing was selected.
+    """
+    selection_source = source_df.loc[display_df.index]
+    selected = _get_selected_type_id(event, selection_source)
+    if selected is None:
+        return None, None
+    return selected, destination
 
 
 def _status_cell_style(status_label: str) -> str:
@@ -439,9 +469,13 @@ def render_popular_modules_table(
 
     Shows all non-ship items from the doctrines table, sorted alphabetically.
 
+    Args:
+        destination: which page a row click navigates to ("doctrine_status" or
+            "market_stats"); chosen by the dashboard's row-destination toggle.
+
     Returns:
-        (type_id, target) where target is "market_stats" or "doctrine_status",
-        or (None, None) if nothing was clicked.
+        (type_id, target) where target echoes ``destination``, or (None, None)
+        if nothing was clicked.
     """
     try:
         module_targets = _compute_module_targets(doctrine_repo)
@@ -515,12 +549,7 @@ def render_popular_modules_table(
             key=dataframe_key,
             width="content",
         )
-        # Realign to the filtered display order before positional extraction.
-        selection_source = snapshot.loc[display_df.index]
-        selected = _get_selected_type_id(event, selection_source)
-        if selected is not None:
-            return selected, destination
-        return None, None
+        return _resolve_selection(event, snapshot, display_df, destination)
 
     st.dataframe(
         styled_table,
@@ -606,11 +635,15 @@ def render_doctrine_ships_table(
     dataframe_key: str | None = None,
     destination: str = "doctrine_status",
 ) -> tuple[int | None, str | None]:
-    """Render doctrine ships stock vs targets table with dual navigation.
+    """Render doctrine ships stock vs targets table.
+
+    Args:
+        destination: which page a row click navigates to ("doctrine_status" or
+            "market_stats"); chosen by the dashboard's row-destination toggle.
 
     Returns:
-        (type_id, target) where target is "market_stats" or "doctrine_status",
-        or (None, None) if nothing was clicked.
+        (type_id, target) where target echoes ``destination``, or (None, None)
+        if nothing was clicked.
     """
     fits_df = doctrine_repo.get_all_fits()
     if fits_df.empty:
@@ -753,13 +786,7 @@ def render_doctrine_ships_table(
             key=dataframe_key,
             width="content",
         )
-        # source_df must match the displayed row ORDER (positional on_select index),
-        # so realign result_df to the filtered display_df.index before extracting.
-        selection_source = result_df.loc[display_df.index]
-        selected = _get_selected_type_id(event, selection_source)
-        if selected is not None:
-            return selected, destination
-        return None, None
+        return _resolve_selection(event, result_df, display_df, destination)
 
     st.dataframe(
         styled_table,

@@ -46,5 +46,37 @@ class TestResolveDeeplinkFilter:
         assert "ship_id" not in qp
         assert "ds_deeplink_ship_id" not in ss
 
+    def test_ship_wins_when_both_params_present(self):
+        # Documented precedence: ship wins, and both params are consumed.
+        qp, ss = {"ship_id": "603", "module_id": "13001"}, {}
+        assert self._call(qp, ss) == (603, None)
+        assert "ship_id" not in qp and "module_id" not in qp
+        assert ss["ds_deeplink_ship_id"] == 603
+        assert "ds_deeplink_module_id" not in ss
+
     def test_no_params_no_state_returns_none_none(self):
         assert self._call({}, {}) == (None, None)
+
+
+class TestClearDeeplinkFilter:
+    """_clear_deeplink_filter (the 'Show all fits' button) drops both keys."""
+
+    def test_clears_both_keys(self):
+        from unittest.mock import patch
+
+        from pages import doctrine_status as ds
+
+        state = {"ds_deeplink_ship_id": 603, "ds_deeplink_module_id": 13001}
+        with patch.object(ds.st, "session_state", state):
+            ds._clear_deeplink_filter()
+        assert state == {}
+
+    def test_is_a_noop_when_no_filter_active(self):
+        from unittest.mock import patch
+
+        from pages import doctrine_status as ds
+
+        state = {"unrelated": 1}
+        with patch.object(ds.st, "session_state", state):
+            ds._clear_deeplink_filter()
+        assert state == {"unrelated": 1}
