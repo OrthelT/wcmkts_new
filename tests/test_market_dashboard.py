@@ -760,6 +760,19 @@ class TestDestinationToggle:
             assert dc._render_destination_toggle("k", "en") == "doctrine_status"
 
 
+class TestRowOpenHint:
+    def test_renders_caption_with_destination_label(self):
+        from pages.components import dashboard_components as dc
+        with patch.object(dc, "st") as mock_st:
+            dc._render_row_open_hint("market_stats", "en")
+        mock_st.caption.assert_called_once()
+        caption_text = mock_st.caption.call_args.args[0]
+        # The hint interpolates the translated nav.page.market_stats label.
+        from ui.i18n import translate_text
+        expected_label = translate_text("en", "nav.page.market_stats")
+        assert expected_label in caption_text
+
+
 class TestTableFunctionsDropDestinationParam:
     def test_ships_table_has_no_destination_param(self):
         import inspect

@@ -276,7 +276,7 @@ def _render_destination_toggle(key: str, language_code: str) -> str:
 
 
 def _render_row_open_hint(destination: str, language_code: str) -> None:
-    """Render the dynamic 'click a row to open it in X' hint beneath a table."""
+    """Render the dynamic 'click a row to open it in X' hint below the destination toggle."""
     dest_label = translate_text(language_code, f"nav.page.{destination}")
     st.caption(
         translate_text(language_code, "dashboard.row_open_hint", destination=dest_label)
