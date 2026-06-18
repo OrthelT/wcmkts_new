@@ -235,7 +235,9 @@ def render_title_headers(market_name: str, language_code: str):
             "market_stats.title",
             market_name=market_name,
             header_env=header_env,
-        ).strip()
+        ).strip(),
+        back_page="pages/market_dashboard.py",
+        back_label=translate_text(language_code, "nav.back_to_dashboard"),
     )
 
 

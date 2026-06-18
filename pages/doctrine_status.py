@@ -462,6 +462,8 @@ def main():
     render_page_title(
         translate_text(language_code, "doctrine_status.title", market_name=market.name),
         subtitle=translate_text(language_code, "doctrine_status.downloads_hint"),
+        back_page="pages/market_dashboard.py",
+        back_label=translate_text(language_code, "nav.back_to_dashboard"),
     )
 
     # Use summary_df directly from FitBuildResult (no redundant get_fit_summary call)
