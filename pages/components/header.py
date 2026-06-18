@@ -45,8 +45,33 @@ def render_language_selector(
     return selected_language
 
 
-def render_page_title(title: str, *, subtitle: str | None = None) -> None:
-    """Render a standard page title and optional subtitle."""
-    st.title(title)
+def render_page_title(
+    title: str,
+    *,
+    subtitle: str | None = None,
+    back_page: str | None = None,
+    back_label: str | None = None,
+) -> None:
+    """Render a standard page title and optional subtitle.
+
+    When ``back_page`` is given, render a tertiary navigation button beside the
+    title that switches to that page on click — used for the dashboard return
+    affordance. ``back_label`` defaults to "← Dashboard". When ``back_page`` is
+    None the layout is unchanged, so other callers are unaffected.
+    """
+    if back_page:
+        back_col, title_col = st.columns([0.18, 0.82], vertical_alignment="center")
+        with back_col:
+            go_back = st.button(
+                back_label or "← Dashboard",
+                key=f"back_to_{back_page}",
+                type="tertiary",
+            )
+        with title_col:
+            st.title(title)
+        if go_back:
+            st.switch_page(back_page)
+    else:
+        st.title(title)
     if subtitle:
         st.markdown(subtitle)
