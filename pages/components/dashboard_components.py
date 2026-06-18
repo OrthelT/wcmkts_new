@@ -251,6 +251,38 @@ def _jita_diff_cell_style(diff_value: float) -> str:
     return "color: #728049"
 
 
+_DESTINATION_OPTIONS = ("doctrine_status", "market_stats")
+_DEFAULT_DESTINATION = "doctrine_status"
+
+
+def _render_destination_toggle(key: str, language_code: str) -> str:
+    """Render a per-table destination toggle; return the chosen page token.
+
+    ``segmented_control`` returns None when the user deselects the active
+    segment — fall back to the dashboard's primary destination so a row click
+    always resolves somewhere (mirrors the prior page-level guard).
+    """
+    _, toggle_col = st.columns([0.6, 0.4], vertical_alignment="center")
+    with toggle_col:
+        choice = st.segmented_control(
+            translate_text(language_code, "dashboard.row_open_in"),
+            options=list(_DESTINATION_OPTIONS),
+            format_func=lambda token: translate_text(language_code, f"nav.page.{token}"),
+            default=_DEFAULT_DESTINATION,
+            key=key,
+            label_visibility="collapsed",
+        )
+    return choice or _DEFAULT_DESTINATION
+
+
+def _render_row_open_hint(destination: str, language_code: str) -> None:
+    """Render the dynamic 'click a row to open it in X' hint beneath a table."""
+    dest_label = translate_text(language_code, f"nav.page.{destination}")
+    st.caption(
+        translate_text(language_code, "dashboard.row_open_hint", destination=dest_label)
+    )
+
+
 # =========================================================================
 # Comparison Table (minerals, isotopes, popular modules)
 # =========================================================================
@@ -463,19 +495,16 @@ def render_popular_modules_table(
     sde_repo,
     language_code: str,
     dataframe_key: str | None = None,
-    destination: str = "doctrine_status",
 ) -> tuple[int | None, str | None]:
     """Render doctrine modules table with stock, target %, qty needed, and fit count.
 
     Shows all non-ship items from the doctrines table, sorted alphabetically.
-
-    Args:
-        destination: which page a row click navigates to ("doctrine_status" or
-            "market_stats"); chosen by the dashboard's row-destination toggle.
+    The per-table destination toggle decides whether a row click opens Doctrine
+    Status or Market Stats.
 
     Returns:
-        (type_id, target) where target echoes ``destination``, or (None, None)
-        if nothing was clicked.
+        (type_id, destination) where destination is the toggle's value, or
+        (None, None) if nothing was clicked.
     """
     try:
         module_targets = _compute_module_targets(doctrine_repo)
@@ -528,6 +557,8 @@ def render_popular_modules_table(
     st.subheader(
         translate_text(language_code, "dashboard.doctrine_modules"), divider="gray",
     )
+    destination = _render_destination_toggle("dash_modules_destination", language_code)
+    _render_row_open_hint(destination, language_code)
     display_df = snapshot[display_cols].copy()
 
     mod_dash_filter_selection = _render_filter_columns("mod_dash_filter", language_code)
@@ -547,7 +578,7 @@ def render_popular_modules_table(
             on_select="rerun",
             selection_mode="single-row",
             key=dataframe_key,
-            width="content",
+            width="stretch",
         )
         return _resolve_selection(event, snapshot, display_df, destination)
 
@@ -555,7 +586,7 @@ def render_popular_modules_table(
         styled_table,
         hide_index=True,
         column_config=get_doctrine_modules_column_config(language_code),
-        width="content",
+        width="stretch",
     )
     return None, None
 
@@ -633,17 +664,15 @@ def render_doctrine_ships_table(
     sde_repo,
     language_code: str,
     dataframe_key: str | None = None,
-    destination: str = "doctrine_status",
 ) -> tuple[int | None, str | None]:
     """Render doctrine ships stock vs targets table.
 
-    Args:
-        destination: which page a row click navigates to ("doctrine_status" or
-            "market_stats"); chosen by the dashboard's row-destination toggle.
+    The per-table destination toggle decides whether a row click opens Doctrine
+    Status or Market Stats.
 
     Returns:
-        (type_id, target) where target echoes ``destination``, or (None, None)
-        if nothing was clicked.
+        (type_id, destination) where destination is the toggle's value, or
+        (None, None) if nothing was clicked.
     """
     fits_df = doctrine_repo.get_all_fits()
     if fits_df.empty:
@@ -763,6 +792,8 @@ def render_doctrine_ships_table(
     st.subheader(
         translate_text(language_code, "dashboard.doctrine_ships"), divider="gray",
     )
+    destination = _render_destination_toggle("dash_ships_destination", language_code)
+    _render_row_open_hint(destination, language_code)
     doc_dash_filter_selection = _render_filter_columns("doc_dash_filter", language_code)
     if doc_dash_filter_selection == "low_stock":
         display_df = display_df[display_df["target_pct"] < 100]
@@ -784,7 +815,7 @@ def render_doctrine_ships_table(
             on_select="rerun",
             selection_mode="single-row",
             key=dataframe_key,
-            width="content",
+            width="stretch",
         )
         return _resolve_selection(event, result_df, display_df, destination)
 
@@ -792,6 +823,6 @@ def render_doctrine_ships_table(
         styled_table,
         hide_index=True,
         column_config=get_doctrine_ships_column_config(language_code),
-        width="content",
+        width="stretch",
     )
     return None, None

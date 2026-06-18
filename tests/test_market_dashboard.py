@@ -742,3 +742,31 @@ class TestResolveSelection:
         assert _resolve_selection(
             self._event([]), source_df, source_df, "market_stats",
         ) == (None, None)
+
+
+class TestDestinationToggle:
+    def test_returns_choice_when_segment_selected(self):
+        from pages.components import dashboard_components as dc
+        with patch.object(dc, "st") as mock_st:
+            mock_st.columns.return_value = (MagicMock(), MagicMock())
+            mock_st.segmented_control.return_value = "market_stats"
+            assert dc._render_destination_toggle("k", "en") == "market_stats"
+
+    def test_falls_back_to_doctrine_status_when_none(self):
+        from pages.components import dashboard_components as dc
+        with patch.object(dc, "st") as mock_st:
+            mock_st.columns.return_value = (MagicMock(), MagicMock())
+            mock_st.segmented_control.return_value = None
+            assert dc._render_destination_toggle("k", "en") == "doctrine_status"
+
+
+class TestTableFunctionsDropDestinationParam:
+    def test_ships_table_has_no_destination_param(self):
+        import inspect
+        from pages.components.dashboard_components import render_doctrine_ships_table
+        assert "destination" not in inspect.signature(render_doctrine_ships_table).parameters
+
+    def test_modules_table_has_no_destination_param(self):
+        import inspect
+        from pages.components.dashboard_components import render_popular_modules_table
+        assert "destination" not in inspect.signature(render_popular_modules_table).parameters
