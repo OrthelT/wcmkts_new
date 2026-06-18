@@ -770,3 +770,27 @@ class TestTableFunctionsDropDestinationParam:
         import inspect
         from pages.components.dashboard_components import render_popular_modules_table
         assert "destination" not in inspect.signature(render_popular_modules_table).parameters
+
+
+class TestCommodityGridNoGlobalToggle:
+    def test_grid_source_has_no_global_destination_toggle(self):
+        # Read the source directly to avoid triggering main() at import time
+        import pathlib
+        source_path = pathlib.Path(__file__).parent.parent / "pages" / "market_dashboard.py"
+        source = source_path.read_text()
+
+        # Extract the _render_commodity_grid function body
+        # Find from "def _render_commodity_grid" to the next "def " at same indentation
+        import re
+        match = re.search(
+            r"def _render_commodity_grid\(.*?\):\n(.*?)(?=\ndef )",
+            source,
+            re.DOTALL
+        )
+        if not match:
+            pytest.fail("Could not find _render_commodity_grid function")
+
+        func_body = match.group(1)
+        assert "dash_row_destination" not in func_body, "Orphaned dash_row_destination key found"
+        assert "segmented_control" not in func_body, "Orphaned segmented_control found"
+        assert "destination=dest" not in func_body, "Orphaned destination=dest kwarg found"

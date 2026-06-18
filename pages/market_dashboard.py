@@ -91,7 +91,7 @@ def _navigate_to_doctrine_status_module(type_id: int):
 
 
 def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_repo, language_code):
-    """Render the 2x2 commodity table grid with clickable rows."""
+    """Render the commodity tables; each doctrine row routes via its own toggle."""
     top_row = st.columns(2, gap="small")
     with top_row[0]:
         selected = render_comparison_table(
@@ -119,18 +119,6 @@ def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_rep
         if selected:
             _navigate_to_market_stats(selected)
 
-    dest = st.segmented_control(
-        translate_text(language_code, "dashboard.row_destination_label"),
-        options=["doctrine_status", "market_stats"],
-        format_func=lambda token: translate_text(language_code, f"nav.page.{token}"),
-        default="doctrine_status",
-        key="dash_row_destination",
-    )
-    # segmented_control returns None if the user deselects — default to the
-    # dashboard's primary use case.
-    dest = dest or "doctrine_status"
-    st.caption(translate_text(language_code, "dashboard.row_select_hint"))
-
     ship_id, target = render_doctrine_ships_table(
         doctrine_repo=doctrine_repo,
         market_service=market_service,
@@ -138,7 +126,6 @@ def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_rep
         sde_repo=sde_repo,
         language_code=language_code,
         dataframe_key="dash_doctrine_ships",
-        destination=dest,
     )
     if ship_id and target == "market_stats":
         _navigate_to_market_stats(ship_id)
@@ -157,7 +144,6 @@ def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_rep
         sde_repo=sde_repo,
         language_code=language_code,
         dataframe_key="dash_popular_modules",
-        destination=dest,
     )
     if module_type_id and module_target == "market_stats":
         _navigate_to_market_stats(module_type_id)
