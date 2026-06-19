@@ -450,7 +450,7 @@ def main():
     if not ensure_market_db_ready(market.database_alias):
         st.error(
             f"Database for **{market.name}** is not available. "
-            "Check Turso credentials and network connectivity."
+            "Check credentials and network connectivity."
         )
         st.stop()
 

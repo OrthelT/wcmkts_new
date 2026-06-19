@@ -262,15 +262,14 @@ def _render_destination_toggle(key: str, language_code: str) -> str:
     segment — fall back to the dashboard's primary destination so a row click
     always resolves somewhere (mirrors the prior page-level guard).
     """
-    _, toggle_col = st.columns([0.6, 0.4], vertical_alignment="center")
-    with toggle_col:
-        choice = st.segmented_control(
-            translate_text(language_code, "dashboard.row_open_in"),
-            options=list(_DESTINATION_OPTIONS),
-            format_func=lambda token: translate_text(language_code, f"nav.page.{token}"),
-            default=_DEFAULT_DESTINATION,
-            key=key,
-            label_visibility="collapsed",
+    choice = st.segmented_control(
+        translate_text(language_code, "dashboard.row_open_in"),
+        options=list(_DESTINATION_OPTIONS),
+        format_func=lambda token: translate_text(language_code, f"nav.page.{token}"),
+        default=_DEFAULT_DESTINATION,
+        key=key,
+        label_visibility="visible",
+        help="Additional information that will be displayed when selecting a checkbox."
         )
     return choice or _DEFAULT_DESTINATION
 
@@ -344,6 +343,7 @@ def render_comparison_table(
     )
 
     st.subheader(translate_text(language_code, title_key), divider="gray")
+
     if dataframe_key:
         st.caption(translate_text(language_code, "dashboard.hint_click_market_stats"))
         event = st.dataframe(
@@ -792,9 +792,10 @@ def render_doctrine_ships_table(
     st.subheader(
         translate_text(language_code, "dashboard.doctrine_ships"), divider="gray",
     )
+    # st.caption(translate_text(language_code, "dashboard.hint_click_market_stats"))
+    doc_dash_filter_selection = _render_filter_columns("doc_dash_filter", language_code)
     destination = _render_destination_toggle("dash_ships_destination", language_code)
     _render_row_open_hint(destination, language_code)
-    doc_dash_filter_selection = _render_filter_columns("doc_dash_filter", language_code)
     if doc_dash_filter_selection == "low_stock":
         display_df = display_df[display_df["target_pct"] < 100]
 
