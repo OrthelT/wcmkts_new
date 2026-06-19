@@ -165,7 +165,8 @@ def _get_selected_type_id(event, source_df: pd.DataFrame) -> int | None:
 
     Args:
         event: The return value from st.dataframe(on_select="rerun").
-        source_df: The full DataFrame (with type_id column) that was displayed.
+        source_df: A DataFrame (with a type_id column) whose row order matches
+            the displayed table — on_select returns a positional index.
 
     Returns:
         The selected type_id, or None if nothing was selected.
@@ -177,8 +178,37 @@ def _get_selected_type_id(event, source_df: pd.DataFrame) -> int | None:
         return None
     row_idx = rows[0]
     if row_idx < 0 or row_idx >= len(source_df):
+        # A legitimate click cannot produce an out-of-range index — this means
+        # source_df is misaligned with the rendered table (realignment drift or
+        # a stale event). Log loudly rather than silently navigating nowhere.
+        logger.error(
+            "on_select row_idx %r out of range for source_df of length %d "
+            "(realignment drift?)",
+            row_idx, len(source_df),
+        )
         return None
     return int(source_df.iloc[row_idx]["type_id"])
+
+
+def _resolve_selection(
+    event, source_df: pd.DataFrame, display_df: pd.DataFrame, destination: str,
+) -> tuple[int | None, str | None]:
+    """Map a dataframe selection event back to ``(type_id, destination)``.
+
+    on_select returns a *positional* index into the displayed rows, but
+    ``source_df`` is the full (unfiltered) frame. ``display_df`` may be filtered
+    (low-stock) and sorted (alphabetical), so its index is a subset of
+    source_df's labels in display order. Realign source_df to that order before
+    positional extraction, so a click on a filtered table resolves to the row
+    the user actually saw rather than the same position in the full frame.
+
+    Returns ``(None, None)`` when nothing was selected.
+    """
+    selection_source = source_df.loc[display_df.index]
+    selected = _get_selected_type_id(event, selection_source)
+    if selected is None:
+        return None, None
+    return selected, destination
 
 
 def _status_cell_style(status_label: str) -> str:
@@ -219,6 +249,37 @@ def _jita_diff_cell_style(diff_value: float) -> str:
     if value < 0:
         return "color: #ef5350"
     return "color: #728049"
+
+
+_DESTINATION_OPTIONS = ("doctrine_status", "market_stats")
+_DEFAULT_DESTINATION = "doctrine_status"
+
+
+def _render_destination_toggle(key: str, language_code: str) -> str:
+    """Render a per-table destination toggle; return the chosen page token.
+
+    ``segmented_control`` returns None when the user deselects the active
+    segment — fall back to the dashboard's primary destination so a row click
+    always resolves somewhere (mirrors the prior page-level guard).
+    """
+    choice = st.segmented_control(
+        translate_text(language_code, "dashboard.row_open_in"),
+        options=list(_DESTINATION_OPTIONS),
+        format_func=lambda token: translate_text(language_code, f"nav.page.{token}"),
+        default=_DEFAULT_DESTINATION,
+        key=key,
+        label_visibility="visible",
+        help="Additional information that will be displayed when selecting a checkbox."
+        )
+    return choice or _DEFAULT_DESTINATION
+
+
+def _render_row_open_hint(destination: str, language_code: str) -> None:
+    """Render the dynamic 'click a row to open it in X' hint below the destination toggle."""
+    dest_label = translate_text(language_code, f"nav.page.{destination}")
+    st.caption(
+        translate_text(language_code, "dashboard.row_open_hint", destination=dest_label)
+    )
 
 
 # =========================================================================
@@ -282,6 +343,7 @@ def render_comparison_table(
     )
 
     st.subheader(translate_text(language_code, title_key), divider="gray")
+
     if dataframe_key:
         st.caption(translate_text(language_code, "dashboard.hint_click_market_stats"))
         event = st.dataframe(
@@ -395,32 +457,6 @@ def _compute_module_targets(doctrine_repo) -> pd.DataFrame:
 
     return agg
 
-def _resolve_table_selection(
-    edited_df: pd.DataFrame, source_df: pd.DataFrame,
-) -> tuple[int | None, str | None]:
-    """Resolve which row in the data_editor was clicked, by preserved pandas index.
-
-    edited_df.index carries the source_df index even when display_df was
-    filtered; positional iloc on source_df would misalign whenever any rows
-    were dropped before render. Returns (type_id, "market_stats" | "doctrine_status")
-    or (None, None) when neither checkbox is checked.
-    """
-    for idx in range(len(edited_df)):
-        row = edited_df.iloc[idx]
-        if not (row["_mkt"] or row["_doc"]):
-            continue
-        source_idx = edited_df.index[idx]
-        if source_idx not in source_df.index:
-            logger.error(
-                "Selected row index %r not found in source DataFrame; skipping",
-                source_idx,
-            )
-            continue
-        type_id = int(source_df.loc[source_idx, "type_id"])
-        target = "market_stats" if row["_mkt"] else "doctrine_status"
-        return type_id, target
-    return None, None
-
 
 _FILTER_OPTIONS = ("low_stock", "all")
 
@@ -463,10 +499,12 @@ def render_popular_modules_table(
     """Render doctrine modules table with stock, target %, qty needed, and fit count.
 
     Shows all non-ship items from the doctrines table, sorted alphabetically.
+    The per-table destination toggle decides whether a row click opens Doctrine
+    Status or Market Stats.
 
     Returns:
-        (type_id, target) where target is "market_stats" or "doctrine_status",
-        or (None, None) if nothing was clicked.
+        (type_id, destination) where destination is the toggle's value, or
+        (None, None) if nothing was clicked.
     """
     try:
         module_targets = _compute_module_targets(doctrine_repo)
@@ -509,56 +547,48 @@ def render_popular_modules_table(
 
     # Sort alphabetically by item name
     snapshot = snapshot.sort_values("type_name", key=lambda s: s.str.lower())
-    snapshot["_mkt"] = False
-    snapshot["_doc"] = False
 
     display_cols = [
         "type_id", "image_url", "type_name", "target_pct", "order_volume",
         "fit_count", "qty_needed", "current_sell_price", "jita_sell_price",
-        "jita_buy_price", "pct_diff_vs_jita_sell", "_mkt", "_doc",
+        "jita_buy_price", "pct_diff_vs_jita_sell",
     ]
 
     st.subheader(
         translate_text(language_code, "dashboard.doctrine_modules"), divider="gray",
     )
+    destination = _render_destination_toggle("dash_modules_destination", language_code)
+    _render_row_open_hint(destination, language_code)
     display_df = snapshot[display_cols].copy()
 
     mod_dash_filter_selection = _render_filter_columns("mod_dash_filter", language_code)
     if mod_dash_filter_selection == "low_stock":
         display_df = display_df[display_df["target_pct"] < 100]
 
-    if dataframe_key:
-        st.caption(
-            "📈 = "
-            + translate_text(language_code, "dashboard.hint_click_market_stats")
-            + "  ·  ⚔️ = "
-            + translate_text(language_code, "dashboard.hint_click_doctrine_status")
-        )
-        table_df = drop_localized_backup_columns(display_df)
-        styled_table = table_df.style.map(
-            _jita_diff_cell_style, subset=["pct_diff_vs_jita_sell"]
-        )
+    table_df = drop_localized_backup_columns(display_df)
+    styled_table = table_df.style.map(
+        _jita_diff_cell_style, subset=["pct_diff_vs_jita_sell"]
+    )
 
-        edited_df = st.data_editor(
+    if dataframe_key:
+        event = st.dataframe(
             styled_table,
             hide_index=True,
             column_config=get_doctrine_modules_column_config(language_code),
-            disabled=[c for c in display_cols if c not in ("_mkt", "_doc")],
+            on_select="rerun",
+            selection_mode="single-row",
             key=dataframe_key,
+            width="stretch",
         )
-        return _resolve_table_selection(edited_df, snapshot)
-    else:
-        table_df = drop_localized_backup_columns(display_df)
-        styled_table = table_df.style.map(
-            _jita_diff_cell_style, subset=["pct_diff_vs_jita_sell"]
-        )
-        st.dataframe(
-            styled_table,
-            hide_index=True,
-            column_config=get_doctrine_modules_column_config(language_code),
-            width="content",
-        )
-        return None, None
+        return _resolve_selection(event, snapshot, display_df, destination)
+
+    st.dataframe(
+        styled_table,
+        hide_index=True,
+        column_config=get_doctrine_modules_column_config(language_code),
+        width="stretch",
+    )
+    return None, None
 
 
 # =========================================================================
@@ -635,11 +665,14 @@ def render_doctrine_ships_table(
     language_code: str,
     dataframe_key: str | None = None,
 ) -> tuple[int | None, str | None]:
-    """Render doctrine ships stock vs targets table with dual navigation.
+    """Render doctrine ships stock vs targets table.
+
+    The per-table destination toggle decides whether a row click opens Doctrine
+    Status or Market Stats.
 
     Returns:
-        (type_id, target) where target is "market_stats" or "doctrine_status",
-        or (None, None) if nothing was clicked.
+        (type_id, destination) where destination is the toggle's value, or
+        (None, None) if nothing was clicked.
     """
     fits_df = doctrine_repo.get_all_fits()
     if fits_df.empty:
@@ -729,8 +762,6 @@ def render_doctrine_ships_table(
             "ship_target": target,
             "fits_on_mkt": fits_on_mkt,
             "status": f"{status_icons.get(status, '')} {status.display_name}",
-            "_mkt": False,
-            "_doc": False,
         })
 
     if missing_target_fids:
@@ -755,58 +786,44 @@ def render_doctrine_ships_table(
     display_cols = [
         "fit_id", "image_url", "type_name", "target_pct", "order_volume",
         "fits_on_mkt", "ship_target", "current_sell_price", "jita_sell_price",
-        "_mkt", "_doc",
     ]
-    
 
     display_df = result_df[display_cols].copy()
     st.subheader(
         translate_text(language_code, "dashboard.doctrine_ships"), divider="gray",
     )
+    # st.caption(translate_text(language_code, "dashboard.hint_click_market_stats"))
     doc_dash_filter_selection = _render_filter_columns("doc_dash_filter", language_code)
+    destination = _render_destination_toggle("dash_ships_destination", language_code)
+    _render_row_open_hint(destination, language_code)
     if doc_dash_filter_selection == "low_stock":
         display_df = display_df[display_df["target_pct"] < 100]
 
-    if dataframe_key:
-        st.caption(
-            "📈 = "
-            + translate_text(language_code, "dashboard.hint_click_market_stats")
-            + "  ·  ⚔️ = "
-            + translate_text(language_code, "dashboard.hint_click_doctrine_status")
+    table_df = drop_localized_backup_columns(display_df)
+    status_labels = result_df["status"]
+    if doc_dash_filter_selection == "all":
+        styled_table = table_df.style.apply(
+            lambda col: _fits_avail_column_style(col, status_labels), axis=0
         )
-        table_df = drop_localized_backup_columns(display_df)
-        status_labels = result_df["status"]
-
-        if doc_dash_filter_selection == "all":
-           styled_table = table_df.style.apply(
-                lambda col: _fits_avail_column_style(col, status_labels), axis=0
-            )
-        else:
-            styled_table = table_df
-
-        edited_df = st.data_editor(
-            styled_table,
-            hide_index=True,
-            column_config=get_doctrine_ships_column_config(language_code),
-            disabled=[c for c in display_cols if c not in ("_mkt", "_doc")],
-            key=dataframe_key,
-        )
-        return _resolve_table_selection(edited_df, result_df)
     else:
-        table_df = drop_localized_backup_columns(result_df[display_cols[:9]].copy())
-        status_labels = result_df["status"]
-        
-        if doc_dash_filter_selection == "all":
-           styled_table = table_df.style.apply(
-                lambda col: _fits_avail_column_style(col, status_labels), axis=0
-            )
-        else:
-            styled_table = table_df
-        
-        st.dataframe(
+        styled_table = table_df
+
+    if dataframe_key:
+        event = st.dataframe(
             styled_table,
             hide_index=True,
             column_config=get_doctrine_ships_column_config(language_code),
-            width="content",
+            on_select="rerun",
+            selection_mode="single-row",
+            key=dataframe_key,
+            width="stretch",
         )
-        return None, None
+        return _resolve_selection(event, result_df, display_df, destination)
+
+    st.dataframe(
+        styled_table,
+        hide_index=True,
+        column_config=get_doctrine_ships_column_config(language_code),
+        width="stretch",
+    )
+    return None, None

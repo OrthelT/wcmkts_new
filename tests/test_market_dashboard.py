@@ -266,7 +266,6 @@ class TestDoctrineShipsColumnConfig:
             "image_url", "fit_id", "type_name", "target_pct",
             "current_sell_price", "order_volume",
             "jita_sell_price", "ship_target", "fits_on_mkt",
-            "_mkt", "_doc",
         }
         assert set(config.keys()) == expected_keys
 
@@ -372,7 +371,7 @@ class TestDoctrineModulesColumnConfig:
         expected_keys = {
             "type_id", "image_url", "type_name", "target_pct", "order_volume",
             "fit_count", "qty_needed", "current_sell_price", "jita_sell_price",
-            "jita_buy_price", "pct_diff_vs_jita_sell", "_mkt", "_doc",
+            "jita_buy_price", "pct_diff_vs_jita_sell",
         }
         assert set(config.keys()) == expected_keys
 
@@ -418,68 +417,6 @@ class TestComputeModuleTargetsMissingTargets:
         repo = self._make_repo(fits_df, targets_df)
         with pytest.raises(ValueError, match=r"\[2, 3\]"):
             _compute_module_targets(repo)
-
-
-class TestResolveTableSelection:
-    """Regression tests for `_resolve_table_selection`.
-
-    Guards the bug where iloc-based row resolution returned the wrong type_id
-    when display_df was filtered (low-stock filter dropped rows from source_df).
-    """
-
-    def _source_df(self):
-        # Source uses non-contiguous index to simulate a row-filter result;
-        # the bugfix relies on edited_df.index aligning with source_df.index.
-        return pd.DataFrame(
-            {"type_id": [11, 22, 33, 44]},
-            index=[0, 1, 2, 3],
-        )
-
-    def test_returns_market_stats_target_for_correct_row(self):
-        from pages.components.dashboard_components import _resolve_table_selection
-
-        source_df = self._source_df()
-        # Filtered display kept only rows at index 2 and 3 (low-stock subset)
-        edited_df = pd.DataFrame(
-            {"_mkt": [False, True], "_doc": [False, False], "type_id": [33, 44]},
-            index=[2, 3],
-        )
-        # iloc[1] → type_id 44, the correct answer.
-        # Pre-fix code did `source_df.iloc[1]` which would have returned 22.
-        assert _resolve_table_selection(edited_df, source_df) == (44, "market_stats")
-
-    def test_returns_doctrine_status_target(self):
-        from pages.components.dashboard_components import _resolve_table_selection
-
-        source_df = self._source_df()
-        edited_df = pd.DataFrame(
-            {"_mkt": [False, False], "_doc": [True, False], "type_id": [33, 44]},
-            index=[2, 3],
-        )
-        assert _resolve_table_selection(edited_df, source_df) == (33, "doctrine_status")
-
-    def test_returns_none_none_when_no_checkbox_set(self):
-        from pages.components.dashboard_components import _resolve_table_selection
-
-        source_df = self._source_df()
-        edited_df = pd.DataFrame(
-            {"_mkt": [False, False], "_doc": [False, False], "type_id": [11, 22]},
-            index=[0, 1],
-        )
-        assert _resolve_table_selection(edited_df, source_df) == (None, None)
-
-    def test_skips_rows_with_missing_source_index(self):
-        # Latent guard: future refactor that resets indices shouldn't crash.
-        from pages.components.dashboard_components import _resolve_table_selection
-
-        source_df = self._source_df()
-        # Index 99 is not in source_df — should be skipped, falling through
-        # to None, None rather than raising KeyError.
-        edited_df = pd.DataFrame(
-            {"_mkt": [True], "_doc": [False], "type_id": [99]},
-            index=[99],
-        )
-        assert _resolve_table_selection(edited_df, source_df) == (None, None)
 
 
 # =========================================================================
@@ -702,3 +639,171 @@ class TestRequireJitaPrices:
 
         assert result == {}
         mock_st.error.assert_not_called()
+
+
+class TestGetSelectedTypeId:
+    """Lock the on_select extraction contract reused by the doctrine tables."""
+
+    def _df(self):
+        return pd.DataFrame({"type_id": [11, 22, 33]})
+
+    def _event(self, rows):
+        from types import SimpleNamespace
+        return SimpleNamespace(selection={"rows": rows})
+
+    def test_none_event_returns_none(self):
+        from pages.components.dashboard_components import _get_selected_type_id
+        assert _get_selected_type_id(None, self._df()) is None
+
+    def test_empty_selection_returns_none(self):
+        from pages.components.dashboard_components import _get_selected_type_id
+        assert _get_selected_type_id(self._event([]), self._df()) is None
+
+    def test_valid_row_returns_positional_type_id(self):
+        from pages.components.dashboard_components import _get_selected_type_id
+        # row index 1 → second row → type_id 22 (positional, index-label agnostic)
+        assert _get_selected_type_id(self._event([1]), self._df()) == 22
+
+    def test_out_of_range_row_returns_none(self):
+        from pages.components.dashboard_components import _get_selected_type_id
+        assert _get_selected_type_id(self._event([99]), self._df()) is None
+
+    def test_negative_row_returns_none(self):
+        # Streamlit never emits a negative on_select index, but the guard must
+        # reject it rather than letting iloc[-1] silently wrap to the last row.
+        from pages.components.dashboard_components import _get_selected_type_id
+        assert _get_selected_type_id(self._event([-1]), self._df()) is None
+
+    def test_out_of_range_row_logs_error(self):
+        # An out-of-range index means realignment drift (a legit click cannot
+        # produce one), so it must be logged loudly, not swallowed.
+        from pages.components import dashboard_components as dc
+        with patch.object(dc.logger, "error") as mock_err:
+            assert dc._get_selected_type_id(self._event([99]), self._df()) is None
+        mock_err.assert_called_once()
+
+    def test_normal_no_selection_does_not_log(self):
+        # None-event and empty-rows are normal "nothing selected" states — silent.
+        from pages.components import dashboard_components as dc
+        with patch.object(dc.logger, "error") as mock_err:
+            assert dc._get_selected_type_id(None, self._df()) is None
+            assert dc._get_selected_type_id(self._event([]), self._df()) is None
+        mock_err.assert_not_called()
+
+
+class TestResolveSelection:
+    """Realignment guard for the doctrine tables' on_select handling.
+
+    on_select returns a POSITIONAL index into the *displayed* (possibly
+    low-stock-filtered, alphabetically-sorted) rows, but the source frame is the
+    full unfiltered frame. _resolve_selection must realign source -> display
+    order before positional extraction. Restores the protection of the deleted
+    TestResolveTableSelection, which guarded the same off-by-row navigation bug.
+    """
+
+    def _event(self, rows):
+        from types import SimpleNamespace
+        return SimpleNamespace(selection={"rows": rows})
+
+    def test_filtered_frame_maps_position_to_displayed_row(self):
+        from pages.components.dashboard_components import _resolve_selection
+
+        # Full source: 4 rows. Low-stock filter kept only labels 2 and 3.
+        source_df = pd.DataFrame({"type_id": [11, 22, 33, 44]}, index=[0, 1, 2, 3])
+        display_df = source_df.loc[[2, 3]]
+        # Displayed position 1 -> label 3 -> type_id 44.
+        # The pre-fix bug (source_df.iloc[1] on the full frame) would return 22.
+        assert _resolve_selection(
+            self._event([1]), source_df, display_df, "market_stats",
+        ) == (44, "market_stats")
+
+    def test_reordered_display_maps_by_position_not_label(self):
+        from pages.components.dashboard_components import _resolve_selection
+
+        # Alphabetical sort can leave labels non-monotonic in display order.
+        source_df = pd.DataFrame({"type_id": [11, 22, 33]}, index=[0, 1, 2])
+        display_df = source_df.loc[[2, 0, 1]]  # display order: 33, 11, 22
+        assert _resolve_selection(
+            self._event([0]), source_df, display_df, "doctrine_status",
+        ) == (33, "doctrine_status")
+
+    def test_returns_destination_passed_through(self):
+        from pages.components.dashboard_components import _resolve_selection
+
+        source_df = pd.DataFrame({"type_id": [11, 22]}, index=[0, 1])
+        assert _resolve_selection(
+            self._event([0]), source_df, source_df, "doctrine_status",
+        ) == (11, "doctrine_status")
+
+    def test_no_selection_returns_none_none(self):
+        from pages.components.dashboard_components import _resolve_selection
+
+        source_df = pd.DataFrame({"type_id": [11, 22]}, index=[0, 1])
+        assert _resolve_selection(
+            self._event([]), source_df, source_df, "market_stats",
+        ) == (None, None)
+
+
+class TestDestinationToggle:
+    def test_returns_choice_when_segment_selected(self):
+        from pages.components import dashboard_components as dc
+        with patch.object(dc, "st") as mock_st:
+            mock_st.columns.return_value = (MagicMock(), MagicMock())
+            mock_st.segmented_control.return_value = "market_stats"
+            assert dc._render_destination_toggle("k", "en") == "market_stats"
+
+    def test_falls_back_to_doctrine_status_when_none(self):
+        from pages.components import dashboard_components as dc
+        with patch.object(dc, "st") as mock_st:
+            mock_st.columns.return_value = (MagicMock(), MagicMock())
+            mock_st.segmented_control.return_value = None
+            assert dc._render_destination_toggle("k", "en") == "doctrine_status"
+
+
+class TestRowOpenHint:
+    def test_renders_caption_with_destination_label(self):
+        from pages.components import dashboard_components as dc
+        with patch.object(dc, "st") as mock_st:
+            dc._render_row_open_hint("market_stats", "en")
+        mock_st.caption.assert_called_once()
+        caption_text = mock_st.caption.call_args.args[0]
+        # The hint interpolates the translated nav.page.market_stats label.
+        from ui.i18n import translate_text
+        expected_label = translate_text("en", "nav.page.market_stats")
+        assert expected_label in caption_text
+
+
+class TestTableFunctionsDropDestinationParam:
+    def test_ships_table_has_no_destination_param(self):
+        import inspect
+        from pages.components.dashboard_components import render_doctrine_ships_table
+        assert "destination" not in inspect.signature(render_doctrine_ships_table).parameters
+
+    def test_modules_table_has_no_destination_param(self):
+        import inspect
+        from pages.components.dashboard_components import render_popular_modules_table
+        assert "destination" not in inspect.signature(render_popular_modules_table).parameters
+
+
+class TestCommodityGridNoGlobalToggle:
+    def test_grid_source_has_no_global_destination_toggle(self):
+        # Read the source directly to avoid triggering main() at import time
+        import pathlib
+        source_path = pathlib.Path(__file__).parent.parent / "pages" / "market_dashboard.py"
+        source = source_path.read_text()
+
+        # Extract the _render_commodity_grid function body
+        # Find from "def _render_commodity_grid" to the next "def " at same indentation
+        import re
+        match = re.search(
+            r"def _render_commodity_grid\(.*?\):\n(.*?)(?=\ndef )",
+            source,
+            re.DOTALL
+        )
+        if not match:
+            pytest.fail("Could not find _render_commodity_grid function")
+
+        func_body = match.group(1)
+        assert "dash_row_destination" not in func_body, "Orphaned dash_row_destination key found"
+        assert "segmented_control" not in func_body, "Orphaned segmented_control found"
+        assert "destination=dest" not in func_body, "Orphaned destination=dest kwarg found"

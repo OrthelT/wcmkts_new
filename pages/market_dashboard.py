@@ -91,7 +91,7 @@ def _navigate_to_doctrine_status_module(type_id: int):
 
 
 def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_repo, language_code):
-    """Render the 2x2 commodity table grid with clickable rows."""
+    """Render the commodity tables; each doctrine row routes via its own toggle."""
     top_row = st.columns(2, gap="small")
     with top_row[0]:
         selected = render_comparison_table(
@@ -131,6 +131,11 @@ def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_rep
         _navigate_to_market_stats(ship_id)
     elif ship_id and target == "doctrine_status":
         _navigate_to_doctrine_status(ship_id)
+    elif ship_id:
+        logger.error(
+            "Unknown ship target=%r for type_id=%s; ignoring click",
+            target, ship_id,
+        )
 
     module_type_id, module_target = render_popular_modules_table(
         market_service=market_service,
