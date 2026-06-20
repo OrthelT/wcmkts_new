@@ -1,12 +1,17 @@
-# Winter Coalition Market App (v.0.6.4)
+# Winter Coalition Market App (v.0.6.5)
 A Streamlit application for viewing EVE Online market statistics for Winter Coalition. This tool provides real-time market data analysis, historical price tracking, and fitting information for various items in EVE Online markets.
 
 SUPPORT: Join the Discord for support https://discord.gg/BxatJE572Y
 CONTRIBUTING: Contributors welcome. This project is fully open source under MIT License. Source code and full documentation available on GitHub: https://github.com/OrthelT/wcmkts_new
 
-
-
 # UPDATES:
+## version 0.6.5
+### New Features and fixes
+- Improves ui/ux when using market_dashboard navigation -> doctrine status or market stats
+- Single row selection checkbox navigates to additional data destination based on toggle selection
+- return button now navigates back to market_dashboard.
+- fix: selected items now survive reruns so interaction with widget elements don't force rerun to default page view. This restores functionality for menu_button selection (fit details and low stock items) on doctrine stats page.
+
 ## version 0.6.4
 ### New Features
 - **Builder Helper stock filters**: New sidebar filters let manufacturers narrow the table to what actually needs building -- `Min days of stock`, `Doctrine items only`, `Below doctrine target`, and `Low stock only`. `Min days` also sizes the suggested `need` column, so it is read before the data is built.
