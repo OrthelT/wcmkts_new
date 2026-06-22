@@ -496,19 +496,14 @@ def main():
         )
         group_id = 1012
     else:
-        groups = get_sde_repository().get_groups_for_category(category_id)
-        groups = groups.sort_values(by="groupName")
-        groups = groups.drop(groups[groups["groupName"] == "Abyssal Modules"].index)
-        group_names = groups["groupName"].unique()
-        selected_group = st.sidebar.selectbox(
-            translate_text(language_code, "build_costs.group_label"), group_names
-        )
-        group_id = groups[groups["groupName"] == selected_group]["groupID"].values[0]
-        logger.info(f"Selected group: {selected_group} ({group_id})")
+        group_id = None
 
     try:
         sde_repo = get_sde_repository()
-        types_df = sde_repo.get_types_for_group(group_id)
+        if group_id and group_id == 1012:
+            types_df = sde_repo.get_types_for_group(group_id)
+        else:
+            types_df: pd.DataFrame = sde_repo.get_types_for_category(category_id)
         types_df = types_df.sort_values(by="typeName")
 
         if len(types_df) == 0:
@@ -629,14 +624,13 @@ def main():
     all_structures = repo.get_all_structures(is_super=st.session_state.super)
     structure_names = sorted([structure.structure for structure in all_structures])
 
-    with st.sidebar.expander(translate_text(language_code, "build_costs.structure_compare_expander")):
-        selected_structure = st.selectbox(
-            translate_text(language_code, "build_costs.structure_compare_label"),
-            structure_names,
-            index=None,
-            placeholder=translate_text(language_code, "build_costs.structure_compare_placeholder"),
-            help=translate_text(language_code, "build_costs.structure_compare_help"),
-        )
+    selected_structure = st.sidebar.selectbox(
+        translate_text(language_code, "build_costs.structure_compare_label"),
+        structure_names,
+        index=None,
+        placeholder=translate_text(language_code, "build_costs.structure_compare_placeholder"),
+        help=translate_text(language_code, "build_costs.structure_compare_help"),
+    )
 
     current_job_params = {
         "item": selected_item,
