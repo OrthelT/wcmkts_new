@@ -360,7 +360,7 @@ def render_30day_metrics_ui(service, language_code: str = "en") -> None:
         divider="gray",
     )
 
-    avg_daily_volume, avg_daily_isk_value, vol_delta, isk_delta, df_7days, df_30days = (
+    avg_daily_volume, avg_daily_isk_value, vol_delta, isk_delta, df_30days, df_7days = (
         service.calculate_30day_metrics(
             selected_category=metrics_category,
             selected_category_id=metrics_category_id,
