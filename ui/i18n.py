@@ -609,7 +609,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.price_source_esi_average": "ESI Average",
         "build_costs.price_source_jita_sell": "Jita Sell",
         "build_costs.price_source_jita_buy": "Jita Buy",
-        "build_costs.structure_compare_expander": "Select a structure to compare (optional)",
         "build_costs.structure_compare_label": "Structures",
         "build_costs.structure_compare_placeholder": "All Structures",
         "build_costs.structure_compare_help": (
@@ -1304,7 +1303,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.price_source_esi_average": "ESI 平均价",
         "build_costs.price_source_jita_sell": "吉他卖价",
         "build_costs.price_source_jita_buy": "吉他买价",
-        "build_costs.structure_compare_expander": "选择要比较的建筑（可选）",
         "build_costs.structure_compare_label": "建筑",
         "build_costs.structure_compare_placeholder": "所有建筑",
         "build_costs.structure_compare_help": "选择一个建筑来比较制造成本；留空则显示所有建筑。",
@@ -1859,7 +1857,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.price_source_jita_buy": "Jita Ankauf",
         "market_stats.mineral_price_comparison": "Mineralpreisvergleich",
         "market_stats.isotope_and_fuel_block_comparison": "Isotope und Treibstoffblöcke",
-        "build_costs.structure_compare_expander": "Struktur zum Vergleich auswählen (optional)",
         "build_costs.structure_compare_label": "Strukturen",
         "build_costs.structure_compare_placeholder": "Alle Strukturen",
         "build_costs.structure_compare_help": (
@@ -2438,7 +2435,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.price_source_jita_buy": "Achat Jita",
         "market_stats.mineral_price_comparison": "Comparaison des prix des mineraux",
         "market_stats.isotope_and_fuel_block_comparison": "Isotopes et blocs de carburant",
-        "build_costs.structure_compare_expander": "Sélectionner une structure de comparaison (optionnel)",
         "build_costs.structure_compare_label": "Structures",
         "build_costs.structure_compare_placeholder": "Toutes les structures",
         "build_costs.structure_compare_help": (
@@ -3017,7 +3013,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.price_source_jita_buy": "Покупка Jita",
         "market_stats.mineral_price_comparison": "Сравнение цен на минералы",
         "market_stats.isotope_and_fuel_block_comparison": "Изотопы и топливные блоки",
-        "build_costs.structure_compare_expander": "Выберите структуру для сравнения (необязательно)",
         "build_costs.structure_compare_label": "Структуры",
         "build_costs.structure_compare_placeholder": "Все структуры",
         "build_costs.structure_compare_help": (
@@ -3519,7 +3514,6 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.price_source_jita_buy": "Compra Jita",
         "market_stats.mineral_price_comparison": "Comparacion de precios de minerales",
         "market_stats.isotope_and_fuel_block_comparison": "Isotopos y bloques de combustible",
-        "build_costs.structure_compare_expander": "Selecciona una estructura para comparar (opcional)",
         "build_costs.structure_compare_label": "Estructuras",
         "build_costs.structure_compare_placeholder": "Todas las estructuras",
         "build_costs.structure_compare_help": (
