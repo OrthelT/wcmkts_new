@@ -15,9 +15,11 @@ Design:
 """
 
 import logging
+from pathlib import Path
 from typing import Optional
 
 import pandas as pd
+from sqlalchemy.sql import bindparam
 import streamlit as st
 from sqlalchemy import text
 
@@ -26,6 +28,11 @@ from logging_config import setup_logging
 from repositories.base import BaseRepository
 
 logger = setup_logging(__name__, log_file="sde_repo.log")
+
+# CSV of group IDs that define the "Build Components (Commodity)" category (id 17).
+_COMMODITY_GROUPS_CSV = (
+    Path(__file__).resolve().parent.parent / "csvfiles" / "build_commodity_groups.csv"
+)
 
 # Allowlist of valid SDE table names for get_sde_table (prevents SQL injection)
 VALID_SDE_TABLES = frozenset({
@@ -102,6 +109,66 @@ def _get_groups_for_category_impl(engine, category_id: int) -> pd.DataFrame:
     with engine.connect() as conn:
         return pd.read_sql_query(query, conn, params={"category_id": category_id})
 
+def _get_types_for_category_impl(engine, remote_engine, category_id: int) -> pd.DataFrame:
+    """Fetch types (typeID, typeName) for a category ID, with malformed-DB fallback to remote.
+
+    Special cases:
+    - category_id 17 (Build Components / Commodity): uses the group IDs in
+      build_commodity_groups.csv, then returns the sdetypes in those groups that
+      are manufacturable (have a row in industryActivityProducts).
+    - category_id 4 (Fuel Blocks): filters to group 1136 (Fuel Block) only.
+    """
+    if category_id == 17:
+        try:
+            group_df = pd.read_csv(_COMMODITY_GROUPS_CSV)
+            groups = group_df["groupID"].dropna().astype(int).tolist()
+        except (FileNotFoundError, pd.errors.EmptyDataError, KeyError) as e:
+            logger.error(f"Failed to read commodity groups CSV {_COMMODITY_GROUPS_CSV}: {e}")
+            return pd.DataFrame(columns=["typeID", "typeName"])
+        query = text("""
+            SELECT DISTINCT s.typeID, s.typeName
+            FROM sdetypes s
+            WHERE s.groupID IN :groups
+            AND EXISTS (
+                SELECT p.productTypeID FROM industryActivityProducts p
+                WHERE s.typeID = p.productTypeID
+            )
+        """).bindparams(bindparam("groups", expanding=True))
+        params = {"groups": groups}
+    elif category_id == 4:
+        query = text(
+            "SELECT DISTINCT typeID, typeName FROM sdetypes "
+            "WHERE categoryID = :category_id AND groupID = 1136"
+        ).bindparams(bindparam("category_id"))
+        params = {"category_id": category_id}
+    else:
+        query = text(
+            "SELECT DISTINCT typeID, typeName FROM sdetypes "
+            "WHERE categoryID = :category_id"
+        ).bindparams(bindparam("category_id"))
+        params = {"category_id": category_id}
+
+    def _run_local():
+        with engine.connect() as conn:
+            return pd.read_sql_query(query, conn, params=params)
+
+    def _run_remote():
+        with remote_engine.connect() as conn:
+            return pd.read_sql_query(query, conn, params=params)
+
+    try:
+        return _run_local()
+    except Exception as e:
+        msg = str(e).lower()
+        logger.error(f"Error fetching types for category {category_id}: {e}")
+        if "no such table" in msg or "malform" in msg:
+            logger.warning(f"Falling back to remote SDE read due to: {msg}")
+            try:
+                return _run_remote()
+            except Exception as e_remote:
+                logger.error(f"Remote fallback also failed: {e_remote}")
+                return pd.DataFrame(columns=["typeID", "typeName"])
+        return pd.DataFrame(columns=["typeID", "typeName"])
 
 def _get_types_for_group_impl(engine, remote_engine, group_id: int) -> pd.DataFrame:
     """Fetch types for a group ID with malformed-DB fallback to remote.
@@ -251,48 +318,45 @@ def _get_sde_db_cached(_cache_key: str) -> DatabaseConfig:
     """Return the shared SDE database config for cached repository reads."""
     return DatabaseConfig("sde")
 
-
 @st.cache_resource
 def _get_type_name_cached(_cache_key: str, type_id: int) -> Optional[str]:
     db = _get_sde_db_cached(_cache_key)
     return _get_type_name_impl(db.engine, type_id)
-
 
 @st.cache_resource
 def _get_type_id_cached(_cache_key: str, type_name: str) -> Optional[int]:
     db = _get_sde_db_cached(_cache_key)
     return _get_type_id_impl(db.engine, type_name)
 
-
 @st.cache_resource
 def _get_groups_for_category_cached(_cache_key: str, category_id: int) -> pd.DataFrame:
     db = _get_sde_db_cached(_cache_key)
     return _get_groups_for_category_impl(db.engine, category_id)
 
+@st.cache_resource
+def _get_types_for_category_cached(_cache_key: str, category_id: int) -> pd.DataFrame:
+    db = _get_sde_db_cached(_cache_key)
+    return _get_types_for_category_impl(db.engine, db.remote_engine, category_id)
 
 @st.cache_resource
 def _get_types_for_group_cached(_cache_key: str, group_id: int) -> pd.DataFrame:
     db = _get_sde_db_cached(_cache_key)
     return _get_types_for_group_impl(db.engine, db.remote_engine, group_id)
 
-
 @st.cache_resource
 def _get_sde_table_cached(_cache_key: str, table_name: str) -> pd.DataFrame:
     db = _get_sde_db_cached(_cache_key)
     return _get_sde_table_impl(db.engine, table_name)
-
 
 @st.cache_resource
 def _get_tech2_type_ids_cached(_cache_key: str) -> list[int]:
     db = _get_sde_db_cached(_cache_key)
     return _get_tech2_type_ids_impl(db.engine)
 
-
 @st.cache_resource
 def _get_faction_type_ids_cached(_cache_key: str) -> set[int]:
     db = _get_sde_db_cached(_cache_key)
     return _get_faction_type_ids_impl(db.engine)
-
 
 @st.cache_resource
 def _get_localized_name_cached(
@@ -301,14 +365,12 @@ def _get_localized_name_cached(
     db = _get_sde_db_cached(_cache_key)
     return _get_localized_name_impl(db.engine, type_id, language)
 
-
 @st.cache_resource
 def _get_localized_names_cached(
     _cache_key: str, type_ids: tuple[int, ...], language: str
 ) -> dict[int, str]:
     db = _get_sde_db_cached(_cache_key)
     return _get_localized_names_impl(db.engine, list(type_ids), language)
-
 
 @st.cache_resource
 def _get_all_translations_cached(_cache_key: str, type_id: int) -> dict[str, str]:
@@ -375,6 +437,16 @@ class SDERepository(BaseRepository):
         Group 332 filters to R.A.M./R.Db items.
         """
         return _get_types_for_group_cached(self._cache_key, group_id)
+
+    def get_types_for_category(self, category_id: int) -> pd.DataFrame:
+        """Get types for a category ID (cached).
+
+        Returns a DataFrame with columns: typeID, typeName.
+        Category 17 (Build Components / Commodity) returns manufacturable
+        sdetypes whose groupID is listed in build_commodity_groups.csv.
+        Category 4 (Fuel Blocks) filters to group 1136 (Fuel Block).
+        """
+        return _get_types_for_category_cached(self._cache_key, category_id)
 
     def get_sde_table(self, table_name: str) -> pd.DataFrame:
         """Get full SDE table by name (cached).

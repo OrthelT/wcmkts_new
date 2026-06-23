@@ -83,9 +83,9 @@ def display_data(
         st.markdown(
             (
                 f"**{translate_text(language_code, 'build_costs.selected_structure')}:** "
-                f"<span style='color: orange;'>{selected_structure}</span> <br>"
+                f"<span style='color: orange;'>{selected_structure}</span><br>"
                 f"*{translate_text(language_code, 'build_costs.column_total_cost')}:* "
-                f"<span style='color: orange;'>{millify(selected_total_cost, precision=2)}</span> <br>"
+                f"<span style='color: orange;'>{millify(selected_total_cost, precision=2)}</span> | "
                 f"*{translate_text(language_code, 'build_costs.column_cost_per_unit')}:* "
                 f"<span style='color: orange;'>"
                 f"{millify(selected_total_cost_per_unit, precision=2)}</span>"
@@ -483,6 +483,7 @@ def main():
     category_id = category_df["id"].values[0]
     logger.info(f"Selected category: {selected_category} ({category_id})")
 
+    selected_group = None
     if category_id == 40:
         groups = ["Sovereignty Hub"]
         selected_group = st.sidebar.selectbox(
@@ -496,19 +497,14 @@ def main():
         )
         group_id = 1012
     else:
-        groups = get_sde_repository().get_groups_for_category(category_id)
-        groups = groups.sort_values(by="groupName")
-        groups = groups.drop(groups[groups["groupName"] == "Abyssal Modules"].index)
-        group_names = groups["groupName"].unique()
-        selected_group = st.sidebar.selectbox(
-            translate_text(language_code, "build_costs.group_label"), group_names
-        )
-        group_id = groups[groups["groupName"] == selected_group]["groupID"].values[0]
-        logger.info(f"Selected group: {selected_group} ({group_id})")
+        group_id = None
 
     try:
         sde_repo = get_sde_repository()
-        types_df = sde_repo.get_types_for_group(group_id)
+        if group_id == 1012:
+            types_df = sde_repo.get_types_for_group(group_id)
+        else:
+            types_df = sde_repo.get_types_for_category(category_id)
         types_df = types_df.sort_values(by="typeName")
 
         if len(types_df) == 0:
@@ -516,10 +512,13 @@ def main():
                 translate_text(
                     language_code,
                     "build_costs.no_buildable_items",
-                    group_name=selected_group,
+                    group_name=selected_group or selected_category,
                 )
             )
-            logger.warning(f"No types returned for group {group_id} — possible missing SDE table")
+            logger.warning(
+                f"No types returned for category={category_id} group={group_id} "
+                "— possible missing SDE table"
+            )
             st.stop()
         else:
             types_df = types_df.drop_duplicates(subset=["typeID"], keep="first")
@@ -629,14 +628,13 @@ def main():
     all_structures = repo.get_all_structures(is_super=st.session_state.super)
     structure_names = sorted([structure.structure for structure in all_structures])
 
-    with st.sidebar.expander(translate_text(language_code, "build_costs.structure_compare_expander")):
-        selected_structure = st.selectbox(
-            translate_text(language_code, "build_costs.structure_compare_label"),
-            structure_names,
-            index=None,
-            placeholder=translate_text(language_code, "build_costs.structure_compare_placeholder"),
-            help=translate_text(language_code, "build_costs.structure_compare_help"),
-        )
+    selected_structure = st.sidebar.selectbox(
+        translate_text(language_code, "build_costs.structure_compare_label"),
+        structure_names,
+        index=None,
+        placeholder=translate_text(language_code, "build_costs.structure_compare_placeholder"),
+        help=translate_text(language_code, "build_costs.structure_compare_help"),
+    )
 
     current_job_params = {
         "item": selected_item,
@@ -780,6 +778,13 @@ def main():
                 )
             )
 
+            st.markdown(body=translate_text(
+                language_code=language_code,
+                key="build_costs.metric_build_cost_per_unit_help", 
+                structure=f"<span style='color: orange;'> {low_cost_structure}</span>"),
+                unsafe_allow_html=True,
+            )
+            
             col1, col2 = st.columns([0.5, 0.5])
             with col1:
                 st.metric(
@@ -812,6 +817,10 @@ def main():
                         job_cost=millify(job_cost, precision=2),
                     )
                 )
+
+            display_df, col_config, col_order = display_data(
+            build_cost_df, language_code, selected_structure
+            )
 
         if vale_price:
             profit_per_unit_vale = vale_price - low_cost
@@ -851,9 +860,7 @@ def main():
         else:
             st.write(translate_text(language_code, "build_costs.no_jita_price"))
 
-        display_df, col_config, col_order = display_data(
-            build_cost_df, language_code, selected_structure
-        )
+
         st.dataframe(
             display_df,
             column_config=col_config,

@@ -109,6 +109,89 @@ class TestGetGroupsForCategory:
         assert "1136" in query_text
 
 
+class TestGetTypesForCategory:
+    def test_default_category_filters_by_category_id(self):
+        from repositories.sde_repo import _get_types_for_category_impl
+        engine, _ = _mock_engine()
+        remote_engine, _ = _mock_engine()
+        expected = pd.DataFrame({"typeID": [587], "typeName": ["Rifter"]})
+
+        with patch("pandas.read_sql_query", return_value=expected) as mock_sql:
+            result = _get_types_for_category_impl(engine, remote_engine, 6)
+
+        assert list(result.columns) == ["typeID", "typeName"]
+        call_args = mock_sql.call_args
+        assert "1136" not in str(call_args[0][0])  # took the else branch, not category 4
+        assert call_args.kwargs["params"] == {"category_id": 6}
+
+    def test_category_4_filters_to_group_1136(self):
+        from repositories.sde_repo import _get_types_for_category_impl
+        engine, _ = _mock_engine()
+        remote_engine, _ = _mock_engine()
+        expected = pd.DataFrame({"typeID": [4051], "typeName": ["Nitrogen Fuel Block"]})
+
+        with patch("pandas.read_sql_query", return_value=expected) as mock_sql:
+            _get_types_for_category_impl(engine, remote_engine, 4)
+
+        assert "1136" in str(mock_sql.call_args[0][0])
+
+    @patch("pandas.read_csv")
+    def test_category_17_reads_csv_and_binds_groups(self, mock_csv):
+        from repositories.sde_repo import _get_types_for_category_impl, _COMMODITY_GROUPS_CSV
+        engine, _ = _mock_engine()
+        remote_engine, _ = _mock_engine()
+        mock_csv.return_value = pd.DataFrame({"groupID": [334, 873]})
+        expected = pd.DataFrame({"typeID": [1], "typeName": ["Construction Block"]})
+
+        with patch("pandas.read_sql_query", return_value=expected) as mock_sql:
+            result = _get_types_for_category_impl(engine, remote_engine, 17)
+
+        mock_csv.assert_called_once_with(_COMMODITY_GROUPS_CSV)
+        assert mock_sql.call_args.kwargs["params"] == {"groups": [334, 873]}
+        assert len(result) == 1
+
+    @patch("pandas.read_csv", side_effect=FileNotFoundError("missing"))
+    def test_category_17_missing_csv_returns_empty(self, _mock_csv):
+        from repositories.sde_repo import _get_types_for_category_impl
+        engine, _ = _mock_engine()
+        remote_engine, _ = _mock_engine()
+
+        result = _get_types_for_category_impl(engine, remote_engine, 17)
+
+        assert result.empty
+        assert list(result.columns) == ["typeID", "typeName"]
+
+    def test_falls_back_to_remote_on_malformed(self):
+        from repositories.sde_repo import _get_types_for_category_impl
+        engine, _ = _mock_engine()
+        remote_engine, _ = _mock_engine()
+        expected = pd.DataFrame({"typeID": [587], "typeName": ["Rifter"]})
+
+        call_count = 0
+        def side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise Exception("database disk image is malformed")
+            return expected
+
+        with patch("pandas.read_sql_query", side_effect=side_effect):
+            result = _get_types_for_category_impl(engine, remote_engine, 6)
+
+        assert len(result) == 1
+
+    def test_returns_empty_on_both_failures(self):
+        from repositories.sde_repo import _get_types_for_category_impl
+        engine, _ = _mock_engine()
+        remote_engine, _ = _mock_engine()
+
+        with patch("pandas.read_sql_query", side_effect=Exception("no such table: sdetypes")):
+            result = _get_types_for_category_impl(engine, remote_engine, 6)
+
+        assert result.empty
+        assert list(result.columns) == ["typeID", "typeName"]
+
+
 class TestGetTypesForGroup:
     def test_returns_types_from_local(self):
         from repositories.sde_repo import _get_types_for_group_impl
