@@ -107,19 +107,10 @@ def display_sync_status(language_code: str = "en"):
         unsafe_allow_html=True,
     )
 
-    overdue_threshold = _UPDATE_INTERVAL_MINUTES + _OVERDUE_GRACE_MINUTES
-    if total_minutes is not None and total_minutes > overdue_threshold:
-        overdue_by = total_minutes - _UPDATE_INTERVAL_MINUTES
-        st.sidebar.markdown(
-            translate_text(language_code, "sync_status.update_overdue", minutes=overdue_by)
-        )
-        return
-
     minutes_remaining = minutes_until_next_update()
     if minutes_remaining is None:
         st.sidebar.caption(translate_text(language_code, "sync_status.countdown_unavailable"))
         return
-
     percent_until_next = (_UPDATE_INTERVAL_MINUTES - minutes_remaining) / _UPDATE_INTERVAL_MINUTES
 
     if minutes_remaining == 0:
