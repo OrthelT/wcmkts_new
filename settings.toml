@@ -108,7 +108,7 @@
 # Use to mirror doctrine assignments for two markets. 
 [doctrine_override]
     doctrine_override_enabled = true
-    override_market_alias = 'wcmktprod'
+    override_market_alias = 'wcmktbkg'
     use_market_key = 'primary'
 
 # database configurations, including utility databases other than for markets.
