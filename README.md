@@ -1,10 +1,14 @@
-# Winter Coalition Market App (v.0.6.6)
+# Winter Coalition Market App (v.0.6.7)
 A Streamlit application for viewing EVE Online market statistics for Winter Coalition. This tool provides real-time market data analysis, historical price tracking, and fitting information for various items in EVE Online markets.
 
 SUPPORT: Join the Discord for support https://discord.gg/BxatJE572Y
 CONTRIBUTING: Contributors welcome. This project is fully open source under MIT License. Source code and full documentation available on GitHub: https://github.com/OrthelT/wcmkts_new
 
 # UPDATES:
+## version 0.6.7
+### New Features and Fixes
+- Add support for BKG market hub
+
 ## version 0.6.6
 ### New Features and Fixes
 - Removed Group Filter from build costs and replaced with fuzzyfind type_name selection.

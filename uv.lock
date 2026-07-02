@@ -1301,7 +1301,7 @@ wheels = [
 
 [[package]]
 name = "wcmkts-production"
-version = "0.6.6"
+version = "0.6.7"
 source = { editable = "." }
 dependencies = [
     { name = "asyncio" },

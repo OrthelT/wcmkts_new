@@ -38,7 +38,7 @@ USER_AGENT = (
     "(https://github.com/OrthelT/wcmkts_production; orthel.toralen@gmail.com)"
 )
 ESI_USER_AGENT = (
-    "WC Markets v0.52 "
+    "WC Markets v0.6.7"
     "(admin contact: Orthel.Toralen@gmail.com; "
     "+https://github.com/OrthelT/wcmkts_new"
 )
