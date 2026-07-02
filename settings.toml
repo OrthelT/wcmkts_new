@@ -67,9 +67,13 @@
 
 
 # Market configurations
+# REMINDER when adding/renaming a hub: its database_alias must ALSO be registered
+# in [db_paths] (alias -> file) and [freshness_probes] (alias -> probe table),
+# and turso_secret_key needs a matching section in .streamlit/secrets.toml.
+# Guard test: uv run pytest tests/test_settings_toml.py
 [markets.primary]
     name = "4-HWWF - WinterCo Central Station"
-    short_name = "4H-New"
+    short_name = "4H"
     region_id = 10000003
     system_id = 30000240
     structure_id = 1053970513596
@@ -88,13 +92,13 @@
     turso_secret_key = "wcmktnorth_turso"
 
 [markets.market3]
-    name = "4-HWWF Platestar"
-    short_name = "4H-plates"
-    region_id = 10000003
-    system_id = 30000240
-    structure_id = 1053654548169
-    database_alias = "wcmktprod"
-    database_file = "wcmktprod.db"
+    name = "BKG-Q2 - Insidious Prime"
+    short_name = "BKG"
+    region_id = 10000055  # Branch
+    system_id = 30004333 # BKG-Q2
+    structure_id = 1032721770598 # Insidious Prime
+    database_alias = "wcmktbkg"
+    database_file = "wcmktbkg.db"
     turso_secret_key = "market3_turso"
 
 # Maps faction modules to identical substitutes in fit supply calculations. 
@@ -104,10 +108,11 @@
 # Use to mirror doctrine assignments for two markets. 
 [doctrine_override]
     doctrine_override_enabled = true
-    override_market_alias = 'wcmktprod'
+    override_market_alias = 'wcmktbkg'
     use_market_key = 'primary'
 
-# database configurations, including utility databases other than for markets. 
+# database configurations, including utility databases other than for markets.
+# Every [markets.*] database_alias must have an entry here (see reminder above).
 [db_paths]
     "wcmktprod" = "wcmktprod.db"
     "wcmktnorth" = "wcmktnorth2.db"
@@ -115,6 +120,7 @@
     "build_cost" = "buildcost.db"
     "wcmkttest" = "wcmkttest.db"
     "wcmktnewkeep" = "wcmktnewkeep.db"
+    "wcmktbkg" = "wcmktbkg.db"
 
 [db_update]
   "frequency" = 1 # frequency of scheduled db updates in hours 
@@ -129,6 +135,7 @@
     "wcmktnewkeep" = "marketstats"
     "build_cost" = "buildcost"
     "wcmktnorth" = "marketstats"
+    "wcmktbkg" = "marketstats"
 
 [env_db_aliases]
     "prod" = "wcmktnewkeep"
