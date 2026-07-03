@@ -322,6 +322,42 @@ class TestCreateISKVolumeChart:
 
 
 # ---------------------------------------------------------------------------
+# Test: create_30day_activity_chart
+# ---------------------------------------------------------------------------
+
+class TestCreate30dayActivityChart:
+    """Daily ISK (bars) + units traded (line) chart for the 30-day section."""
+
+    def _service(self, mock_repo):
+        from services.market_service import MarketService
+        return MarketService(mock_repo)
+
+    def test_zero_sentinel_returns_none(self, mock_repo):
+        """calculate_30day_metrics error paths return int 0, not a DataFrame."""
+        assert self._service(mock_repo).create_30day_activity_chart(0) is None
+
+    def test_empty_df_returns_none(self, mock_repo):
+        assert self._service(mock_repo).create_30day_activity_chart(pd.DataFrame()) is None
+
+    def test_builds_bar_and_line_with_daily_aggregation(self, mock_repo):
+        df = pd.DataFrame({
+            "date": pd.to_datetime(["2026-07-01", "2026-07-01", "2026-07-02"]),
+            "volume": [10, 5, 20],
+            "daily_isk_volume": [100.0, 50.0, 400.0],
+        })
+        fig = self._service(mock_repo).create_30day_activity_chart(df)
+
+        assert fig is not None
+        assert len(fig.data) == 2
+        bar, line = fig.data
+        assert bar.type == "bar"
+        assert line.type == "scatter"
+        # Two rows on 07-01 aggregate into one bar
+        assert list(bar.y) == [150.0, 400.0]
+        assert list(line.y) == [15, 20]
+
+
+# ---------------------------------------------------------------------------
 # Test: get_top_n_items
 # ---------------------------------------------------------------------------
 

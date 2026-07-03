@@ -283,6 +283,57 @@ class MarketService:
             logger.error(f"Error calculating 30-day metrics: {e}")
             return 0, 0, 0, 0, 0, 0
 
+    def create_30day_activity_chart(self, df_30days) -> Optional[go.Figure]:
+        """Create the daily ISK value (bars) + units traded (line) chart.
+
+        Args:
+            df_30days: the 30-day history slice from calculate_30day_metrics()
+                with date, volume, and daily_isk_volume columns. Error paths
+                return the int 0 sentinel instead of a DataFrame, so guard on
+                type, not just emptiness.
+
+        Returns:
+            Plotly Figure, or None when there is nothing to chart.
+        """
+        if not isinstance(df_30days, pd.DataFrame) or df_30days.empty:
+            return None
+
+        daily = (
+            df_30days.groupby("date")
+            .agg(volume=("volume", "sum"), isk_value=("daily_isk_volume", "sum"))
+            .reset_index()
+            .sort_values("date")
+        )
+
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        fig.add_trace(
+            go.Bar(
+                x=daily["date"],
+                y=daily["isk_value"],
+                name="ISK Value",
+                hovertemplate="<b>%{x}</b><br>ISK: %{y:,.0f}<extra></extra>",
+            ),
+            secondary_y=False,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=daily["date"],
+                y=daily["volume"],
+                name="Units Traded",
+                line=dict(color="#FF69B4", width=2),
+                hovertemplate="<b>%{x}</b><br>Units: %{y:,.0f}<extra></extra>",
+            ),
+            secondary_y=True,
+        )
+        fig.update_layout(
+            height=350,
+            margin=dict(t=30, b=10),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+        )
+        fig.update_yaxes(title_text="ISK Value", secondary_y=False)
+        fig.update_yaxes(title_text="Units Traded", secondary_y=True, showgrid=False)
+        return fig
+
     def calculate_isk_volume_by_period(
         self,
         period: str = "daily",
