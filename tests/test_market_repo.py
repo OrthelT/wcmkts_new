@@ -589,10 +589,17 @@ class TestOrderBookSummaryImpl:
     @patch("repositories.market_repo.BaseRepository")
     @patch("repositories.market_repo.DatabaseConfig")
     def test_null_value_sum_coerces_to_zero(self, mock_db_cls, mock_repo_cls):
-        """SUM() over zero rows yields NULL; it must surface as 0.0, not NaN."""
+        """SUM() over zero rows yields NULL; it must surface as 0.0, not NaN.
+
+        The NULL arrives as a float64 NaN (as real SQL/pandas would deliver
+        it). NaN is truthy, so a naive `or 0.0` guard would leak NaN through.
+        """
         mock_repo = Mock()
         mock_repo.read_df.return_value = pd.DataFrame({
-            "is_buy_order": [0], "n": [1], "total_value": [None], "type_count": [1],
+            "is_buy_order": [0, 1],
+            "n": [1, 1],
+            "total_value": pd.array([100.0, None], dtype="float64"),
+            "type_count": [1, 1],
         })
         mock_repo_cls.return_value = mock_repo
         mock_db_cls.return_value = Mock()
@@ -600,7 +607,9 @@ class TestOrderBookSummaryImpl:
         from repositories.market_repo import _get_order_book_summary_impl
         result = _get_order_book_summary_impl()
 
-        assert result["sell_order_value"] == 0.0
+        assert result["sell_order_value"] == 100.0
+        assert not pd.isna(result["buy_order_value"])
+        assert result["buy_order_value"] == 0.0
 
     @patch("repositories.market_repo.BaseRepository")
     @patch("repositories.market_repo.DatabaseConfig")

@@ -267,12 +267,14 @@ def _get_order_book_summary_impl(db_alias: str = "wcmkt") -> dict:
         return summary
     rows = df.set_index("is_buy_order")
     if 0 in rows.index:
+        sell_value = rows.at[0, "total_value"]
         summary["active_sell_orders"] = int(rows.at[0, "n"])
-        summary["sell_order_value"] = float(rows.at[0, "total_value"] or 0.0)
+        summary["sell_order_value"] = 0.0 if pd.isna(sell_value) else float(sell_value)
         summary["sell_types_listed"] = int(rows.at[0, "type_count"])
     if 1 in rows.index:
+        buy_value = rows.at[1, "total_value"]
         summary["active_buy_orders"] = int(rows.at[1, "n"])
-        summary["buy_order_value"] = float(rows.at[1, "total_value"] or 0.0)
+        summary["buy_order_value"] = 0.0 if pd.isna(buy_value) else float(buy_value)
     return summary
 
 
