@@ -144,6 +144,38 @@ class TestCalculate30dayMetrics:
 
         assert result[0] > 0
 
+    def test_type_ids_filter(self, sample_history_df, mock_repo):
+        """Explicit type_ids (pill filters) query history for exactly those ids."""
+        mock_repo.get_history_by_type_ids.return_value = sample_history_df
+
+        from services.market_service import MarketService
+        service = MarketService(mock_repo)
+        result = service.calculate_30day_metrics(selected_type_ids=[34, 35])
+
+        mock_repo.get_history_by_type_ids.assert_called_once_with([34, 35])
+        assert result[0] > 0
+
+    def test_empty_type_ids_returns_zeros_without_query(self, mock_repo):
+        """An empty scope is a true zero — it must not widen to all items."""
+        from services.market_service import MarketService
+        service = MarketService(mock_repo)
+        result = service.calculate_30day_metrics(selected_type_ids=[])
+
+        assert result == (0, 0, 0, 0, 0, 0)
+        mock_repo.get_history_by_type_ids.assert_not_called()
+        mock_repo.get_all_history.assert_not_called()
+
+    def test_type_ids_take_precedence_over_category(self, sample_history_df, mock_repo):
+        mock_repo.get_history_by_type_ids.return_value = sample_history_df
+
+        from services.market_service import MarketService
+        service = MarketService(mock_repo)
+        service.calculate_30day_metrics(
+            selected_category="Ship", selected_type_ids=[34],
+        )
+
+        mock_repo.get_category_type_ids.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # Test: calculate_isk_volume_by_period

@@ -625,3 +625,77 @@ class TestOrderBookSummaryImpl:
         from repositories.market_repo import _get_order_book_summary_impl
         with pytest.raises(RuntimeError):
             _get_order_book_summary_impl()
+
+
+class TestThirtyDayFilterTypeIdsImpl:
+    """Pill-filter type-id resolution: SDE scopes + doctrine ships."""
+
+    @patch("repositories.market_repo.BaseRepository")
+    @patch("repositories.market_repo.DatabaseConfig")
+    def test_ships_excludes_shuttle_groups(self, mock_db_cls, mock_repo_cls):
+        mock_repo = Mock()
+        mock_repo.read_df.return_value = pd.DataFrame({"type_id": [603, 24698]})
+        mock_repo_cls.return_value = mock_repo
+        mock_db_cls.return_value = Mock()
+
+        from repositories.market_repo import _get_30day_filter_type_ids_impl
+        result = _get_30day_filter_type_ids_impl("ships")
+
+        assert result == [603, 24698]
+        mock_db_cls.assert_called_once_with("sde")
+        _, kwargs = mock_repo.read_df.call_args
+        assert kwargs["params"]["group_ids"] == [31, 1566, 4737]
+
+    @patch("repositories.market_repo.BaseRepository")
+    @patch("repositories.market_repo.DatabaseConfig")
+    def test_materials_uses_material_asteroid_and_pi_categories(
+        self, mock_db_cls, mock_repo_cls
+    ):
+        mock_repo = Mock()
+        mock_repo.read_df.return_value = pd.DataFrame({"type_id": [34]})
+        mock_repo_cls.return_value = mock_repo
+        mock_db_cls.return_value = Mock()
+
+        from repositories.market_repo import _get_30day_filter_type_ids_impl
+        result = _get_30day_filter_type_ids_impl("materials")
+
+        assert result == [34]
+        _, kwargs = mock_repo.read_df.call_args
+        assert kwargs["params"]["cat_ids"] == [4, 25, 42, 43]
+
+    @patch("repositories.market_repo.BaseRepository")
+    @patch("repositories.market_repo.DatabaseConfig")
+    def test_doctrine_ships_queries_market_db(self, mock_db_cls, mock_repo_cls):
+        mock_repo = Mock()
+        mock_repo.read_df.return_value = pd.DataFrame({"type_id": [24698]})
+        mock_repo_cls.return_value = mock_repo
+        mock_db_cls.return_value = Mock()
+
+        from repositories.market_repo import _get_30day_filter_type_ids_impl
+        result = _get_30day_filter_type_ids_impl("doctrine_ships", db_alias="wcmkt")
+
+        assert result == [24698]
+        mock_db_cls.assert_called_once_with("wcmkt")
+
+    @patch("repositories.market_repo.BaseRepository")
+    @patch("repositories.market_repo.DatabaseConfig")
+    def test_unknown_key_returns_empty_without_query(self, mock_db_cls, mock_repo_cls):
+        """Data-integrity rule: an unknown scope is empty, never 'all items'."""
+        mock_repo = Mock()
+        mock_repo_cls.return_value = mock_repo
+        mock_db_cls.return_value = Mock()
+
+        from repositories.market_repo import _get_30day_filter_type_ids_impl
+        assert _get_30day_filter_type_ids_impl("bogus") == []
+        mock_repo.read_df.assert_not_called()
+
+    @patch("repositories.market_repo.BaseRepository")
+    @patch("repositories.market_repo.DatabaseConfig")
+    def test_empty_result_returns_empty_list(self, mock_db_cls, mock_repo_cls):
+        mock_repo = Mock()
+        mock_repo.read_df.return_value = pd.DataFrame(columns=["type_id"])
+        mock_repo_cls.return_value = mock_repo
+        mock_db_cls.return_value = Mock()
+
+        from repositories.market_repo import _get_30day_filter_type_ids_impl
+        assert _get_30day_filter_type_ids_impl("modules") == []

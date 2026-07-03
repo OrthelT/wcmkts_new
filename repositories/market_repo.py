@@ -155,6 +155,48 @@ def _get_category_type_ids_by_id_impl(category_id: int) -> list:
     return df["type_id"].tolist()
 
 
+# 30-day stats pill filter scopes (verified against sdelite.db 2026-07-03)
+SHUTTLE_GROUP_IDS = (31, 1566, 4737)  # Shuttle, Irregular, Homefront Operations
+MATERIALS_CATEGORY_IDS = (4, 25, 42, 43)  # Material, Asteroid, PI Resources/Commodities
+
+
+def _get_30day_filter_type_ids_impl(filter_key: str, db_alias: str = "wcmkt") -> list:
+    """Resolve a 30-day stats pill filter to a list of type_ids.
+
+    'ships' / 'modules' / 'materials' query the SDE (ships exclude shuttle
+    groups); 'doctrine_ships' queries the market db's doctrines table for
+    distinct hulls in doctrine use. Unknown keys return [] and log at ERROR —
+    never silently widen the scope (data-integrity rule).
+    """
+    if filter_key == "doctrine_ships":
+        repo = BaseRepository(DatabaseConfig(db_alias), logger)
+        df = repo.read_df(text("SELECT DISTINCT ship_id AS type_id FROM doctrines"))
+    elif filter_key == "ships":
+        repo = BaseRepository(DatabaseConfig("sde"), logger)
+        query = text(
+            "SELECT typeID AS type_id FROM sdetypes "
+            "WHERE categoryID = 6 AND groupID NOT IN :group_ids"
+        ).bindparams(bindparam("group_ids", expanding=True))
+        df = repo.read_df(query, params={"group_ids": list(SHUTTLE_GROUP_IDS)})
+    elif filter_key == "modules":
+        repo = BaseRepository(DatabaseConfig("sde"), logger)
+        df = repo.read_df(
+            text("SELECT typeID AS type_id FROM sdetypes WHERE categoryID = 7")
+        )
+    elif filter_key == "materials":
+        repo = BaseRepository(DatabaseConfig("sde"), logger)
+        query = text(
+            "SELECT typeID AS type_id FROM sdetypes WHERE categoryID IN :cat_ids"
+        ).bindparams(bindparam("cat_ids", expanding=True))
+        df = repo.read_df(query, params={"cat_ids": list(MATERIALS_CATEGORY_IDS)})
+    else:
+        logger.error(f"Unknown 30-day filter key: {filter_key}")
+        return []
+    if df.empty:
+        return []
+    return df["type_id"].tolist()
+
+
 def _get_watchlist_type_ids_impl(db_alias: str = "wcmkt") -> list:
     """Fetch distinct type_ids from the watchlist table."""
     db = DatabaseConfig(db_alias)
@@ -350,6 +392,11 @@ def _get_category_type_ids_by_id_cached(category_id: int) -> list:
     return _get_category_type_ids_by_id_impl(category_id)
 
 
+@st.cache_data(ttl=1800)
+def _get_30day_filter_type_ids_cached(filter_key: str, db_alias: str = "wcmkt") -> list:
+    return _get_30day_filter_type_ids_impl(filter_key, db_alias)
+
+
 @st.cache_data(ttl=600)
 def _get_watchlist_type_ids_cached(db_alias: str = "wcmkt") -> list:
     return _get_watchlist_type_ids_impl(db_alias)
@@ -415,6 +462,7 @@ def invalidate_market_caches():
     _get_sell_order_summary_cached.clear()
     _get_stats_for_type_ids_cached.clear()
     _get_order_book_summary_cached.clear()
+    _get_30day_filter_type_ids_cached.clear()
     logger.info("Market caches invalidated")
 
 
@@ -526,6 +574,10 @@ class MarketRepository(BaseRepository):
         if category_name is None:
             return []
         return _get_category_type_ids_cached(category_name)
+
+    def get_30day_filter_type_ids(self, filter_key: str) -> list:
+        """Resolve a 30-day stats pill filter key to type_ids (cached, TTL=1800s)."""
+        return _get_30day_filter_type_ids_cached(filter_key, self.db.alias)
 
     def get_watchlist_type_ids(self) -> list:
         """Get distinct type_ids from watchlist (cached, TTL=600s)."""

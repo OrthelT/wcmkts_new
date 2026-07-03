@@ -196,6 +196,10 @@ class MarketService:
             "last_updated": self._repo.get_update_time(),
         }
 
+    def get_30day_filter_type_ids(self, filter_key: str) -> list:
+        """Resolve a 30-day stats pill filter key to type_ids."""
+        return self._repo.get_30day_filter_type_ids(filter_key)
+
     # =====================================================================
     # Pure Calculations
     # =====================================================================
@@ -205,8 +209,13 @@ class MarketService:
         selected_category: str = None,
         selected_category_id: int | None = None,
         selected_item_id: int = None,
+        selected_type_ids: list[int] | None = None,
     ) -> tuple:
         """Calculate 30-day and 7-day market metrics.
+
+        Scope precedence: selected_item_id > selected_type_ids >
+        category > all items. selected_type_ids=[] is an empty scope and
+        returns zeros without querying (never widens to all items).
 
         Returns:
             (avg_daily_volume, avg_daily_isk_value, vol_delta, isk_delta,
@@ -216,6 +225,10 @@ class MarketService:
         try:
             if selected_item_id:
                 df = self._repo.get_history_by_type_ids([selected_item_id])
+            elif selected_type_ids is not None:
+                if not selected_type_ids:
+                    return 0, 0, 0, 0, 0, 0
+                df = self._repo.get_history_by_type_ids(selected_type_ids)
             elif selected_category_id is not None or selected_category:
                 type_ids = self._repo.get_category_type_ids(
                     selected_category,
