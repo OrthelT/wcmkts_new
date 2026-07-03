@@ -229,27 +229,51 @@ def _get_stats_for_type_ids_impl(type_ids: list[int], db_alias: str = "wcmkt") -
     return repo.read_df(query, params={"type_ids": [int(tid) for tid in type_ids]})
 
 
-def _get_order_counts_impl(db_alias: str = "wcmkt") -> dict:
-    """Count active sell/buy orders via a SQL GROUP BY (no full-table load).
+def _get_order_book_summary_impl(db_alias: str = "wcmkt") -> dict:
+    """Aggregate active order counts, order-book ISK value, and distinct sell
+    types via a single SQL GROUP BY (no full-table load).
+
+    Sell value is SUM(price * volume_remain) over actual sell orders — the same
+    definition the Market Stats page uses — NOT marketstats' min_price *
+    total_volume_remain, which values the whole book at the best ask and only
+    covers watchlist types.
 
     No try/except here: read_df() already attempts sync + remote-fallback
     recovery and only raises on genuinely unrecoverable failures. Swallowing
-    that to {0, 0} would misreport a broken read as a real empty market
+    that to zeros would misreport a broken read as a real empty market
     (data-integrity rule) — let it propagate so the caller can surface it. A
     legitimately empty result (no rows) is still a true zero, handled below.
     """
     repo = BaseRepository(DatabaseConfig(db_alias), logger)
     query = text(
-        "SELECT is_buy_order, COUNT(*) AS n FROM marketorders GROUP BY is_buy_order"
+        """
+        SELECT is_buy_order,
+               COUNT(*) AS n,
+               SUM(price * volume_remain) AS total_value,
+               COUNT(DISTINCT type_id) AS type_count
+        FROM marketorders
+        GROUP BY is_buy_order
+        """
     )
     df = repo.read_df(query)
-    if df.empty:
-        return {"active_sell_orders": 0, "active_buy_orders": 0}
-    counts = df.set_index("is_buy_order")["n"].to_dict()
-    return {
-        "active_sell_orders": int(counts.get(0, 0)),
-        "active_buy_orders": int(counts.get(1, 0)),
+    summary = {
+        "active_sell_orders": 0,
+        "active_buy_orders": 0,
+        "sell_order_value": 0.0,
+        "buy_order_value": 0.0,
+        "sell_types_listed": 0,
     }
+    if df.empty:
+        return summary
+    rows = df.set_index("is_buy_order")
+    if 0 in rows.index:
+        summary["active_sell_orders"] = int(rows.at[0, "n"])
+        summary["sell_order_value"] = float(rows.at[0, "total_value"] or 0.0)
+        summary["sell_types_listed"] = int(rows.at[0, "type_count"])
+    if 1 in rows.index:
+        summary["active_buy_orders"] = int(rows.at[1, "n"])
+        summary["buy_order_value"] = float(rows.at[1, "total_value"] or 0.0)
+    return summary
 
 
 def _get_sde_info_impl(type_ids: list) -> pd.DataFrame:
@@ -350,8 +374,8 @@ def _get_stats_for_type_ids_cached(type_ids: tuple, db_alias: str = "wcmkt") -> 
 
 
 @st.cache_data(ttl=1800)
-def _get_order_counts_cached(db_alias: str = "wcmkt") -> dict:
-    return _get_order_counts_impl(db_alias)
+def _get_order_book_summary_cached(db_alias: str = "wcmkt") -> dict:
+    return _get_order_book_summary_impl(db_alias)
 
 
 @st.cache_resource
@@ -388,7 +412,7 @@ def invalidate_market_caches():
     _get_watchlist_cached.clear()
     _get_sell_order_summary_cached.clear()
     _get_stats_for_type_ids_cached.clear()
-    _get_order_counts_cached.clear()
+    _get_order_book_summary_cached.clear()
     logger.info("Market caches invalidated")
 
 
@@ -521,9 +545,10 @@ class MarketRepository(BaseRepository):
         """Get marketstats rows for specific type_ids (cached, TTL=600s)."""
         return _get_stats_for_type_ids_cached(tuple(type_ids), self.db.alias)
 
-    def get_order_counts(self) -> dict:
-        """Get active sell/buy order counts via SQL aggregation (cached, TTL=1800s)."""
-        return _get_order_counts_cached(self.db.alias)
+    def get_order_book_summary(self) -> dict:
+        """Get active order counts + order-book ISK value + distinct sell types
+        via SQL aggregation (cached, TTL=1800s)."""
+        return _get_order_book_summary_cached(self.db.alias)
 
     def get_sde_info(self, type_ids: list = None) -> pd.DataFrame:
         """Get SDE info for type_ids. If None, uses market type_ids."""

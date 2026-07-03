@@ -176,36 +176,24 @@ class MarketService:
         return result[["type_id", "type_name", "current_sell_price", "order_volume"]]
 
     def get_market_overview_kpis(self) -> dict:
-        """Aggregate market-wide KPI totals from cached repository data.
+        """Aggregate market-wide KPI totals from the live order book.
+
+        total_market_value and items_listed come from marketorders (sell side)
+        so the dashboard matches the Market Stats page's "Sell Orders Value"
+        exactly — see _get_order_book_summary_impl for why marketstats is
+        deliberately not used here.
 
         Returns:
             Dict with keys: total_market_value, active_sell_orders,
             active_buy_orders, items_listed, last_updated.
         """
-        stats_df = self._repo.get_all_stats()
-
-        total_market_value = 0.0
-        items_listed = 0
-        if stats_df is not None and not stats_df.empty:
-            prices = pd.to_numeric(stats_df["min_price"], errors="coerce").fillna(0)
-            volumes = pd.to_numeric(stats_df["total_volume_remain"], errors="coerce").fillna(0)
-            total_market_value = float((prices * volumes).sum())
-            items_listed = int(stats_df["type_id"].nunique())
-
-        # Order counts come from a SQL GROUP BY rather than loading the full
-        # marketorders table just to count rows by is_buy_order.
-        counts = self._repo.get_order_counts()
-        active_sell_orders = int(counts.get("active_sell_orders", 0))
-        active_buy_orders = int(counts.get("active_buy_orders", 0))
-
-        last_updated = self._repo.get_update_time()
-
+        summary = self._repo.get_order_book_summary()
         return {
-            "total_market_value": total_market_value,
-            "active_sell_orders": active_sell_orders,
-            "active_buy_orders": active_buy_orders,
-            "items_listed": items_listed,
-            "last_updated": last_updated,
+            "total_market_value": float(summary.get("sell_order_value", 0.0)),
+            "active_sell_orders": int(summary.get("active_sell_orders", 0)),
+            "active_buy_orders": int(summary.get("active_buy_orders", 0)),
+            "items_listed": int(summary.get("sell_types_listed", 0)),
+            "last_updated": self._repo.get_update_time(),
         }
 
     # =====================================================================
