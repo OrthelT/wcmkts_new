@@ -313,7 +313,7 @@ def get_doctrine_ships_column_config(language_code: str = "en") -> dict:
             format="%d%%",
         ),
         "order_volume": st.column_config.NumberColumn(
-            translate_text(language_code, "market_stats.market_stock"),
+            translate_text(language_code, "dashboard.column_ship_hulls"),
             format="compact",
         ),
         "fits_on_mkt": st.column_config.NumberColumn(
@@ -360,9 +360,9 @@ def get_doctrine_modules_column_config(language_code: str = "en") -> dict:
             translate_text(language_code, "market_stats.market_stock"),
             format="compact",
         ),
-        "fit_count": st.column_config.NumberColumn(
+        "fits_on_mkt": st.column_config.NumberColumn(
             translate_text(language_code, "dashboard.column_fits"),
-            help="Number of distinct fits that include this module",
+            help="Complete fits the current module stock can supply (worst case across fits)",
         ),
         "qty_needed": st.column_config.NumberColumn(
             translate_text(language_code, "dashboard.column_qty_needed"),

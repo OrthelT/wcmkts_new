@@ -155,14 +155,15 @@ class TestComputeModuleTargets:
         result = _compute_module_targets(repo)
         assert len(result) == 1
         row = result.iloc[0]
-        # Fit 1: qty_needed = (20-15)*2 = 10, target_pct = round(15/20*100) = 75
-        # Fit 2: qty_needed = (10-5)*4 = 20, target_pct = round(5/10*100) = 50
-        # MAX(qty_needed) = 20, MIN(target_pct) = 50
+        # Fit 1: qty_needed = (20-15)*2 = 10, target_pct = 75, fits_on_mkt = 15
+        # Fit 2: qty_needed = (10-5)*4 = 20, target_pct = 50, fits_on_mkt = 5
+        # MAX(qty_needed) = 20, MIN(target_pct) = 50, MIN(fits_on_mkt) = 5
         assert row["qty_needed"] == 20
         assert row["target_pct"] == 50
-        assert row["fit_count"] == 2
+        assert row["fits_on_mkt"] == 5
 
-    def test_fit_count_single_fit(self):
+    def test_zero_stock_module_shows_zero_fits(self):
+        """A module with no stock supports 0 fits — the column must show 0."""
         from pages.components.dashboard_components import _compute_module_targets
 
         fits_df = pd.DataFrame({
@@ -170,17 +171,16 @@ class TestComputeModuleTargets:
             "ship_id": [999],
             "fit_id": [1],
             "fit_qty": [2],
-            "fits_on_mkt": [10],
+            "fits_on_mkt": [0],
             "category_id": [7],
         })
         targets_df = pd.DataFrame({"fit_id": [1], "ship_target": [20]})
         repo = self._make_repo(fits_df, targets_df)
         result = _compute_module_targets(repo)
-        assert result.iloc[0]["fit_count"] == 1
+        assert result.iloc[0]["fits_on_mkt"] == 0
 
-    def test_fit_count_uses_distinct_not_row_count(self):
-        # Same module appearing twice in the same fit_id (e.g. low + mid slot)
-        # should count as 1 distinct fit, not 2.
+    def test_duplicate_rows_in_same_fit_take_min(self):
+        """Same module twice in one fit (low + mid slot): worst row wins."""
         from pages.components.dashboard_components import _compute_module_targets
 
         fits_df = pd.DataFrame({
@@ -188,13 +188,13 @@ class TestComputeModuleTargets:
             "ship_id": [999, 999],
             "fit_id": [1, 1],
             "fit_qty": [1, 1],
-            "fits_on_mkt": [10, 10],
+            "fits_on_mkt": [10, 8],
             "category_id": [7, 7],
         })
         targets_df = pd.DataFrame({"fit_id": [1], "ship_target": [20]})
         repo = self._make_repo(fits_df, targets_df)
         result = _compute_module_targets(repo)
-        assert result.iloc[0]["fit_count"] == 1
+        assert result.iloc[0]["fits_on_mkt"] == 8
 
     def test_empty_fits(self):
         from pages.components.dashboard_components import _compute_module_targets
@@ -354,7 +354,7 @@ class TestDoctrineModulesColumnConfig:
         config = get_doctrine_modules_column_config("en")
         expected_keys = {
             "type_id", "image_url", "type_name", "target_pct", "order_volume",
-            "fit_count", "qty_needed", "current_sell_price", "jita_sell_price",
+            "fits_on_mkt", "qty_needed", "current_sell_price", "jita_sell_price",
             "jita_buy_price", "pct_diff_vs_jita_sell",
         }
         assert set(config.keys()) == expected_keys
@@ -441,7 +441,7 @@ class TestRenderPopularModulesTableEarlyExits:
     def test_empty_snapshot_returns_none_none(self):
         from pages.components import dashboard_components as dc
 
-        targets = pd.DataFrame({"type_id": [100], "qty_needed": [1], "target_pct": [50], "fit_count": [1]})
+        targets = pd.DataFrame({"type_id": [100], "qty_needed": [1], "target_pct": [50], "fits_on_mkt": [1]})
         kwargs = self._kwargs()
         kwargs["market_service"].get_current_market_snapshot.return_value = pd.DataFrame()
 
