@@ -332,6 +332,9 @@ def render_top_n_items_ui(
 # 30-Day Metrics UI
 # =============================================================================
 
+THIRTY_DAY_FILTER_KEYS = ("all", "ships", "doctrine_ships", "modules", "materials")
+
+
 def render_30day_metrics_ui(service, language_code: str = "en") -> None:
     """Render 30-day market performance metrics section.
 
@@ -341,6 +344,7 @@ def render_30day_metrics_ui(service, language_code: str = "en") -> None:
     metrics_category = None
     metrics_category_id = None
     metrics_item_id = None
+    metrics_type_ids = None
 
     if ss_has("selected_item_id"):
         metrics_item_id = st.session_state.selected_item_id
@@ -348,7 +352,29 @@ def render_30day_metrics_ui(service, language_code: str = "en") -> None:
         metrics_category = st.session_state.selected_category
         metrics_category_id = st.session_state.get("selected_category_id")
 
-    if ss_has("selected_item"):
+    pill_key = "all"
+    if metrics_item_id is None:
+        # st.pills returns None when the user deselects the active pill —
+        # treat that as "all" rather than an empty scope.
+        pill_key = st.pills(
+            translate_text(language_code, "market_stats.pill_filter_label"),
+            options=THIRTY_DAY_FILTER_KEYS,
+            default="all",
+            format_func=lambda key: translate_text(
+                language_code, f"market_stats.pill_{key}"
+            ),
+            key="thirty_day_filter_pill",
+            label_visibility="collapsed",
+        ) or "all"
+
+    if pill_key != "all":
+        # A pill overrides the sidebar category scope; "all" preserves the
+        # existing sidebar-driven behavior.
+        metrics_category = None
+        metrics_category_id = None
+        metrics_type_ids = service.get_30day_filter_type_ids(pill_key)
+        metrics_label = translate_text(language_code, f"market_stats.pill_{pill_key}")
+    elif ss_has("selected_item"):
         metrics_label = st.session_state.selected_item
     elif ss_has("selected_category"):
         metrics_label = st.session_state.selected_category
@@ -365,6 +391,7 @@ def render_30day_metrics_ui(service, language_code: str = "en") -> None:
             selected_category=metrics_category,
             selected_category_id=metrics_category_id,
             selected_item_id=metrics_item_id,
+            selected_type_ids=metrics_type_ids,
         )
     )
 

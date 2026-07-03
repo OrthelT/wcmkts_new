@@ -97,3 +97,28 @@ def test_orphaned_dashboard_keys_removed():
     # Removed from every block; translate_text returns the raw key when absent.
     assert translate_text("en", "dashboard.row_destination_label") == "dashboard.row_destination_label"
     assert translate_text("en", "dashboard.row_select_hint") == "dashboard.row_select_hint"
+
+
+class TestThirtyDayPillKeys:
+    """Pill filter labels must resolve in English (other languages fall back)."""
+
+    def test_pill_keys_resolve_in_english(self):
+        from ui.i18n import translate_text
+
+        keys = [
+            "market_stats.pill_filter_label",
+            "market_stats.pill_all",
+            "market_stats.pill_ships",
+            "market_stats.pill_doctrine_ships",
+            "market_stats.pill_modules",
+            "market_stats.pill_materials",
+        ]
+        for key in keys:
+            text = translate_text("en", key)
+            assert text != key, f"missing English translation for {key}"
+
+    def test_pill_keys_present_in_all_languages(self):
+        from ui.i18n import TRANSLATIONS
+
+        for lang, table in TRANSLATIONS.items():
+            assert "market_stats.pill_ships" in table, f"missing pill keys in {lang}"
