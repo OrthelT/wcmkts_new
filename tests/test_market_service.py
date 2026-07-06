@@ -91,16 +91,47 @@ class TestCalculate30dayMetrics:
         assert result == (0, 0, 0, 0, 0, 0)
 
     def test_category_filter(self, sample_history_df, mock_repo):
-        """Filtering by category should use category type_ids."""
+        """A non-ship category uses the (shuttle-inclusive) category resolver."""
         mock_repo.get_category_type_ids.return_value = [34]
         mock_repo.get_history_by_type_ids.return_value = sample_history_df
 
         from services.market_service import MarketService
         service = MarketService(mock_repo)
-        result = service.calculate_30day_metrics(selected_category="Ship")
+        result = service.calculate_30day_metrics(selected_category="Drone")
 
-        mock_repo.get_category_type_ids.assert_called_once_with("Ship", category_id=None)
+        mock_repo.get_category_type_ids.assert_called_once_with("Drone", category_id=None)
         assert result[0] > 0  # avg_vol
+
+    def test_ship_category_excludes_shuttles_via_pill_resolver(self, sample_history_df, mock_repo):
+        """The 30-day panel treats the sidebar 'Ship' category like the 'Ships'
+        pill: shuttles are excluded by routing through the pill resolver
+        (get_30day_filter_type_ids('ships')) rather than the shuttle-inclusive
+        get_category_type_ids. See market_dashboard shuttle-exclusion rule."""
+        mock_repo.get_30day_filter_type_ids.return_value = [587]
+        mock_repo.get_history_by_type_ids.return_value = sample_history_df
+
+        from services.market_service import MarketService
+        service = MarketService(mock_repo)
+        result = service.calculate_30day_metrics(
+            selected_category="Ship", selected_category_id=6,
+        )
+
+        mock_repo.get_30day_filter_type_ids.assert_called_once_with("ships")
+        mock_repo.get_category_type_ids.assert_not_called()
+        mock_repo.get_history_by_type_ids.assert_called_once_with([587])
+        assert result[0] > 0  # avg_vol
+
+    def test_ship_category_detected_by_id_without_name(self, sample_history_df, mock_repo):
+        """Ship detection works from category_id alone (name not required)."""
+        mock_repo.get_30day_filter_type_ids.return_value = [587]
+        mock_repo.get_history_by_type_ids.return_value = sample_history_df
+
+        from services.market_service import MarketService
+        service = MarketService(mock_repo)
+        service.calculate_30day_metrics(selected_category_id=6)
+
+        mock_repo.get_30day_filter_type_ids.assert_called_once_with("ships")
+        mock_repo.get_category_type_ids.assert_not_called()
 
     def test_sparse_trading_days_uses_full_window(self, mock_repo):
         """Average should divide by 30, not by number of traded days.

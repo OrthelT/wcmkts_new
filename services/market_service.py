@@ -25,6 +25,11 @@ from logging_config import setup_logging
 
 logger = setup_logging(__name__)
 
+# SDE category id for ships. The 30-day panel scopes the "Ship" category the
+# same way the "Ships" pill does — shuttles excluded — by routing through the
+# pill resolver instead of the shuttle-inclusive category resolver.
+SHIP_CATEGORY_ID = 6
+
 
 class MarketService:
     """Market analysis service with pure calculation and chart creation logic.
@@ -232,10 +237,16 @@ class MarketService:
                     return 0, 0, 0, 0, 0, 0
                 df = self._repo.get_history_by_type_ids(selected_type_ids)
             elif selected_category_id is not None or selected_category:
-                type_ids = self._repo.get_category_type_ids(
-                    selected_category,
-                    category_id=selected_category_id,
-                )
+                if selected_category_id == SHIP_CATEGORY_ID or selected_category == "Ship":
+                    # Ship scope excludes shuttles here (matches the Ships pill),
+                    # so route through the pill resolver, not the shuttle-
+                    # inclusive category resolver used by the main table.
+                    type_ids = self._repo.get_30day_filter_type_ids("ships")
+                else:
+                    type_ids = self._repo.get_category_type_ids(
+                        selected_category,
+                        category_id=selected_category_id,
+                    )
                 if not type_ids:
                     return 0, 0, 0, 0, 0, 0
                 df = self._repo.get_history_by_type_ids(type_ids)
