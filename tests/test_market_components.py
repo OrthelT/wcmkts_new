@@ -118,6 +118,24 @@ def test_30day_pill_selection_overrides_sidebar_category_scope():
     assert kwargs["selected_item_id"] is None
 
 
+def test_top_n_headers_reflect_daily_selection():
+    """Daily pill -> daily-average headers."""
+    from pages.components.market_components import _top_n_column_headers
+
+    isk_header, volume_header = _top_n_column_headers(is_total=False)
+    assert isk_header == "Daily ISK Volume"
+    assert volume_header == "Avg Volume"
+
+
+def test_top_n_headers_reflect_total_selection():
+    """Total pill -> the columns hold window sums, so headers say 'Total'."""
+    from pages.components.market_components import _top_n_column_headers
+
+    isk_header, volume_header = _top_n_column_headers(is_total=True)
+    assert isk_header == "Total ISK Volume"
+    assert volume_header == "Total Volume"
+
+
 def test_30day_activity_chart_receives_true_30day_frame():
     """The activity chart must be fed the 30-day frame, not the 7-day one.
 

@@ -267,6 +267,18 @@ def configure_top_n_items_ui() -> None:
     )
 
 
+def _top_n_column_headers(is_total: bool) -> tuple[str, str]:
+    """(isk_header, volume_header) for the top-N table.
+
+    Reflects the Daily/Total pill: when Total is selected the columns hold
+    window sums, not daily averages, so the headers must say so rather than
+    keep the misleading "Daily"/"Avg" labels.
+    """
+    if is_total:
+        return "Total ISK Volume", "Total Volume"
+    return "Daily ISK Volume", "Avg Volume"
+
+
 def render_top_n_items_ui(
     service,
     df_7days: pd.DataFrame,
@@ -316,10 +328,13 @@ def render_top_n_items_ui(
                 unsafe_allow_html=True,
             )
 
+            isk_header, volume_header = _top_n_column_headers(
+                st.session_state.daily_total_pill == 1
+            )
             colconfig = {
                 "type_name": st.column_config.TextColumn("Type Name", width="medium"),
-                "daily_isk_volume": st.column_config.NumberColumn("Daily ISK Volume", format="compact", width="small"),
-                "volume": st.column_config.NumberColumn("Avg Volume", format="compact", width="small"),
+                "daily_isk_volume": st.column_config.NumberColumn(isk_header, format="compact", width="small"),
+                "volume": st.column_config.NumberColumn(volume_header, format="compact", width="small"),
             }
             st.dataframe(top_n_items, column_config=colconfig)
         else:
