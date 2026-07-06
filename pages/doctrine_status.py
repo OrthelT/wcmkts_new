@@ -374,7 +374,7 @@ def _render_low_stock_modules_panel(
                             language_code,
                             "doctrine_status.view_stock_breakdown",
                         ),
-                        use_container_width=True,
+                        width='stretch',
                     ):
                         st.markdown(f"**{mod_name}**")
                         st.caption(

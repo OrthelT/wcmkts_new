@@ -474,7 +474,7 @@ def render_30day_metrics_ui(service, language_code: str = "en") -> None:
 
     chart = service.create_30day_activity_chart(df_30days)
     if chart is not None:
-        st.plotly_chart(chart, use_container_width=True)
+        st.plotly_chart(chart, width='stretch')
 
     st.divider()
 
