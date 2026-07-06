@@ -1,10 +1,24 @@
-# Winter Coalition Market App (v.0.6.7)
+# Winter Coalition Market App (v.0.6.8)
 A Streamlit application for viewing EVE Online market statistics for Winter Coalition. This tool provides real-time market data analysis, historical price tracking, and fitting information for various items in EVE Online markets.
 
 SUPPORT: Join the Discord for support https://discord.gg/BxatJE572Y
 CONTRIBUTING: Contributors welcome. This project is fully open source under MIT License. Source code and full documentation available on GitHub: https://github.com/OrthelT/wcmkts_new
 
 # UPDATES:
+## version 0.6.8
+### New Features
+- **30-day category pills on Market Stats**: New pills above the 30-day metrics -- All / Ships / Doctrine Ships / Modules / Materials. Ships exclude shuttles; Doctrine Ships are the distinct hulls from the active hub's doctrines; unknown or empty scopes fail closed with zeros and a warning rather than silently widening. Localized in all 8 languages.
+- **30-day daily activity chart**: Daily ISK value (bars) plus units traded (line) below the 30-day metrics, re-scoping with whichever pill, item, or category filter is active. The historical stats section now defaults to expanded.
+
+### Bug Fixes
+- **Dashboard market value now matches Market Stats**: The dashboard's Total Market Value previously valued the watchlist-scoped order book at the best ask, missing ~550 non-watchlist types. Both pages now share one source of truth -- a SQL aggregation over actual sell orders (`get_order_book_summary`). Items Listed now counts actual listed sell-order types.
+- **Popular Modules "Fits" column** now shows fits supported by current stock (zero stock displays 0) instead of counting fits that merely include the module.
+- **30-day stats column headers** now match the daily average / total toggle selection.
+
+### Other
+- Renamed dashboard columns: Doctrine Ships stock is now **Ship Hulls**; **% Target** is now **% Fits Target** in both tables.
+- Replaced deprecated Streamlit calls.
+
 ## version 0.6.7
 ### New Features and Fixes
 - Add support for BKG market hub
