@@ -383,14 +383,16 @@ def _compute_module_targets(doctrine_repo) -> pd.DataFrame:
     - target_pct = MIN across fits of: round((fits_on_mkt / ship_target) * 100),
         clipped to [0, 100]. The cap masks overstock (>100%) by design — once a
         fit hits its target, the dashboard treats it as done.
-    - fit_count = number of distinct fits that include this type_id.
+    - fits_on_mkt = MIN across fits of the module's fits_on_mkt: how many
+        complete fits the current module stock supports, worst case. 0 stock
+        displays as 0 (it supports no fits), never blank.
 
     Raises:
         ValueError: if any fit referenced in fits_df has no matching row in
             ship_targets. Per AGENTS.md data-integrity rule, missing target
             configuration is surfaced loudly rather than coerced to 0.
 
-    Returns DataFrame with columns: type_id, qty_needed, target_pct, fit_count
+    Returns DataFrame with columns: type_id, qty_needed, target_pct, fits_on_mkt
     """
     fits_df = doctrine_repo.get_all_fits()
     if fits_df.empty:
@@ -448,12 +450,12 @@ def _compute_module_targets(doctrine_repo) -> pd.DataFrame:
     agg = modules.groupby("type_id").agg(
         qty_needed=("row_qty_needed", "max"),
         target_pct=("row_target_pct", "min"),
-        fit_count=("fit_id", "nunique"),
+        fits_on_mkt=("fits_on_mkt", "min"),
     ).reset_index()
 
     agg["target_pct"] = agg["target_pct"].clip(upper=100).astype(int)
     agg["qty_needed"] = agg["qty_needed"].astype(int)
-    agg["fit_count"] = agg["fit_count"].astype(int)
+    agg["fits_on_mkt"] = agg["fits_on_mkt"].astype(int)
 
     return agg
 
@@ -532,7 +534,7 @@ def render_popular_modules_table(
     snapshot = snapshot.merge(module_targets, on="type_id", how="left")
     snapshot["target_pct"] = snapshot["target_pct"].fillna(0).astype(int)
     snapshot["qty_needed"] = snapshot["qty_needed"].fillna(0).astype(int)
-    snapshot["fit_count"] = snapshot["fit_count"].fillna(0).astype(int)
+    snapshot["fits_on_mkt"] = snapshot["fits_on_mkt"].fillna(0).astype(int)
 
     snapshot = apply_localized_type_names(snapshot, sde_repo, language_code, logger)
     snapshot["type_name"] = snapshot["type_name"].fillna(snapshot["type_id"].astype(str))
@@ -550,7 +552,7 @@ def render_popular_modules_table(
 
     display_cols = [
         "type_id", "image_url", "type_name", "target_pct", "order_volume",
-        "fit_count", "qty_needed", "current_sell_price", "jita_sell_price",
+        "fits_on_mkt", "qty_needed", "current_sell_price", "jita_sell_price",
         "jita_buy_price", "pct_diff_vs_jita_sell",
     ]
 

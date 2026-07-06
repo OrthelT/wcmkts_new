@@ -447,12 +447,12 @@ def _render_action_chips(result: PricerResult, language_code: str):
             data=csv_data,
             file_name=filename,
             mime="text/csv",
-            use_container_width=True,
+            width='stretch',
         )
     with c2:
         if st.button(
             translate_text(language_code, "pricer.appraisal.action_reset"),
-            use_container_width=True,
+            width='stretch',
             key="pricer_reset",
         ):
             ss_set("pricer_result", None)
@@ -881,7 +881,7 @@ def main():
             price_button = st.button(
                 translate_text(language_code, "pricer.price_items"),
                 type="primary",
-                use_container_width=True,
+                width='stretch',
                 key="pricer_submit",
             )
 

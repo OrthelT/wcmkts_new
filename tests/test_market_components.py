@@ -42,3 +42,171 @@ def test_30day_metrics_forwards_windows_with_correct_labels():
     kwargs = mock_top_n.call_args.kwargs
     assert kwargs["df_7days"] is df_7, "7-day slot must carry the true 7-day frame"
     assert kwargs["df_30days"] is df_30, "30-day slot must carry the true 30-day frame"
+
+
+def _make_mock_st(pill_return):
+    """Build a wholesale ``st`` mock for render_30day_metrics_ui tests."""
+    mock_st = MagicMock()
+    mock_st.pills.return_value = pill_return
+    mock_st.session_state.selected_item = None
+    mock_st.columns.side_effect = lambda *a, **k: [MagicMock(), MagicMock()]
+    return mock_st
+
+
+def _make_service():
+    service = Mock()
+    # Non-zero metrics so the component renders past the insufficient-data
+    # early return; contract: (avg_vol, avg_isk, vol_delta, isk_delta, df_30, df_7)
+    service.calculate_30day_metrics.return_value = (
+        5.0, 5.0, 1.0, 1.0, pd.DataFrame({"w": ["30d"]}), pd.DataFrame({"w": ["7d"]})
+    )
+    return service
+
+
+def test_30day_pill_deselect_preserves_sidebar_category_scope():
+    """st.pills returning None (deselect) must behave as "all".
+
+    The sidebar category scope is preserved and no type-id filter is passed
+    (``selected_type_ids=None`` means "unused", never an empty scope).
+    """
+    from pages.components import market_components
+
+    mock_st = _make_mock_st(pill_return=None)
+    mock_st.session_state.selected_category = "Ship"
+    mock_st.session_state.get.return_value = 6  # selected_category_id
+    service = _make_service()
+
+    sidebar_keys = {"selected_category"}
+    with patch.object(market_components, "st", mock_st), \
+            patch.object(market_components, "ss_has", side_effect=sidebar_keys.__contains__), \
+            patch.object(market_components, "translate_text", return_value="x"), \
+            patch.object(market_components, "render_top_n_items_ui"):
+        market_components.render_30day_metrics_ui(service, language_code="en")
+
+    mock_st.pills.assert_called_once()
+    service.get_30day_filter_type_ids.assert_not_called()
+    kwargs = service.calculate_30day_metrics.call_args.kwargs
+    assert kwargs["selected_category"] == "Ship"
+    assert kwargs["selected_category_id"] == 6
+    assert kwargs["selected_item_id"] is None
+    assert kwargs["selected_type_ids"] is None
+
+
+def test_30day_pill_selection_overrides_sidebar_category_scope():
+    """A selected pill scopes metrics to its type ids and drops the category."""
+    from pages.components import market_components
+
+    mock_st = _make_mock_st(pill_return="ships")
+    mock_st.session_state.selected_category = "Ship"
+    mock_st.session_state.get.return_value = 6  # selected_category_id
+    service = _make_service()
+    ship_ids = [587, 588, 24698]
+    service.get_30day_filter_type_ids.return_value = ship_ids
+
+    sidebar_keys = {"selected_category"}
+    with patch.object(market_components, "st", mock_st), \
+            patch.object(market_components, "ss_has", side_effect=sidebar_keys.__contains__), \
+            patch.object(market_components, "translate_text", return_value="x"), \
+            patch.object(market_components, "render_top_n_items_ui"):
+        market_components.render_30day_metrics_ui(service, language_code="en")
+
+    service.get_30day_filter_type_ids.assert_called_once_with("ships")
+    kwargs = service.calculate_30day_metrics.call_args.kwargs
+    assert kwargs["selected_type_ids"] is ship_ids
+    assert kwargs["selected_category"] is None
+    assert kwargs["selected_category_id"] is None
+    assert kwargs["selected_item_id"] is None
+
+
+def test_top_n_headers_reflect_daily_selection():
+    """Daily pill -> daily-average headers."""
+    from pages.components.market_components import _top_n_column_headers
+
+    isk_header, volume_header = _top_n_column_headers(is_total=False)
+    assert isk_header == "Daily ISK Volume"
+    assert volume_header == "Avg Volume"
+
+
+def test_top_n_headers_reflect_total_selection():
+    """Total pill -> the columns hold window sums, so headers say 'Total'."""
+    from pages.components.market_components import _top_n_column_headers
+
+    isk_header, volume_header = _top_n_column_headers(is_total=True)
+    assert isk_header == "Total ISK Volume"
+    assert volume_header == "Total Volume"
+
+
+def test_30day_activity_chart_receives_true_30day_frame():
+    """The activity chart must be fed the 30-day frame, not the 7-day one.
+
+    ``calculate_30day_metrics`` returns ``(..., df_30days, df_7days)``. The
+    component builds the chart from slot 5 (df_30days) and hands the result to
+    ``st.plotly_chart``. This locks in both the no-swap contract (mirroring
+    ``render_top_n_items_ui``) and that the chart is actually rendered rather
+    than silently dropped.
+    """
+    from pages.components import market_components
+
+    df_30 = pd.DataFrame({"window": ["30d"]})
+    df_7 = pd.DataFrame({"window": ["7d"]})
+
+    service = Mock()
+    service.calculate_30day_metrics.return_value = (5.0, 5.0, 1.0, 1.0, df_30, df_7)
+    chart = object()
+    service.create_30day_activity_chart.return_value = chart
+
+    mock_st = _make_mock_st(pill_return="all")
+
+    with patch.object(market_components, "st", mock_st), \
+            patch.object(market_components, "ss_has", return_value=False), \
+            patch.object(market_components, "translate_text", return_value="x"), \
+            patch.object(market_components, "render_top_n_items_ui"):
+        market_components.render_30day_metrics_ui(service, language_code="en")
+
+    service.create_30day_activity_chart.assert_called_once_with(df_30)
+    mock_st.plotly_chart.assert_called_once()
+    assert mock_st.plotly_chart.call_args.args[0] is chart
+
+
+def test_30day_activity_chart_not_rendered_when_none():
+    """A None chart (empty/sentinel frame) draws nothing -- no plotly_chart call."""
+    from pages.components import market_components
+
+    service = _make_service()
+    service.create_30day_activity_chart.return_value = None
+
+    mock_st = _make_mock_st(pill_return="all")
+
+    with patch.object(market_components, "st", mock_st), \
+            patch.object(market_components, "ss_has", return_value=False), \
+            patch.object(market_components, "translate_text", return_value="x"), \
+            patch.object(market_components, "render_top_n_items_ui"):
+        market_components.render_30day_metrics_ui(service, language_code="en")
+
+    service.create_30day_activity_chart.assert_called_once()
+    mock_st.plotly_chart.assert_not_called()
+
+
+def test_30day_pills_hidden_when_item_selected():
+    """A selected item skips the pills entirely (item scope wins)."""
+    from pages.components import market_components
+
+    mock_st = _make_mock_st(pill_return="ships")
+    mock_st.session_state.selected_item_id = 34
+    mock_st.session_state.selected_item = "Tritanium"
+    service = _make_service()
+
+    item_keys = {"selected_item_id", "selected_item"}
+    with patch.object(market_components, "st", mock_st), \
+            patch.object(market_components, "ss_has", side_effect=item_keys.__contains__), \
+            patch.object(market_components, "translate_text", return_value="x"), \
+            patch.object(market_components, "render_top_n_items_ui"):
+        market_components.render_30day_metrics_ui(service, language_code="en")
+
+    mock_st.pills.assert_not_called()
+    service.get_30day_filter_type_ids.assert_not_called()
+    kwargs = service.calculate_30day_metrics.call_args.kwargs
+    assert kwargs["selected_item_id"] == 34
+    assert kwargs["selected_type_ids"] is None
+    assert kwargs["selected_category"] is None
+    assert kwargs["selected_category_id"] is None

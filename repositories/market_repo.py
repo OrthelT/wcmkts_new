@@ -155,6 +155,58 @@ def _get_category_type_ids_by_id_impl(category_id: int) -> list:
     return df["type_id"].tolist()
 
 
+# 30-day stats pill filter scopes (verified against sdelite.db 2026-07-03)
+# Only group 31 (Shuttle) currently has rows in the lightweight SDE; 1566
+# (Irregular Shuttle) and 4737 (Homefront Operations Shuttle) are inert today
+# and kept as defensive excludes in case the SDE ever carries those hulls.
+SHUTTLE_GROUP_IDS = (31, 1566, 4737)
+MATERIALS_CATEGORY_IDS = (4, 25, 42, 43)  # Material, Asteroid, PI Resources/Commodities
+
+
+def _get_30day_filter_type_ids_impl(filter_key: str, db_alias: str = "wcmkt") -> list:
+    """Resolve a 30-day stats pill filter to a list of type_ids.
+
+    'ships' / 'modules' / 'materials' query the SDE (ships exclude shuttle
+    groups); 'doctrine_ships' queries the market db's doctrines table for
+    distinct hulls in doctrine use. Unknown keys return [] and log at ERROR —
+    never silently widen the scope (data-integrity rule).
+    """
+    if filter_key == "doctrine_ships":
+        repo = BaseRepository(DatabaseConfig(db_alias), logger)
+        # Exclude NULL ship_id: a NULL becomes NaN in the id list and raises in
+        # the downstream int() coercion, silently zeroing the whole pill scope.
+        df = repo.read_df(
+            text(
+                "SELECT DISTINCT ship_id AS type_id FROM doctrines "
+                "WHERE ship_id IS NOT NULL"
+            )
+        )
+    elif filter_key == "ships":
+        repo = BaseRepository(DatabaseConfig("sde"), logger)
+        query = text(
+            "SELECT typeID AS type_id FROM sdetypes "
+            "WHERE categoryID = 6 AND groupID NOT IN :group_ids"
+        ).bindparams(bindparam("group_ids", expanding=True))
+        df = repo.read_df(query, params={"group_ids": list(SHUTTLE_GROUP_IDS)})
+    elif filter_key == "modules":
+        repo = BaseRepository(DatabaseConfig("sde"), logger)
+        df = repo.read_df(
+            text("SELECT typeID AS type_id FROM sdetypes WHERE categoryID = 7")
+        )
+    elif filter_key == "materials":
+        repo = BaseRepository(DatabaseConfig("sde"), logger)
+        query = text(
+            "SELECT typeID AS type_id FROM sdetypes WHERE categoryID IN :cat_ids"
+        ).bindparams(bindparam("cat_ids", expanding=True))
+        df = repo.read_df(query, params={"cat_ids": list(MATERIALS_CATEGORY_IDS)})
+    else:
+        logger.error(f"Unknown 30-day filter key: {filter_key}")
+        return []
+    if df.empty:
+        return []
+    return df["type_id"].tolist()
+
+
 def _get_watchlist_type_ids_impl(db_alias: str = "wcmkt") -> list:
     """Fetch distinct type_ids from the watchlist table."""
     db = DatabaseConfig(db_alias)
@@ -229,27 +281,53 @@ def _get_stats_for_type_ids_impl(type_ids: list[int], db_alias: str = "wcmkt") -
     return repo.read_df(query, params={"type_ids": [int(tid) for tid in type_ids]})
 
 
-def _get_order_counts_impl(db_alias: str = "wcmkt") -> dict:
-    """Count active sell/buy orders via a SQL GROUP BY (no full-table load).
+def _get_order_book_summary_impl(db_alias: str = "wcmkt") -> dict:
+    """Aggregate active order counts, order-book ISK value, and distinct sell
+    types via a single SQL GROUP BY (no full-table load).
+
+    Sell value is SUM(price * volume_remain) over actual sell orders — the same
+    definition the Market Stats page uses — NOT marketstats' min_price *
+    total_volume_remain, which values the whole book at the best ask and only
+    covers watchlist types.
 
     No try/except here: read_df() already attempts sync + remote-fallback
     recovery and only raises on genuinely unrecoverable failures. Swallowing
-    that to {0, 0} would misreport a broken read as a real empty market
+    that to zeros would misreport a broken read as a real empty market
     (data-integrity rule) — let it propagate so the caller can surface it. A
     legitimately empty result (no rows) is still a true zero, handled below.
     """
     repo = BaseRepository(DatabaseConfig(db_alias), logger)
     query = text(
-        "SELECT is_buy_order, COUNT(*) AS n FROM marketorders GROUP BY is_buy_order"
+        """
+        SELECT is_buy_order,
+               COUNT(*) AS n,
+               SUM(price * volume_remain) AS total_value,
+               COUNT(DISTINCT type_id) AS type_count
+        FROM marketorders
+        GROUP BY is_buy_order
+        """
     )
     df = repo.read_df(query)
-    if df.empty:
-        return {"active_sell_orders": 0, "active_buy_orders": 0}
-    counts = df.set_index("is_buy_order")["n"].to_dict()
-    return {
-        "active_sell_orders": int(counts.get(0, 0)),
-        "active_buy_orders": int(counts.get(1, 0)),
+    summary = {
+        "active_sell_orders": 0,
+        "active_buy_orders": 0,
+        "sell_order_value": 0.0,
+        "buy_order_value": 0.0,
+        "sell_types_listed": 0,
     }
+    if df.empty:
+        return summary
+    rows = df.set_index("is_buy_order")
+    if 0 in rows.index:
+        sell_value = rows.at[0, "total_value"]
+        summary["active_sell_orders"] = int(rows.at[0, "n"])
+        summary["sell_order_value"] = 0.0 if pd.isna(sell_value) else float(sell_value)
+        summary["sell_types_listed"] = int(rows.at[0, "type_count"])
+    if 1 in rows.index:
+        buy_value = rows.at[1, "total_value"]
+        summary["active_buy_orders"] = int(rows.at[1, "n"])
+        summary["buy_order_value"] = 0.0 if pd.isna(buy_value) else float(buy_value)
+    return summary
 
 
 def _get_sde_info_impl(type_ids: list) -> pd.DataFrame:
@@ -324,6 +402,11 @@ def _get_category_type_ids_by_id_cached(category_id: int) -> list:
     return _get_category_type_ids_by_id_impl(category_id)
 
 
+@st.cache_data(ttl=1800)
+def _get_30day_filter_type_ids_cached(filter_key: str, db_alias: str = "wcmkt") -> list:
+    return _get_30day_filter_type_ids_impl(filter_key, db_alias)
+
+
 @st.cache_data(ttl=600)
 def _get_watchlist_type_ids_cached(db_alias: str = "wcmkt") -> list:
     return _get_watchlist_type_ids_impl(db_alias)
@@ -350,8 +433,8 @@ def _get_stats_for_type_ids_cached(type_ids: tuple, db_alias: str = "wcmkt") -> 
 
 
 @st.cache_data(ttl=1800)
-def _get_order_counts_cached(db_alias: str = "wcmkt") -> dict:
-    return _get_order_counts_impl(db_alias)
+def _get_order_book_summary_cached(db_alias: str = "wcmkt") -> dict:
+    return _get_order_book_summary_impl(db_alias)
 
 
 @st.cache_resource
@@ -388,7 +471,8 @@ def invalidate_market_caches():
     _get_watchlist_cached.clear()
     _get_sell_order_summary_cached.clear()
     _get_stats_for_type_ids_cached.clear()
-    _get_order_counts_cached.clear()
+    _get_order_book_summary_cached.clear()
+    _get_30day_filter_type_ids_cached.clear()
     logger.info("Market caches invalidated")
 
 
@@ -501,6 +585,10 @@ class MarketRepository(BaseRepository):
             return []
         return _get_category_type_ids_cached(category_name)
 
+    def get_30day_filter_type_ids(self, filter_key: str) -> list:
+        """Resolve a 30-day stats pill filter key to type_ids (cached, TTL=1800s)."""
+        return _get_30day_filter_type_ids_cached(filter_key, self.db.alias)
+
     def get_watchlist_type_ids(self) -> list:
         """Get distinct type_ids from watchlist (cached, TTL=600s)."""
         return _get_watchlist_type_ids_cached(self.db.alias)
@@ -521,9 +609,10 @@ class MarketRepository(BaseRepository):
         """Get marketstats rows for specific type_ids (cached, TTL=600s)."""
         return _get_stats_for_type_ids_cached(tuple(type_ids), self.db.alias)
 
-    def get_order_counts(self) -> dict:
-        """Get active sell/buy order counts via SQL aggregation (cached, TTL=1800s)."""
-        return _get_order_counts_cached(self.db.alias)
+    def get_order_book_summary(self) -> dict:
+        """Get active order counts + order-book ISK value + distinct sell types
+        via SQL aggregation (cached, TTL=1800s)."""
+        return _get_order_book_summary_cached(self.db.alias)
 
     def get_sde_info(self, type_ids: list = None) -> pd.DataFrame:
         """Get SDE info for type_ids. If None, uses market type_ids."""

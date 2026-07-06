@@ -25,6 +25,11 @@ from logging_config import setup_logging
 
 logger = setup_logging(__name__)
 
+# SDE category id for ships. The 30-day panel scopes the "Ship" category the
+# same way the "Ships" pill does — shuttles excluded — by routing through the
+# pill resolver instead of the shuttle-inclusive category resolver.
+SHIP_CATEGORY_ID = 6
+
 
 class MarketService:
     """Market analysis service with pure calculation and chart creation logic.
@@ -176,37 +181,31 @@ class MarketService:
         return result[["type_id", "type_name", "current_sell_price", "order_volume"]]
 
     def get_market_overview_kpis(self) -> dict:
-        """Aggregate market-wide KPI totals from cached repository data.
+        """Aggregate market-wide KPI totals from the live order book.
+
+        total_market_value and items_listed come from marketorders (sell side)
+        so the dashboard matches the Market Stats page's all-items "Sell Orders
+        Value" (both are SUM(price * volume_remain) over sell orders; the
+        Market Stats figure only differs when a category filter is active
+        there) — see _get_order_book_summary_impl for why marketstats is
+        deliberately not used here.
 
         Returns:
             Dict with keys: total_market_value, active_sell_orders,
             active_buy_orders, items_listed, last_updated.
         """
-        stats_df = self._repo.get_all_stats()
-
-        total_market_value = 0.0
-        items_listed = 0
-        if stats_df is not None and not stats_df.empty:
-            prices = pd.to_numeric(stats_df["min_price"], errors="coerce").fillna(0)
-            volumes = pd.to_numeric(stats_df["total_volume_remain"], errors="coerce").fillna(0)
-            total_market_value = float((prices * volumes).sum())
-            items_listed = int(stats_df["type_id"].nunique())
-
-        # Order counts come from a SQL GROUP BY rather than loading the full
-        # marketorders table just to count rows by is_buy_order.
-        counts = self._repo.get_order_counts()
-        active_sell_orders = int(counts.get("active_sell_orders", 0))
-        active_buy_orders = int(counts.get("active_buy_orders", 0))
-
-        last_updated = self._repo.get_update_time()
-
+        summary = self._repo.get_order_book_summary()
         return {
-            "total_market_value": total_market_value,
-            "active_sell_orders": active_sell_orders,
-            "active_buy_orders": active_buy_orders,
-            "items_listed": items_listed,
-            "last_updated": last_updated,
+            "total_market_value": float(summary.get("sell_order_value", 0.0)),
+            "active_sell_orders": int(summary.get("active_sell_orders", 0)),
+            "active_buy_orders": int(summary.get("active_buy_orders", 0)),
+            "items_listed": int(summary.get("sell_types_listed", 0)),
+            "last_updated": self._repo.get_update_time(),
         }
+
+    def get_30day_filter_type_ids(self, filter_key: str) -> list:
+        """Resolve a 30-day stats pill filter key to type_ids."""
+        return self._repo.get_30day_filter_type_ids(filter_key)
 
     # =====================================================================
     # Pure Calculations
@@ -217,8 +216,13 @@ class MarketService:
         selected_category: str = None,
         selected_category_id: int | None = None,
         selected_item_id: int = None,
+        selected_type_ids: list[int] | None = None,
     ) -> tuple:
         """Calculate 30-day and 7-day market metrics.
+
+        Scope precedence: selected_item_id > selected_type_ids >
+        category > all items. selected_type_ids=[] is an empty scope and
+        returns zeros without querying (never widens to all items).
 
         Returns:
             (avg_daily_volume, avg_daily_isk_value, vol_delta, isk_delta,
@@ -228,11 +232,21 @@ class MarketService:
         try:
             if selected_item_id:
                 df = self._repo.get_history_by_type_ids([selected_item_id])
+            elif selected_type_ids is not None:
+                if not selected_type_ids:
+                    return 0, 0, 0, 0, 0, 0
+                df = self._repo.get_history_by_type_ids(selected_type_ids)
             elif selected_category_id is not None or selected_category:
-                type_ids = self._repo.get_category_type_ids(
-                    selected_category,
-                    category_id=selected_category_id,
-                )
+                if selected_category_id == SHIP_CATEGORY_ID or selected_category == "Ship":
+                    # Ship scope excludes shuttles here (matches the Ships pill),
+                    # so route through the pill resolver, not the shuttle-
+                    # inclusive category resolver used by the main table.
+                    type_ids = self._repo.get_30day_filter_type_ids("ships")
+                else:
+                    type_ids = self._repo.get_category_type_ids(
+                        selected_category,
+                        category_id=selected_category_id,
+                    )
                 if not type_ids:
                     return 0, 0, 0, 0, 0, 0
                 df = self._repo.get_history_by_type_ids(type_ids)
@@ -281,6 +295,57 @@ class MarketService:
         except Exception as e:
             logger.error(f"Error calculating 30-day metrics: {e}")
             return 0, 0, 0, 0, 0, 0
+
+    def create_30day_activity_chart(self, df_30days) -> Optional[go.Figure]:
+        """Create the daily ISK value (bars) + units traded (line) chart.
+
+        Args:
+            df_30days: the 30-day history slice from calculate_30day_metrics()
+                with date, volume, and daily_isk_volume columns. Error paths
+                return the int 0 sentinel instead of a DataFrame, so guard on
+                type, not just emptiness.
+
+        Returns:
+            Plotly Figure, or None when there is nothing to chart.
+        """
+        if not isinstance(df_30days, pd.DataFrame) or df_30days.empty:
+            return None
+
+        daily = (
+            df_30days.groupby("date")
+            .agg(volume=("volume", "sum"), isk_value=("daily_isk_volume", "sum"))
+            .reset_index()
+            .sort_values("date")
+        )
+
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        fig.add_trace(
+            go.Bar(
+                x=daily["date"],
+                y=daily["isk_value"],
+                name="ISK Value",
+                hovertemplate="<b>%{x}</b><br>ISK: %{y:,.0f}<extra></extra>",
+            ),
+            secondary_y=False,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=daily["date"],
+                y=daily["volume"],
+                name="Units Traded",
+                line=dict(color="#FF69B4", width=2),
+                hovertemplate="<b>%{x}</b><br>Units: %{y:,.0f}<extra></extra>",
+            ),
+            secondary_y=True,
+        )
+        fig.update_layout(
+            height=350,
+            margin=dict(t=30, b=10),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+        )
+        fig.update_yaxes(title_text="ISK Value", secondary_y=False)
+        fig.update_yaxes(title_text="Units Traded", secondary_y=True, showgrid=False)
+        return fig
 
     def calculate_isk_volume_by_period(
         self,

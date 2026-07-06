@@ -12,46 +12,45 @@ import pytest
 
 
 class TestGetMarketOverviewKpis:
-    """Tests for MarketService.get_market_overview_kpis()."""
+    """Tests for MarketService.get_market_overview_kpis().
 
-    def _make_service(
-        self, stats_df=None, order_counts=None, update_time="12:00 UTC",
-    ):
+    The dashboard KPI must equal the Market Stats page's Sell Orders Value:
+    SUM(price * volume_remain) over sell orders in marketorders — sourced
+    from the repo's order-book summary, not the marketstats aggregate.
+    """
+
+    def _make_service(self, summary=None, update_time="12:00 UTC"):
         from services.market_service import MarketService
 
         repo = MagicMock()
-        repo.get_all_stats.return_value = stats_df
-        # Order counts now come from a SQL GROUP BY in the repository, not a
-        # full-table pandas load. Default to zeros when not provided.
-        repo.get_order_counts.return_value = order_counts or {
+        repo.get_order_book_summary.return_value = summary or {
             "active_sell_orders": 0,
             "active_buy_orders": 0,
+            "sell_order_value": 0.0,
+            "buy_order_value": 0.0,
+            "sell_types_listed": 0,
         }
         repo.get_update_time.return_value = update_time
         return MarketService(repo)
 
-    def test_basic_aggregation(self):
-        stats = pd.DataFrame({
-            "type_id": [34, 35],
-            "min_price": [10.0, 20.0],
-            "total_volume_remain": [100, 200],
+    def test_value_is_sell_order_book_value(self):
+        service = self._make_service(summary={
+            "active_sell_orders": 20409,
+            "active_buy_orders": 4800,
+            "sell_order_value": 8.14e12,
+            "buy_order_value": 1.0e11,
+            "sell_types_listed": 2906,
         })
-        service = self._make_service(
-            stats_df=stats,
-            order_counts={"active_sell_orders": 2, "active_buy_orders": 1},
-        )
         kpis = service.get_market_overview_kpis()
 
-        assert kpis["total_market_value"] == pytest.approx(10.0 * 100 + 20.0 * 200)
-        assert kpis["items_listed"] == 2
-        assert kpis["active_sell_orders"] == 2
-        assert kpis["active_buy_orders"] == 1
+        assert kpis["total_market_value"] == pytest.approx(8.14e12)
+        assert kpis["items_listed"] == 2906
+        assert kpis["active_sell_orders"] == 20409
+        assert kpis["active_buy_orders"] == 4800
         assert kpis["last_updated"] == "12:00 UTC"
 
-    def test_empty_data_returns_zeros(self):
-        service = self._make_service(
-            stats_df=pd.DataFrame(), order_counts=None, update_time=None,
-        )
+    def test_empty_summary_returns_zeros(self):
+        service = self._make_service(update_time=None)
         kpis = service.get_market_overview_kpis()
 
         assert kpis["total_market_value"] == 0.0
@@ -60,26 +59,11 @@ class TestGetMarketOverviewKpis:
         assert kpis["active_buy_orders"] == 0
         assert kpis["last_updated"] is None
 
-    def test_none_dataframes(self):
-        service = self._make_service(stats_df=None, order_counts=None)
-        kpis = service.get_market_overview_kpis()
-
-        assert kpis["total_market_value"] == 0.0
-        assert kpis["items_listed"] == 0
-        assert kpis["active_sell_orders"] == 0
-        assert kpis["active_buy_orders"] == 0
-
-    def test_non_numeric_values_coerced(self):
-        stats = pd.DataFrame({
-            "type_id": [34],
-            "min_price": ["not_a_number"],
-            "total_volume_remain": [100],
-        })
-        service = self._make_service(stats_df=stats, order_counts=None)
-        kpis = service.get_market_overview_kpis()
-
-        assert kpis["total_market_value"] == 0.0
-        assert kpis["items_listed"] == 1
+    def test_does_not_touch_marketstats(self):
+        """The KPI path must not load the watchlist-scoped stats table."""
+        service = self._make_service()
+        service.get_market_overview_kpis()
+        service._repo.get_all_stats.assert_not_called()
 
 
 # =========================================================================
@@ -171,14 +155,15 @@ class TestComputeModuleTargets:
         result = _compute_module_targets(repo)
         assert len(result) == 1
         row = result.iloc[0]
-        # Fit 1: qty_needed = (20-15)*2 = 10, target_pct = round(15/20*100) = 75
-        # Fit 2: qty_needed = (10-5)*4 = 20, target_pct = round(5/10*100) = 50
-        # MAX(qty_needed) = 20, MIN(target_pct) = 50
+        # Fit 1: qty_needed = (20-15)*2 = 10, target_pct = 75, fits_on_mkt = 15
+        # Fit 2: qty_needed = (10-5)*4 = 20, target_pct = 50, fits_on_mkt = 5
+        # MAX(qty_needed) = 20, MIN(target_pct) = 50, MIN(fits_on_mkt) = 5
         assert row["qty_needed"] == 20
         assert row["target_pct"] == 50
-        assert row["fit_count"] == 2
+        assert row["fits_on_mkt"] == 5
 
-    def test_fit_count_single_fit(self):
+    def test_zero_stock_module_shows_zero_fits(self):
+        """A module with no stock supports 0 fits — the column must show 0."""
         from pages.components.dashboard_components import _compute_module_targets
 
         fits_df = pd.DataFrame({
@@ -186,17 +171,16 @@ class TestComputeModuleTargets:
             "ship_id": [999],
             "fit_id": [1],
             "fit_qty": [2],
-            "fits_on_mkt": [10],
+            "fits_on_mkt": [0],
             "category_id": [7],
         })
         targets_df = pd.DataFrame({"fit_id": [1], "ship_target": [20]})
         repo = self._make_repo(fits_df, targets_df)
         result = _compute_module_targets(repo)
-        assert result.iloc[0]["fit_count"] == 1
+        assert result.iloc[0]["fits_on_mkt"] == 0
 
-    def test_fit_count_uses_distinct_not_row_count(self):
-        # Same module appearing twice in the same fit_id (e.g. low + mid slot)
-        # should count as 1 distinct fit, not 2.
+    def test_duplicate_rows_in_same_fit_take_min(self):
+        """Same module twice in one fit (low + mid slot): worst row wins."""
         from pages.components.dashboard_components import _compute_module_targets
 
         fits_df = pd.DataFrame({
@@ -204,13 +188,13 @@ class TestComputeModuleTargets:
             "ship_id": [999, 999],
             "fit_id": [1, 1],
             "fit_qty": [1, 1],
-            "fits_on_mkt": [10, 10],
+            "fits_on_mkt": [10, 8],
             "category_id": [7, 7],
         })
         targets_df = pd.DataFrame({"fit_id": [1], "ship_target": [20]})
         repo = self._make_repo(fits_df, targets_df)
         result = _compute_module_targets(repo)
-        assert result.iloc[0]["fit_count"] == 1
+        assert result.iloc[0]["fits_on_mkt"] == 8
 
     def test_empty_fits(self):
         from pages.components.dashboard_components import _compute_module_targets
@@ -370,7 +354,7 @@ class TestDoctrineModulesColumnConfig:
         config = get_doctrine_modules_column_config("en")
         expected_keys = {
             "type_id", "image_url", "type_name", "target_pct", "order_volume",
-            "fit_count", "qty_needed", "current_sell_price", "jita_sell_price",
+            "fits_on_mkt", "qty_needed", "current_sell_price", "jita_sell_price",
             "jita_buy_price", "pct_diff_vs_jita_sell",
         }
         assert set(config.keys()) == expected_keys
@@ -457,7 +441,7 @@ class TestRenderPopularModulesTableEarlyExits:
     def test_empty_snapshot_returns_none_none(self):
         from pages.components import dashboard_components as dc
 
-        targets = pd.DataFrame({"type_id": [100], "qty_needed": [1], "target_pct": [50], "fit_count": [1]})
+        targets = pd.DataFrame({"type_id": [100], "qty_needed": [1], "target_pct": [50], "fits_on_mkt": [1]})
         kwargs = self._kwargs()
         kwargs["market_service"].get_current_market_snapshot.return_value = pd.DataFrame()
 

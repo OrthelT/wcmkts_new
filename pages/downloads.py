@@ -333,7 +333,7 @@ def market_downloads_section():
             data=lambda a=db_alias: _get_market_orders_csv(a),
             file_name=f"{short_name}_market_orders.csv",
             mime="text/csv",
-            use_container_width=True,
+            width='stretch',
             icon=":material/download:",
         )
 
@@ -343,7 +343,7 @@ def market_downloads_section():
             data=lambda a=db_alias: _get_market_stats_csv(a),
             file_name=f"{short_name}_market_stats.csv",
             mime="text/csv",
-            use_container_width=True,
+            width='stretch',
             icon=":material/download:",
         )
 
@@ -353,7 +353,7 @@ def market_downloads_section():
             data=lambda a=db_alias: _get_market_history_csv(a),
             file_name=f"{short_name}_market_history.csv",
             mime="text/csv",
-            use_container_width=True,
+            width='stretch',
             icon=":material/download:",
         )
 
@@ -405,7 +405,7 @@ def doctrine_downloads_section():
             data=lambda a=db_alias: _get_all_doctrine_fits_csv(a),
             file_name=f"{market.short_name}_doctrine_fits.csv",
             mime="text/csv",
-            use_container_width=True,
+            width='stretch',
             icon=":material/download:",
         )
     elif filter_type == "Low Stock Only":
@@ -414,7 +414,7 @@ def doctrine_downloads_section():
             data=lambda a=db_alias: _get_low_stock_doctrine_fits_csv(a),
             file_name=f"{market.short_name}_low_stock_doctrine_fits.csv",
             mime="text/csv",
-            use_container_width=True,
+            width='stretch',
             icon=":material/download:",
         )
     else:
@@ -431,7 +431,7 @@ def doctrine_downloads_section():
                 ),
                 file_name=f"doctrine_{safe_name}.csv",
                 mime="text/csv",
-                use_container_width=True,
+                width='stretch',
                 icon=":material/download:",
             )
 
@@ -466,7 +466,7 @@ def individual_fit_downloads_section():
             data=lambda a=db_alias, fid=fit_id: _get_single_fit_csv(a, fid),
             file_name=f"fit_{fit_id}_{ship_name}.csv",
             mime="text/csv",
-            use_container_width=True,
+            width='stretch',
             icon=":material/download:",
         )
 
@@ -509,7 +509,7 @@ def low_stock_downloads_section():
         ),
         file_name=f"{market.short_name}_low_stock_items.csv",
         mime="text/csv",
-        use_container_width=True,
+        width='stretch',
         icon=":material/download:",
     )
 
@@ -541,7 +541,7 @@ def sde_downloads_section():
         data=lambda tbl=selected_table: _get_sde_table_csv(tbl),
         file_name=f"{selected_table}.csv",
         mime="text/csv",
-        use_container_width=True,
+        width='stretch',
         icon=":material/download:",
     )
 

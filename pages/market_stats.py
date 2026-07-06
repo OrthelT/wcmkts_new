@@ -509,7 +509,7 @@ def main():
         # 30-Day Historical Metrics
         with st.expander(
             translate_text(language_code, "market_stats.thirty_day_market_stats"),
-            expanded=False,
+            expanded=True,
         ):
             render_30day_metrics_ui(market_service, language_code)
 

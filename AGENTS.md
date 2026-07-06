@@ -110,8 +110,8 @@ uv run pytest --cov
 ### UI Pages (`pages/` directory)
 All pages follow consistent patterns with Streamlit best practices:
 
-1. **`market_dashboard.py`** (🏠 Market Dashboard, default landing page) - Doctrine Ships, Popular Modules, Minerals, and Isotopes tables with checkbox-driven deep links into Doctrine Status / Market Stats. Constrained to low-stock doctrine items by default (toggle to view all).
-2. **`market_stats.py`** (📈 Market Stats) - Primary market data visualization with interactive Plotly charts, market orders, statistics, and historical data
+1. **`market_dashboard.py`** (🏠 Market Dashboard, default landing page) - Doctrine Ships, Popular Modules, Minerals, and Isotopes tables with checkbox-driven deep links into Doctrine Status / Market Stats. Constrained to low-stock doctrine items by default (toggle to view all). KPIs sourced from the marketorders order book (matches Market Stats sell-order value).
+2. **`market_stats.py`** (📈 Market Stats) - Primary market data visualization with interactive Plotly charts, market orders, statistics, and historical data. 30-Day stats expander includes category pills (all/ships/doctrine ships/modules/materials, shuttles excluded from ships) and a daily ISK+volume activity chart.
 3. **`doctrine_status.py`** (⚔️ Doctrine Status) - Doctrine fit status tracking with stock levels, costs, and market availability. Supports `module_id` query param for module-filtered deep links from the dashboard.
 4. **`doctrine_report.py`** (📝 Doctrine Report) - Detailed doctrine analysis and reporting
 5. **`low_stock.py`** (⚠️ Low Stock) - Low inventory alerting system with category filtering
