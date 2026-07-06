@@ -156,7 +156,10 @@ def _get_category_type_ids_by_id_impl(category_id: int) -> list:
 
 
 # 30-day stats pill filter scopes (verified against sdelite.db 2026-07-03)
-SHUTTLE_GROUP_IDS = (31, 1566, 4737)  # Shuttle, Irregular, Homefront Operations
+# Only group 31 (Shuttle) currently has rows in the lightweight SDE; 1566
+# (Irregular Shuttle) and 4737 (Homefront Operations Shuttle) are inert today
+# and kept as defensive excludes in case the SDE ever carries those hulls.
+SHUTTLE_GROUP_IDS = (31, 1566, 4737)
 MATERIALS_CATEGORY_IDS = (4, 25, 42, 43)  # Material, Asteroid, PI Resources/Commodities
 
 
@@ -170,7 +173,14 @@ def _get_30day_filter_type_ids_impl(filter_key: str, db_alias: str = "wcmkt") ->
     """
     if filter_key == "doctrine_ships":
         repo = BaseRepository(DatabaseConfig(db_alias), logger)
-        df = repo.read_df(text("SELECT DISTINCT ship_id AS type_id FROM doctrines"))
+        # Exclude NULL ship_id: a NULL becomes NaN in the id list and raises in
+        # the downstream int() coercion, silently zeroing the whole pill scope.
+        df = repo.read_df(
+            text(
+                "SELECT DISTINCT ship_id AS type_id FROM doctrines "
+                "WHERE ship_id IS NOT NULL"
+            )
+        )
     elif filter_key == "ships":
         repo = BaseRepository(DatabaseConfig("sde"), logger)
         query = text(

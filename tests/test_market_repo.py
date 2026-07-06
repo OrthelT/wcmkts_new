@@ -676,6 +676,11 @@ class TestThirtyDayFilterTypeIdsImpl:
 
         assert result == [24698]
         mock_db_cls.assert_called_once_with("wcmkt")
+        # A NULL ship_id would become NaN in the id list and raise in the
+        # downstream int() coercion, silently zeroing the whole pill scope, so
+        # the query must filter NULLs out at the source (data-integrity rule).
+        query_text = str(mock_repo.read_df.call_args.args[0])
+        assert "ship_id IS NOT NULL" in query_text
 
     @patch("repositories.market_repo.BaseRepository")
     @patch("repositories.market_repo.DatabaseConfig")

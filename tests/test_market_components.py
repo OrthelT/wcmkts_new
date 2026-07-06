@@ -118,6 +118,57 @@ def test_30day_pill_selection_overrides_sidebar_category_scope():
     assert kwargs["selected_item_id"] is None
 
 
+def test_30day_activity_chart_receives_true_30day_frame():
+    """The activity chart must be fed the 30-day frame, not the 7-day one.
+
+    ``calculate_30day_metrics`` returns ``(..., df_30days, df_7days)``. The
+    component builds the chart from slot 5 (df_30days) and hands the result to
+    ``st.plotly_chart``. This locks in both the no-swap contract (mirroring
+    ``render_top_n_items_ui``) and that the chart is actually rendered rather
+    than silently dropped.
+    """
+    from pages.components import market_components
+
+    df_30 = pd.DataFrame({"window": ["30d"]})
+    df_7 = pd.DataFrame({"window": ["7d"]})
+
+    service = Mock()
+    service.calculate_30day_metrics.return_value = (5.0, 5.0, 1.0, 1.0, df_30, df_7)
+    chart = object()
+    service.create_30day_activity_chart.return_value = chart
+
+    mock_st = _make_mock_st(pill_return="all")
+
+    with patch.object(market_components, "st", mock_st), \
+            patch.object(market_components, "ss_has", return_value=False), \
+            patch.object(market_components, "translate_text", return_value="x"), \
+            patch.object(market_components, "render_top_n_items_ui"):
+        market_components.render_30day_metrics_ui(service, language_code="en")
+
+    service.create_30day_activity_chart.assert_called_once_with(df_30)
+    mock_st.plotly_chart.assert_called_once()
+    assert mock_st.plotly_chart.call_args.args[0] is chart
+
+
+def test_30day_activity_chart_not_rendered_when_none():
+    """A None chart (empty/sentinel frame) draws nothing -- no plotly_chart call."""
+    from pages.components import market_components
+
+    service = _make_service()
+    service.create_30day_activity_chart.return_value = None
+
+    mock_st = _make_mock_st(pill_return="all")
+
+    with patch.object(market_components, "st", mock_st), \
+            patch.object(market_components, "ss_has", return_value=False), \
+            patch.object(market_components, "translate_text", return_value="x"), \
+            patch.object(market_components, "render_top_n_items_ui"):
+        market_components.render_30day_metrics_ui(service, language_code="en")
+
+    service.create_30day_activity_chart.assert_called_once()
+    mock_st.plotly_chart.assert_not_called()
+
+
 def test_30day_pills_hidden_when_item_selected():
     """A selected item skips the pills entirely (item scope wins)."""
     from pages.components import market_components

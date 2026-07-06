@@ -179,8 +179,10 @@ class MarketService:
         """Aggregate market-wide KPI totals from the live order book.
 
         total_market_value and items_listed come from marketorders (sell side)
-        so the dashboard matches the Market Stats page's "Sell Orders Value"
-        exactly — see _get_order_book_summary_impl for why marketstats is
+        so the dashboard matches the Market Stats page's all-items "Sell Orders
+        Value" (both are SUM(price * volume_remain) over sell orders; the
+        Market Stats figure only differs when a category filter is active
+        there) — see _get_order_book_summary_impl for why marketstats is
         deliberately not used here.
 
         Returns:
