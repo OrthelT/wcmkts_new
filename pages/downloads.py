@@ -448,11 +448,12 @@ def individual_fit_downloads_section():
     st.markdown(f"Download detailed fit data with market data for **{market.name}**.")
 
     fits = _get_fit_options(db_alias)
-    fit_options = {f"{f['ship_name']} (ID: {f['fit_id']})": f for f in fits}
+    fit_options = {f"{f['ship_name']} - {f['fit_name']} (ID: {f['fit_id']})": f for f in fits}
+    fit_keys: list[str] = sorted(fit_options.keys())
 
     selected_fit_label = st.selectbox(
         "Select Fit",
-        ["Select a fit..."] + list(fit_options.keys()),
+        ["Select a fit..."] + fit_keys,
         key="individual_fit_select",
     )
 
