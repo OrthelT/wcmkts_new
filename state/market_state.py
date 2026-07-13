@@ -62,7 +62,7 @@ def set_active_market(key: str) -> None:
     refresh_market_caches()
 
     # Clear sync state so it refreshes for the new market
-    for ss_key in ("local_update_status", "remote_update_status"):
+    for ss_key in ("local_update_status",):
         st.session_state.pop(ss_key, None)
 
 

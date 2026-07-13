@@ -32,8 +32,6 @@ class SyncStatusUnavailableError(Exception):
 def get_most_recent_update_resilient(
     db_alias: str,
     table_name: str = "marketstats",
-    *,
-    remote: bool = False,
 ) -> datetime | None:
     """Return latest updatelog timestamp using sync/retry/remote fallback for local reads.
 
@@ -63,13 +61,12 @@ def get_most_recent_update_resilient(
         """
     )
     try:
-        df = reader.read_df(query, params={"table_name": table_name}, local=not remote)
+        df = reader.read_df(query, params={"table_name": table_name})
     except Exception as exc:
         logger.error(
-            "sync_status_read_failed alias=%s table=%s remote=%s: %s",
+            "sync_status_read_failed alias=%s table=%s: %s",
             db_alias,
             table_name,
-            remote,
             exc,
             exc_info=True,
         )
@@ -100,16 +97,18 @@ def _coerce_update_time(value) -> datetime | None:
     return parsed.to_pydatetime()
 
 
-def update_wcmkt_state(db_alias: str = None, skip_remote: bool = False) -> None:
-    """Update session state with local (and optionally remote) DB update times.
+def update_wcmkt_state(db_alias: str = None) -> None:
+    """Update session state with the local DB's most recent update time.
 
-    Uses the updatelog table to determine when each database was last refreshed.
+    Uses the updatelog table to determine when the database was last refreshed.
+    Under the pyturso embedded-replica model there is no separate remote
+    timestamp to record: remote is unknowable without a pull, and after a
+    pull, local IS remote. Callers needing to know whether the currently
+    served data is a restored backup should check
+    ``config.get_degraded_aliases()`` instead.
 
     Args:
         db_alias: Database alias to check. If None, uses the active market.
-        skip_remote: If True, skip the remote timestamp query to avoid
-            network latency on cold start. The remote state will be
-            populated later by check_db() / local_matches_remote().
     """
     if db_alias is None:
         try:
@@ -124,12 +123,11 @@ def update_wcmkt_state(db_alias: str = None, skip_remote: bool = False) -> None:
     db = DatabaseConfig(db_alias)
 
     local_update_status = {'updated': None, 'needs_update': False, 'time_since': None}
-    remote_update_status = {'updated': None, 'needs_update': False, 'time_since': None}
 
     now = datetime.now(timezone.utc)
 
     try:
-        local_update = get_most_recent_update_resilient(db.alias, "marketstats", remote=False)
+        local_update = get_most_recent_update_resilient(db.alias, "marketstats")
     except SyncStatusUnavailableError as exc:
         logger.warning(f"Local sync status unavailable for {db.alias}: {exc}")
         local_update = None
@@ -140,23 +138,6 @@ def update_wcmkt_state(db_alias: str = None, skip_remote: bool = False) -> None:
             local_update_status['time_since'] > timedelta(hours=2)
         )
 
-    if not skip_remote and db.has_remote_credentials:
-        try:
-            remote_update = get_most_recent_update_resilient(db.alias, "marketstats", remote=True)
-            remote_update_status['updated'] = remote_update
-            if remote_update is not None:
-                remote_update_status['time_since'] = now - remote_update
-                remote_update_status['needs_update'] = (
-                    remote_update_status['time_since'] > timedelta(hours=2)
-                )
-        except SyncStatusUnavailableError as e:
-            logger.warning(f"Skipping remote sync state for {db.alias}: {e}")
-        except Exception as e:
-            logger.warning(f"Skipping remote sync state for {db.alias}: {e}")
-    elif skip_remote:
-        logger.info(f"Skipping remote check for {db_alias} (deferred to check_db)")
-    else:
-        logger.info(f"No remote credentials for {db.alias}; using local-only sync state")
     logger.info("-"*60)
     ss_set('local_update_status', local_update_status)
     logger.info(f"local_status saved to session state: {db.alias, db.path}")
@@ -164,11 +145,6 @@ def update_wcmkt_state(db_alias: str = None, skip_remote: bool = False) -> None:
     logger.info(f"Active market: {active_market.database_alias}")
     logger.info("--------------------------------")
     for k, v in local_update_status.items():
-        logger.info(f"{k}: {v}")
-    logger.info("-"*60)
-    ss_set('remote_update_status', remote_update_status)
-    logger.info("remote_status saved to session state:")
-    for k, v in remote_update_status.items():
         logger.info(f"{k}: {v}")
     logger.info("-"*60)
     end_time = perf_counter()

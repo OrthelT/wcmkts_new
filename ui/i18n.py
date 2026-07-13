@@ -384,6 +384,10 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "sync_status.minute_remaining": "1 minute remaining until next update",
         "sync_status.awaiting_update": "Awaiting next update…",
         "sync_status.countdown_unavailable": "Update time unavailable",
+        "sync_status.degraded_backup": (
+            "⚠️ Serving backup data restored {time}. Live sync is unavailable; "
+            "data may be stale."
+        ),
         "market_stats.downloads_hint": (
             "*Visit the **Downloads** page for market data, doctrine fits, and SDE table exports.*"
         ),
