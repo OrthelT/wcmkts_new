@@ -76,13 +76,16 @@ class TestDatabaseConfigSyncSerialization(unittest.TestCase):
         self.assertNotIn("st.session_state", source,
                         "sync() should not mutate st.session_state")
 
-    def test_sync_returns_bool(self):
-        """Test that sync() has bool return type annotation"""
+    def test_sync_returns_bool_compatible_result(self):
+        """Test that sync() returns a SyncResult preserving the legacy bool contract"""
         import inspect
-        from config import DatabaseConfig
+        from config import DatabaseConfig, SyncResult
         sig = inspect.signature(DatabaseConfig.sync)
-        self.assertEqual(sig.return_annotation, bool,
-                        "sync() should return bool")
+        self.assertEqual(sig.return_annotation, SyncResult,
+                        "sync() should return SyncResult")
+        # SyncResult.__bool__ preserves the legacy `if db.sync():` contract
+        self.assertTrue(bool(SyncResult(ok=True, changed=False)))
+        self.assertFalse(bool(SyncResult(ok=False, changed=False)))
 
 
 if __name__ == "__main__":

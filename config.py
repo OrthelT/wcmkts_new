@@ -2,9 +2,8 @@ from sqlalchemy import create_engine, inspect, text, select, NullPool
 from sqlalchemy.exc import NoSuchTableError, OperationalError
 import streamlit as st
 import os
+import json
 
-# os.environ.setdefault("RUST_LOG", "debug")
-import libsql
 from logging_config import setup_logging
 import sqlite3 as sql
 from datetime import datetime, timezone
@@ -15,6 +14,7 @@ from time import perf_counter
 from dataclasses import dataclass
 import shutil
 from pathlib import Path
+import turso.sync as tursosync
 
 logger = setup_logging(__name__)
 
@@ -128,8 +128,6 @@ class DatabaseConfig:
     # Shared handles per-alias to avoid multiple simultaneous connections to the same file
     _engines: dict[str, object] = {}
     _remote_engines: dict[str, object] = {}
-    _libsql_connects: dict[str, object] = {}
-    _libsql_sync_connects: dict[str, object] = {}
     _sqlite_local_connects: dict[str, object] = {}
     _ro_engines: dict[str, object] = {}
 
@@ -148,7 +146,7 @@ class DatabaseConfig:
         except Exception:
             return DatabaseConfig.wcdbmap
 
-    def __init__(self, alias: str, dialect: str = "sqlite+libsql"):
+    def __init__(self, alias: str, dialect: str = "sqlite+turso"):
         if alias == "wcmkt":
             alias = self._resolve_active_alias()
 
@@ -166,8 +164,6 @@ class DatabaseConfig:
         self.probe_table = self._freshness_probes.get(self.alias)
         self._engine = None
         self._remote_engine = None
-        self._libsql_connect = None
-        self._libsql_sync_connect = None
         self._sqlite_local_connect = None
         self._ro_engine = None
 
@@ -199,24 +195,6 @@ class DatabaseConfig:
             )
             DatabaseConfig._remote_engines[self.alias] = eng
         return eng
-
-    @property
-    def libsql_local_connect(self):
-        conn = DatabaseConfig._libsql_connects.get(self.alias)
-        if conn is None:
-            conn = libsql.connect(self.path)
-            DatabaseConfig._libsql_connects[self.alias] = conn
-        return conn
-
-    @property
-    def libsql_sync_connect(self):
-        conn = DatabaseConfig._libsql_sync_connects.get(self.alias)
-        if conn is None:
-            conn = libsql.connect(
-                self.path, sync_url=self.turso_url, auth_token=self.token
-            )
-            DatabaseConfig._libsql_sync_connects[self.alias] = conn
-        return conn
 
     @property
     def sqlite_local_connect(self):
@@ -253,18 +231,6 @@ class DatabaseConfig:
             with suppress(Exception):
                 eng.dispose()
 
-        # Close libsql direct connection if any
-        conn = DatabaseConfig._libsql_connects.pop(self.alias, None)
-        if conn is not None:
-            with suppress(Exception):
-                conn.close()
-
-        # Close libsql sync connection if any (avoid reusing for sync)
-        sconn = DatabaseConfig._libsql_sync_connects.pop(self.alias, None)
-        if sconn is not None:
-            with suppress(Exception):
-                sconn.close()
-
         # Close raw sqlite3 connection if any
         sqlite_conn = DatabaseConfig._sqlite_local_connects.pop(self.alias, None)
         if sqlite_conn is not None:
@@ -294,122 +260,125 @@ class DatabaseConfig:
             logger.error(f"Integrity check error ({self.alias}): {e}")
             return False
 
-    def _sync_once(self) -> bool:
-        """Execute a single sync attempt against the remote Turso replica.
+    def _replica_metadata_valid(self) -> bool:
+        """True when {path}-info exists and parses as pyturso JSON metadata.
 
-        Creates a libsql embedded-replica connection, syncs, verifies the
-        data is current via the *same* connection, then closes.
+        A libsql-era or corrupt -info file fails the parse, which routes the
+        replica through nuke + fresh bootstrap (deploy-day upgrade path).
+        """
+        info_path = Path(self.path + "-info")
+        if not info_path.exists():
+            return False
+        try:
+            json.loads(info_path.read_text())
+            return True
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            return False
 
-        Returns True if sync succeeded and the local data matches remote.
+    def _ensure_replica_consistency(self) -> None:
+        """Enforce the .db/.db-info pairing invariant before any sync connect.
+
+        Never pull on a db lacking valid metadata: a .db without (valid)
+        -info, or an orphaned -info, is removed so pull() starts from a
+        clean bootstrap. Both-absent is the normal cold-start case.
+        """
+        db_exists = os.path.exists(self.path)
+        meta_valid = self._replica_metadata_valid()
+        if db_exists and meta_valid:
+            return
+        if db_exists or os.path.exists(self.path + "-info"):
+            logger.warning(
+                f"Inconsistent replica state for {self.alias} "
+                f"(db_exists={db_exists}, metadata_valid={meta_valid}); "
+                "removing for fresh bootstrap"
+            )
+            self._remove_replica_files()
+
+    def _pull_once(self) -> bool:
+        """Open a sync connection, pull, checkpoint, close.
+
+        Returns pull()'s changed flag. checkpoint() folds the WAL into the
+        main file so snapshot_backup() copies a complete database.
         """
         sync_start = perf_counter()
-        file_existed_before = os.path.exists(self.path)
-        conn = None
+        conn = tursosync.connect(
+            self.path, remote_url=self.turso_url, auth_token=self.token
+        )
         try:
-            conn = libsql.connect(
-                self.path, sync_url=self.turso_url, auth_token=self.token
-            )
-            conn.sync()
-            sync_time = round((perf_counter() - sync_start) * 1000, 2)
-            logger.info(
-                f"sync() completed for {self.alias} in {sync_time} ms at "
-                f"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}"
-            )
-
-            # Log the post-sync timestamp for market databases only.
-            # Non-market databases (sde, build_cost) lack the marketstats
-            # table, so this diagnostic check is skipped for them.
-            try:
-                row = conn.execute(
-                    "SELECT count(*) FROM sqlite_master "
-                    "WHERE type='table' AND name='marketstats'"
-                ).fetchone()
-                if row and row[0] > 0:
-                    ts_row = conn.execute(
-                        "SELECT MAX(last_update) FROM marketstats"
-                    ).fetchone()
-                    local_ts = ts_row[0] if ts_row else None
-                    logger.info(f"Post-sync local MAX(last_update) via sync conn: {local_ts}")
-            except Exception:
-                pass
-
-            return True
-        except Exception as e:
-            logger.error(f"Database sync failed for {self.alias}: {e}")
-            if not file_existed_before:
-                self._remove_replica_files()
-            raise
+            changed = conn.pull()
+            conn.checkpoint()
         finally:
-            if conn is not None:
-                with suppress(Exception):
-                    conn.close()
-                    logger.info("Sync connection closed")
+            with suppress(Exception):
+                conn.close()
+        sync_time = round((perf_counter() - sync_start) * 1000, 2)
+        logger.info(
+            f"pull completed for {self.alias} in {sync_time} ms "
+            f"(changed={changed}) at "
+            f"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+        return changed
 
-    def sync(self) -> bool:
-        """Synchronize the local database with the remote Turso replica safely.
+    def sync(self) -> SyncResult:
+        """Pull remote changes into the local replica safely.
 
-        Uses _SYNC_LOCK to serialize sync operations and disposes local
-        connections to prevent corruption.
-
-        If the first sync attempt leaves stale data (e.g. because the local
-        file had embedded-replica metadata from a different Turso database),
-        the local file is deleted and a fresh sync is attempted.
+        Serialized by _SYNC_LOCK with dispose-before-sync. Enforces the
+        file-state machine, retries once via nuke + fresh bootstrap on
+        integrity failure, snapshots a backup pair on success, and clears
+        the degraded registry.
 
         Returns:
-            True if sync and integrity check succeeded, False otherwise.
-            Callers are responsible for cache invalidation and UI feedback.
+            SyncResult(ok, changed). Truthiness == ok, preserving the
+            legacy bool contract. Callers own cache invalidation and UI.
 
         Raises:
-            ValueError: If Turso credentials are missing for this alias.
+            ValueError: missing Turso credentials for this alias.
+            Exception: pull/network failures propagate (a healthy local
+                file is never deleted on a network error).
         """
-        # Fail fast before libsql.connect() can create an empty db file
         if not self.turso_url or not self.token:
             raise ValueError(
                 f"Missing Turso credentials for alias '{self.alias}'. "
-                f"Add [{self.alias}_turso] section to .streamlit/secrets.toml"
+                f"Add the matching section to .streamlit/secrets.toml"
             )
-
         logger.info("-" * 40)
         logger.info(
-            f"sync() starting for {self.alias} "
-            f"(url={self.turso_url}) at "
+            f"sync() starting for {self.alias} (url={self.turso_url}) at "
             f"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}"
         )
-
         with _SYNC_LOCK:
             self._dispose_local_connections()
-            logger.debug("Disposed local connections, starting sync...")
+            self._ensure_replica_consistency()
+            file_existed = os.path.exists(self.path)
+            try:
+                changed = self._pull_once()
+            except Exception as e:
+                logger.error(f"Database sync failed for {self.alias}: {e}")
+                if not file_existed:
+                    # connect() may create files before failing; don't leave
+                    # an empty landmine that passes existence checks
+                    self._remove_replica_files()
+                raise
+            changed = changed or not file_existed  # fresh bootstrap == new data
 
-            self._sync_once()
-
-            # Verify local data matches remote.  If it doesn't, the local
-            # file likely has replica metadata from a different Turso DB
-            # (e.g. the old static wcdbmap).  Delete and retry from scratch.
-            if not self.local_matches_remote():
+            ok = self.integrity_check()
+            if not ok:
                 logger.warning(
-                    f"Post-sync data mismatch for {self.alias} — "
-                    "local file may have stale replica metadata. "
-                    "Deleting local file and retrying fresh sync."
+                    f"Post-sync integrity check failed for {self.alias}; "
+                    "retrying with nuke + fresh bootstrap"
                 )
                 self._dispose_local_connections()
                 self._remove_replica_files()
-                self._sync_once()
+                changed = True
+                self._pull_once()
+                ok = self.integrity_check()
 
-                if not self.local_matches_remote():
-                    logger.error(
-                        f"Fresh sync for {self.alias} still has data mismatch"
-                    )
-
-            update_time = datetime.now(timezone.utc)
-            logger.info(f"Database synced at {update_time} UTC")
+            if ok:
+                self.snapshot_backup()  # best-effort; logs on failure
+                clear_degraded(self.alias)
+            else:
+                logger.error(f"Fresh bootstrap for {self.alias} still fails integrity.")
             logger.info("-" * 40)
-
-            # Post-sync integrity validation
-            ok = self.integrity_check()
-            if not ok:
-                logger.error("Post-sync integrity check failed.")
-
-            return ok
+            return SyncResult(ok=ok, changed=changed)
 
     def _has_marketstats_table(self) -> bool:
         """Return True if the local database contains a ``marketstats`` table."""

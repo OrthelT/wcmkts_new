@@ -53,12 +53,14 @@ def cmd_sync(args: argparse.Namespace) -> int:
         try:
             db = DatabaseConfig(alias)
             print(f"alias: {db.alias}; path: {db.path}; url: {db.turso_url}")
-            ok = db.sync()
+            res = db.sync()
             elapsed = round((perf_counter() - t0) * 1000)
-            if ok:
-                print(f"ok ({elapsed} ms)")
-            else:
-                print(f"integrity check failed ({elapsed} ms)")
+            print(
+                f"Sync {'succeeded' if res.ok else 'FAILED'} "
+                f"({'new data pulled' if res.changed else 'already current'}) "
+                f"({elapsed} ms)"
+            )
+            if not res.ok:
                 failed.append(alias)
         except Exception as e:
             elapsed = round((perf_counter() - t0) * 1000)
