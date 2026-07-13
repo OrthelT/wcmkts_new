@@ -1,5 +1,4 @@
-from sqlalchemy import create_engine, inspect, text, select, NullPool
-from sqlalchemy.exc import NoSuchTableError, OperationalError
+from sqlalchemy import create_engine, text, select, NullPool
 import streamlit as st
 import os
 import json
@@ -121,10 +120,6 @@ class DatabaseConfig:
         except (KeyError, AttributeError):
             pass  # Not all aliases need Turso (graceful degradation)
 
-    # Per-alias probe table for post-sync freshness validation.
-    # Empty mapping means "skip the probe and trust libsql sync".
-    _freshness_probes: dict[str, str] = settings.get("freshness_probes", {})
-
     # Shared handles per-alias to avoid multiple simultaneous connections to the same file
     _engines: dict[str, object] = {}
     _remote_engines: dict[str, object] = {}
@@ -161,7 +156,6 @@ class DatabaseConfig:
         turso_key = f"{self.alias}_turso"
         self.turso_url = self._db_turso_urls.get(turso_key)
         self.token = self._db_turso_auth_tokens.get(turso_key)
-        self.probe_table = self._freshness_probes.get(self.alias)
         self._engine = None
         self._remote_engine = None
         self._sqlite_local_connect = None
@@ -384,102 +378,6 @@ class DatabaseConfig:
                 logger.error(f"Fresh bootstrap for {self.alias} still fails integrity.")
             logger.info("-" * 40)
             return SyncResult(ok=ok, changed=changed)
-
-    def _has_marketstats_table(self) -> bool:
-        """Return True if the local database contains a ``marketstats`` table."""
-        try:
-            local_conn = sql.connect(f"file:{self.path}?mode=ro", uri=True)
-            try:
-                row = local_conn.execute(
-                    "SELECT count(*) FROM sqlite_master "
-                    "WHERE type='table' AND name='marketstats'"
-                ).fetchone()
-                return row[0] > 0
-            finally:
-                local_conn.close()
-        except Exception:
-            return False
-
-    def _update_log_cls(self):
-        """Return the ``UpdateLog`` ORM class bound to this alias's ``Base``.
-
-        Each database has its own ``DeclarativeBase`` registry, so the
-        ``UpdateLog`` model lives alongside the rest of that database's
-        models (e.g. ``models.UpdateLog`` for market DBs,
-        ``build_cost_models.UpdateLog`` for build_cost).  Returns ``None``
-        when no probe is configured for this alias.
-        """
-        if not self.probe_table:
-            return None
-        if self.alias == "build_cost":
-            from build_cost_models import UpdateLog
-            return UpdateLog
-        from models import UpdateLog
-        return UpdateLog
-
-    def local_matches_remote(self) -> bool:
-        """Check if local updatelog timestamp matches remote after sync.
-
-        Probes the single ``updatelog`` row whose ``table_name`` matches
-        ``self.probe_table`` (configured in ``settings.toml``
-        ``[freshness_probes]``).  When no probe is configured for this
-        alias the check is skipped and True is returned — sync is trusted
-        as soon as libsql reports success.
-
-        Returns True only when the probe is genuinely "not deployed yet":
-        the remote ``updatelog`` table is missing, or it exists but has
-        no row for this probe.  Returns False on local read failure or
-        when local and remote timestamps differ.  Connection-class errors
-        (auth, network, TLS, etc.) propagate to the caller so a real
-        failure is surfaced instead of masked as "synced".
-        """
-        UpdateLog = self._update_log_cls()
-        if UpdateLog is None:
-            return True
-
-        # Pre-check that the remote probe table exists.  Doing this via
-        # the inspector means a missing table is a clean boolean signal
-        # rather than a connection-class OperationalError, so we can let
-        # auth/network failures from the actual query propagate naturally
-        # without swallowing them through error-type guessing.
-        if not inspect(self.remote_engine).has_table("updatelog"):
-            logger.warning(
-                f"local_matches_remote({self.alias}, probe={self.probe_table}): "
-                "remote updatelog table absent; skipping freshness check"
-            )
-            return True
-
-        stmt = select(UpdateLog.timestamp).where(
-            UpdateLog.table_name == self.probe_table
-        )
-
-        with Session(self.remote_engine) as session:
-            remote_ts = session.execute(stmt).scalar()
-
-        if remote_ts is None:
-            logger.warning(
-                f"local_matches_remote({self.alias}, probe={self.probe_table}): "
-                "no remote probe row yet; skipping freshness check"
-            )
-            return True
-
-        # Local read fails closed: a missing table, malformed disk, or
-        # any other DB error post-sync means sync didn't deliver usable
-        # data, so the caller should resync.
-        try:
-            with Session(self.ro_engine) as session:
-                local_ts = session.execute(stmt).scalar()
-        except (OperationalError, NoSuchTableError) as e:
-            logger.error(
-                f"local_matches_remote({self.alias}) local read failed: {e}"
-            )
-            return False
-
-        logger.info(
-            f"local_matches_remote({self.alias}, probe={self.probe_table}): "
-            f"remote={remote_ts}, local={local_ts}"
-        )
-        return remote_ts == local_ts
 
     def _remove_replica_files(self):
         """Remove the local db file and every pyturso/WAL sidecar artifact."""
