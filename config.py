@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 import threading
 from contextlib import suppress
 from time import perf_counter
+from dataclasses import dataclass
 
 logger = setup_logging(__name__)
 
@@ -28,6 +29,23 @@ DEFAULT_SHIP_TARGET = 20
 
 # Global lock to serialize sync operations within the process
 _SYNC_LOCK = threading.Lock()
+
+
+@dataclass(frozen=True)
+class SyncResult:
+    """Outcome of DatabaseConfig.sync().
+
+    ok: pull succeeded and post-sync integrity check passed.
+    changed: pull applied new data (or a fresh bootstrap occurred).
+
+    __bool__ preserves the legacy `if db.sync():` contract (truthy == ok).
+    """
+
+    ok: bool
+    changed: bool
+
+    def __bool__(self) -> bool:
+        return self.ok
 
 
 def get_settings() -> dict:
