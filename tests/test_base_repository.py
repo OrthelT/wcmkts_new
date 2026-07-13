@@ -160,6 +160,29 @@ class TestReadDf(unittest.TestCase):
         self.assertIn("malformed", str(ctx.exception))
         mock_db.restore_from_backup.assert_called_once()
 
+    def test_restore_success_but_retry_fails_raises_retry_error(self):
+        engine, _ = self._mock_engine_with_data(None)
+        repo, mock_db = self._make_repo(engine=engine)
+        mock_db.sync.side_effect = Exception("turso unreachable")
+        mock_db.restore_from_backup.return_value = True
+        calls = iter([
+            Exception("database disk image is malformed"),
+            Exception("still broken after restore")
+        ])
+
+        def side_effect(*a, **k):
+            v = next(calls)
+            if isinstance(v, Exception):
+                raise v
+            return v
+
+        with patch("repositories.base.pd.read_sql_query", side_effect=side_effect):
+            with self.assertRaises(Exception) as ctx:
+                repo.read_df("SELECT * FROM test")
+        self.assertIn("still broken after restore", str(ctx.exception))
+        self.assertNotIn("malformed", str(ctx.exception))
+        mock_db.restore_from_backup.assert_called_once()
+
     def test_recover_false_raises_immediately(self):
         engine, _ = self._mock_engine_with_data(None)
         repo, mock_db = self._make_repo(engine=engine)

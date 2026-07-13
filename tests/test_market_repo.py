@@ -234,7 +234,6 @@ class TestMarketRepositoryMalformedRecovery:
         assert len(result) == 1
         mock_db.sync.assert_called_once()
         mock_db.restore_from_backup.assert_called_once()
-        mock_db.sync.assert_called_once()
 
 
 class TestMarketRepositoryClass:
