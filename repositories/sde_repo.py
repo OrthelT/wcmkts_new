@@ -109,8 +109,8 @@ def _get_groups_for_category_impl(engine, category_id: int) -> pd.DataFrame:
     with engine.connect() as conn:
         return pd.read_sql_query(query, conn, params={"category_id": category_id})
 
-def _get_types_for_category_impl(engine, remote_engine, category_id: int) -> pd.DataFrame:
-    """Fetch types (typeID, typeName) for a category ID, with malformed-DB fallback to remote.
+def _get_types_for_category_impl(repo: BaseRepository, category_id: int) -> pd.DataFrame:
+    """Fetch types (typeID, typeName) for a category ID, with malformed-DB recovery via repo.
 
     Special cases:
     - category_id 17 (Build Components / Commodity): uses the group IDs in
@@ -148,30 +148,14 @@ def _get_types_for_category_impl(engine, remote_engine, category_id: int) -> pd.
         ).bindparams(bindparam("category_id"))
         params = {"category_id": category_id}
 
-    def _run_local():
-        with engine.connect() as conn:
-            return pd.read_sql_query(query, conn, params=params)
-
-    def _run_remote():
-        with remote_engine.connect() as conn:
-            return pd.read_sql_query(query, conn, params=params)
-
     try:
-        return _run_local()
+        return repo.read_df(query, params=params)
     except Exception as e:
-        msg = str(e).lower()
         logger.error(f"Error fetching types for category {category_id}: {e}")
-        if "no such table" in msg or "malform" in msg:
-            logger.warning(f"Falling back to remote SDE read due to: {msg}")
-            try:
-                return _run_remote()
-            except Exception as e_remote:
-                logger.error(f"Remote fallback also failed: {e_remote}")
-                return pd.DataFrame(columns=["typeID", "typeName"])
         return pd.DataFrame(columns=["typeID", "typeName"])
 
-def _get_types_for_group_impl(engine, remote_engine, group_id: int) -> pd.DataFrame:
-    """Fetch types for a group ID with malformed-DB fallback to remote.
+def _get_types_for_group_impl(repo: BaseRepository, group_id: int) -> pd.DataFrame:
+    """Fetch types for a group ID, with malformed-DB recovery via repo.
 
     Joins invTypes with industryActivityProducts to find manufacturable items.
     Special case: group 332 filters to R.A.M./R.Db items only.
@@ -185,28 +169,11 @@ def _get_types_for_group_impl(engine, remote_engine, group_id: int) -> pd.DataFr
         ORDER BY t.typeName
     """)
 
-    def _run_local():
-        with engine.connect() as conn:
-            return pd.read_sql_query(query, conn, params={"group_id": group_id})
-
-    def _run_remote():
-        with remote_engine.connect() as conn:
-            return pd.read_sql_query(query, conn, params={"group_id": group_id})
-
     try:
-        df = _run_local()
+        df = repo.read_df(query, params={"group_id": group_id})
     except Exception as e:
-        msg = str(e).lower()
         logger.error(f"Error fetching types for group {group_id}: {e}")
-        if "no such table" in msg or "malform" in msg:
-            logger.warning(f"Falling back to remote SDE read due to: {msg}")
-            try:
-                df = _run_remote()
-            except Exception as e_remote:
-                logger.error(f"Remote fallback also failed: {e_remote}")
-                return pd.DataFrame(columns=["typeID", "typeName"])
-        else:
-            return pd.DataFrame(columns=["typeID", "typeName"])
+        return pd.DataFrame(columns=["typeID", "typeName"])
 
     if group_id == 332 and not df.empty:
         df = df[df["typeName"].str.contains("R.A.M.") | df["typeName"].str.contains("R.Db")]
@@ -336,12 +303,12 @@ def _get_groups_for_category_cached(_cache_key: str, category_id: int) -> pd.Dat
 @st.cache_resource
 def _get_types_for_category_cached(_cache_key: str, category_id: int) -> pd.DataFrame:
     db = _get_sde_db_cached(_cache_key)
-    return _get_types_for_category_impl(db.engine, db.remote_engine, category_id)
+    return _get_types_for_category_impl(BaseRepository(db, logger), category_id)
 
 @st.cache_resource
 def _get_types_for_group_cached(_cache_key: str, group_id: int) -> pd.DataFrame:
     db = _get_sde_db_cached(_cache_key)
-    return _get_types_for_group_impl(db.engine, db.remote_engine, group_id)
+    return _get_types_for_group_impl(BaseRepository(db, logger), group_id)
 
 @st.cache_resource
 def _get_sde_table_cached(_cache_key: str, table_name: str) -> pd.DataFrame:

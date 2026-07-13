@@ -205,14 +205,13 @@ class TestMarketRepositoryMalformedRecovery:
 
     @patch("repositories.market_repo.DatabaseConfig")
     @patch("pandas.read_sql_query")
-    def test_orders_remote_fallback_on_persistent_error(self, mock_read_sql, mock_db_cls):
-        """Orders function falls back to remote when local stays broken after sync."""
+    def test_orders_backup_restore_fallback_on_persistent_error(self, mock_read_sql, mock_db_cls):
+        """Orders function falls back to backup restore when sync doesn't fix a persistent error."""
         expected = pd.DataFrame({"order_id": [1], "type_id": [34], "price": [10.0]})
         mock_engine, _ = self._mock_engine()
-        mock_remote_engine, _ = self._mock_engine()
         mock_db = Mock()
         type(mock_db).engine = PropertyMock(return_value=mock_engine)
-        type(mock_db).remote_engine = PropertyMock(return_value=mock_remote_engine)
+        mock_db.restore_from_backup.return_value = True
         mock_db_cls.return_value = mock_db
 
         call_count = 0
@@ -220,7 +219,8 @@ class TestMarketRepositoryMalformedRecovery:
         def side_effect(*args, **kwargs):
             nonlocal call_count
             call_count += 1
-            # First two calls (local) fail, third call (remote) succeeds
+            # First call (local) fails, retry after sync (call 2) also fails,
+            # retry after backup restore (call 3) succeeds.
             if call_count <= 2:
                 raise Exception("database disk image is malformed")
             return expected
@@ -232,6 +232,8 @@ class TestMarketRepositoryMalformedRecovery:
 
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 1
+        mock_db.sync.assert_called_once()
+        mock_db.restore_from_backup.assert_called_once()
         mock_db.sync.assert_called_once()
 
 

@@ -110,7 +110,7 @@ class AdminRepository:
             """
         )
         if getattr(self, "_reader", None) is not None:
-            return self._reader.read_df(query, local=self._read_local()).reset_index(drop=True)
+            return self._reader.read_df(query).reset_index(drop=True)
 
         with self._get_write_engine().connect() as conn:
             return pd.read_sql_query(query, conn).reset_index(drop=True)
@@ -210,7 +210,7 @@ class AdminRepository:
             """
         )
         if getattr(self, "_reader", None) is not None:
-            return self._reader.read_df(query, local=self._read_local()).reset_index(drop=True)
+            return self._reader.read_df(query).reset_index(drop=True)
         with self._get_write_engine().connect() as conn:
             return pd.read_sql_query(query, conn).reset_index(drop=True)
 
@@ -233,7 +233,7 @@ class AdminRepository:
             """
         )
         if getattr(self, "_reader", None) is not None:
-            return self._reader.read_df(query, local=self._read_local()).reset_index(drop=True)
+            return self._reader.read_df(query).reset_index(drop=True)
         with self._get_write_engine().connect() as conn:
             return pd.read_sql_query(query, conn).reset_index(drop=True)
 
@@ -287,8 +287,8 @@ class AdminRepository:
         )
         params = {"fit_id": fit_id}
         if getattr(self, "_reader", None) is not None:
-            fit_df = self._reader.read_df(fit_query, params=params, local=self._read_local())
-            items_df = self._reader.read_df(items_query, params=params, local=self._read_local())
+            fit_df = self._reader.read_df(fit_query, params=params)
+            items_df = self._reader.read_df(items_query, params=params)
             if fit_df.empty:
                 return ""
             fit = fit_df.iloc[0].to_dict()
@@ -767,6 +767,8 @@ class AdminRepository:
         return self._db.engine
 
     def _read_local(self) -> bool:
+        # Reads are always local under pyturso; retained only until the
+        # companion admin write-path plan reworks write_target handling.
         return self._write_target != "remote"
 
     @staticmethod

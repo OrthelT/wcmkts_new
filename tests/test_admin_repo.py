@@ -553,7 +553,9 @@ def test_write_target_property_exposes_normalized_local_target():
     assert repo.write_target == "local"
 
 
-def test_remote_admin_reader_reads_remote_source():
+def test_admin_reader_reads_without_local_kwarg():
+    # Reads always go through BaseRepository.read_df() (local, pyturso-backed)
+    # regardless of write_target -- the local= kwarg was removed from read_df.
     db = MagicMock()
     repo = AdminRepository(db, write_target="remote")
     repo._reader = MagicMock()
@@ -562,7 +564,7 @@ def test_remote_admin_reader_reads_remote_source():
     repo.get_watchlist()
 
     _, kwargs = repo._reader.read_df.call_args
-    assert kwargs["local"] is False
+    assert "local" not in kwargs
 
 
 def test_get_doctrine_fit_eft_returns_current_fit_text(tmp_path):
