@@ -1,10 +1,9 @@
-from sqlalchemy import create_engine, text, select, NullPool
+from sqlalchemy import create_engine, text, select
 import streamlit as st
 import os
 import json
 
 from logging_config import setup_logging
-import sqlite3 as sql
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 import threading
@@ -122,9 +121,6 @@ class DatabaseConfig:
 
     # Shared handles per-alias to avoid multiple simultaneous connections to the same file
     _engines: dict[str, object] = {}
-    _remote_engines: dict[str, object] = {}
-    _sqlite_local_connects: dict[str, object] = {}
-    _ro_engines: dict[str, object] = {}
 
     @staticmethod
     def _resolve_active_alias() -> str:
@@ -157,9 +153,6 @@ class DatabaseConfig:
         self.turso_url = self._db_turso_urls.get(turso_key)
         self.token = self._db_turso_auth_tokens.get(turso_key)
         self._engine = None
-        self._remote_engine = None
-        self._sqlite_local_connect = None
-        self._ro_engine = None
 
     @property
     def has_remote_credentials(self) -> bool:
@@ -174,47 +167,6 @@ class DatabaseConfig:
             DatabaseConfig._engines[self.alias] = eng
         return eng
 
-    @property
-    def remote_engine(self):
-        eng = DatabaseConfig._remote_engines.get(self.alias)
-        if eng is None:
-            if not self.turso_url or not self.token:
-                raise ValueError(
-                    f"No Turso credentials for alias '{self.alias}'. "
-                    "Add [{self.alias}_turso] to .streamlit/secrets.toml"
-                )
-            eng = create_engine(
-                f"sqlite+{self.turso_url}?secure=true",
-                connect_args={"auth_token": self.token},
-            )
-            DatabaseConfig._remote_engines[self.alias] = eng
-        return eng
-
-    @property
-    def sqlite_local_connect(self):
-        conn = DatabaseConfig._sqlite_local_connects.get(self.alias)
-        if conn is None:
-            conn = sql.connect(self.path)
-            DatabaseConfig._sqlite_local_connects[self.alias] = conn
-        return conn
-
-    @property
-    def ro_engine(self):
-        """SQLAlchemy engine to the local file, read-only, no pooling."""
-        eng = DatabaseConfig._ro_engines.get(self.alias)
-        if eng is not None:
-            return eng
-        else:
-            # URI form with read-only flags
-            uri = f"sqlite+pysqlite:///file:{self.path}?mode=ro&uri=true"
-            eng = create_engine(
-                uri,
-                poolclass=NullPool,  # no long-lived pooled handles
-                connect_args={"check_same_thread": False},
-            )
-            DatabaseConfig._ro_engines[self.alias] = eng
-        return eng
-
     def _dispose_local_connections(self):
         """Dispose/close all local connections/engines to safely allow file operations.
         This helps prevent corruption during sync by ensuring no open handles.
@@ -224,18 +176,6 @@ class DatabaseConfig:
         if eng is not None:
             with suppress(Exception):
                 eng.dispose()
-
-        # Close raw sqlite3 connection if any
-        sqlite_conn = DatabaseConfig._sqlite_local_connects.pop(self.alias, None)
-        if sqlite_conn is not None:
-            with suppress(Exception):
-                sqlite_conn.close()
-
-        # Close read-only engine if any
-        ro_engine = DatabaseConfig._ro_engines.pop(self.alias, None)
-        if ro_engine is not None:
-            with suppress(Exception):
-                ro_engine.dispose()
 
     def integrity_check(self) -> bool:
         """Run PRAGMA integrity_check on the local database.
@@ -465,47 +405,32 @@ class DatabaseConfig:
             )
             return True
 
-    def get_table_list(self, local_only: bool = True) -> list[str]:
-        if local_only:
-            engine = self.engine
-            with engine.connect() as conn:
-                stmt = text("PRAGMA table_list")
-                result = conn.execute(stmt)
-                tables = result.fetchall()
-                table_list = [
-                    table.name for table in tables if "sqlite" not in table.name
-                ]
-                conn.close()
-                return table_list
-        else:
-            engine = self.remote_engine
-            with engine.connect() as conn:
-                stmt = text("PRAGMA table_list")
-                result = conn.execute(stmt)
-                tables = result.fetchall()
-                table_list = [
-                    table.name for table in tables if "sqlite" not in table.name
-                ]
-                conn.close()
-                return table_list
+    def get_table_list(self) -> list[str]:
+        engine = self.engine
+        with engine.connect() as conn:
+            stmt = text("PRAGMA table_list")
+            result = conn.execute(stmt)
+            tables = result.fetchall()
+            table_list = [
+                table.name for table in tables if "sqlite" not in table.name
+            ]
+            conn.close()
+            return table_list
 
     def get_table_columns(
-        self, table_name: str, local_only: bool = True, full_info: bool = False
+        self, table_name: str, full_info: bool = False
     ) -> list[dict]:
         """
-        Get column information for a specific table.
+        Get column information for a specific table (local database only).
 
         Args:
             table_name: Name of the table to inspect
-            local_only: If True, use local database; if False, use remote database
+            full_info: If True, return full column metadata dicts; else just names
 
         Returns:
             List of dictionaries containing column information
         """
-        if local_only:
-            engine = self.engine
-        else:
-            engine = self.remote_engine
+        engine = self.engine
 
         with engine.connect() as conn:
             # Use string formatting for PRAGMA since it doesn't support parameterized queries well
@@ -534,7 +459,6 @@ class DatabaseConfig:
         self,
         table_name: str,
         update_log_cls,
-        remote: bool = False,
     ) -> datetime | None:
         """Return the updatelog timestamp for ``table_name``, or None if absent.
 
@@ -544,13 +468,12 @@ class DatabaseConfig:
                 ``Base``.  Callers pass the class from the module that
                 owns this database's models (e.g. ``models.UpdateLog`` for
                 market DBs, ``build_cost_models.UpdateLog`` for build_cost).
-            remote: Read from the Turso remote engine when True.
 
         Returns the timestamp as a tz-aware UTC ``datetime``, or None when
         no row matches.  The column is stored as a naive datetime; UTC is
         the contract enforced by the backend writer.
         """
-        engine = self.remote_engine if remote else self.engine
+        engine = self.engine
         with Session(bind=engine) as session:
             stmt = select(update_log_cls.timestamp).where(
                 update_log_cls.table_name == table_name

@@ -533,10 +533,15 @@ def test_prepare_local_write_disposes_stale_connections():
 def test_default_write_engine_uses_local_target():
     db = MagicMock()
     db.engine = object()
-    db.remote_engine = object()
     repo = AdminRepository(db)
 
     assert repo._get_write_engine() is db.engine
+
+
+def test_remote_write_target_raises_not_implemented():
+    repo = AdminRepository(MagicMock(), write_target="remote")
+    with pytest.raises(NotImplementedError):
+        repo._get_write_engine()
 
 
 def test_write_target_property_exposes_normalized_local_default():

@@ -763,7 +763,10 @@ class AdminRepository:
         if override is not None:
             return override
         if self._write_target == "remote":
-            return self._db.remote_engine
+            raise NotImplementedError(
+                "Remote admin writes are disabled during the pyturso migration; "
+                "pending the write-path rework (local write + push)."
+            )
         return self._db.engine
 
     def _read_local(self) -> bool:
