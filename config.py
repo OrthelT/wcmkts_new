@@ -13,6 +13,8 @@ import threading
 from contextlib import suppress
 from time import perf_counter
 from dataclasses import dataclass
+import shutil
+from pathlib import Path
 
 logger = setup_logging(__name__)
 
@@ -46,6 +48,21 @@ class SyncResult:
 
     def __bool__(self) -> bool:
         return self.ok
+
+
+# Aliases currently serving restored backup data (value = restore time, UTC).
+# Module-level: degraded-ness is a property of the on-disk file, i.e. process-wide.
+_DEGRADED_REGISTRY: dict[str, datetime] = {}
+
+
+def get_degraded_aliases() -> dict[str, datetime]:
+    """Return a copy of {alias: restore_time} for DBs serving backup data."""
+    return dict(_DEGRADED_REGISTRY)
+
+
+def clear_degraded(alias: str) -> None:
+    """Remove ``alias`` from the degraded registry (no-op if absent)."""
+    _DEGRADED_REGISTRY.pop(alias, None)
 
 
 def get_settings() -> dict:
@@ -320,7 +337,7 @@ class DatabaseConfig:
         except Exception as e:
             logger.error(f"Database sync failed for {self.alias}: {e}")
             if not file_existed_before:
-                self._cleanup_empty_db_file()
+                self._remove_replica_files()
             raise
         finally:
             if conn is not None:
@@ -375,7 +392,7 @@ class DatabaseConfig:
                     "Deleting local file and retrying fresh sync."
                 )
                 self._dispose_local_connections()
-                self._cleanup_empty_db_file()
+                self._remove_replica_files()
                 self._sync_once()
 
                 if not self.local_matches_remote():
@@ -490,14 +507,73 @@ class DatabaseConfig:
         )
         return remote_ts == local_ts
 
-    def _cleanup_empty_db_file(self):
-        """Remove empty db file and libsql/WAL artifacts left by a failed sync."""
-        for suffix in ("", "-shm", "-wal", "-info"):
+    def _remove_replica_files(self):
+        """Remove the local db file and every pyturso/WAL sidecar artifact."""
+        for suffix in ("", "-shm", "-wal", "-info", "-changes", "-wal-revert"):
             file_path = self.path + suffix
             if os.path.exists(file_path):
                 with suppress(OSError):
                     os.remove(file_path)
-                    logger.info(f"Removed {file_path} created during failed sync")
+                    logger.info(f"Removed replica artifact {file_path}")
+
+    def snapshot_backup(self) -> bool:
+        """Copy the live ``.db`` + ``.db-info`` pair to ``.bak`` files.
+
+        Pure file copy — the caller (sync()) is responsible for having
+        checkpointed the WAL first so the main file is complete. Each copy
+        goes to a temp file then an atomic os.replace(), so a mid-copy crash
+        cannot leave a torn backup. Best-effort: returns False on any error.
+        """
+        try:
+            for src, dst in (
+                (self.path, self.path + ".bak"),
+                (self.path + "-info", self.path + "-info.bak"),
+            ):
+                tmp = dst + ".tmp"
+                shutil.copy2(src, tmp)
+                os.replace(tmp, dst)
+            logger.info(f"snapshot_backup: wrote backup pair for {self.alias}")
+            return True
+        except OSError as e:
+            logger.error(f"snapshot_backup failed for {self.alias}: {e}")
+            return False
+
+    def restore_from_backup(self) -> bool:
+        """Replace the live replica with the last-known-good backup pair.
+
+        Checks the backup pair exists BEFORE touching live files — a
+        malformed live file is diagnostic evidence when no backup exists.
+        On success, registers the alias in the degraded registry; a later
+        successful sync() clears it (the restored pair is a valid replica,
+        so the next pull() catches it up incrementally).
+        """
+        bak, info_bak = self.path + ".bak", self.path + "-info.bak"
+        if not (os.path.exists(bak) and os.path.exists(info_bak)):
+            logger.error(
+                f"restore_from_backup({self.alias}): no backup pair; "
+                "leaving live files untouched"
+            )
+            return False
+        with _SYNC_LOCK:
+            self._dispose_local_connections()
+            self._remove_replica_files()
+            try:
+                shutil.copy2(bak, self.path)
+                shutil.copy2(info_bak, self.path + "-info")
+            except OSError as e:
+                logger.error(f"restore_from_backup({self.alias}) copy failed: {e}")
+                return False
+            if not self.integrity_check():
+                logger.error(
+                    f"restore_from_backup({self.alias}): restored copy failed integrity"
+                )
+                return False
+            _DEGRADED_REGISTRY[self.alias] = datetime.now(timezone.utc)
+            logger.warning(
+                f"{self.alias} restored from backup taken before last failure; "
+                "serving degraded data until next successful sync"
+            )
+            return True
 
     def get_table_list(self, local_only: bool = True) -> list[str]:
         if local_only:
