@@ -2,6 +2,7 @@ from sqlalchemy import create_engine, text, select
 import streamlit as st
 import os
 import json
+import sqlite3
 
 from logging_config import setup_logging
 from datetime import datetime, timezone
@@ -209,16 +210,36 @@ class DatabaseConfig:
         except (OSError, UnicodeDecodeError, json.JSONDecodeError):
             return False
 
-    def _ensure_replica_consistency(self) -> None:
-        """Enforce the .db/.db-info pairing invariant before any sync connect.
+    def _db_has_tables(self) -> bool:
+        """True when the local .db opens as sqlite and has ≥1 user table.
 
-        Never pull on a db lacking valid metadata: a .db without (valid)
-        -info, or an orphaned -info, is removed so pull() starts from a
-        clean bootstrap. Both-absent is the normal cold-start case.
+        A 0-byte or garbage .db beside valid -info metadata can't serve reads,
+        and an incremental pull won't repair it — only a fresh bootstrap will.
+        """
+        try:
+            conn = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True)
+            try:
+                count = conn.execute(
+                    "SELECT count(*) FROM sqlite_master "
+                    "WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+                ).fetchone()[0]
+                return count > 0
+            finally:
+                conn.close()
+        except sqlite3.Error:
+            return False
+
+    def _ensure_replica_consistency(self) -> None:
+        """Enforce replica validity invariants before any sync connect.
+
+        Never pull on a db lacking valid metadata or content: a .db without
+        (valid) -info, an orphaned -info, or a paired .db with no user tables
+        is removed so pull() starts from a clean bootstrap. Both-absent is
+        the normal cold-start case.
         """
         db_exists = os.path.exists(self.path)
         meta_valid = self._replica_metadata_valid()
-        if db_exists and meta_valid:
+        if db_exists and meta_valid and self._db_has_tables():
             return
         if db_exists or os.path.exists(self.path + "-info"):
             logger.warning(

@@ -225,7 +225,7 @@ with DatabaseConfig("wcmktprod").engine.connect() as conn:
 - **Programmatic sync**: Use `DatabaseConfig.sync()` method
 - **Integrity validation**: Automatic PRAGMA integrity_check before/after sync
 - **Backup-restore fallback**: `BaseRepository.read_df()` auto-recovers a malformed local DB by syncing and retrying, then falling back to `DatabaseConfig.restore_from_backup()` (the last known-good `.bak`/`-info.bak` pair) if sync itself fails
-- **Cold-start safety**: `init_db.py` validates database *content* (not just file existence) via `verify_db_content()`. Empty or corrupt files (including old libsql-era replicas without a matching pyturso `-info` sidecar) are removed and re-synced. `sync()` validates credentials before opening a `turso.sync` connection and cleans up artifacts (`.db`, `-shm`, `-wal`, `-info`, `-changes`, `-wal-revert`) on failure.
+- **Cold-start safety**: `init_db.py` validates database *content* (not just file existence) via `verify_db_content()`. Invalid files (empty, corrupt, or old libsql-era replicas without a matching pyturso `-info` sidecar) are never deleted by `init_db` itself — `sync()` removes them under `_SYNC_LOCK` (via `_ensure_replica_consistency()`, which also nukes a paired `.db` with no user tables) and re-bootstraps. Bootstrap is single-flight: `_INIT_LOCK` in `init_db.py` serializes concurrent sessions so a second cold-starting session can't clobber the first session's in-flight sync; later entrants re-verify and skip completed work. `sync()` validates credentials before opening a `turso.sync` connection and cleans up artifacts (`.db`, `-shm`, `-wal`, `-info`, `-changes`, `-wal-revert`) on failure.
 
 **Important:** This application does NOT write market data. Market data updates are handled by the separate backend repository (mkts_backend) which calls ESI APIs and updates the Turso remote database.
 
@@ -247,7 +247,7 @@ with DatabaseConfig("wcmktprod").engine.connect() as conn:
 
 ### Current Test Coverage
 The test suite covers repositories, services, database config, i18n, parser, pricer/fit-availability, and infrastructure:
-- 635 tests + 22 subtests passing (`uv run pytest -q`)
+- 644 tests + 22 subtests passing (`uv run pytest -q`)
 
 ## Commit & Pull Request Guidelines
 
@@ -282,7 +282,7 @@ Include in PR description:
 - **Integrity errors**: DatabaseConfig will auto-recover with `integrity_check()` and sync
 - **Malformed database**: Repository functions auto-detect and fall back through sync-and-retry, then `restore_from_backup()`, via the `read_df()` ladder
 - **Connection errors**: Review logs in `logs/` directory
-- **Empty db file on cold start**: Opening a `turso.sync` connection creates the `.db` file before syncing. If credentials are missing or sync fails, the empty file persists and causes "no such table" errors on subsequent runs. `init_db.py` detects this via `verify_db_content()` and removes empty files before re-syncing. If `.db-info` exists alongside an empty `.db`, it indicates a prior interrupted sync.
+- **Empty db file on cold start**: Opening a `turso.sync` connection creates the `.db` file before syncing. If credentials are missing or sync fails, the empty file persists and causes "no such table" errors on subsequent runs. `init_db.py` detects this via `verify_db_content()` and re-runs `sync()`, which removes the invalid files under `_SYNC_LOCK` before re-bootstrapping. If `.db-info` exists alongside an empty `.db`, it indicates a prior interrupted sync.
 - **Credential naming mismatch**: Database aliases in `[db_paths]` (e.g., `sde`, `build_cost`) may not match Turso secret section names (e.g., `sdelite_turso`, `buildcost_turso`). Use `[db_turso_keys]` in `settings.toml` to map aliases to their correct secret section names. When adding a new database, ensure its turso key is either `{alias}_turso` or has an override in `[db_turso_keys]`.
 
 ### Performance Issues
@@ -489,7 +489,7 @@ from state.session_state import ss_get  # ✗ state!
 - **`pages/`**: Streamlit application pages
 - **`pages/components/`**: Extracted Streamlit rendering components (market_components, dashboard_components, db_refresh, page_chrome)
 - **`parser/`**: EFT fitting and item list parser (open source contribution)
-- **`tests/`**: pytest unit tests (635 tests, 22 subtests)
+- **`tests/`**: pytest unit tests (644 tests, 22 subtests)
 - **`docs/`**: Documentation
 - **`logs/`**: Application logs (git-ignored)
 - **`images/`**: UI assets

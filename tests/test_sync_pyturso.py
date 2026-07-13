@@ -1,6 +1,7 @@
 """sync() state machine and pull flow (spec §1)."""
 
 import os
+import sqlite3
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -24,6 +25,15 @@ def _write(path, data=b"x" * 32):
         f.write(data)
 
 
+def _make_db(path, tables=True):
+    """Create a real sqlite database, optionally with a user table."""
+    conn = sqlite3.connect(path)
+    if tables:
+        conn.execute("CREATE TABLE t (id INTEGER)")
+    conn.commit()
+    conn.close()
+
+
 def _write_info(db, valid=True):
     content = '{"hash":1,"version":0,"durable_frame_num":1,"generation":1}' if valid else "libsql-binary-garbage\x00"
     with open(db.path + "-info", "w") as f:
@@ -38,11 +48,36 @@ def _mock_sync_conn(pull_returns=False):
 
 class TestEnsureReplicaConsistency:
     def test_both_valid_untouched(self, db):
-        _write(db.path)
+        _make_db(db.path)
         _write_info(db)
         db._ensure_replica_consistency()
         assert os.path.exists(db.path)
         assert os.path.exists(db.path + "-info")
+
+    def test_paired_but_tableless_db_nuked(self, db):
+        """A valid pairing whose .db has no user tables cannot serve reads and
+        an incremental pull won't fix it — must be nuked for fresh bootstrap."""
+        _make_db(db.path, tables=False)
+        _write_info(db)
+        db._ensure_replica_consistency()
+        assert not os.path.exists(db.path)
+        assert not os.path.exists(db.path + "-info")
+
+    def test_paired_zero_byte_db_nuked(self, db):
+        """A 0-byte .db beside valid -info (interrupted sync) must be nuked."""
+        open(db.path, "wb").close()
+        _write_info(db)
+        db._ensure_replica_consistency()
+        assert not os.path.exists(db.path)
+        assert not os.path.exists(db.path + "-info")
+
+    def test_garbage_db_with_valid_info_nuked(self, db):
+        """A non-sqlite .db beside valid -info must be nuked."""
+        _write(db.path)
+        _write_info(db)
+        db._ensure_replica_consistency()
+        assert not os.path.exists(db.path)
+        assert not os.path.exists(db.path + "-info")
 
     def test_neither_exists_noop(self, db):
         db._ensure_replica_consistency()
@@ -90,7 +125,7 @@ class TestSync:
             db.sync()
 
     def test_pull_no_changes(self, db):
-        _write(db.path)
+        _make_db(db.path)
         _write_info(db)
         conn = _mock_sync_conn(pull_returns=False)
         result, _, snap = self._run_sync(db, conn)
@@ -100,7 +135,7 @@ class TestSync:
         snap.assert_called_once()
 
     def test_pull_with_changes(self, db):
-        _write(db.path)
+        _make_db(db.path)
         _write_info(db)
         conn = _mock_sync_conn(pull_returns=True)
         result, _, _ = self._run_sync(db, conn)
@@ -115,7 +150,7 @@ class TestSync:
         import config as config_module
 
         config_module._DEGRADED_REGISTRY["testalias"] = None
-        _write(db.path)
+        _make_db(db.path)
         _write_info(db)
         result, _, _ = self._run_sync(db, _mock_sync_conn())
         assert result.ok
@@ -137,7 +172,7 @@ class TestSync:
         assert not os.path.exists(db.path)  # no empty-file landmine left behind
 
     def test_pull_failure_on_existing_file_preserves_it(self, db):
-        _write(db.path, b"healthy")
+        _make_db(db.path)
         _write_info(db)
         conn = MagicMock()
         conn.pull.side_effect = RuntimeError("network down")
@@ -146,8 +181,13 @@ class TestSync:
         ):
             with pytest.raises(RuntimeError):
                 db.sync()
-        with open(db.path, "rb") as f:
-            assert f.read() == b"healthy"  # network blip must not nuke a healthy file
+        # network blip must not nuke a healthy file
+        check = sqlite3.connect(f"file:{db.path}?mode=ro", uri=True)
+        tables = check.execute(
+            "SELECT count(*) FROM sqlite_master WHERE type='table'"
+        ).fetchone()[0]
+        check.close()
+        assert tables == 1
 
     def test_integrity_failure_triggers_one_nuke_retry(self, db):
         _write(db.path)

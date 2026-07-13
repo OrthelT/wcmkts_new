@@ -47,7 +47,7 @@ the source of truth, not a migration target):
 | `repositories/market_repo.py` | 9 | mix of `wcmkt` and `sde` reads; `_get_watchlist_impl` / the snapshot+KPI impls already show the correct `read_df()` form to copy |
 | `services/low_stock_service.py` | 7 | service-level DB access; reads `wcmkt` + `sde` |
 | `repositories/doctrine_repo.py` | 6 | several methods already use `read_df()` — finish the stragglers |
-| `repositories/build_cost_repo.py` | 5 | `build_cost` alias |
+| `repositories/build_cost_repo.py` | 1 | reads migrated to `read_df()` 2026-07-13 (cold-start "no such table: structures" crash); the one remaining connect is the `_write_industry_index_impl` **write**, which correctly stays on a direct connection |
 | `repositories/market_orders_repo.py` | 4 | |
 | `services/pricer_service.py` | 4 | `wcmkt` + `sde` reads |
 | `services/import_helper_service.py` | 3 | `wcmkt` + `sde` reads |
