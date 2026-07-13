@@ -1,6 +1,5 @@
 """sync() state machine and pull flow (spec §1)."""
 
-import json
 import os
 from unittest.mock import MagicMock, patch
 
