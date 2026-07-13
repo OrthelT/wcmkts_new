@@ -87,6 +87,34 @@ def test_restore_failing_integrity_returns_false(db):
     assert "testalias" not in get_degraded_aliases()
 
 
+def test_restore_second_copy_failure_leaves_live_files_untouched(db):
+    _write_live_pair(db, b"goodstate" * 4)
+    assert db.snapshot_backup() is True
+    _write_live_pair(db, b"original!")
+
+    real_copy2 = config_module.shutil.copy2
+    call_count = {"n": 0}
+
+    def flaky_copy2(src, dst, *args, **kwargs):
+        call_count["n"] += 1
+        if call_count["n"] == 2:
+            raise OSError("disk error on second copy")
+        return real_copy2(src, dst, *args, **kwargs)
+
+    with patch.object(config_module.shutil, "copy2", side_effect=flaky_copy2):
+        assert db.restore_from_backup() is False
+
+    with open(db.path, "rb") as f:
+        assert f.read() == b"original!"
+    with open(db.path + "-info") as f:
+        assert '"generation":1' in f.read()
+
+    import glob
+
+    assert glob.glob(db.path + "*.tmp") == []
+    assert "testalias" not in get_degraded_aliases()
+
+
 def test_clear_degraded_and_copy_semantics(db):
     config_module._DEGRADED_REGISTRY["testalias"] = None
     snapshot = get_degraded_aliases()

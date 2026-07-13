@@ -543,9 +543,17 @@ class DatabaseConfig:
 
         Checks the backup pair exists BEFORE touching live files — a
         malformed live file is diagnostic evidence when no backup exists.
-        On success, registers the alias in the degraded registry; a later
-        successful sync() clears it (the restored pair is a valid replica,
-        so the next pull() catches it up incrementally).
+        The backup pair is first copied to ``.tmp`` staging files next to
+        the live path; only once BOTH staged copies succeed are local
+        connections disposed, the live replica files removed, and the
+        staged files moved into place with ``os.replace()``. This keeps
+        the live files completely untouched if staging fails partway
+        (e.g. a disk error on the second copy), rather than leaving a
+        torn replica (a ``.db`` with no matching ``-info`` sidecar)
+        behind. On success, registers the alias in the degraded
+        registry; a later successful sync() clears it (the restored
+        pair is a valid replica, so the next pull() catches it up
+        incrementally).
         """
         bak, info_bak = self.path + ".bak", self.path + "-info.bak"
         if not (os.path.exists(bak) and os.path.exists(info_bak)):
@@ -554,15 +562,25 @@ class DatabaseConfig:
                 "leaving live files untouched"
             )
             return False
+
+        tmp_db, tmp_info = self.path + ".tmp", self.path + "-info.tmp"
         with _SYNC_LOCK:
+            try:
+                shutil.copy2(bak, tmp_db)
+                shutil.copy2(info_bak, tmp_info)
+            except OSError as e:
+                logger.error(f"restore_from_backup({self.alias}) staging copy failed: {e}")
+                for tmp in (tmp_db, tmp_info):
+                    with suppress(OSError):
+                        if os.path.exists(tmp):
+                            os.remove(tmp)
+                return False
+
             self._dispose_local_connections()
             self._remove_replica_files()
-            try:
-                shutil.copy2(bak, self.path)
-                shutil.copy2(info_bak, self.path + "-info")
-            except OSError as e:
-                logger.error(f"restore_from_backup({self.alias}) copy failed: {e}")
-                return False
+            os.replace(tmp_db, self.path)
+            os.replace(tmp_info, self.path + "-info")
+
             if not self.integrity_check():
                 logger.error(
                     f"restore_from_backup({self.alias}): restored copy failed integrity"
