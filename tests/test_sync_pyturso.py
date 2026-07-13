@@ -170,3 +170,30 @@ class TestSync:
             result = db.sync()
         assert result == SyncResult(ok=True, changed=True)
         assert conn.pull.call_count == 2
+
+    def test_integrity_retry_pull_failure_cleans_up_landmine(self, db):
+        """First pull succeeds but fails integrity; the retry pull then dies
+        mid-flight (e.g. network drop). The exception must propagate, and no
+        partial replica (.db / .db-info) may be left behind as a landmine."""
+        _write(db.path)
+        _write_info(db)
+        conn = MagicMock()
+        call_count = {"n": 0}
+
+        def fake_pull():
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                _write(db.path)
+                _write_info(db)
+                return False
+            raise RuntimeError("network down mid-retry")
+
+        conn.pull.side_effect = fake_pull
+        with patch("config.tursosync.connect", return_value=conn), patch.object(
+            DatabaseConfig, "integrity_check", return_value=False
+        ), patch.object(DatabaseConfig, "_dispose_local_connections"):
+            with pytest.raises(RuntimeError):
+                db.sync()
+        assert conn.pull.call_count == 2
+        assert not os.path.exists(db.path)
+        assert not os.path.exists(db.path + "-info")

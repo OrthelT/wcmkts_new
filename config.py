@@ -369,7 +369,12 @@ class DatabaseConfig:
                 self._dispose_local_connections()
                 self._remove_replica_files()
                 changed = True
-                self._pull_once()
+                try:
+                    self._pull_once()
+                except Exception:
+                    logger.error(f"Retry pull failed for {self.alias}; removing partial replica")
+                    self._remove_replica_files()
+                    raise
                 ok = self.integrity_check()
 
             if ok:
