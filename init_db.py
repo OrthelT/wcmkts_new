@@ -1,4 +1,5 @@
 from config import DatabaseConfig
+import json
 import os
 import sqlite3 as sql
 from logging_config import setup_logging
@@ -40,16 +41,29 @@ def verify_db_content(path):
             "WHERE type='table' AND name NOT LIKE 'sqlite_%'"
         )
         count = cursor.fetchone()[0]
+        if count == 0:
+            conn.close()
+            return False
         conn.close()
-        return count > 0
+        # pyturso pairing invariant: a replica is only ready when its -info
+        # metadata exists and parses. A libsql-era or metadata-less .db must
+        # be removed and re-bootstrapped (sync()'s state machine enforces the
+        # same rule; enforcing it here routes cold start through resync).
+        try:
+            with open(path + "-info", encoding="utf-8") as f:
+                json.load(f)
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            logger.warning(f"DB {path} has no valid pyturso metadata; treating as not ready")
+            return False
+        return True
     except Exception as e:
         logger.warning(f"DB content verification failed for {path}: {e}")
         return False
 
 
 def _remove_empty_db(path):
-    """Remove an empty/invalid database file and its libsql/WAL artifacts."""
-    for suffix in ("", "-shm", "-wal", "-info"):
+    """Remove an empty/invalid database file and its pyturso/WAL artifacts."""
+    for suffix in ("", "-shm", "-wal", "-info", "-changes", "-wal-revert"):
         file_path = path + suffix
         if os.path.exists(file_path):
             try:
