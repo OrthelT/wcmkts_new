@@ -21,7 +21,7 @@ SaveMode = Literal["add", "update"]
 class AdminWriteIntegrityError(Exception):
     """Raised when a multi-statement admin write completes but read-back disagrees.
 
-    Catches the scenario where a libsql write appears to succeed (the
+    Catches the scenario where a pyturso write appears to succeed (the
     ``engine.begin()`` block exits without raising) but a later read shows
     the change did not take effect — e.g. a network drop after the SQL was
     sent but before the commit response was received, or a silent rollback.

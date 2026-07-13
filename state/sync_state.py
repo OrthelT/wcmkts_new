@@ -33,7 +33,7 @@ def get_most_recent_update_resilient(
     db_alias: str,
     table_name: str = "marketstats",
 ) -> datetime | None:
-    """Return latest updatelog timestamp using sync/retry/remote fallback for local reads.
+    """Return latest updatelog timestamp using read_df's sync-and-retry / backup-restore recovery for local reads.
 
     Returns:
         Timezone-aware datetime for the most recent ``timestamp`` row, or

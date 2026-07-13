@@ -193,19 +193,48 @@ class TestDegradedBackupBanner:
         message = sidebar_mock.warning.call_args.args[0]
         assert "07-01 08:30 UTC" in message
         assert "backup data" in message.lower()
+        assert not message.startswith("[")
 
     def test_no_warning_when_active_alias_not_degraded(self, monkeypatch):
         sidebar_mock = self._run(monkeypatch, {})
 
         sidebar_mock.warning.assert_not_called()
 
-    def test_no_warning_when_a_different_alias_is_degraded(self, monkeypatch):
+    def test_shows_warning_when_a_different_alias_is_degraded(self, monkeypatch):
+        """Non-active degraded aliases (e.g. sde, which never gets a periodic
+        sync) must still surface a warning — otherwise the flag would persist
+        forever unseen. The message is prefixed with the alias name so the
+        user knows which database is affected.
+        """
         restored_at = datetime(2026, 7, 1, 8, 30, tzinfo=timezone.utc)
         sidebar_mock = self._run(
             monkeypatch, {"wcmktnorth": restored_at}, active_alias="wcmkt"
         )
 
-        sidebar_mock.warning.assert_not_called()
+        sidebar_mock.warning.assert_called_once()
+        message = sidebar_mock.warning.call_args.args[0]
+        assert message.startswith("[wcmktnorth]")
+        assert "07-01 08:30 UTC" in message
+        assert "backup data" in message.lower()
+
+    def test_shows_one_warning_per_degraded_alias(self, monkeypatch):
+        """Both the active alias and other degraded aliases must each get a
+        warning — no alias's degraded state should be invisible to the user.
+        """
+        active_restored_at = datetime(2026, 7, 1, 8, 30, tzinfo=timezone.utc)
+        other_restored_at = datetime(2026, 6, 15, 3, 0, tzinfo=timezone.utc)
+        sidebar_mock = self._run(
+            monkeypatch,
+            {"wcmkt": active_restored_at, "sde": other_restored_at},
+            active_alias="wcmkt",
+        )
+
+        assert sidebar_mock.warning.call_count == 2
+        messages = [call.args[0] for call in sidebar_mock.warning.call_args_list]
+        assert any("06-15 03:00 UTC" in m and m.startswith("[sde]") for m in messages)
+        assert any(
+            "07-01 08:30 UTC" in m and not m.startswith("[") for m in messages
+        )
 
 
 def test_get_most_recent_update_resilient_has_no_remote_param():

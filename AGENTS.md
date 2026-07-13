@@ -473,7 +473,6 @@ from state.session_state import ss_get  # ✗ state!
 **Technical Reference:**
 - `architecture_reference.md` - Definitive technical reference for the current architecture
 - `change_log.md` - Change log covering the v0.2.0 refactoring (Phases 1-13) through v0.6.x releases
-- `database_config.md` - Database configuration and Turso sync details
 - `module_equivalents.md` - Module equivalents feature architecture, CLI usage, and aggregation pipeline
 - `testing.md` - Testing guidelines and pytest patterns
 
