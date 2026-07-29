@@ -2,43 +2,6 @@
 
 This file provides comprehensive guidance for LLM assistants (like Claude Code) when helping developers work with the Winter Coalition Market Stats Viewer codebase.
 
-## New Task
-### Improve Dashboard UI
-One of the primary use cases of this app is to monitor market availability of doctrine ships. I'd like to revise the display of Doctrine Ships and Popular Modules tables on ./pages/market_dashboard.py to better support this usecase. 
-- Doctrine Ships - add a column "% target" calculated from fits_on_mkt/ship_target with a progress bar keyed to % target.
-- Doctrine Ships - reorder columns: (icon), fit_id, item, progress bar, stock, fit_available, target, % target, sell_price, jita_sell
-- Popular Modules - create new columns "target %" and "qty needed" that is calculated from the doctrines table. Use the following query for type_id 13001 as an example or a more efficient method if you can devise it:
-```sql
-```sql
-
-WITH needed AS (
-  SELECT
-    d.type_id,
-    CASE WHEN d.fits_on_mkt < s.ship_target
-      THEN (s.ship_target - fits_on_mkt) * fit_qty
-    ELSE 0
-    END qty_needed
-  FROM doctrines as d
-  JOIN ship_targets as s
-  ON d.fit_id = s.fit_id
-)
-SELECT
-  MAX(n.qty_needed) qty_needed,
-  round(MIN((d.fits_on_mkt/s.ship_target)*100),0) AS target_perc
-FROM doctrines as d
-JOIN needed as n
-ON d.type_id = n.type_id
-JOIN ship_targets as s
-ON d.fit_id = s.fit_id
-WHERE d.type_id = 13001
-```
-
-- Popular modules - Column order: (icon), item, stock, "target %", "qty needed". sell_price, jita_sell,jita_buy, % vs jita
-- Popular modules - order alphabetically, include all items in the doctrine table except for ships.
-- Doctrine Ships - add a column % target calculated from progress bar keyed to percent target. 
-- Display these tables across the width of the page rather than in two columns
-Make a plan first
-
 ## Project Overview
 
 Winter Coalition Market Stats Viewer is a Streamlit web application for EVE Online market analysis. It provides real-time market data visualization, doctrine analysis, and inventory management tools for the Winter Coalition.
@@ -46,61 +9,6 @@ The web app can be found here: https://wcmkts.streamlit.app/
 It also has a sister application, Winter Coalition Northern Supply, which supports a different market hub managed in a separate repository. 
 
 **Important:** ESI calls to update market data in wcmktprod.db are handled in a separate repository: https://github.com/OrthelT/mkts_backend
-
-## Quick Start Commands
-
-### Installation and Setup
-```bash
-# Install dependencies using uv (preferred package manager for Python 3.12)
-uv sync
-
-# Alternative: install via pip if uv is not available
-pip install -e .
-```
-
-### Running the Application
-```bash
-# Start the Streamlit application
-uv run streamlit run app.py
-
-# Development mode with file watching
-uv run streamlit run app.py --server.runOnSave true
-```
-
-### Database Operations
-```bash
-# Test database sync functionality
-uv run python -c "
-from config import DatabaseConfig
-db = DatabaseConfig()
-db.sync()
-"
-
-# Check database integrity
-uv run python -c "
-from config import DatabaseConfig
-db = DatabaseConfig()
-print('Integrity check:', db.integrity_check())
-"
-```
-
-### Linting and Formatting
-```bash
-# Check code style with Ruff
-uvx ruff check .
-
-# Auto-format code with Ruff
-uvx ruff format .
-```
-
-### Testing
-```bash
-# Run all tests with pytest
-uv run pytest -q
-
-# Run with coverage
-uv run pytest --cov
-```
 
 ## Project Structure & Module Organization
 
@@ -180,51 +88,15 @@ All pages follow consistent patterns with Streamlit best practices:
 
 ### Local Databases
 
-**Primary Databases:**
-- **`wcmktprod.db`**: Market orders and statistics (synced from Turso via backend repo)
-- **`sdelite.db`**: EVE Online Static Data Export (lightweight version)
-- **`buildcost.db`**: Manufacturing and structure data
+Three synced SQLite replicas: **`wcmktprod.db`** (market orders/stats),
+**`sdelite.db`** (EVE Static Data Export, lightweight), **`buildcost.db`** (manufacturing).
+Schemas are defined in `models.py`, `sdemodels.py`, and `build_cost_models.py`.
 
-**Database Tables:**
+Non-obvious: `sdelite.db.localizations` holds ~210k localized item names for 8 languages
+(de, en, es, fr, ja, ko, ru, zh), accessed via `SDERepository.get_localized_name()` /
+`get_localized_names()` / `get_all_translations()`. It falls back to English for the ~20
+items with no translation in the requested language.
 
-*wcmktprod.db tables:*
-- `marketorders`: Individual buy/sell orders
-- `marketstats`: Aggregated market statistics
-- `market_history`: Historical price/volume data
-- `doctrines`: Fleet doctrine configurations
-- `doctrine_fits`: Doctrine fitting details
-- `ship_targets`: Target inventory levels
-- `lead_ships`: Leadership ship configurations
-- `watchlist`: Market watchlist items
-- `updatelog`: Database update tracking
-- `module_equivalents`: Interchangeable faction module mappings for aggregated stock calculations
-
-*sdelite.db tables:*
-- `invTypes`: EVE Online item definitions
-- `invGroups`: Item group classifications
-- `invCategories`: High-level item categories
-- `localizations`: Localized item names for 8 languages (de, en, es, fr, ja, ko, ru, zh). ~210k rows. Accessed via `SDERepository.get_localized_name()`, `get_localized_names()`, `get_all_translations()`. Falls back to English for items without a translation in the requested language (~20 en-only items).
-
-*buildcost.db tables:*
-- `structures`: Manufacturing structure data
-- `industry_index`: Industry cost indices
-- `rigs`: Structure rig configurations
-
-### Configuration Files
-
-- **`config.toml`**: Streamlit theme and UI configuration
-- **`settings.toml`**: Application settings including ship role definitions, special cases, `[db_paths]` alias-to-file mappings, and `[db_turso_keys]` alias-to-secret overrides
-- **`.streamlit/secrets.toml`**: Turso credentials (local only, git-ignored)
-- **`pyproject.toml`**: Project metadata, dependencies, dev tools config
-
-### Other Directories
-
-- **`docs/`**: Admin guides, database documentation, walkthroughs
-- **`tests/`**: pytest unit tests for database operations, logging, market data
-- **`depreciated-code/`**: Legacy code archive
-- **`logs/`**: Application logs (git-ignored)
-- **`images/`**: UI assets and images
-- **`dev_files/`**: Development-specific files
 ## Database Architecture
 
 ### Turso Embedded Replica Pattern
@@ -263,38 +135,6 @@ mkt_db.integrity_check()
 # uv run python config.py wcmktprod
 ```
 
-## Environment Setup
-
-### Required Secrets (Streamlit Cloud & Local Development)
-
-Create `.streamlit/secrets.toml` (section-per-database format):
-```toml
-[wcmktprod_turso]
-url = "libsql://your-database.turso.io"
-token = "your_turso_auth_token"
-
-[wcmktnorth_turso]
-url = "libsql://your-north-database.turso.io"
-token = "your_turso_auth_token"
-
-[sdelite_turso]
-url = "libsql://your-sde.turso.io"
-token = "your_sde_auth_token"
-
-[buildcost_turso]
-url = "libsql://your-buildcost.turso.io"
-token = "your_buildcost_auth_token"
-
-[janice]
-api_key = "your_janice_api_key"  # For Pricer page Jita price lookups
-```
-
-### Local Development Notes
-- Ensure local database files exist: `wcmktprod.db`, `sdelite.db`, `buildcost.db`
-- The application will use local SQLite files if sync credentials are not available
-- Database files are git-ignored (*.db, *.db-shm, *.db-wal)
-- Logs are stored in `logs/` directory (git-ignored)
-
 ## Development Guidelines
 
 ### Data Integrity Rule
@@ -309,40 +149,9 @@ The only acceptable default is when the context module is genuinely unavailable 
 
 Concretely, a config value should have a single source of truth that every consumer reads. For market hubs this means `DatabaseConfig` resolves Turso credentials from the same `MarketConfig.turso_secret_key` the rest of the app reads (see `config._resolve_turso_section`), rather than a separate `{alias}_turso` convention that can disagree with the market config. Add a `SettingsService` accessor for new global params; don't scatter `settings_dict[...]` reads or second copies of a default.
 
-### Coding Style & Naming Conventions
-- **Python style**: PEP 8, 4-space indents, max line length 100
-- **Naming conventions**:
-  - Modules/functions: `snake_case`
-  - Classes: `PascalCase`
-  - Constants: `UPPER_SNAKE_CASE`
-- **Type hints**: Use type annotations on function signatures
-- **Docstrings**: Include concise docstrings on public functions
+### Coding Style
+- Max line length 100 (wider than ruff's default 88)
 - **Logging**: Use `logging` module with `logging_config.py`; avoid `print()` in production code
-
-### Adding New Pages
-
-1. Create new page file in `pages/` directory with emoji prefix (e.g., `📊_new_page.py`)
-2. Add page registration in `app.py` pages dictionary
-3. Use services and repositories via factory functions -- do not access `DatabaseConfig` directly
-4. Use centralized logging from `logging_config.py`
-5. Follow existing page patterns for consistency
-
-Example:
-```python
-import streamlit as st
-from services import get_market_service
-from logging_config import setup_logging
-
-logger = setup_logging("new_page")
-
-def main():
-    st.title("New Page")
-    service = get_market_service()
-    df = service.get_market_data(type_id)
-
-if __name__ == "__main__":
-    main()
-```
 
 ### Database Operations
 
@@ -437,10 +246,6 @@ with DatabaseConfig("wcmktprod").engine.connect() as conn:
 - Query correctness and error handling
 - Sync operations and integrity checks
 
-### Current Test Coverage
-The test suite covers repositories, services, database config, i18n, parser, pricer/fit-availability, and infrastructure:
-- 501 tests + 22 subtests passing (`uv run pytest -q`)
-
 ## Commit & Pull Request Guidelines
 
 ### Commit Messages
@@ -463,67 +268,7 @@ Include in PR description:
 - Notes on any database schema or configuration impacts
 - Performance implications (if any)
 
-## Troubleshooting
-
-### Database Connection Issues
-- **Local files missing**: Run `init_db.py` to initialize databases
-- **Sync failures**: Check Turso credentials in `.streamlit/secrets.toml`
-- **Integrity errors**: DatabaseConfig will auto-recover with `integrity_check()` and sync
-- **Malformed database**: Repository functions auto-detect and fallback to remote queries
-- **Connection errors**: Review logs in `logs/` directory
-- **Empty db file on cold start**: `libsql.connect()` creates the `.db` file before syncing. If credentials are missing or sync fails, the empty file persists and causes "no such table" errors on subsequent runs. `init_db.py` detects this via `verify_db_content()` and removes empty files before re-syncing. If `.db-info` exists alongside an empty `.db`, it indicates a prior interrupted sync.
-- **Credential naming mismatch**: Database aliases in `[db_paths]` (e.g., `sde`, `build_cost`) may not match Turso secret section names (e.g., `sdelite_turso`, `buildcost_turso`). Use `[db_turso_keys]` in `settings.toml` to map aliases to their correct secret section names. When adding a new database, ensure its turso key is either `{alias}_turso` or has an override in `[db_turso_keys]`.
-
-### Performance Issues
-- **Slow queries**: Use targeted cache invalidation (e.g., `invalidate_market_caches()`)
-- **Outdated data**: Check database sync status and last update time
-- **Memory usage**: Monitor during large data operations, consider pagination
-
-### Data Quality Issues
-- **Missing data**: Check if backend repository (mkts_backend) is running and updating remote DB
-- **Incorrect prices**: Verify Jita prices are current, check Fuzzworks API fallback
-- **Missing types**: Check SDE database is current and complete
-
-## Security & Configuration Tips
-
-- **Secrets management**: Store Turso URLs/tokens in `.streamlit/secrets.toml`; NEVER hard-code
-- **Environment variables**: `.env` supported via `python-dotenv`
-- **Git hygiene**: Database files (`*.db*`) and logs (`*.log`) are git-ignored
-- **API keys**: ESI API is public, but rate-limit aware code is in backend repo
-- **Authentication**: Turso auth tokens required for remote sync
-
 ## Architecture Summary
-
-```
-┌───────────────────────────────────────────────────────────────────────────────────────┐
-│                              Streamlit Frontend (app.py)                               │
-│  ┌──────────┬──────────┬──────────┬──────────┬──────────┬───────────┬───────────────┐ │
-│  │ Market   │ Doctrine │ Doctrine │ Low      │ Build    │ Downloads │ Pricer        │ │
-│  │ Stats    │ Status   │ Report   │ Stock    │ Costs    │           │               │ │
-│  └────┬─────┴────┬─────┴────┬─────┴────┬─────┴────┬─────┴─────┬─────┴───────┬───────┘ │
-│       └──────────┴──────────┴──────────┴──────────┴───────────┴─────────────┘         │
-│                                        │                                               │
-│                              services/ + repositories/                                 │
-└───────────────────────────────────────┬───────────────────────────────────────────────┘
-                                        │
-                                        ▼
-┌─────────────────────────────────────────────────────────────┐
-│              DatabaseConfig (config.py)                      │
-│  ┌──────────┬──────────┬──────────┐                         │
-│  │ wcmktprod│ sdelite  │buildcost │                         │
-│  │ .db      │ .db      │.db       │                         │
-│  └────┬─────┴──────────┴──────────┘                         │
-│       │ Sync (libsql, _SYNC_LOCK)                           │
-└───────┼─────────────────────────────────────────────────────┘
-        │
-        ▼
-┌─────────────────────────────────────────────────────────────┐
-│           Turso Cloud Database (Remote)                     │
-│                                                             │
-│  Updated by: mkts_backend repo (ESI API calls)             │
-│  https://github.com/OrthelT/mkts_backend                   │
-└─────────────────────────────────────────────────────────────┘
-```
 
 **Data Flow:**
 1. Backend repo (mkts_backend) fetches market data from ESI API
@@ -645,45 +390,13 @@ from app import logger  # ✗ entry point!
 from state.session_state import ss_get  # ✗ state!
 ```
 
-## Version Information
+## External Resources
 
-- **Current version**: 0.6.2 (unreleased; latest released tag v0.6.1, 2026-05-07)
-- **Python version**: 3.12+
-- **Package manager**: uv (preferred)
-- **Main branch**: main
-
-## Additional Resources & Documentation Index
-
-### Documentation (`docs/` directory)
-
-**User Documentation:**
-- `docs_cn.md` - Chinese translation of user guide
-
-**Technical Reference:**
-- `architecture_reference.md` - Definitive technical reference for the current architecture
-- `change_log.md` - Change log covering the v0.2.0 refactoring (Phases 1-13) through v0.6.x releases
-- `database_config.md` - Database configuration and Turso sync details
-- `module_equivalents.md` - Module equivalents feature architecture, CLI usage, and aggregation pipeline
-- `testing.md` - Testing guidelines and pytest patterns
-
-**Guides:**
-- `admin_guide.md` - Administrative guide for managing the application
-- `walkthrough.md` - Step-by-step walkthroughs
-
-### Project Directories
-- **`domain/`**: Core business models (FitItem, FitSummary, StockStatus, ShipRole, PricedItem, MarketConfig, converters)
-- **`repositories/`**: Database access layer (BaseRepository, DoctrineRepository, MarketRepository, MarketOrdersRepository, BuildCostRepository, SDERepository)
-- **`services/`**: Business logic (DoctrineService, MarketService, BuildCostService, BuilderHelperService, JitaPriceService, PricerService, ImportHelperService, LowStockService, SelectionService, ModuleEquivalentsService, TypeResolutionService, TypeNameLocalization, categorization)
-- **`state/`**: Session state management (ss_get, ss_has, ss_set, ss_init, get_service, language_state, market_state)
-- **`ui/`**: UI formatting utilities, column configurations, reusable popover components, i18n translations, market selector, page chrome
-- **`pages/`**: Streamlit application pages
-- **`pages/components/`**: Extracted Streamlit rendering components (market_components, dashboard_components, db_refresh, page_chrome)
-- **`parser/`**: EFT fitting and item list parser (open source contribution)
-- **`tests/`**: pytest unit tests (501 tests, 22 subtests)
-- **`docs/`**: Documentation
-- **`logs/`**: Application logs (git-ignored)
-- **`images/`**: UI assets
-- **`depreciated-code/`**: Legacy code archive
-
-### External Resources
 - **Backend repository**: https://github.com/OrthelT/mkts_backend (ESI API integration, market data updates)
+- **Live app**: https://wcmkts.streamlit.app/
+
+## Related Skills
+
+Task-specific guidance lives in `.claude/skills/` and loads on demand:
+`wcmkts-setup` (secrets + local dev), `wcmkts-new-page` (adding a Streamlit page),
+`wcmkts-troubleshooting` (sync, connection, and data-quality problems).
