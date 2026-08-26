@@ -81,6 +81,8 @@ types.jsonl
 *.db-shm
 *.db
 *.db*
+# Local-only ESI cache (per-viewer, never synced to Turso)
+streamlit_cache.db*
 FRONTEND_UPDATE_PLAN.md
 settings.toml.bak
 refactorprompt.md

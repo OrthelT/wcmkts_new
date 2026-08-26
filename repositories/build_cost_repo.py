@@ -6,11 +6,14 @@ Extracts DB functions from pages/build_costs.py into the repository pattern.
 """
 
 import logging
+from functools import lru_cache
+from pathlib import Path
 from typing import Optional
 
 import pandas as pd
 import streamlit as st
 from sqlalchemy import bindparam, text
+from sqlalchemy.exc import OperationalError
 
 from config import DatabaseConfig
 from logging_config import setup_logging
@@ -27,13 +30,53 @@ VALID_STRUCTURE_TYPE_IDS = [35827, 35825, 35826]
 SUPER_SHIPYARD_ID = 1046452498926
 INVALID_RIG_IDS = [46640, 46641, 46496, 46497, 46634]
 
+# =============================================================================
+# Local-only ESI cache (industry_index)
+#
+# industry_index is a per-viewer ESI cache, refetched on expiry — it is not
+# shared market data. Keeping it in buildcost.db meant to_sql(if_exists=
+# "replace") DROPped/CREATEd the table on every viewer's page load, and pyturso
+# replays DDL from sqlite_schema text on push, putting that churn into the CDC
+# queue of the shared, sync-managed replica. It now lives in its own
+# local-only SQLite file that is never synced, mirroring the backend's
+# cli_cache.db pattern.
+# =============================================================================
+
+_CACHE_DB = Path(__file__).resolve().parents[1] / "streamlit_cache.db"
+
+
+@lru_cache(maxsize=1)
+def _cache_engine():
+    """Local-only SQLite engine for per-viewer ESI caches (industry_index)."""
+    from sqlalchemy import create_engine
+
+    return create_engine(f"sqlite:///{_CACHE_DB}")
+
+
+def _read_cache_df(query, params: Optional[dict] = None) -> pd.DataFrame:
+    """Read from the local ESI cache DB.
+
+    Returns an empty DataFrame on a clean cache miss (the table has not been
+    created yet) instead of raising. Deliberately bypasses BaseRepository/
+    read_df: that recovery ladder syncs the shared replica on a bad read,
+    which is the wrong policy for a disposable local cache.
+    """
+    try:
+        with _cache_engine().connect() as conn:
+            return pd.read_sql_query(query, conn, params=params)
+    except (OperationalError, pd.errors.DatabaseError) as e:
+        if "no such table" in str(e).lower():
+            return pd.DataFrame()
+        raise
+
 
 # =============================================================================
 # Implementation Functions (non-cached, for testability)
 #
 # All reads go through BaseRepository.read_df() so a malformed/mid-bootstrap
 # local replica self-heals (sync + retry, then backup restore) instead of
-# raising "no such table" into the page.
+# raising "no such table" into the page. The exception is industry_index,
+# which lives in the local-only cache DB above and reads via _read_cache_df().
 # =============================================================================
 
 def _build_cost_reader() -> BaseRepository:
@@ -73,9 +116,13 @@ def _get_structure_rigs_impl(repo: BaseRepository) -> dict[str, list[str]]:
     return rig_dict
 
 
-def _get_manufacturing_cost_index_impl(repo: BaseRepository, system_id: int) -> float:
-    """Get the manufacturing cost index for a solar system."""
-    df = repo.read_df(
+def _get_manufacturing_cost_index_impl(system_id: int) -> float:
+    """Get the manufacturing cost index for a solar system.
+
+    Reads from the local ESI cache DB (industry_index), not the shared
+    buildcost replica.
+    """
+    df = _read_cache_df(
         text("SELECT manufacturing FROM industry_index WHERE solar_system_id = :sid"),
         params={"sid": system_id},
     )
@@ -102,9 +149,14 @@ def _get_all_structures_impl(repo: BaseRepository, is_super: bool) -> pd.DataFra
     return repo.read_df(query, params=params)
 
 
-def _write_industry_index_impl(engine, df: pd.DataFrame) -> None:
-    """Write industry index DataFrame to the database."""
-    with engine.connect() as conn:
+def _write_industry_index_impl(df: pd.DataFrame) -> None:
+    """Write industry index DataFrame to the local ESI cache DB.
+
+    Deliberately not the shared buildcost replica: to_sql(if_exists=
+    "replace") emits DROP/CREATE DDL, and pyturso replays DDL from
+    sqlite_schema text on push.
+    """
+    with _cache_engine().begin() as conn:
         df.to_sql("industry_index", conn, if_exists="replace", index=False)
 
 
@@ -143,7 +195,7 @@ def _get_structure_rigs_cached(_url: str) -> dict[str, list[str]]:
 
 @st.cache_data(ttl=3600)
 def _get_manufacturing_cost_index_cached(_url: str, system_id: int) -> float:
-    return _get_manufacturing_cost_index_impl(_build_cost_reader(), system_id)
+    return _get_manufacturing_cost_index_impl(system_id)
 
 
 @st.cache_data(ttl=3600)
@@ -212,8 +264,8 @@ class BuildCostRepository(BaseRepository):
         return list(df.itertuples(index=False))
 
     def write_industry_index(self, df: pd.DataFrame) -> None:
-        """Write industry index DataFrame to the database."""
-        _write_industry_index_impl(self.db.engine, df)
+        """Write industry index DataFrame to the local ESI cache DB."""
+        _write_industry_index_impl(df)
 
     def get_builder_cost_catalog(self) -> pd.DataFrame:
         """Get the synced builder-cost catalog (cached, TTL=600s)."""
