@@ -138,7 +138,7 @@ class DatabaseConfig:
         except Exception:
             return DatabaseConfig.wcdbmap
 
-    def __init__(self, alias: str, dialect: str = "sqlite+turso"):
+    def __init__(self, alias: str, dialect: str = "sqlite+turso_sync"):
         if alias == "wcmkt":
             alias = self._resolve_active_alias()
 
@@ -153,6 +153,7 @@ class DatabaseConfig:
         turso_key = f"{self.alias}_turso"
         self.turso_url = self._db_turso_urls.get(turso_key)
         self.token = self._db_turso_auth_tokens.get(turso_key)
+        self._connect_args = {"remote_url": self.turso_url, "auth_token": self.token}
         self._engine = None
 
     @property
@@ -160,12 +161,35 @@ class DatabaseConfig:
         """Return True when Turso URL/token are available for this alias."""
         return bool(self.turso_url and self.token)
 
+    def _engine_cache_key(self) -> str:
+        """Cache key for ``_engines``, namespaced by engine mode.
+
+        Credentialed replicas are opened on the sync dialect; replicas
+        without credentials fall back to a plain read-only SQLite
+        connection. Keying by alias alone would let a degraded engine
+        created before credentials were available get reused afterward
+        (or vice versa), silently keeping the wrong connection type.
+        """
+        mode = "sync" if self.has_remote_credentials else "local"
+        return f"{self.alias}:{mode}"
+
     @property
     def engine(self):
-        eng = DatabaseConfig._engines.get(self.alias)
+        key = self._engine_cache_key()
+        eng = DatabaseConfig._engines.get(key)
         if eng is None:
-            eng = create_engine(self.url)
-            DatabaseConfig._engines[self.alias] = eng
+            if self.has_remote_credentials:
+                # sqlite+turso_sync — the plain sqlite+turso dialect
+                # auto-checkpoints the WAL at 1000 frames and destroys the
+                # baseline pull() needs.
+                eng = create_engine(self.url, connect_args=self._connect_args)
+            else:
+                # Degraded/no-credential mode: an ordinary read-only SQLite
+                # connection. Never the plain sqlite+turso dialect, and
+                # never the sync dialect with remote_url=None — this
+                # replica must not sync() later in this process.
+                eng = create_engine(f"sqlite:///file:{self.path}?mode=ro&uri=true")
+            DatabaseConfig._engines[key] = eng
         return eng
 
     def _dispose_local_connections(self):
@@ -173,7 +197,7 @@ class DatabaseConfig:
         This helps prevent corruption during sync by ensuring no open handles.
         """
         # Dispose SQLAlchemy engine (local file) shared across instances
-        eng = DatabaseConfig._engines.pop(self.alias, None)
+        eng = DatabaseConfig._engines.pop(self._engine_cache_key(), None)
         if eng is not None:
             with suppress(Exception):
                 eng.dispose()
