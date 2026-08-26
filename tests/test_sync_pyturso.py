@@ -1,5 +1,6 @@
 """sync() state machine and pull flow (spec §1)."""
 
+import json
 import os
 import sqlite3
 from unittest.mock import MagicMock, patch
@@ -35,7 +36,23 @@ def _make_db(path, tables=True):
 
 
 def _write_info(db, valid=True):
-    content = '{"hash":1,"version":0,"durable_frame_num":1,"generation":1}' if valid else "libsql-binary-garbage\x00"
+    """Write a real pyturso-shaped -info (valid=True) or corrupt bytes.
+
+    The "valid" content deliberately matches the shape classify_metadata
+    accepts (version "v1" + client_unique_id) and records db.turso_url as
+    its bootstrap remote, so the fail-closed remote-identity check in
+    _ensure_replica_consistency does not spuriously trip these fixtures.
+    """
+    if valid:
+        content = json.dumps(
+            {
+                "version": "v1",
+                "client_unique_id": "test-client-id",
+                "saved_configuration": {"remote_url": db.turso_url},
+            }
+        )
+    else:
+        content = "libsql-binary-garbage\x00"
     with open(db.path + "-info", "w") as f:
         f.write(content)
 

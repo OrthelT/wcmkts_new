@@ -1,7 +1,6 @@
 from sqlalchemy import create_engine, text, select
 import streamlit as st
 import os
-import json
 import sqlite3
 
 from logging_config import setup_logging
@@ -12,7 +11,6 @@ from contextlib import suppress
 from time import perf_counter
 from dataclasses import dataclass
 import shutil
-from pathlib import Path
 import turso.sync as tursosync
 
 logger = setup_logging(__name__)
@@ -220,19 +218,64 @@ class DatabaseConfig:
             return False
 
     def _replica_metadata_valid(self) -> bool:
-        """True when {path}-info exists and parses as pyturso JSON metadata.
+        """True when {path}-info is usable pyturso metadata.
 
-        A libsql-era or corrupt -info file fails the parse, which routes the
-        replica through nuke + fresh bootstrap (deploy-day upgrade path).
+        A libsql-era -info is valid JSON, so parsing alone accepts a file
+        pyturso cannot use; classify_metadata checks the shape, which routes
+        the replica through nuke + fresh bootstrap (deploy-day upgrade path).
         """
-        info_path = Path(self.path + "-info")
-        if not info_path.exists():
-            return False
-        try:
-            json.loads(info_path.read_text())
-            return True
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-            return False
+        from replica_metadata import classify_metadata
+
+        return classify_metadata(self.path) == "pyturso"
+
+    @staticmethod
+    def _remote_key(url: str) -> str:
+        """Normalize a Turso URL to (netloc, path) for remote-identity comparison.
+
+        Scheme (``https`` vs ``libsql``) and a trailing slash are not
+        meaningful; no token is read or logged.
+        """
+        from urllib.parse import urlparse
+
+        parsed = urlparse(url)
+        return f"{parsed.netloc}{parsed.path.rstrip('/')}"
+
+    def remote_matches_metadata(self) -> bool | None:
+        """Whether this replica was bootstrapped against the configured remote.
+
+        pyturso records the bootstrap remote in the ``-info`` sidecar. After a
+        production cutover the configuration changes but the files on disk do
+        not, so a test replica can be read under a production configuration.
+
+        Returns:
+            True on match, False on mismatch, None when either side is
+            unknown (no metadata, or no configured URL) — never raises.
+        """
+        from replica_metadata import metadata_remote_url
+
+        recorded = metadata_remote_url(self.path)
+        if not recorded or not self.turso_url:
+            return None
+        return self._remote_key(recorded) == self._remote_key(self.turso_url)
+
+    @staticmethod
+    def _classify_backup_metadata(info_bak_path: str) -> tuple[str, str | None]:
+        """Classify a ``*-info.bak`` sidecar and return its recorded remote.
+
+        classify_metadata/metadata_remote_url derive the sidecar path by
+        appending ``-info`` to whatever base path is passed in. A backup's
+        sidecar is named ``{db}-info.bak`` — not ``{db}.bak-info`` — so it
+        must be staged under a ``-info``-suffixed name before it can be
+        classified.
+        """
+        import tempfile
+
+        from replica_metadata import classify_metadata, metadata_remote_url
+
+        with tempfile.TemporaryDirectory() as tmp:
+            staged_base = os.path.join(tmp, "backup")
+            shutil.copy2(info_bak_path, staged_base + "-info")
+            return classify_metadata(staged_base), metadata_remote_url(staged_base)
 
     def _db_has_tables(self) -> bool:
         """True when the local .db opens as sqlite and has ≥1 user table.
@@ -264,6 +307,17 @@ class DatabaseConfig:
         db_exists = os.path.exists(self.path)
         meta_valid = self._replica_metadata_valid()
         if db_exists and meta_valid and self._db_has_tables():
+            if self.remote_matches_metadata() is False:
+                from replica_metadata import metadata_remote_url
+
+                recorded = metadata_remote_url(self.path)
+                raise RuntimeError(
+                    f"{self.alias} ({self.path}) was bootstrapped against a "
+                    f"different Turso remote ({recorded}) than the one "
+                    f"configured now ({self.turso_url}). Refusing to pull. "
+                    "Preserve any needed local work, then remove the replica "
+                    "files and re-sync explicitly."
+                )
             return
         if db_exists or os.path.exists(self.path + "-info"):
             logger.warning(
@@ -417,6 +471,22 @@ class DatabaseConfig:
             logger.error(
                 f"restore_from_backup({self.alias}): no backup pair; "
                 "leaving live files untouched"
+            )
+            return False
+
+        kind, recorded_url = self._classify_backup_metadata(info_bak)
+        if (
+            kind == "pyturso"
+            and recorded_url
+            and self.turso_url
+            and self._remote_key(recorded_url) != self._remote_key(self.turso_url)
+        ):
+            logger.error(
+                f"restore_from_backup({self.alias}): backup pair was "
+                f"bootstrapped against a different Turso remote "
+                f"({recorded_url}) than the one configured now "
+                f"({self.turso_url}); refusing to restore, leaving live "
+                "files untouched"
             )
             return False
 

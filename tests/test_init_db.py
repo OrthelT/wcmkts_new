@@ -7,7 +7,10 @@ import time
 
 from init_db import ensure_market_db_ready, init_db, verify_db_content
 
-VALID_INFO = '{"hash":1,"version":0,"durable_frame_num":1,"generation":1}'
+VALID_INFO = (
+    '{"version":"v1","client_unique_id":"test-client-id",'
+    '"saved_configuration":{"remote_url":"https://example-orthelt.aws-us-east-1.turso.io"}}'
+)
 
 
 def _make_sqlite_db(path):
@@ -121,3 +124,106 @@ def test_concurrent_init_db_serialized(tmp_path, monkeypatch):
     intervals = sorted((start, end) for _, _, start, end in _FakeDB.sync_events)
     for (_, prev_end), (next_start, _) in zip(intervals, intervals[1:]):
         assert next_start >= prev_end, "sync() calls overlapped across threads"
+
+
+class TestLibsqlMetadataRejected:
+    """A libsql-era -info parses as JSON, so the old checks accepted it and
+    the first engine call raised turso.lib.DatabaseError."""
+
+    def test_replica_metadata_valid_rejects_libsql(self, tmp_path):
+        import json
+        from config import DatabaseConfig
+
+        db = DatabaseConfig.__new__(DatabaseConfig)
+        db.path = str(tmp_path / "m.db")
+        (tmp_path / "m.db").write_bytes(b"x")
+        (tmp_path / "m.db-info").write_text(
+            json.dumps({"hash": "0" * 64, "version": 0, "generation": 1})
+        )
+        assert db._replica_metadata_valid() is False
+
+    def test_verify_db_content_rejects_libsql(self, tmp_path):
+        import json
+        import sqlite3
+        from init_db import verify_db_content
+
+        p = tmp_path / "m.db"
+        con = sqlite3.connect(p)
+        con.execute("CREATE TABLE t (a INTEGER)")
+        con.commit()
+        con.close()
+        (tmp_path / "m.db-info").write_text(
+            json.dumps({"hash": "0" * 64, "version": 0, "generation": 1})
+        )
+        assert verify_db_content(str(p)) is False
+
+    def test_sync_refuses_live_replica_from_different_remote(self, tmp_path):
+        # Valid pyturso metadata naming a test remote + configured production
+        # URL must raise before _pull_once() or engine construction.
+        import json
+        import sqlite3
+
+        import pytest
+        from unittest.mock import patch
+
+        from config import DatabaseConfig
+
+        db = DatabaseConfig.__new__(DatabaseConfig)
+        db.alias = "primary"
+        db.path = str(tmp_path / "m.db")
+        db.turso_url = "https://wcmktnewkeep-orthelt.aws-us-east-1.turso.io"
+        db.token = "t"
+        db._engine = None
+
+        con = sqlite3.connect(db.path)
+        con.execute("CREATE TABLE t (a INTEGER)")
+        con.commit()
+        con.close()
+
+        (tmp_path / "m.db-info").write_text(
+            json.dumps(
+                {
+                    "version": "v1",
+                    "client_unique_id": "test-client-id",
+                    "saved_configuration": {
+                        "remote_url": "https://wcmktnewkeeptest-orthelt.aws-us-east-1.turso.io"
+                    },
+                }
+            )
+        )
+
+        with patch("config.tursosync.connect") as connect_mock:
+            with pytest.raises(RuntimeError, match="different Turso remote"):
+                db.sync()
+        connect_mock.assert_not_called()
+
+    def test_restore_refuses_backup_from_different_remote(self, tmp_path):
+        # A .db.bak/.db-info.bak pair from test must not be restored after
+        # production secrets are configured.
+        import json
+
+        from config import DatabaseConfig
+
+        db = DatabaseConfig.__new__(DatabaseConfig)
+        db.alias = "primary"
+        db.path = str(tmp_path / "m.db")
+        db.turso_url = "https://wcmktnewkeep-orthelt.aws-us-east-1.turso.io"
+        db.token = "t"
+        db._engine = None
+
+        (tmp_path / "m.db.bak").write_bytes(b"x" * 16)
+        (tmp_path / "m.db-info.bak").write_text(
+            json.dumps(
+                {
+                    "version": "v1",
+                    "client_unique_id": "test-client-id",
+                    "saved_configuration": {
+                        "remote_url": "https://wcmktnewkeeptest-orthelt.aws-us-east-1.turso.io"
+                    },
+                }
+            )
+        )
+
+        assert db.restore_from_backup() is False
+        assert not (tmp_path / "m.db").exists()
+        assert not (tmp_path / "m.db-info").exists()

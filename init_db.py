@@ -1,5 +1,4 @@
 from config import DatabaseConfig
-import json
 import os
 import sqlite3 as sql
 import threading
@@ -54,14 +53,17 @@ def verify_db_content(path):
             return False
         conn.close()
         # pyturso pairing invariant: a replica is only ready when its -info
-        # metadata exists and parses. A libsql-era or metadata-less .db must
+        # metadata is genuinely pyturso-shaped. A libsql-era -info is valid
+        # JSON (so a bare parse wrongly accepts it) or metadata-less .db must
         # be removed and re-bootstrapped (sync()'s state machine enforces the
         # same rule; enforcing it here routes cold start through resync).
-        try:
-            with open(path + "-info", encoding="utf-8") as f:
-                json.load(f)
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-            logger.warning(f"DB {path} has no valid pyturso metadata; treating as not ready")
+        from replica_metadata import classify_metadata
+
+        kind = classify_metadata(path)
+        if kind != "pyturso":
+            logger.warning(
+                f"DB {path} has {kind} metadata, not pyturso; treating as not ready"
+            )
             return False
         return True
     except Exception as e:
