@@ -50,7 +50,7 @@ class TestSyncDialect:
 
         hits = []
         for p in pathlib.Path(".").rglob("*.py"):
-            if ".venv" in p.parts or "tests" in p.parts or "dev" in p.parts:
+            if ".venv" in p.parts or "tests" in p.parts:
                 continue
             if re.search(r'"sqlite\+turso"|\'sqlite\+turso\'', p.read_text()):
                 hits.append(str(p))
