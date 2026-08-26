@@ -4,6 +4,8 @@ A Streamlit application for viewing EVE Online market statistics for Winter Coal
 SUPPORT: Join the Discord for support https://discord.gg/BxatJE572Y
 CONTRIBUTING: Contributors welcome. This project is fully open source under MIT License. Source code and full documentation available on GitHub: https://github.com/OrthelT/wcmkts_new
 
+**Note:** Admin pages (watchlist and doctrine management) are currently disabled during the pyturso migration. Re-enabling them requires a local-write-plus-push redesign.
+
 # UPDATES:
 ## version 0.6.8
 ### New Features

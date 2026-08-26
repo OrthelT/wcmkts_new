@@ -63,14 +63,14 @@ def main() -> None:
         st.stop()
 
     settings = SettingsService()
-    service = get_admin_service()
-    doctrine_options = service.get_doctrine_options()
-    fit_options = service.get_doctrine_fit_options()
 
-    st.caption(
-        f"Signed in as {verified_identity['character_name']} ({verified_identity['character_id']})"
+    st.warning(
+        "Admin is disabled during the pyturso migration. Reads and writes both "
+        "route through the remote write path, which was removed when pyturso "
+        "made every engine local. Re-enabling it needs a local-write-plus-push "
+        "rework, deferred by decision."
     )
-    st.caption(f"Write target: {settings.admin_write_target} | Market: {market.name}")
+    st.stop()
 
     col_logout, col_watchlist = st.columns(2)
     with col_logout:

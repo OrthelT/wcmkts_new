@@ -769,11 +769,6 @@ class AdminRepository:
             )
         return self._db.engine
 
-    def _read_local(self) -> bool:
-        # Reads are always local under pyturso; retained only until the
-        # companion admin write-path plan reworks write_target handling.
-        return self._write_target != "remote"
-
     @staticmethod
     def _normalize_write_target(write_target: str) -> str:
         target = str(write_target).strip().lower()

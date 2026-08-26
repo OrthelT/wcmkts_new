@@ -887,3 +887,13 @@ def test_update_doctrine_fit_refreshes_existing_lead_ship(tmp_path):
 
     assert lead_ship["lead_ship"] == 4
     assert lead_ship["fit_id"] == 20
+
+
+def test_admin_pages_state_the_disabled_reason_before_failing():
+    """Both pages showed 'Write target: remote' and then raised. State the
+    deferral instead."""
+    from pathlib import Path
+
+    for page in ("pages/admin.py", "pages/admin_doctrines.py"):
+        text = Path(page).read_text()
+        assert "disabled during the pyturso migration" in text, page

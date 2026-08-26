@@ -28,6 +28,7 @@ All pages follow consistent patterns with Streamlit best practices:
 8. **`downloads.py`** (📥 Downloads) - Centralized CSV export for market data, doctrine fits, low stock items, and SDE tables. Uses Streamlit's callable pattern for lazy data loading.
 9. **`pricer.py`** (💰 Pricer) - Item and fitting price calculator similar to [Janice](https://janice.e-351.com/). EFT input renders a Janice-style fit availability hero (focal fits-available count, bottleneck callout, faction-equivalent aggregation toggle); tab- or space-separated multibuy renders a per-item grid with local + Jita totals.
 10. **`import_helper.py`** (Import Helper) - A visualisation tool to discover items with significantly larger price margin compared with Jita sell. Helps importers quickly spot price hikes to undercut.
+11. **`admin.py` and `admin_doctrines.py`** - Admin interfaces for watchlist and doctrine management (currently disabled during the pyturso migration; re-enabling requires a local-write-plus-push redesign).
 
 ### Core Modules
 

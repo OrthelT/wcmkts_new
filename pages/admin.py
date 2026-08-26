@@ -304,16 +304,14 @@ def main() -> None:
     _ensure_state()
 
     settings = SettingsService()
-    service = get_admin_service()
-    watchlist_df = service.get_watchlist()
-    if watchlist_df.empty:
-        watchlist_df = pd.DataFrame(columns=WATCHLIST_COLUMNS)
-    sdetypes_df = _get_sde_types_for_admin()
 
-    st.caption(
-        f"Signed in as {verified_identity['character_name']} ({verified_identity['character_id']})"
+    st.warning(
+        "Admin is disabled during the pyturso migration. Reads and writes both "
+        "route through the remote write path, which was removed when pyturso "
+        "made every engine local. Re-enabling it needs a local-write-plus-push "
+        "rework, deferred by decision."
     )
-    st.caption(f"Write target: {settings.admin_write_target} | Market: {market.name}")
+    st.stop()
 
     col_logout, col_login = st.columns(2)
     with col_logout:
