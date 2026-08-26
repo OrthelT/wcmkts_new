@@ -227,3 +227,73 @@ class TestLibsqlMetadataRejected:
         assert db.restore_from_backup() is False
         assert not (tmp_path / "m.db").exists()
         assert not (tmp_path / "m.db-info").exists()
+
+
+class TestRemoteMatchesMetadata:
+    """Frontend equivalent of the backend's TestRemoteMatchesMetadata: pins
+    remote_matches_metadata()'s netloc+path comparison and None-on-unknown
+    semantics against the real frontend DatabaseConfig."""
+
+    PYTURSO_INFO = {
+        "version": "v1",
+        "client_unique_id": "test-client-id",
+        "saved_configuration": {
+            "remote_url": "https://wcmktnewkeeptest-orthelt.aws-us-east-1.turso.io"
+        },
+    }
+
+    def _db(self, tmp_path, url):
+        from config import DatabaseConfig
+
+        db = DatabaseConfig.__new__(DatabaseConfig)
+        db.alias = "primary"
+        db.path = str(tmp_path / "market.db")
+        db.turso_url = url
+        db.token = "t"
+        db._engine = None
+        return db
+
+    def _write_info(self, tmp_path, payload):
+        import json
+
+        (tmp_path / "market.db-info").write_text(json.dumps(payload))
+
+    def test_matching_remote(self, tmp_path):
+        db = self._db(tmp_path, "https://wcmktnewkeeptest-orthelt.aws-us-east-1.turso.io")
+        self._write_info(tmp_path, self.PYTURSO_INFO)
+        assert db.remote_matches_metadata() is True
+
+    def test_mismatched_remote(self, tmp_path):
+        db = self._db(tmp_path, "https://wcmktnewkeep-orthelt.aws-us-east-1.turso.io")
+        self._write_info(tmp_path, self.PYTURSO_INFO)
+        assert db.remote_matches_metadata() is False
+
+    def test_scheme_and_trailing_slash_ignored(self, tmp_path):
+        db = self._db(tmp_path, "libsql://wcmktnewkeeptest-orthelt.aws-us-east-1.turso.io/")
+        self._write_info(tmp_path, self.PYTURSO_INFO)
+        assert db.remote_matches_metadata() is True
+
+    def test_unknown_without_metadata(self, tmp_path):
+        db = self._db(tmp_path, "https://anything.turso.io")
+        assert db.remote_matches_metadata() is None
+
+    def test_unknown_without_configured_url(self, tmp_path):
+        db = self._db(tmp_path, None)
+        self._write_info(tmp_path, self.PYTURSO_INFO)
+        assert db.remote_matches_metadata() is None
+
+    def test_remote_key_ignores_scheme_and_trailing_slash(self):
+        from config import DatabaseConfig
+
+        a = DatabaseConfig._remote_key("https://host.turso.io/")
+        b = DatabaseConfig._remote_key("libsql://host.turso.io")
+        assert a == b == "host.turso.io"
+
+    def test_remote_key_distinguishes_different_hosts(self):
+        from config import DatabaseConfig
+
+        assert DatabaseConfig._remote_key(
+            "https://wcmktnewkeeptest-orthelt.aws-us-east-1.turso.io"
+        ) != DatabaseConfig._remote_key(
+            "https://wcmktnewkeep-orthelt.aws-us-east-1.turso.io"
+        )
