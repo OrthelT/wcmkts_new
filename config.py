@@ -109,18 +109,31 @@ class DatabaseConfig:
         _market_secret_keys = {}
     _db_turso_urls: dict[str, str] = {}
     _db_turso_auth_tokens: dict[str, str] = {}
+    _secrets_source_missing_logged = False
     for _alias in _db_paths:
         _turso_key = f"{_alias}_turso"
         _secret_key = _resolve_turso_section(_alias, _market_secret_keys, _turso_key_overrides)
         try:
             _db_turso_urls[_turso_key] = st.secrets[_secret_key].url
             _db_turso_auth_tokens[_turso_key] = st.secrets[_secret_key].token
-        except (KeyError, AttributeError, st.errors.StreamlitSecretNotFoundError):
-            # Not all aliases need Turso (graceful degradation). The last case
-            # is a totally absent .streamlit/secrets.toml (e.g. a fresh clone
-            # or CI with no secrets) -- st.secrets raises a FileNotFoundError
-            # subclass rather than KeyError/AttributeError for that case.
-            pass
+        except st.errors.StreamlitSecretNotFoundError:
+            # .streamlit/secrets.toml doesn't exist at all (fresh clone, CI
+            # with no secrets, or a deployment that never provisioned one) --
+            # every alias hits this on every iteration, so log once at an
+            # elevated level. Unlike the per-alias KeyError/AttributeError
+            # below, this zeroes out credentials for every database, not
+            # just one, which is the misconfiguration a production deploy
+            # needs to notice in its logs even though it no longer crashes.
+            if not _secrets_source_missing_logged:
+                logger.warning(
+                    "No .streamlit/secrets.toml found -- every database will "
+                    "run local-only with no Turso credentials. Expected for "
+                    "a fresh clone or CI; if this is a live deployment, its "
+                    "secrets were never provisioned."
+                )
+                _secrets_source_missing_logged = True
+        except (KeyError, AttributeError):
+            pass  # Not all aliases need Turso (graceful degradation)
 
     # Shared handles per-alias to avoid multiple simultaneous connections to the same file
     _engines: dict[str, object] = {}
