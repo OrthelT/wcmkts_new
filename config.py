@@ -115,8 +115,12 @@ class DatabaseConfig:
         try:
             _db_turso_urls[_turso_key] = st.secrets[_secret_key].url
             _db_turso_auth_tokens[_turso_key] = st.secrets[_secret_key].token
-        except (KeyError, AttributeError):
-            pass  # Not all aliases need Turso (graceful degradation)
+        except (KeyError, AttributeError, st.errors.StreamlitSecretNotFoundError):
+            # Not all aliases need Turso (graceful degradation). The last case
+            # is a totally absent .streamlit/secrets.toml (e.g. a fresh clone
+            # or CI with no secrets) -- st.secrets raises a FileNotFoundError
+            # subclass rather than KeyError/AttributeError for that case.
+            pass
 
     # Shared handles per-alias to avoid multiple simultaneous connections to the same file
     _engines: dict[str, object] = {}
