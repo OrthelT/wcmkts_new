@@ -8,7 +8,7 @@ from pathlib import Path
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
-from build_cost_models import Base as BuildCostBase, IndustryIndex, Rig, Structure
+from build_cost_models import Base as BuildCostBase, Rig, Structure
 from models import (
     Base as MarketBase,
     DoctrineFit,
@@ -188,7 +188,10 @@ def _remove_existing(path: Path, force: bool) -> None:
         raise FileExistsError(
             f"{path} already exists. Re-run with --force to overwrite demo data."
         )
-    for suffix in ("", "-shm", "-wal", "-info"):
+    # The full pyturso sidecar set, matching config.py's
+    # _remove_replica_files(). Leaving -changes behind puts a stale CDC queue
+    # beside a plain SQLite file.
+    for suffix in ("", "-shm", "-wal", "-info", "-changes", "-wal-revert"):
         candidate = Path(f"{path}{suffix}")
         if candidate.exists():
             candidate.unlink()
@@ -520,29 +523,31 @@ def _seed_build_cost_db(path: Path) -> None:
                 region_id=10000016,
             )
         )
-        session.add(
-            IndustryIndex(
-                solar_system_id=30000240,
-                manufacturing=0.045,
-                researching_time_efficiency=0.0,
-                researching_material_efficiency=0.0,
-                copying=0.0,
-                invention=0.0,
-                reaction=0.0,
-            )
-        )
-        session.add(
-            IndustryIndex(
-                solar_system_id=30002029,
-                manufacturing=0.052,
-                researching_time_efficiency=0.0,
-                researching_material_efficiency=0.0,
-                copying=0.0,
-                invention=0.0,
-                reaction=0.0,
-            )
-        )
         session.commit()
+
+
+def _seed_industry_index_cache() -> Path:
+    """Seed industry_index where the build-costs page actually reads it.
+
+    industry_index is a per-viewer ESI cache and moved out of buildcost.db
+    into the local-only streamlit_cache.db. Seeding it into buildcost.db left
+    demo mode raising "No manufacturing cost index found" unless a live ESI
+    fetch ran. Writing through the repository's own writer keeps the location
+    in one place.
+    """
+    import pandas as pd
+
+    from repositories.build_cost_repo import _CACHE_DB, _write_industry_index_impl
+
+    _write_industry_index_impl(
+        pd.DataFrame(
+            [
+                {"solar_system_id": 30000240, "manufacturing": 0.045},
+                {"solar_system_id": 30002029, "manufacturing": 0.052},
+            ]
+        )
+    )
+    return _CACHE_DB
 
 
 def seed_demo_data(force: bool = False) -> list[Path]:
@@ -569,5 +574,6 @@ def seed_demo_data(force: bool = False) -> list[Path]:
     _seed_market_db(Path(db_paths[market_aliases[1]]), "B-9C24 Keepstar", 1.08)
     _seed_sde_db(Path(db_paths["sde"]))
     _seed_build_cost_db(Path(db_paths["build_cost"]))
+    target_paths.append(_seed_industry_index_cache())
 
     return target_paths
