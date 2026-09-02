@@ -20,11 +20,21 @@ def db(tmp_path):
     clear_degraded("testalias")
 
 
-def _write_live_pair(db, content=b"x" * 32):
+# pyturso-shaped metadata: version "v1" plus a non-empty client_unique_id.
+# restore_from_backup() refuses any other kind, so a libsql-era payload here
+# would exercise the refusal instead of the restore path under test.
+_PYTURSO_INFO = (
+    '{"version":"v1","client_unique_id":"test-client-id",'
+    '"durable_frame_num":1,"generation":1}'
+)
+_LIBSQL_INFO = '{"hash":1,"version":0,"durable_frame_num":1,"generation":1}'
+
+
+def _write_live_pair(db, content=b"x" * 32, info=_PYTURSO_INFO):
     with open(db.path, "wb") as f:
         f.write(content)
     with open(db.path + "-info", "w") as f:
-        f.write('{"hash":1,"version":0,"durable_frame_num":1,"generation":1}')
+        f.write(info)
 
 
 def test_snapshot_backup_copies_pair(db):
@@ -123,3 +133,33 @@ def test_clear_degraded_and_copy_semantics(db):
     clear_degraded("testalias")
     assert "testalias" not in get_degraded_aliases()
     clear_degraded("testalias")  # idempotent, no raise
+
+
+@pytest.mark.parametrize(
+    "info, kind",
+    [(_LIBSQL_INFO, "libsql"), ("not json at all", "corrupt")],
+)
+def test_restore_refuses_non_pyturso_backup_metadata(db, info, kind, caplog):
+    """A libsql-era or corrupt -info.bak is not a replica pyturso can open.
+
+    Restoring it would overwrite the live pair and only then fail
+    integrity_check(), destroying the diagnostic evidence for nothing.
+    """
+    import glob
+    import os
+
+    _write_live_pair(db, b"goodstate" * 4, info=info)
+    assert db.snapshot_backup() is True
+    _write_live_pair(db, b"corrupted", info=info)
+
+    with patch.object(DatabaseConfig, "integrity_check", return_value=True), patch.object(
+        DatabaseConfig, "_dispose_local_connections"
+    ):
+        assert db.restore_from_backup() is False
+
+    with open(db.path, "rb") as f:
+        assert f.read() == b"corrupted"  # live files untouched
+    assert glob.glob(db.path + "*.tmp") == []
+    assert "testalias" not in get_degraded_aliases()
+    assert f"backup metadata is '{kind}'" in caplog.text
+    assert os.path.exists(db.path + ".bak")  # backup left in place

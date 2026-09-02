@@ -193,6 +193,12 @@ class DatabaseConfig:
         key = self._engine_cache_key()
         eng = DatabaseConfig._engines.get(key)
         if eng is None:
+            # init_db() marks any replica with tables and pyturso-shaped
+            # metadata "initialized" and never syncs it, so sync()'s guard
+            # is not reached on the read path. Without this check the app
+            # would serve a test replica under a production configuration
+            # indefinitely — and look correct doing it.
+            self.assert_remote_compatible()
             if self.has_remote_credentials:
                 # sqlite+turso_sync — the plain sqlite+turso dialect
                 # auto-checkpoints the WAL at 1000 frames and destroys the
@@ -275,6 +281,32 @@ class DatabaseConfig:
             return None
         return self._remote_key(recorded) == self._remote_key(self.turso_url)
 
+    def assert_remote_compatible(self) -> None:
+        """Fail before touching a replica bootstrapped against another remote.
+
+        Mirrors the backend guard of the same name in
+        ``mkts_backend/config/db_config.py``: only an explicit ``False`` from
+        ``remote_matches_metadata()`` raises. ``None`` — either side unknown —
+        is a deliberate no-op, so a credential-less or never-bootstrapped
+        replica is unaffected.
+
+        Raises:
+            RuntimeError: on a confirmed remote mismatch.
+        """
+        if self.remote_matches_metadata() is not False:
+            return
+
+        from replica_metadata import metadata_remote_url
+
+        recorded = metadata_remote_url(self.path)
+        raise RuntimeError(
+            f"{self.alias} ({self.path}) was bootstrapped against a "
+            f"different Turso remote ({recorded}) than the one "
+            f"configured now ({self.turso_url}). Refusing to connect. "
+            "Preserve any needed local work, then remove the replica "
+            "files and re-sync explicitly."
+        )
+
     @staticmethod
     def _classify_backup_metadata(info_bak_path: str) -> tuple[str, str | None]:
         """Classify a ``*-info.bak`` sidecar and return its recorded remote.
@@ -324,17 +356,7 @@ class DatabaseConfig:
         db_exists = os.path.exists(self.path)
         meta_valid = self._replica_metadata_valid()
         if db_exists and meta_valid and self._db_has_tables():
-            if self.remote_matches_metadata() is False:
-                from replica_metadata import metadata_remote_url
-
-                recorded = metadata_remote_url(self.path)
-                raise RuntimeError(
-                    f"{self.alias} ({self.path}) was bootstrapped against a "
-                    f"different Turso remote ({recorded}) than the one "
-                    f"configured now ({self.turso_url}). Refusing to pull. "
-                    "Preserve any needed local work, then remove the replica "
-                    "files and re-sync explicitly."
-                )
+            self.assert_remote_compatible()
             return
         if db_exists or os.path.exists(self.path + "-info"):
             logger.warning(
@@ -492,9 +514,20 @@ class DatabaseConfig:
             return False
 
         kind, recorded_url = self._classify_backup_metadata(info_bak)
+        if kind != "pyturso":
+            # A libsql-era or corrupt -info.bak is not a replica pyturso can
+            # open. Restoring it would overwrite the live pair and only then
+            # fail integrity_check(), having destroyed the diagnostic
+            # evidence for nothing.
+            logger.error(
+                f"restore_from_backup({self.alias}): backup metadata is "
+                f"'{kind}', not pyturso; refusing to restore, leaving live "
+                "files untouched"
+            )
+            return False
+
         if (
-            kind == "pyturso"
-            and recorded_url
+            recorded_url
             and self.turso_url
             and self._remote_key(recorded_url) != self._remote_key(self.turso_url)
         ):

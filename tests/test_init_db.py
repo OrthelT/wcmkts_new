@@ -1,9 +1,12 @@
 """init_db file-state checks and single-flight bootstrap (spec §1 cold start)."""
 
+import json
 import os
 import sqlite3
 import threading
 import time
+
+import pytest
 
 from init_db import ensure_market_db_ready, init_db, verify_db_content
 
@@ -297,3 +300,64 @@ class TestRemoteMatchesMetadata:
         ) != DatabaseConfig._remote_key(
             "https://wcmktnewkeep-orthelt.aws-us-east-1.turso.io"
         )
+
+
+class TestEngineRemoteGuard:
+    """The engine property must refuse a replica bootstrapped against a
+    different Turso remote.
+
+    init_db.verify_db_content() returns True for any replica with tables and
+    pyturso-shaped metadata without comparing remotes, so init_db() marks it
+    initialized and never syncs it — sync()'s guard is not on the read path.
+    Without a guard at the engine, pointing secrets.toml at production while
+    a `…test` replica sits on disk serves test data indefinitely.
+    """
+
+    PYTURSO_INFO = TestRemoteMatchesMetadata.PYTURSO_INFO
+    MATCHING_URL = "https://wcmktnewkeeptest-orthelt.aws-us-east-1.turso.io"
+    OTHER_URL = "https://wcmktnewkeep-orthelt.aws-us-east-1.turso.io"
+
+    @pytest.fixture(autouse=True)
+    def _isolate_engine_cache(self):
+        from config import DatabaseConfig
+
+        saved = dict(DatabaseConfig._engines)
+        yield
+        DatabaseConfig._engines.clear()
+        DatabaseConfig._engines.update(saved)
+
+    def _db(self, tmp_path, url, alias):
+        from config import DatabaseConfig
+
+        db = DatabaseConfig.__new__(DatabaseConfig)
+        db.alias = alias
+        db.path = str(tmp_path / "market.db")
+        db.url = f"sqlite+turso_sync:///{db.path}"
+        db.turso_url = url
+        db.token = "t"
+        db._connect_args = {"remote_url": url, "auth_token": "t"}
+        db._engine = None
+        return db
+
+    def _write_info(self, tmp_path):
+        (tmp_path / "market.db-info").write_text(json.dumps(self.PYTURSO_INFO))
+
+    def test_engine_refuses_replica_from_a_different_remote(self, tmp_path):
+        db = self._db(tmp_path, self.OTHER_URL, "guard-mismatch")
+        self._write_info(tmp_path)
+        assert db.remote_matches_metadata() is False
+        with pytest.raises(RuntimeError, match="different Turso remote"):
+            db.engine
+
+    def test_engine_opens_on_a_matching_remote(self, tmp_path):
+        db = self._db(tmp_path, self.MATCHING_URL, "guard-match")
+        self._write_info(tmp_path)
+        assert db.remote_matches_metadata() is True
+        assert db.engine is not None
+
+    def test_engine_opens_when_the_remote_is_unknown(self, tmp_path):
+        # No -info sidecar: remote_matches_metadata() is None, not False,
+        # and an unknown remote must stay a no-op (backend semantics).
+        db = self._db(tmp_path, self.MATCHING_URL, "guard-unknown")
+        assert db.remote_matches_metadata() is None
+        assert db.engine is not None
