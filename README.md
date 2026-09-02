@@ -342,7 +342,7 @@ Adds interactive market ISK volume charting to Market Stats, including moving av
 
 ## Data Updates
 
-The app keeps a local pyturso-synced SQLite replica for each database, giving extremely fast data fetches. The application automatically pulls updates on a periodic schedule (see `[db_update]` in `settings.toml`; currently hourly). Users can also trigger manual updates using the sync button in the sidebar to obtain new data, if it is available.
+The app keeps a local pyturso-synced SQLite replica for each database, giving extremely fast data fetches. While a session is open the app polls for updates, pulling at most once every 600 seconds (`pages/components/db_refresh.py`); this is hard-coded, not configurable. The sidebar's "next update" countdown is an *estimate* of when the backend next publishes — 60 minutes after the last `updatelog` timestamp (`state/sync_state.py`) — not a schedule the app follows. Users can also trigger manual updates using the sync button in the sidebar to obtain new data, if it is available.
 
 ## Setup
 

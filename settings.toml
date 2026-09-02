@@ -122,10 +122,6 @@
     "wcmktnewkeep" = "wcmktnewkeep.db"
     "wcmktbkg" = "wcmktbkg.db"
 
-[db_update]
-  "frequency" = 1 # frequency of scheduled db updates in hours 
-  "time" = 20 # minutes after the hour of scheduled updates 
-
 [db_turso_keys]
     "sde" = "sdelite_turso"
     "build_cost" = "buildcost_turso"

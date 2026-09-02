@@ -224,7 +224,8 @@ with DatabaseConfig("wcmktnewkeep").engine.connect() as conn:
 ### Data Synchronization
 
 - **Manual sync**: Available via sidebar button in Streamlit UI
-- **Automatic sync**: Scheduled periodically per `[db_update]` in `settings.toml` (currently hourly, `:20` past the hour)
+- **Automatic sync**: Not configuration-scheduled. `pages/components/db_refresh.py:145` polls on Streamlit reruns and calls `check_db()` once more than **600 s** have passed since the last check, so the cadence follows session activity. Nothing in `settings.toml` tunes it
+- **Sidebar countdown**: An *estimate*, not a schedule. `state/sync_state.py` (`_UPDATE_INTERVAL_MINUTES = 60`) adds 60 minutes to the last `updatelog` timestamp to guess when the **backend** next publishes. It schedules no frontend sync and is tied to no fixed minute past the hour
 - **Programmatic sync**: Use `DatabaseConfig.sync()` method
 - **Integrity validation**: Automatic PRAGMA integrity_check before/after sync
 - **Backup-restore fallback**: `BaseRepository.read_df()` auto-recovers a malformed local DB by syncing and retrying, then falling back to `DatabaseConfig.restore_from_backup()` (the last known-good `.bak`/`-info.bak` pair) if sync itself fails
