@@ -759,15 +759,24 @@ class AdminRepository:
             )
 
     def _get_write_engine(self):
+        """Admin writes through a DatabaseConfig are disabled, both targets.
+
+        Under pyturso ``self._db.engine`` is a *writable* sync-dialect engine
+        on the frontend's own replica, and the frontend never push()es. A
+        "local" admin write would therefore commit into a ``-changes`` queue
+        that nothing drains: invisible to Turso, invisible to every other
+        viewer, and strictly worse than the pre-migration behavior where such
+        a write was merely useless. Tests inject ``_engine_override`` (a plain
+        SQLite engine over a real file) and are unaffected.
+        """
         override = getattr(self, "_engine_override", None)
         if override is not None:
             return override
-        if self._write_target == "remote":
-            raise NotImplementedError(
-                "Remote admin writes are disabled during the pyturso migration; "
-                "pending the write-path rework (local write + push)."
-            )
-        return self._db.engine
+        raise NotImplementedError(
+            f"Admin writes ({self._write_target}) are disabled during the "
+            "pyturso migration; pending the write-path rework "
+            "(local write + push)."
+        )
 
     @staticmethod
     def _normalize_write_target(write_target: str) -> str:
