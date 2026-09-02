@@ -6,19 +6,20 @@
 
 ## Motivation
 
-The app reads SQLite/libSQL three different ways today. Only one of them carries
-the resilience guarantees the architecture advertises:
+The app reads its pyturso-synced SQLite replicas three different ways today.
+Only one of them carries the resilience guarantees the architecture advertises:
 
-| Pattern | Recovery on malformed/corrupt DB? | Remote fallback? |
-|---|---|---|
-| `BaseRepository.read_df(text(...))` | ✅ sync-and-retry | ✅ falls back to `remote_engine` |
-| Bare `db.engine.connect()` + `pd.read_sql_query` | ❌ | ❌ |
-| SQLAlchemy ORM `select()` reads | n/a — **not used anywhere** | n/a |
+| Pattern | Recovery on malformed/corrupt DB? |
+|---|---|
+| `BaseRepository.read_df(text(...))` | ✅ `db.sync()` + retry, then `db.restore_from_backup()` + retry |
+| Bare `db.engine.connect()` + `pd.read_sql_query` | ❌ |
+| SQLAlchemy ORM `select()` reads | n/a — **not used anywhere** |
 
-`read_df()` (`repositories/base.py`) is the intended single chokepoint:
-local read → on malformed error `db.sync()` + retry → if still failing, read from
-`db.remote_engine`. Every site that calls `engine.connect()` directly silently
-opts out of that, so a corrupt local `.db` makes those queries throw
+`read_df()` (`repositories/base.py`) is the intended single chokepoint: local
+read → on malformed error `db.sync()` + retry → if that still fails,
+`db.restore_from_backup()` (swap in the last-known-good backup pair) + retry →
+raise. Every site that calls `engine.connect()` directly silently opts out of
+that, so a corrupt local `.db` makes those queries throw
 ("no such table" / "database disk image is malformed") instead of self-healing —
 exactly the failure mode `read_df()` exists to prevent (and that `init_db.py` /
 cold-start notes in `CLAUDE.md` reference).
@@ -31,34 +32,37 @@ logic should change; only *how* each query is executed.
 - **Reads stay raw SQL** via `sqlalchemy.text(...)`. The ORM is *not* adopted for
   reads — it earns its keep only for schema definition/seeding (`demo_data.py`),
   the single write path (`admin_repo.py`), and as schema documentation.
-- **Every read flows through `read_df()`** so recovery + remote fallback are
-  uniform.
+- **Every read flows through `read_df()`** so recovery (sync-and-retry, then
+  backup-restore) is uniform.
 - Params are **named**; `IN` clauses use `bindparam(name, expanding=True)`.
 
-## Scope: 53 direct-`engine.connect()` local read sites across 10 files
+## Scope: 47 direct-`engine.connect()` local read sites across 9 files
 
-Counts verified via `grep -c "engine.connect()"` minus `remote_engine.connect()`,
-excluding `repositories/base.py` (its 2 connects *are* the `read_df()` chokepoint —
+Counts verified via `grep -rn "engine.connect()" repositories/ services/`,
+excluding `repositories/base.py` (its connect *is* the `read_df()` chokepoint —
 the source of truth, not a migration target):
 
 | File | Local read sites | Notes |
 |---|---:|---|
-| `repositories/sde_repo.py` | 10 | `sde` alias; mostly `@st.cache_resource` (no TTL); one `remote_engine.connect()` already used as a manual fallback |
+| `repositories/sde_repo.py` | 9 | `sde` alias; mostly `@st.cache_resource` (no TTL) |
 | `repositories/market_repo.py` | 9 | mix of `wcmkt` and `sde` reads; `_get_watchlist_impl` / the snapshot+KPI impls already show the correct `read_df()` form to copy |
 | `services/low_stock_service.py` | 7 | service-level DB access; reads `wcmkt` + `sde` |
 | `repositories/doctrine_repo.py` | 6 | several methods already use `read_df()` — finish the stragglers |
-| `repositories/build_cost_repo.py` | 1 | reads migrated to `read_df()` 2026-07-13 (cold-start "no such table: structures" crash); the one remaining connect is the `_write_industry_index_impl` **write**, which correctly stays on a direct connection |
 | `repositories/market_orders_repo.py` | 4 | |
 | `services/pricer_service.py` | 4 | `wcmkt` + `sde` reads |
-| `services/import_helper_service.py` | 3 | `wcmkt` + `sde` reads |
 | `services/module_equivalents_service.py` | 3 | cached equivalence-group helpers that take a passed-in `engine`; `_get_module_stocks` was already migrated to `read_df()` |
+| `services/import_helper_service.py` | 3 | `wcmkt` + `sde` reads |
 | `services/price_service.py` | 2 | `DatabasePriceProvider` reads `jita_prices`; keep provider abstraction, just swap execution |
 
 > **Already compliant (no work):** `repositories/admin_repo.py` (all reads go
 > through `self._reader.read_df(...)`; its **writes** — `DELETE` +
 > `sqlite_insert(Watchlist)` — correctly stay on a direct transactional
-> connection, since `read_df` is read-only) and
-> `services/type_resolution_service.py` (no direct `engine.connect()`).
+> connection, since `read_df` is read-only), `services/type_resolution_service.py`
+> (no direct `engine.connect()`), and `repositories/build_cost_repo.py` (reads
+> migrated to `read_df()` 2026-07-13; its former write, `_write_industry_index_impl`,
+> no longer touches the synced replica at all — `industry_index` moved to the
+> local-only `streamlit_cache.db`, so this file has zero `db.engine.connect()`
+> sites left against `wcmkt`/`sde`).
 
 > Regenerate the live list before starting:
 > ```bash
@@ -88,8 +92,8 @@ df = repo.read_df(query, params={"ids": ids})
 
 Notes:
 - `read_df()` accepts a `text()` clause (or a raw SQL string) plus `params`, and
-  takes `local=` / `fallback_remote_on_malformed=` kwargs if a site needs to opt
-  out of fallback.
+  takes a `recover=` kwarg (default `True`) if a site needs to opt out of the
+  sync/backup-restore recovery ladder.
 - Where a module already holds a `DatabaseConfig` (e.g. services with
   `self._mkt_db`), build `BaseRepository(self._mkt_db, self._logger)` rather than
   constructing a new `DatabaseConfig`.
@@ -101,8 +105,9 @@ Notes:
 
 - **Writes** (`admin_repo.py` `DELETE`/`sqlite_insert`, `demo_data.py`
   `create_all` + seeding) stay as-is — `read_df()` is read-only by design.
-- **`config.py` sync/integrity** internals (`libsql.connect`, `PRAGMA`
-  `integrity_check`) are infrastructure, not application reads — out of scope.
+- **`config.py` sync/integrity** internals (the `sqlite+turso_sync` engine setup,
+  `PRAGMA integrity_check`) are infrastructure, not application reads — out of
+  scope.
 - The cached `engine`-passing helpers in `module_equivalents_service.py` may need
   a small signature change (pass `DatabaseConfig`/alias instead of a raw
   `engine`) so they can build a `BaseRepository`; do this deliberately, not as a
@@ -113,13 +118,8 @@ Notes:
 - `uv run pytest -q` — the suite mostly mocks repositories, so most sites change
   without test churn. Sites that mock `engine.connect()` directly will need their
   mocks updated to the `read_df()` boundary.
-- **Coverage gaps to close while here:** there is currently **no test file for
-  `ModuleEquivalentsService`** (`get_aggregated_stock`, `_get_module_stocks`,
-  equivalence-group aggregation are untested). Add one as part of this work —
-  the `_get_module_stocks` → `read_df()` migration done in the perf pass shipped
-  without direct coverage.
-- Manual smoke: rename/corrupt a local `.db` and confirm pages recover via sync /
-  remote fallback instead of surfacing "no such table".
+- Manual smoke: rename/corrupt a local `.db` and confirm pages recover via
+  sync-and-retry / backup-restore instead of surfacing "no such table".
 
 ## Suggested sequencing
 
@@ -127,6 +127,5 @@ Notes:
    then `doctrine_repo.py`, then the smaller repos.
 2. `services/` that hit the DB directly — ideally push those reads down into the
    appropriate repository while migrating, to retire service-level DB access.
-3. Add the `ModuleEquivalentsService` test file.
-4. Optional: a lightweight lint/CI guard (e.g. grep check) that fails on new
+3. Optional: a lightweight lint/CI guard (e.g. grep check) that fails on new
    `engine.connect()` reads outside `base.py` / write paths, to prevent regression.

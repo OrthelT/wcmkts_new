@@ -4,10 +4,12 @@ This guide is intended for administrators who need to maintain, configure, or de
 
 ## System Architecture Overview
 
-The application uses a hybrid database approach:
+The application uses a hybrid database approach, with one pyturso-synced SQLite
+replica per market hub plus two shared databases:
 - **Local SQLite Databases**:
-  - `wcmktprod.db`: Main market data (4-HWWF) — synchronized from the Turso remote
-  - `wcmktnorth2.db`: Deployment market data (B-9C24) — synchronized from Turso
+  - `wcmktnewkeep.db` (alias `wcmktnewkeep`): Primary market data (4-HWWF) — synchronized from the Turso remote
+  - `wcmktnorth2.db` (alias `wcmktnorth`): Deployment market data (X47L-Q) — synchronized from Turso
+  - `wcmktbkg.db` (alias `wcmktbkg`): Third market data (BKG-Q2) — synchronized from Turso
   - `sdelite.db`: EVE Online Static Data Export (item information, localizations)
   - `buildcost.db`: Manufacturing structures, rigs, and industry indices
 - **Turso Cloud Database**:
@@ -17,7 +19,7 @@ The application uses a hybrid database approach:
 
 ## Database Schema
 
-Key tables in the market database (`wcmktprod.db` / `wcmktnorth2.db`):
+Key tables in each market database (`wcmktnewkeep.db` / `wcmktnorth2.db` / `wcmktbkg.db`):
 - `marketorders`: Individual sell and buy orders on the market
 - `marketstats`: Aggregated statistics about market items
 - `market_history`: Historical price and volume data
@@ -47,12 +49,16 @@ Key tables in the build cost database (`buildcost.db`):
 Production environments use Streamlit secrets management. Create `.streamlit/secrets.toml` with per-database sections:
 
 ```toml
-[wcmktprod_turso]
-url = "libsql://your-database.turso.io"
+[wcmktnewkeep_turso]
+url = "libsql://your-primary-database.turso.io"
 token = "your_turso_auth_token"
 
 [wcmktnorth_turso]
-url = "libsql://your-north-database.turso.io"
+url = "libsql://your-deployment-database.turso.io"
+token = "your_turso_auth_token"
+
+[market3_turso]
+url = "libsql://your-market3-database.turso.io"
 token = "your_turso_auth_token"
 
 [sdelite_turso]
@@ -69,14 +75,14 @@ Note: The `sde` alias maps to `sdelite_turso` and `build_cost` maps to `buildcos
 ### Database Synchronization Settings
 
 Database synchronization is managed by the `DatabaseConfig` class in `config.py`:
-- Automatic sync occurs daily at 13:00 UTC
+- Automatic sync is scheduled periodically per `[db_update]` in `settings.toml` (currently hourly)
 - Manual sync via sidebar button triggers `DatabaseConfig.sync()` on the active market database
 - `sync()` serializes via `_SYNC_LOCK` (threading.Lock) and runs `PRAGMA integrity_check` after sync
-- CLI sync: `uv run python config.py <alias>` (e.g., `uv run python config.py wcmktprod`)
+- CLI sync: `uv run python config.py <alias>` (e.g., `uv run python config.py wcmktnewkeep`)
 
 ### Doctrine Targets Configuration
 
-Target inventory levels for doctrine ships are stored in the `ship_targets` table in `wcmktprod.db`. This table is managed via the backend repository (mkts_backend). Each entry has `fit_id`, `ship_target`, and `fit_name` columns.
+Target inventory levels for doctrine ships are stored in the `ship_targets` table in each market database. This table is managed via the backend repository (mkts_backend). Each entry has `fit_id`, `ship_target`, and `fit_name` columns.
 
 ## Deployment Options
 
@@ -131,13 +137,13 @@ Target inventory levels for doctrine ships are stored in the `ship_targets` tabl
 
 2. **Optimize SQLite databases**:
    ```bash
-   sqlite3 wcmktprod.db 'VACUUM;'
+   sqlite3 wcmktnewkeep.db 'VACUUM;'
    sqlite3 sdelite.db 'VACUUM;'
    ```
 
 3. **Backup databases**:
    ```bash
-   cp wcmktprod.db wcmktprod.db.backup
+   cp wcmktnewkeep.db wcmktnewkeep.db.backup
    cp sdelite.db sdelite.db.backup
    ```
 
@@ -165,12 +171,12 @@ If the application becomes slow:
 - Check Turso credentials in `.streamlit/secrets.toml`
 - Verify secret section names match (e.g., `sde` alias requires `sdelite_turso` section — see `[db_turso_keys]` in `settings.toml`)
 - Examine logs in `logs/` directory for detailed error messages
-- Run CLI sync to test: `uv run python config.py wcmktprod`
+- Run CLI sync to test: `uv run python config.py wcmktnewkeep`
 - Check for empty db file artifacts (`.db-info` alongside a 0-byte `.db`): delete both and re-sync
 
 ### Missing Data
 - Confirm data exists in the remote Turso database (check backend repository logs)
-- Verify the active market hub is correctly selected (primary vs deployment)
+- Verify the active market hub is correctly selected (primary, deployment, or market3)
 - Check SDE database has correct item information
 - Look for exceptions in log files
 

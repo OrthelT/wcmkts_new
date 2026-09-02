@@ -53,7 +53,7 @@ tests/
 
 ## Current Test Coverage
 
-**329 tests + 16 subtests** covering repositories, services, database config, i18n, parser, pricer/fit-availability, and infrastructure:
+**677 tests + 22 subtests** covering repositories, services, database config, i18n, parser, pricer/fit-availability, and infrastructure:
 
 - **Success cases**: Normal function operation
 - **Data validation**: Return types and structure
@@ -158,7 +158,7 @@ uv run pytest tests/test_settings_toml.py -v
 
 ## Key Metrics
 
-- **Total tests**: 329 + 16 subtests (as of v0.6.1)
+- **Total tests**: 677 + 22 subtests (as of v0.6.8)
 - **Test types**: Unit tests, integration tests, configuration validation
-- **Run time**: ~1-2 seconds (fast unit tests only; integration tests may be slower)
+- **Run time**: ~2-3 seconds (fast unit tests only; integration tests may be slower)
 - **Success rate**: 100% (CI enforced)

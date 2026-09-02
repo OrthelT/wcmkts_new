@@ -6,9 +6,9 @@ This file provides comprehensive guidance for LLM assistants (like Claude Code) 
 
 Winter Coalition Market Stats Viewer is a Streamlit web application for EVE Online market analysis. It provides real-time market data visualization, doctrine analysis, and inventory management tools for the Winter Coalition.
 The web app can be found here: https://wcmkts.streamlit.app/
-It also has a sister application, Winter Coalition Northern Supply, which supports a different market hub managed in a separate repository. 
+It covers three market hubs (primary, deployment, market3) in one app; `ui/market_selector.py` toggles between them.
 
-**Important:** ESI calls to update market data in wcmktprod.db are handled in a separate repository: https://github.com/OrthelT/mkts_backend
+**Important:** ESI calls to update market data are handled in a separate repository: https://github.com/OrthelT/mkts_backend
 
 ## Project Structure & Module Organization
 
@@ -35,7 +35,7 @@ All pages follow consistent patterns with Streamlit best practices:
 **Database Layer:**
 - **`config.py`**: DatabaseConfig class managing SQLite connections with pyturso pull-based Turso cloud sync
   - Uses `_SYNC_LOCK` to serialize sync operations; SQLite handles reader concurrency
-  - Manages 3 databases: wcmktprod (market), sdelite (static data), buildcost (manufacturing)
+  - Manages 5 databases: one per market hub (`wcmktnewkeep`, `wcmktnorth`, `wcmktbkg`), plus `sde` (static data) and `build_cost` (manufacturing)
   - `sync()` returns `SyncResult` (bool-compatible via `__bool__`, truthy == `ok`) -- callers handle UI feedback and targeted cache invalidation
   - Methods: `integrity_check()`, `sync()`, `snapshot_backup()`, `restore_from_backup()`, `get_most_recent_update()`
 - **`models.py`**: SQLAlchemy ORM models using modern `mapped_column()` syntax
@@ -89,8 +89,9 @@ All pages follow consistent patterns with Streamlit best practices:
 
 ### Local Databases
 
-Three synced SQLite replicas: **`wcmktprod.db`** (market orders/stats),
-**`sdelite.db`** (EVE Static Data Export, lightweight), **`buildcost.db`** (manufacturing).
+Five synced SQLite replicas: one per market hub — **`wcmktnewkeep.db`** (primary),
+**`wcmktnorth2.db`** (deployment), **`wcmktbkg.db`** (market3) — plus
+**`sdelite.db`** (EVE Static Data Export, lightweight) and **`buildcost.db`** (manufacturing).
 Schemas are defined in `models.py`, `sdemodels.py`, and `build_cost_models.py`.
 
 Non-obvious: `sdelite.db.localizations` holds ~210k localized item names for 8 languages
@@ -103,7 +104,8 @@ items with no translation in the requested language.
 ### Turso Embedded Replica Pattern
 
 The application uses Turso's embedded-replica pattern for optimal performance:
-- Local SQLite databases (`wcmktprod.db`, `sdelite.db`) provide fast reads
+- Local SQLite databases (per-hub market DBs, `sdelite.db`, `buildcost.db`) provide fast reads
+- **Sync-dialect rule:** `DatabaseConfig.engine` opens the `sqlite+turso_sync` dialect whenever Turso credentials are present -- never the plain `sqlite+turso` dialect, which auto-checkpoints the WAL at 1000 frames and destroys the baseline `pull()` needs. Without credentials, `engine` degrades to a read-only local SQLite connection instead (never the sync dialect with no remote configured).
 - Synchronization is pull-based via the `pyturso` library: `sync()` opens a `turso.sync` connection and calls `pull()` (a real network round-trip each time -- there is no separate lightweight "check" step)
 - Sync serialized via `_SYNC_LOCK` (simple `threading.Lock`). SQLite handles its own reader concurrency
 - Integrity checks with `PRAGMA integrity_check` after sync; a failed check triggers one nuke + fresh-bootstrap retry
@@ -118,9 +120,9 @@ Databases are managed via the `DatabaseConfig` class in `config.py`. Each instan
 ```python
 from config import DatabaseConfig
 
-mkt_db = DatabaseConfig("wcmktprod")   # wcmktprod.db — main market data
-sde_db = DatabaseConfig("sde")         # sdelite.db — static data
-bc_db  = DatabaseConfig("build_cost")  # buildcost.db — manufacturing
+mkt_db = DatabaseConfig("wcmktnewkeep")  # wcmktnewkeep.db — primary market data
+sde_db = DatabaseConfig("sde")           # sdelite.db — static data
+bc_db  = DatabaseConfig("build_cost")    # buildcost.db — manufacturing
 
 # Access engine
 engine = mkt_db.engine        # SQLAlchemy engine (local file)
@@ -132,7 +134,7 @@ ok = mkt_db.sync()
 mkt_db.integrity_check()
 
 # CLI sync (from terminal)
-# uv run python config.py wcmktprod
+# uv run python config.py wcmktnewkeep
 ```
 
 ## Development Guidelines
@@ -188,7 +190,7 @@ from config import DatabaseConfig
 from repositories.base import BaseRepository
 
 # CORRECT — raw SQL through read_df() (recovery + backup-restore fallback included)
-repo = BaseRepository(DatabaseConfig("wcmktprod"))
+repo = BaseRepository(DatabaseConfig("wcmktnewkeep"))
 query = text(
     "SELECT type_id, min_price FROM marketstats WHERE type_id IN :ids"
 ).bindparams(bindparam("ids", expanding=True))
@@ -201,7 +203,7 @@ df = get_market_repository().get_all_stats()  # cached DataFrame
 
 ```python
 # AVOID — bypasses read_df(), so no malformed-DB recovery / backup-restore fallback
-with DatabaseConfig("wcmktprod").engine.connect() as conn:
+with DatabaseConfig("wcmktnewkeep").engine.connect() as conn:
     df = pd.read_sql_query(query, conn, params={"ids": [34, 35]})
 ```
 
@@ -222,7 +224,7 @@ with DatabaseConfig("wcmktprod").engine.connect() as conn:
 ### Data Synchronization
 
 - **Manual sync**: Available via sidebar button in Streamlit UI
-- **Automatic sync**: Scheduled for 13:00 UTC daily (managed by sync scheduler)
+- **Automatic sync**: Scheduled periodically per `[db_update]` in `settings.toml` (currently hourly, `:20` past the hour)
 - **Programmatic sync**: Use `DatabaseConfig.sync()` method
 - **Integrity validation**: Automatic PRAGMA integrity_check before/after sync
 - **Backup-restore fallback**: `BaseRepository.read_df()` auto-recovers a malformed local DB by syncing and retrying, then falling back to `DatabaseConfig.restore_from_backup()` (the last known-good `.bak`/`-info.bak` pair) if sync itself fails
@@ -248,7 +250,7 @@ with DatabaseConfig("wcmktprod").engine.connect() as conn:
 
 ### Current Test Coverage
 The test suite covers repositories, services, database config, i18n, parser, pricer/fit-availability, and infrastructure:
-- 644 tests + 22 subtests passing (`uv run pytest -q`)
+- 677 tests + 22 subtests passing (`uv run pytest -q`)
 
 ## Commit & Pull Request Guidelines
 
@@ -272,9 +274,6 @@ Include in PR description:
 - Notes on any database schema or configuration impacts
 - Performance implications (if any)
 
-## Architecture Summary
-
-=======
 ## Troubleshooting
 
 ### Database Connection Issues
@@ -320,11 +319,9 @@ Include in PR description:
                                         │
                                         ▼
 ┌─────────────────────────────────────────────────────────────┐
-│              DatabaseConfig (config.py)                      │
-│  ┌──────────┬──────────┬──────────┐                         │
-│  │ wcmktprod│ sdelite  │buildcost │                         │
-│  │ .db      │ .db      │.db       │                         │
-│  └────┬─────┴──────────┴──────────┘                         │
+│              DatabaseConfig (config.py)                     │
+│  5 replicas: one per market hub (wcmktnewkeep,               │
+│  wcmktnorth, wcmktbkg), plus sdelite and buildcost           │
 │       │ Sync (pyturso pull, _SYNC_LOCK)                     │
 └───────┼─────────────────────────────────────────────────────┘
         │
@@ -345,7 +342,12 @@ Include in PR description:
 5. `_SYNC_LOCK` serializes sync operations; SQLite handles reader concurrency
 
 **Key Principles:**
-- Frontend is read-only for market data
+- Frontend is read-only for market data. The `industry_index` ESI cache was the
+  one exception (a write into the synced `build_cost` replica); it now lives in
+  the local-only, never-synced `streamlit_cache.db`, so there is no exception
+  left for market data (see `repositories/build_cost_repo.py`). The admin
+  watchlist/doctrine write path (`admin_repo.py`) is separate and currently
+  disabled in the UI -- see the deferred local-write-plus-push redesign above.
 - Local SQLite replicas provide fast reads
 - Turso sync provides data freshness
 - Targeted cache invalidation after sync (market caches only)
@@ -459,7 +461,7 @@ from state.session_state import ss_get  # ✗ state!
 
 ## External Resources
 
-- **Current version**: 0.6.2 (unreleased; latest released tag v0.6.1, 2026-05-07)
+- **Current version**: 0.6.8 (see `README.md` for the full changelog)
 - **Python version**: 3.12+
 - **Package manager**: uv (preferred)
 - **Main branch**: main
@@ -490,7 +492,7 @@ from state.session_state import ss_get  # ✗ state!
 - **`pages/`**: Streamlit application pages
 - **`pages/components/`**: Extracted Streamlit rendering components (market_components, dashboard_components, db_refresh, page_chrome)
 - **`parser/`**: EFT fitting and item list parser (open source contribution)
-- **`tests/`**: pytest unit tests (644 tests, 22 subtests)
+- **`tests/`**: pytest unit tests (677 tests, 22 subtests)
 - **`docs/`**: Documentation
 - **`logs/`**: Application logs (git-ignored)
 - **`images/`**: UI assets
