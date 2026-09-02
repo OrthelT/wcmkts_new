@@ -656,8 +656,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "alias",
         nargs="?",
-        default="wcmktprod",
-        help="Database alias from settings.toml [db_paths] (default: wcmktprod)",
+        default="wcmktnewkeep",
+        help="Database alias from settings.toml [db_paths] (default: wcmktnewkeep)",
     )
     args = parser.parse_args()
 

@@ -20,8 +20,8 @@ class MarketConfig:
         region_id: EVE region ID
         system_id: EVE solar system ID
         structure_id: EVE structure ID
-        database_alias: Alias used by DatabaseConfig (e.g. "wcmktprod")
-        database_file: Local database filename (e.g. "wcmktprod.db")
+        database_alias: Alias used by DatabaseConfig (e.g. "wcmktnewkeep")
+        database_file: Local database filename (e.g. "wcmktnewkeep.db")
         turso_secret_key: Section name in secrets.toml for Turso creds
     """
 

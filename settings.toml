@@ -114,7 +114,6 @@
 # database configurations, including utility databases other than for markets.
 # Every [markets.*] database_alias must have an entry here (see reminder above).
 [db_paths]
-    "wcmktprod" = "wcmktprod.db"
     "wcmktnorth" = "wcmktnorth2.db"
     "sde" = "sdelite.db"
     "build_cost" = "buildcost.db"
