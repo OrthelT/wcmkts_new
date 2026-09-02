@@ -43,18 +43,58 @@ class TestSyncDialect:
         for alias in aliases:
             assert DatabaseConfig(alias).url.startswith("sqlite+turso_sync:///"), alias
 
-    def test_plain_dialect_is_absent_from_the_codebase(self):
-        """Guard against a reintroduction."""
-        import pathlib
+    def _plain_dialect_hits(self, root):
+        """Every ``<file>:<line>: <text>`` naming the plain dialect in code.
+
+        Matches the bare dialect wherever it occurs instead of requiring a
+        closing quote right after it, so ``create_engine("sqlite+turso:///x")``
+        and the f-string form are caught. The inline-URL form is what the
+        deleted ``dev/query_latency.py`` actually used — the old
+        quote-terminated pattern would not have caught the very thing this
+        guard exists for. ``#`` comments are stripped first so prose
+        explaining why the plain dialect is banned is not a hit.
+        """
         import re
 
+        pat = re.compile(r"sqlite\+turso(?!_sync)")
         hits = []
-        for p in pathlib.Path(".").rglob("*.py"):
-            if ".venv" in p.parts or "tests" in p.parts:
+        for p in sorted(root.rglob("*.py")):
+            rel = p.relative_to(root)
+            if ".venv" in rel.parts or "tests" in rel.parts:
                 continue
-            if re.search(r'"sqlite\+turso"|\'sqlite\+turso\'', p.read_text()):
-                hits.append(str(p))
-        assert hits == [], hits
+            for i, line in enumerate(p.read_text().splitlines(), 1):
+                if pat.search(re.sub(r"#.*$", "", line)):
+                    hits.append(f"{rel}:{i}: {line.strip()}")
+        return hits
+
+    def test_plain_dialect_scan_catches_inline_url_and_fstring_forms(self, tmp_path):
+        """The guard must detect the forms most likely to reintroduce it."""
+        (tmp_path / "a_bare.py").write_text('dialect = "sqlite+turso"\n')
+        (tmp_path / "b_fstring.py").write_text(
+            'create_engine(f"sqlite+turso:///{path}")\n'
+        )
+        (tmp_path / "c_inline_url.py").write_text(
+            'create_engine("sqlite+turso:///x.db")\n'
+        )
+        (tmp_path / "d_allowed.py").write_text(
+            'dialect = "sqlite+turso_sync"  # not the plain sqlite+turso one\n'
+        )
+
+        hits = self._plain_dialect_hits(tmp_path)
+        assert [h.split(":", 1)[0] for h in hits] == [
+            "a_bare.py", "b_fstring.py", "c_inline_url.py",
+        ], hits
+
+    def test_plain_dialect_is_absent_from_the_codebase(self):
+        """Guard against a reintroduction.
+
+        Anchored at the repo root rather than the CWD, so it cannot pass
+        vacuously when pytest is invoked from another directory.
+        """
+        import pathlib
+
+        root = pathlib.Path(__file__).resolve().parents[1]
+        assert self._plain_dialect_hits(root) == []
 
     def test_no_credentials_uses_read_only_sqlite_without_sync_args(self, tmp_path):
         """A replica with no Turso credentials must fall back to an ordinary
