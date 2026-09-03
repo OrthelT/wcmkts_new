@@ -208,5 +208,18 @@ class TestSettingsToml(unittest.TestCase):
                 result = fit_mappings.get(fit_id) or fit_mappings.get(str(fit_id))
                 self.assertIsNotNone(result)
 
+    def test_periodic_sync_aliases_excludes_markets(self):
+        """[freshness_probes] is gone; [sync].periodic_sync_aliases replaces it
+        and must never list a market hub's database_alias (those are always
+        checked and don't need to be declared separately).
+        """
+        market_aliases = {
+            m["database_alias"] for m in self.settings["markets"].values()
+        }
+        periodic = set(self.settings["sync"]["periodic_sync_aliases"])
+        self.assertNotIn("freshness_probes", self.settings)
+        self.assertTrue(periodic.isdisjoint(market_aliases))
+
+
 if __name__ == "__main__":
     unittest.main()

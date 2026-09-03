@@ -4,6 +4,8 @@ A Streamlit application for viewing EVE Online market statistics for Winter Coal
 SUPPORT: Join the Discord for support https://discord.gg/BxatJE572Y
 CONTRIBUTING: Contributors welcome. This project is fully open source under MIT License. Source code and full documentation available on GitHub: https://github.com/OrthelT/wcmkts_new
 
+**Note:** Admin pages (watchlist and doctrine management) are currently disabled during the pyturso migration. Re-enabling them requires a local-write-plus-push redesign.
+
 # UPDATES:
 ## version 0.6.8
 ### New Features
@@ -340,7 +342,7 @@ Adds interactive market ISK volume charting to Market Stats, including moving av
 
 ## Data Updates
 
-The app uses Turso's embedded-replica feature to allow a local SQLlite-libsql database that allows extremely fast data fetches. The application automatically syncs with EVE Online market stored on the parent database daily at 13:00 UTC. Users can also trigger manual updates using the sync button in the sidebar to obtain new data, if it is available.
+The app keeps a local pyturso-synced SQLite replica for each database, giving extremely fast data fetches. While a session is open the app polls for updates, pulling at most once every 600 seconds (`pages/components/db_refresh.py`); this is hard-coded, not configurable. The sidebar's "next update" countdown is an *estimate* of when the backend next publishes — 60 minutes after the last `updatelog` timestamp (`state/sync_state.py`) — not a schedule the app follows. Users can also trigger manual updates using the sync button in the sidebar to obtain new data, if it is available.
 
 ## Setup
 
@@ -357,12 +359,16 @@ uv sync
 
 3. Set up credentials. Create `.streamlit/secrets.toml` with per-database sections:
 ```toml
-[wcmktprod_turso]
-url = "libsql://your-database.turso.io"
+[wcmktnewkeep_turso]
+url = "libsql://your-primary-database.turso.io"
 token = "your_turso_auth_token"
 
 [wcmktnorth_turso]
-url = "libsql://your-north-database.turso.io"
+url = "libsql://your-deployment-database.turso.io"
+token = "your_turso_auth_token"
+
+[market3_turso]
+url = "libsql://your-market3-database.turso.io"
 token = "your_turso_auth_token"
 
 [sdelite_turso]
@@ -384,7 +390,15 @@ uv run streamlit run app.py
 For local Streamlit runs, store credentials in `.streamlit/secrets.toml` (git‑ignored). This is the default source for database URLs/tokens used by `DatabaseConfig`. Example structure:
 
 ```
-[wcmktprod_turso]
+[wcmktnewkeep_turso]
+url = "libsql://..."
+token = "..."
+
+[wcmktnorth_turso]
+url = "libsql://..."
+token = "..."
+
+[market3_turso]
 url = "libsql://..."
 token = "..."
 
@@ -443,24 +457,25 @@ git wt 3mRY9  # Just the unique ID
 
 ## DatabaseConfig Class
 
-The `DatabaseConfig` class is a centralized configuration manager that handles multiple database connections and operations. It provides a unified interface for working with local SQLite databases, remote Turso databases, and LibSQL synchronization.
+The `DatabaseConfig` class (`config.py`) is a centralized configuration manager for the app's pyturso-synced replicas. Each alias gets one local SQLite file kept in sync with its Turso remote via the `sqlite+turso_sync` dialect — there is no separate "remote engine"; reads and the sync pull both go through the same local replica.
 
 ### Key Features
 
-- **Multi-Database Support**: Manages connections to multiple databases (market data, SDE, build costs)
-- **Dual Environment Support**: Handles both local SQLite and remote Turso database connections
-- **Automatic Synchronization**: Provides LibSQL sync capabilities for keeping local and remote databases in sync
-- **Lazy Loading**: Database connections are created only when needed using properties
-- **Validation**: Includes sync validation to ensure data consistency
+- **Multi-Database Support**: Manages connections to multiple databases (market data for each hub, SDE, build costs)
+- **Sync Dialect**: Uses the `sqlite+turso_sync` engine when Turso credentials are present; falls back to a plain read-only local SQLite connection when they are not (so the app still runs local-only without secrets)
+- **Automatic Synchronization**: `sync()` pulls remote changes into the local replica, retrying via nuke + fresh bootstrap on an integrity-check failure, and snapshots a `.bak` pair on success
+- **Lazy Loading**: Engines are created only when needed and cached per alias
+- **Validation**: `integrity_check()` and `remote_matches_metadata()` guard against a corrupt or wrongly-targeted replica
 
 ### Database Aliases
 
-The class supports the following database aliases:
+The class supports the following database aliases (from `settings.toml`):
 
 | Alias | Description | Local File | Purpose |
 |-------|-------------|------------|---------|
-| `wcmktprod` | Production market database | `wcmktprod.db` | Main market data and orders (4-HWWF) |
-| `wcmktnorth` | Deployment market database | `wcmktnorth2.db` | Northern market data (B-9C24) |
+| `wcmktnewkeep` | Primary market database | `wcmktnewkeep.db` | Main market data and orders (4-HWWF) |
+| `wcmktnorth` | Deployment market database | `wcmktnorth2.db` | Deployment market data (X47L-Q) |
+| `wcmktbkg` | Third market database | `wcmktbkg.db` | BKG-Q2 market data |
 | `sde` | Static Data Export | `sdelite.db` | EVE Online static data (items, categories) |
 | `build_cost` | Build cost calculations | `buildcost.db` | Structure data and industry indexes |
 
@@ -471,53 +486,41 @@ The class supports the following database aliases:
 from config import DatabaseConfig
 
 # Create a database configuration
-mkt_db = DatabaseConfig("wcmktprod")  # Production market database
-sde_db = DatabaseConfig("sde")     # Static data export
+mkt_db = DatabaseConfig("wcmktnewkeep")  # Primary market database
+sde_db = DatabaseConfig("sde")           # Static data export
 build_db = DatabaseConfig("build_cost")  # Build cost database
 ```
 
-#### Database Connections
-
-The class provides several connection methods through properties:
+#### Database Connection
 
 ```python
-# Local SQLite connection (SQLAlchemy engine)
-local_engine = mkt_db.engine
-
-# Remote Turso connection (SQLAlchemy engine)
-remote_engine = mkt_db.remote_engine
-
-# LibSQL local connection
-libsql_conn = mkt_db.libsql_local_connect
-
-# LibSQL sync connection (for synchronization)
-sync_conn = mkt_db.libsql_sync_connect
-
-# Direct SQLite connection
-sqlite_conn = mkt_db.sqlite_local_connect
+# The one engine for this alias (sync dialect if credentials are present,
+# otherwise a read-only local SQLite connection)
+engine = mkt_db.engine
 ```
 
 #### Synchronization
 
 ```python
-# Sync local database with remote Turso database
-mkt_db.sync()
+# Pull remote changes into the local replica
+result = mkt_db.sync()  # SyncResult(ok, changed)
 
-# Validate sync was successful
-is_valid = mkt_db.local_matches_remote()
+# Check whether this replica was bootstrapped against the currently
+# configured Turso remote (True/False/None if unknown)
+matches = mkt_db.remote_matches_metadata()
 ```
 
 #### Database Inspection
 
 ```python
 # Get list of tables
-tables = mkt_db.get_table_list(local_only=True)
+tables = mkt_db.get_table_list()
 
 # Get column information for a specific table
-columns = mkt_db.get_table_columns("marketorders", local_only=True)
+columns = mkt_db.get_table_columns("marketorders")
 
 # Get detailed column information
-detailed_columns = mkt_db.get_table_columns("marketorders", local_only=True, full_info=True)
+detailed_columns = mkt_db.get_table_columns("marketorders", full_info=True)
 ```
 
 ### Properties
@@ -526,45 +529,35 @@ detailed_columns = mkt_db.get_table_columns("marketorders", local_only=True, ful
 |----------|------|-------------|
 | `alias` | str | Database alias identifier |
 | `path` | str | Local file path to the database |
-| `url` | str | SQLAlchemy connection URL for local database |
-| `turso_url` | str | Remote Turso database URL |
+| `url` | str | SQLAlchemy connection URL for the local replica |
+| `turso_url` | str | Configured Turso database URL |
 | `token` | str | Authentication token for Turso |
-| `engine` | Engine | SQLAlchemy engine for local database (lazy-loaded) |
-| `remote_engine` | Engine | SQLAlchemy engine for remote database (lazy-loaded) |
-| `libsql_local_connect` | Connection | LibSQL local connection (lazy-loaded) |
-| `libsql_sync_connect` | Connection | LibSQL sync connection (lazy-loaded) |
-| `sqlite_local_connect` | Connection | Direct SQLite connection (lazy-loaded) |
+| `has_remote_credentials` | bool | True when both `turso_url` and `token` are available |
+| `engine` | Engine | SQLAlchemy engine for this alias (lazy-loaded, cached) |
 
 ### Methods
 
-#### `sync()`
-Synchronizes the local database with the remote Turso database using LibSQL's embedded-replica feature.
+#### `sync() -> SyncResult`
+Pulls remote changes into the local replica. Serialized across calls, disposes local connections first, enforces the replica-consistency state machine, retries once via nuke + fresh bootstrap on a post-sync integrity-check failure, and snapshots a `.bak`/`.bak-info` pair on success.
 
-**Features:**
-- Updates local database with latest remote data
-- Updates Streamlit session state with sync timestamps
-- Validates sync success for market databases
-- Updates saved sync state
+**Returns:** `SyncResult(ok, changed)` — truthy on success, preserving the legacy bool contract.
 
-#### `local_matches_remote() -> bool`
-Validates that the local updatelog timestamp matches the remote after sync. Uses a plain sqlite3 read-only connection for the local read to avoid SQLAlchemy connection pool caching issues.
+**Raises:** `ValueError` if Turso credentials are missing for this alias; network/pull exceptions propagate (a healthy local file is never deleted on a network error).
 
-**Returns:** `True` if timestamps match, `False` otherwise or on error
+#### `remote_matches_metadata() -> bool | None`
+Whether this replica's `-info` sidecar was bootstrapped against the currently configured Turso remote (compares host + path only). Returns `None` when either side is unknown.
 
-#### `get_table_list(local_only: bool = True) -> list[str]`
-Retrieves a list of table names from the database.
+#### `restore_from_backup() -> bool`
+Replaces the live replica with the last `.bak`/`.bak-info` pair snapshotted by a prior successful `sync()`. Used by `read_df()`'s recovery ladder when a retried sync still fails.
 
-**Parameters:**
-- `local_only`: If `True`, uses local database; if `False`, uses remote database
+#### `get_table_list() -> list[str]`
+Retrieves a list of table names from this alias's replica (excluding SQLite system tables).
 
-**Returns:** List of table names (excluding SQLite system tables)
-
-#### `get_table_columns(table_name: str, local_only: bool = True, full_info: bool = False) -> list`
+#### `get_table_columns(table_name: str, full_info: bool = False) -> list`
 Retrieves column information for a specific table.
 
 **Parameters:**
 - `table_name`: Name of the table to inspect
-- `local_only`: If `True`, uses local database; if `False`, uses remote database
 - `full_info`: If `True`, returns detailed column information; if `False`, returns just column names
 
 **Returns:**
@@ -573,11 +566,19 @@ Retrieves column information for a specific table.
 
 ### Configuration
 
-The class uses Streamlit secrets for Turso configuration:
+The class uses Streamlit secrets for Turso configuration, one `[<turso_secret_key>]` section per alias (see `settings.toml`'s `turso_secret_key` / `[db_turso_keys]`):
 
 ```python
 # Required secrets in .streamlit/secrets.toml
-[wcmktprod_turso]
+[wcmktnewkeep_turso]
+url = "your_turso_url"
+token = "your_auth_token"
+
+[wcmktnorth_turso]
+url = "your_turso_url"
+token = "your_auth_token"
+
+[market3_turso]
 url = "your_turso_url"
 token = "your_auth_token"
 
@@ -594,16 +595,16 @@ token = "your_auth_token"
 
 The class includes proper error handling for:
 - Invalid database aliases
-- Missing Streamlit secrets
+- Missing Streamlit secrets (degrades to local-only, no Turso credentials)
 - Database connection failures
-- Sync validation failures
+- Sync integrity-check failures (nuke + fresh bootstrap retry)
 
 ### Performance Considerations
 
-- **Lazy Loading**: Database connections are only created when first accessed
-- **Connection Reuse**: Connections are cached and reused for subsequent operations
-- **Efficient Sync**: Uses LibSQL's optimized sync mechanism for minimal bandwidth usage
-- **Validation**: Sync validation is only performed for market databases to avoid unnecessary checks
+- **Lazy Loading**: Engines are only created when first accessed
+- **Connection Reuse**: Engines are cached per alias (keyed by credential mode) and reused for subsequent operations
+- **Efficient Sync**: Uses the pyturso sync-dialect's incremental pull for minimal bandwidth usage
+- **Validation**: `integrity_check()` runs after every `sync()`; `remote_matches_metadata()` guards against reading a replica bootstrapped against a different Turso remote
 
 ## Maintenance
 

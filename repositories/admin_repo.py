@@ -110,7 +110,7 @@ class AdminRepository:
             """
         )
         if getattr(self, "_reader", None) is not None:
-            return self._reader.read_df(query, local=self._read_local()).reset_index(drop=True)
+            return self._reader.read_df(query).reset_index(drop=True)
 
         with self._get_write_engine().connect() as conn:
             return pd.read_sql_query(query, conn).reset_index(drop=True)
@@ -210,7 +210,7 @@ class AdminRepository:
             """
         )
         if getattr(self, "_reader", None) is not None:
-            return self._reader.read_df(query, local=self._read_local()).reset_index(drop=True)
+            return self._reader.read_df(query).reset_index(drop=True)
         with self._get_write_engine().connect() as conn:
             return pd.read_sql_query(query, conn).reset_index(drop=True)
 
@@ -233,7 +233,7 @@ class AdminRepository:
             """
         )
         if getattr(self, "_reader", None) is not None:
-            return self._reader.read_df(query, local=self._read_local()).reset_index(drop=True)
+            return self._reader.read_df(query).reset_index(drop=True)
         with self._get_write_engine().connect() as conn:
             return pd.read_sql_query(query, conn).reset_index(drop=True)
 
@@ -287,8 +287,8 @@ class AdminRepository:
         )
         params = {"fit_id": fit_id}
         if getattr(self, "_reader", None) is not None:
-            fit_df = self._reader.read_df(fit_query, params=params, local=self._read_local())
-            items_df = self._reader.read_df(items_query, params=params, local=self._read_local())
+            fit_df = self._reader.read_df(fit_query, params=params)
+            items_df = self._reader.read_df(items_query, params=params)
             if fit_df.empty:
                 return ""
             fit = fit_df.iloc[0].to_dict()
@@ -759,15 +759,24 @@ class AdminRepository:
             )
 
     def _get_write_engine(self):
+        """Admin writes through a DatabaseConfig are disabled, both targets.
+
+        Under pyturso ``self._db.engine`` is a *writable* sync-dialect engine
+        on the frontend's own replica, and the frontend never push()es. A
+        "local" admin write would therefore commit into a ``-changes`` queue
+        that nothing drains: invisible to Turso, invisible to every other
+        viewer, and strictly worse than the pre-migration behavior where such
+        a write was merely useless. Tests inject ``_engine_override`` (a plain
+        SQLite engine over a real file) and are unaffected.
+        """
         override = getattr(self, "_engine_override", None)
         if override is not None:
             return override
-        if self._write_target == "remote":
-            return self._db.remote_engine
-        return self._db.engine
-
-    def _read_local(self) -> bool:
-        return self._write_target != "remote"
+        raise NotImplementedError(
+            f"Admin writes ({self._write_target}) are disabled during the "
+            "pyturso migration; pending the write-path rework "
+            "(local write + push)."
+        )
 
     @staticmethod
     def _normalize_write_target(write_target: str) -> str:

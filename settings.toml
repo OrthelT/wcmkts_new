@@ -68,7 +68,7 @@
 
 # Market configurations
 # REMINDER when adding/renaming a hub: its database_alias must ALSO be registered
-# in [db_paths] (alias -> file) and [freshness_probes] (alias -> probe table),
+# in [db_paths] (alias -> file),
 # and turso_secret_key needs a matching section in .streamlit/secrets.toml.
 # Guard test: uv run pytest tests/test_settings_toml.py
 [markets.primary]
@@ -114,7 +114,6 @@
 # database configurations, including utility databases other than for markets.
 # Every [markets.*] database_alias must have an entry here (see reminder above).
 [db_paths]
-    "wcmktprod" = "wcmktprod.db"
     "wcmktnorth" = "wcmktnorth2.db"
     "sde" = "sdelite.db"
     "build_cost" = "buildcost.db"
@@ -122,20 +121,15 @@
     "wcmktnewkeep" = "wcmktnewkeep.db"
     "wcmktbkg" = "wcmktbkg.db"
 
-[db_update]
-  "frequency" = 1 # frequency of scheduled db updates in hours 
-  "time" = 20 # minutes after the hour of scheduled updates 
-
 [db_turso_keys]
     "sde" = "sdelite_turso"
     "build_cost" = "buildcost_turso"
 
-[freshness_probes]
-    "wcmktprod" = "marketstats"
-    "wcmktnewkeep" = "marketstats"
-    "build_cost" = "buildcost"
-    "wcmktnorth" = "marketstats"
-    "wcmktbkg" = "marketstats"
+# Shared (non-market) databases included in the periodic 600s pull check.
+# Market hub aliases are always checked and must NOT be listed here.
+# sde is cold-start-only by design.
+[sync]
+    periodic_sync_aliases = ["build_cost"]
 
 [env_db_aliases]
     "prod" = "wcmktnewkeep"

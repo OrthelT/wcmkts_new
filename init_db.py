@@ -1,11 +1,19 @@
 from config import DatabaseConfig
 import os
 import sqlite3 as sql
+import threading
 from logging_config import setup_logging
 from time import perf_counter
 from settings_service import get_all_market_configs
 
 logger = setup_logging(__name__)
+
+# Serializes bootstrap across concurrent Streamlit sessions (script-run
+# threads share one process and one set of .db files). Without this, a
+# second session cold-starting mid-bootstrap sees the first session's
+# half-downloaded replica, judges it invalid, and re-syncs it redundantly.
+# The second entrant blocks, then re-verifies and skips completed work.
+_INIT_LOCK = threading.Lock()
 
 
 def verify_db_path(path):
@@ -40,31 +48,39 @@ def verify_db_content(path):
             "WHERE type='table' AND name NOT LIKE 'sqlite_%'"
         )
         count = cursor.fetchone()[0]
+        if count == 0:
+            conn.close()
+            return False
         conn.close()
-        return count > 0
+        # pyturso pairing invariant: a replica is only ready when its -info
+        # metadata is genuinely pyturso-shaped. A libsql-era -info is valid
+        # JSON (so a bare parse wrongly accepts it) or metadata-less .db must
+        # be removed and re-bootstrapped (sync()'s state machine enforces the
+        # same rule; enforcing it here routes cold start through resync).
+        from replica_metadata import classify_metadata
+
+        kind = classify_metadata(path)
+        if kind != "pyturso":
+            logger.warning(
+                f"DB {path} has {kind} metadata, not pyturso; treating as not ready"
+            )
+            return False
+        return True
     except Exception as e:
         logger.warning(f"DB content verification failed for {path}: {e}")
         return False
-
-
-def _remove_empty_db(path):
-    """Remove an empty/invalid database file and its libsql/WAL artifacts."""
-    for suffix in ("", "-shm", "-wal", "-info"):
-        file_path = path + suffix
-        if os.path.exists(file_path):
-            try:
-                os.remove(file_path)
-                logger.info(f"Removed invalid db file: {file_path}")
-            except OSError as e:
-                logger.warning(f"Failed to remove {file_path}: {e}")
 
 
 def init_db():
     """Initialize ALL local databases, syncing from Turso when needed.
 
     Checks each database for both file existence AND valid content (tables).
-    If a file exists but is empty (e.g., left behind by a failed sync),
-    it is removed and sync is re-attempted.
+    Invalid files are never removed here — sync() enforces the replica
+    validity invariants under _SYNC_LOCK and rebuilds via fresh bootstrap,
+    so an in-flight sync can't be clobbered from another thread.
+
+    Serialized by _INIT_LOCK: concurrent sessions cold-starting together
+    take turns, and the later ones re-verify (cheap) instead of re-syncing.
 
     Returns True only when every market and shared database has been
     verified to contain tables.  Returns False if any database could
@@ -94,33 +110,37 @@ def init_db():
 
     status = {}
 
-    for key, value in db_paths.items():
-        alias = key
-        db_path = value
-        db = DatabaseConfig(alias)
+    with _INIT_LOCK:
+        for key, value in db_paths.items():
+            alias = key
+            db_path = value
+            db = DatabaseConfig(alias)
 
-        try:
-            if verify_db_content(db_path):
-                logger.info(f"DB exists and has content: {db_path}✔️")
-                status[key] = "success initialized🟢"
-            else:
-                # File is missing, empty, or has no tables — need to sync
-                if verify_db_path(db_path):
-                    logger.warning(f"DB file exists but is empty/invalid: {db_path}, removing")
-                    _remove_empty_db(db_path)
-                else:
-                    logger.warning(f"DB path does not exist: {db_path}⚠️")
-                logger.info("syncing db")
-                logger.info(f"syncing db: {db_path}🛜")
-                db.sync()
+            try:
                 if verify_db_content(db_path):
-                    status[key] = "initialized and synced🟢"
+                    logger.info(f"DB exists and has content: {db_path}✔️")
+                    status[key] = "success initialized🟢"
                 else:
-                    status[key] = "synced but empty🔴"
-        except Exception as e:
-            logger.error(f"Error syncing db: {e}")
-            status[key] = "failed🔴"
-        logger.info(f"db initialization status: {key}: {status[key]}")
+                    # Missing, empty, or invalid — sync() nukes and
+                    # re-bootstraps invalid files under its own lock
+                    if verify_db_path(db_path):
+                        logger.warning(
+                            f"DB file exists but is empty/invalid: {db_path}; "
+                            "sync() will rebuild it"
+                        )
+                    else:
+                        logger.warning(f"DB path does not exist: {db_path}⚠️")
+                    logger.info("syncing db")
+                    logger.info(f"syncing db: {db_path}🛜")
+                    db.sync()
+                    if verify_db_content(db_path):
+                        status[key] = "initialized and synced🟢"
+                    else:
+                        status[key] = "synced but empty🔴"
+            except Exception as e:
+                logger.error(f"Error syncing db: {e}")
+                status[key] = "failed🔴"
+            logger.info(f"db initialization status: {key}: {status[key]}")
     logger.info("-"*100)
     logger.info("updating wcmkt state")
     logger.info("-"*100)
@@ -160,24 +180,25 @@ def ensure_market_db_ready(db_alias: str) -> bool:
     if verify_db_content(db.path):
         return True
 
-    # Database is missing or empty — attempt sync
-    logger.warning(f"Market database '{db_alias}' ({db.path}) not ready, attempting sync")
+    with _INIT_LOCK:
+        # Re-verify: another session may have bootstrapped it while we waited
+        if verify_db_content(db.path):
+            return True
 
-    if verify_db_path(db.path):
-        _remove_empty_db(db.path)
+        # Missing or invalid — sync() removes invalid files under _SYNC_LOCK
+        logger.warning(f"Market database '{db_alias}' ({db.path}) not ready, attempting sync")
+        try:
+            db.sync()
+        except Exception as e:
+            logger.error(f"Failed to sync market database '{db_alias}': {e}")
+            return False
 
-    try:
-        db.sync()
-    except Exception as e:
-        logger.error(f"Failed to sync market database '{db_alias}': {e}")
+        if verify_db_content(db.path):
+            logger.info(f"Market database '{db_alias}' synced and ready")
+            return True
+
+        logger.error(f"Market database '{db_alias}' still empty after sync")
         return False
-
-    if verify_db_content(db.path):
-        logger.info(f"Market database '{db_alias}' synced and ready")
-        return True
-
-    logger.error(f"Market database '{db_alias}' still empty after sync")
-    return False
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 
+import ui.sync_display as sync_display
 from state import sync_state
 from state.sync_state import SyncStatusUnavailableError
 
@@ -152,6 +153,104 @@ class TestGetMostRecentUpdateResilient:
 
         with pytest.raises(SyncStatusUnavailableError):
             sync_state.get_most_recent_update_resilient("wcmkt", "marketstats")
+
+
+class TestDegradedBackupBanner:
+    """Sidebar must warn when the active alias is serving restored-backup data.
+
+    Under pyturso there is no separate remote timestamp (local IS remote
+    after a pull), so `config.get_degraded_aliases()` is the sole signal
+    that the currently served local data came from a backup restore rather
+    than a live sync.
+    """
+
+    def _run(self, monkeypatch, degraded_aliases, active_alias="wcmkt"):
+        market = MagicMock()
+        market.database_alias = active_alias
+        monkeypatch.setattr("state.market_state.get_active_market", lambda: market)
+
+        session_state = {
+            "local_update_status": {
+                "updated": datetime(2026, 5, 17, 12, 0, tzinfo=timezone.utc),
+                "time_since": timedelta(minutes=10),
+            }
+        }
+        monkeypatch.setattr(sync_display.st, "session_state", session_state, raising=False)
+        monkeypatch.setattr(sync_display, "minutes_until_next_update", lambda: 30)
+        monkeypatch.setattr("config.get_degraded_aliases", lambda: degraded_aliases)
+
+        sidebar_mock = MagicMock()
+        monkeypatch.setattr(sync_display.st, "sidebar", sidebar_mock, raising=False)
+
+        sync_display.display_sync_status("en")
+        return sidebar_mock
+
+    def test_shows_warning_when_active_alias_is_degraded(self, monkeypatch):
+        restored_at = datetime(2026, 7, 1, 8, 30, tzinfo=timezone.utc)
+        sidebar_mock = self._run(monkeypatch, {"wcmkt": restored_at})
+
+        sidebar_mock.warning.assert_called_once()
+        message = sidebar_mock.warning.call_args.args[0]
+        assert "07-01 08:30 UTC" in message
+        assert "backup data" in message.lower()
+        assert not message.startswith("[")
+
+    def test_no_warning_when_active_alias_not_degraded(self, monkeypatch):
+        sidebar_mock = self._run(monkeypatch, {})
+
+        sidebar_mock.warning.assert_not_called()
+
+    def test_shows_warning_when_a_different_alias_is_degraded(self, monkeypatch):
+        """Non-active degraded aliases (e.g. sde, which never gets a periodic
+        sync) must still surface a warning — otherwise the flag would persist
+        forever unseen. The message is prefixed with the alias name so the
+        user knows which database is affected.
+        """
+        restored_at = datetime(2026, 7, 1, 8, 30, tzinfo=timezone.utc)
+        sidebar_mock = self._run(
+            monkeypatch, {"wcmktnorth": restored_at}, active_alias="wcmkt"
+        )
+
+        sidebar_mock.warning.assert_called_once()
+        message = sidebar_mock.warning.call_args.args[0]
+        assert message.startswith("[wcmktnorth]")
+        assert "07-01 08:30 UTC" in message
+        assert "backup data" in message.lower()
+
+    def test_shows_one_warning_per_degraded_alias(self, monkeypatch):
+        """Both the active alias and other degraded aliases must each get a
+        warning — no alias's degraded state should be invisible to the user.
+        """
+        active_restored_at = datetime(2026, 7, 1, 8, 30, tzinfo=timezone.utc)
+        other_restored_at = datetime(2026, 6, 15, 3, 0, tzinfo=timezone.utc)
+        sidebar_mock = self._run(
+            monkeypatch,
+            {"wcmkt": active_restored_at, "sde": other_restored_at},
+            active_alias="wcmkt",
+        )
+
+        assert sidebar_mock.warning.call_count == 2
+        messages = [call.args[0] for call in sidebar_mock.warning.call_args_list]
+        assert any("06-15 03:00 UTC" in m and m.startswith("[sde]") for m in messages)
+        assert any(
+            "07-01 08:30 UTC" in m and not m.startswith("[") for m in messages
+        )
+
+
+def test_get_most_recent_update_resilient_has_no_remote_param():
+    import inspect
+
+    from state.sync_state import get_most_recent_update_resilient
+
+    assert "remote" not in inspect.signature(get_most_recent_update_resilient).parameters
+
+
+def test_update_wcmkt_state_has_no_skip_remote_param():
+    import inspect
+
+    from state.sync_state import update_wcmkt_state
+
+    assert "skip_remote" not in inspect.signature(update_wcmkt_state).parameters
 
 
 if __name__ == "__main__":

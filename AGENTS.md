@@ -6,9 +6,9 @@ This file provides comprehensive guidance for LLM assistants (like Claude Code) 
 
 Winter Coalition Market Stats Viewer is a Streamlit web application for EVE Online market analysis. It provides real-time market data visualization, doctrine analysis, and inventory management tools for the Winter Coalition.
 The web app can be found here: https://wcmkts.streamlit.app/
-It also has a sister application, Winter Coalition Northern Supply, which supports a different market hub managed in a separate repository. 
+It covers three market hubs (primary, deployment, market3) in one app; `ui/market_selector.py` toggles between them.
 
-**Important:** ESI calls to update market data in wcmktprod.db are handled in a separate repository: https://github.com/OrthelT/mkts_backend
+**Important:** ESI calls to update market data are handled in a separate repository: https://github.com/OrthelT/mkts_backend
 
 ## Project Structure & Module Organization
 
@@ -28,15 +28,16 @@ All pages follow consistent patterns with Streamlit best practices:
 8. **`downloads.py`** (📥 Downloads) - Centralized CSV export for market data, doctrine fits, low stock items, and SDE tables. Uses Streamlit's callable pattern for lazy data loading.
 9. **`pricer.py`** (💰 Pricer) - Item and fitting price calculator similar to [Janice](https://janice.e-351.com/). EFT input renders a Janice-style fit availability hero (focal fits-available count, bottleneck callout, faction-equivalent aggregation toggle); tab- or space-separated multibuy renders a per-item grid with local + Jita totals.
 10. **`import_helper.py`** (Import Helper) - A visualisation tool to discover items with significantly larger price margin compared with Jita sell. Helps importers quickly spot price hikes to undercut.
+11. **`admin.py` and `admin_doctrines.py`** - Admin interfaces for watchlist and doctrine management (currently disabled during the pyturso migration; re-enabling requires a local-write-plus-push redesign).
 
 ### Core Modules
 
 **Database Layer:**
-- **`config.py`**: DatabaseConfig class managing SQLite/LibSQL connections with Turso cloud sync
+- **`config.py`**: DatabaseConfig class managing SQLite connections with pyturso pull-based Turso cloud sync
   - Uses `_SYNC_LOCK` to serialize sync operations; SQLite handles reader concurrency
-  - Manages 3 databases: wcmktprod (market), sdelite (static data), buildcost (manufacturing)
-  - `sync()` returns bool -- callers handle UI feedback and targeted cache invalidation
-  - Methods: `integrity_check()`, `sync()`, `local_matches_remote()`, `get_most_recent_update()`
+  - Manages 5 databases: one per market hub (`wcmktnewkeep`, `wcmktnorth`, `wcmktbkg`), plus `sde` (static data) and `build_cost` (manufacturing)
+  - `sync()` returns `SyncResult` (bool-compatible via `__bool__`, truthy == `ok`) -- callers handle UI feedback and targeted cache invalidation
+  - Methods: `integrity_check()`, `sync()`, `snapshot_backup()`, `restore_from_backup()`, `get_most_recent_update()`
 - **`models.py`**: SQLAlchemy ORM models using modern `mapped_column()` syntax
   - MarketStats, MarketOrders, MarketHistory, Doctrines, ShipTargets, DoctrineFits, ModuleEquivalents, etc.
 - **`sdemodels.py`**: SDE (Static Data Export) ORM models for InvTypes, InvGroups, InvCategories, Localization
@@ -88,8 +89,9 @@ All pages follow consistent patterns with Streamlit best practices:
 
 ### Local Databases
 
-Three synced SQLite replicas: **`wcmktprod.db`** (market orders/stats),
-**`sdelite.db`** (EVE Static Data Export, lightweight), **`buildcost.db`** (manufacturing).
+Five synced SQLite replicas: one per market hub — **`wcmktnewkeep.db`** (primary),
+**`wcmktnorth2.db`** (deployment), **`wcmktbkg.db`** (market3) — plus
+**`sdelite.db`** (EVE Static Data Export, lightweight) and **`buildcost.db`** (manufacturing).
 Schemas are defined in `models.py`, `sdemodels.py`, and `build_cost_models.py`.
 
 Non-obvious: `sdelite.db.localizations` holds ~210k localized item names for 8 languages
@@ -101,13 +103,14 @@ items with no translation in the requested language.
 
 ### Turso Embedded Replica Pattern
 
-The application uses Turso's embedded-replica feature for optimal performance:
-- Local SQLite databases (`wcmktprod.db`, `sdelite.db`) provide fast reads
-- Automatic synchronization with remote Turso database via libsql
+The application uses Turso's embedded-replica pattern for optimal performance:
+- Local SQLite databases (per-hub market DBs, `sdelite.db`, `buildcost.db`) provide fast reads
+- **Sync-dialect rule:** `DatabaseConfig.engine` opens the `sqlite+turso_sync` dialect whenever Turso credentials are present -- never the plain `sqlite+turso` dialect, which auto-checkpoints the WAL at 1000 frames and destroys the baseline `pull()` needs. Without credentials, `engine` degrades to a read-only local SQLite connection instead (never the sync dialect with no remote configured).
+- Synchronization is pull-based via the `pyturso` library: `sync()` opens a `turso.sync` connection and calls `pull()` (a real network round-trip each time -- there is no separate lightweight "check" step)
 - Sync serialized via `_SYNC_LOCK` (simple `threading.Lock`). SQLite handles its own reader concurrency
-- Integrity checks with `PRAGMA integrity_check` after sync
-- Malformed database auto-recovery with remote fallback via `BaseRepository.read_df()`
-- `sync()` returns bool -- callers handle UI feedback (toasts) and targeted cache invalidation
+- Integrity checks with `PRAGMA integrity_check` after sync; a failed check triggers one nuke + fresh-bootstrap retry
+- Malformed database auto-recovery via a backup-restore ladder in `BaseRepository.read_df()`: local read -> on malformed-class error, `db.sync()` + retry -> on sync failure, `db.restore_from_backup()` + retry -> raise
+- `sync()` returns `SyncResult` (bool-compatible via `__bool__`, truthy == `ok`) -- callers handle UI feedback (toasts) and targeted cache invalidation
 
 **Note:** Market data updates come from the separate backend repository (mkts_backend) which handles ESI API calls and populates the Turso remote database. This frontend application only reads and syncs from Turso.
 
@@ -117,22 +120,21 @@ Databases are managed via the `DatabaseConfig` class in `config.py`. Each instan
 ```python
 from config import DatabaseConfig
 
-mkt_db = DatabaseConfig("wcmktprod")   # wcmktprod.db — main market data
-sde_db = DatabaseConfig("sde")         # sdelite.db — static data
-bc_db  = DatabaseConfig("build_cost")  # buildcost.db — manufacturing
+mkt_db = DatabaseConfig("wcmktnewkeep")  # wcmktnewkeep.db — primary market data
+sde_db = DatabaseConfig("sde")           # sdelite.db — static data
+bc_db  = DatabaseConfig("build_cost")    # buildcost.db — manufacturing
 
-# Access engines
+# Access engine
 engine = mkt_db.engine        # SQLAlchemy engine (local file)
-remote = mkt_db.remote_engine # SQLAlchemy engine (Turso remote)
 
-# Sync from remote — returns bool; caller handles UI feedback
+# Pull from Turso — returns SyncResult (bool-compatible); caller handles UI feedback
 ok = mkt_db.sync()
 
 # Check integrity
 mkt_db.integrity_check()
 
 # CLI sync (from terminal)
-# uv run python config.py wcmktprod
+# uv run python config.py wcmktnewkeep
 ```
 
 ## Development Guidelines
@@ -177,7 +179,7 @@ The convention for every read is:
 2. Use **named** params, and `bindparam("ids", expanding=True)` for `IN` clauses
    (never string-interpolate values into SQL).
 3. Execute it through **`BaseRepository.read_df()`** — the single chokepoint that
-   provides malformed-DB recovery → sync-and-retry → remote fallback. A bare
+   provides malformed-DB recovery → sync-and-retry → backup-restore fallback. A bare
    `db.engine.connect()` + `pd.read_sql_query` gets **none** of that resilience,
    so a corrupt local `.db` makes those queries throw "no such table" instead of
    self-healing.
@@ -187,8 +189,8 @@ from sqlalchemy import text, bindparam
 from config import DatabaseConfig
 from repositories.base import BaseRepository
 
-# CORRECT — raw SQL through read_df() (recovery + remote fallback included)
-repo = BaseRepository(DatabaseConfig("wcmktprod"))
+# CORRECT — raw SQL through read_df() (recovery + backup-restore fallback included)
+repo = BaseRepository(DatabaseConfig("wcmktnewkeep"))
 query = text(
     "SELECT type_id, min_price FROM marketstats WHERE type_id IN :ids"
 ).bindparams(bindparam("ids", expanding=True))
@@ -200,8 +202,8 @@ df = get_market_repository().get_all_stats()  # cached DataFrame
 ```
 
 ```python
-# AVOID — bypasses read_df(), so no malformed-DB recovery / remote fallback
-with DatabaseConfig("wcmktprod").engine.connect() as conn:
+# AVOID — bypasses read_df(), so no malformed-DB recovery / backup-restore fallback
+with DatabaseConfig("wcmktnewkeep").engine.connect() as conn:
     df = pd.read_sql_query(query, conn, params={"ids": [34, 35]})
 ```
 
@@ -222,15 +224,16 @@ with DatabaseConfig("wcmktprod").engine.connect() as conn:
 ### Data Synchronization
 
 - **Manual sync**: Available via sidebar button in Streamlit UI
-- **Automatic sync**: Scheduled for 13:00 UTC daily (managed by sync scheduler)
+- **Automatic sync**: Not configuration-scheduled. `pages/components/db_refresh.py:145` polls on Streamlit reruns and calls `check_db()` once more than **600 s** have passed since the last check, so the cadence follows session activity. Nothing in `settings.toml` tunes it
+- **Sidebar countdown**: An *estimate*, not a schedule. `state/sync_state.py` (`_UPDATE_INTERVAL_MINUTES = 60`) adds 60 minutes to the last `updatelog` timestamp to guess when the **backend** next publishes. It schedules no frontend sync and is tied to no fixed minute past the hour
 - **Programmatic sync**: Use `DatabaseConfig.sync()` method
 - **Integrity validation**: Automatic PRAGMA integrity_check before/after sync
-- **Remote fallback**: Auto-fallback to remote queries if local DB is malformed
-- **Cold-start safety**: `init_db.py` validates database *content* (not just file existence) via `verify_db_content()`. Empty or corrupt files are removed and re-synced. `sync()` validates credentials before `libsql.connect()` and cleans up artifacts (`.db`, `-shm`, `-wal`, `-info`) on failure.
+- **Backup-restore fallback**: `BaseRepository.read_df()` auto-recovers a malformed local DB by syncing and retrying, then falling back to `DatabaseConfig.restore_from_backup()` (the last known-good `.bak`/`-info.bak` pair) if sync itself fails
+- **Cold-start safety**: `init_db.py` validates database *content* (not just file existence) via `verify_db_content()`. Invalid files (empty, corrupt, or old libsql-era replicas without a matching pyturso `-info` sidecar) are never deleted by `init_db` itself — `sync()` removes them under `_SYNC_LOCK` (via `_ensure_replica_consistency()`, which also nukes a paired `.db` with no user tables) and re-bootstraps. Bootstrap is single-flight: `_INIT_LOCK` in `init_db.py` serializes concurrent sessions so a second cold-starting session can't clobber the first session's in-flight sync; later entrants re-verify and skip completed work. `sync()` validates credentials before opening a `turso.sync` connection and cleans up artifacts (`.db`, `-shm`, `-wal`, `-info`, `-changes`, `-wal-revert`) on failure.
 
 **Important:** This application does NOT write market data. Market data updates are handled by the separate backend repository (mkts_backend) which calls ESI APIs and updates the Turso remote database.
 
-**Critical:** Databases must only be created through `DatabaseConfig.sync()`. `libsql.connect()` creates the local `.db` file as a side effect before syncing — if sync fails, the empty file will pass naive existence checks and cause "no such table" errors. Never use `os.path.exists()` alone to determine if a database is initialized; always check for actual table content.
+**Critical:** Databases must only be created through `DatabaseConfig.sync()`. Opening a `turso.sync` connection creates the local `.db` file as a side effect before syncing — if sync fails, the empty file will pass naive existence checks and cause "no such table" errors. Never use `os.path.exists()` alone to determine if a database is initialized; always check for actual table content.
 
 ## Testing Guidelines
 
@@ -245,6 +248,10 @@ with DatabaseConfig("wcmktprod").engine.connect() as conn:
 - Data shape/columns validation
 - Query correctness and error handling
 - Sync operations and integrity checks
+
+### Current Test Coverage
+The test suite covers repositories, services, database config, i18n, parser, pricer/fit-availability, and infrastructure:
+- 677 tests + 22 subtests passing (`uv run pytest -q`)
 
 ## Commit & Pull Request Guidelines
 
@@ -268,7 +275,65 @@ Include in PR description:
 - Notes on any database schema or configuration impacts
 - Performance implications (if any)
 
+## Troubleshooting
+
+### Database Connection Issues
+- **Local files missing**: Run `init_db.py` to initialize databases
+- **Sync failures**: Check Turso credentials in `.streamlit/secrets.toml`
+- **Integrity errors**: DatabaseConfig will auto-recover with `integrity_check()` and sync
+- **Malformed database**: Repository functions auto-detect and fall back through sync-and-retry, then `restore_from_backup()`, via the `read_df()` ladder
+- **Connection errors**: Review logs in `logs/` directory
+- **Empty db file on cold start**: Opening a `turso.sync` connection creates the `.db` file before syncing. If credentials are missing or sync fails, the empty file persists and causes "no such table" errors on subsequent runs. `init_db.py` detects this via `verify_db_content()` and re-runs `sync()`, which removes the invalid files under `_SYNC_LOCK` before re-bootstrapping. If `.db-info` exists alongside an empty `.db`, it indicates a prior interrupted sync.
+- **Credential naming mismatch**: Database aliases in `[db_paths]` (e.g., `sde`, `build_cost`) may not match Turso secret section names (e.g., `sdelite_turso`, `buildcost_turso`). Use `[db_turso_keys]` in `settings.toml` to map aliases to their correct secret section names. When adding a new database, ensure its turso key is either `{alias}_turso` or has an override in `[db_turso_keys]`.
+
+### Performance Issues
+- **Slow queries**: Use targeted cache invalidation (e.g., `invalidate_market_caches()`)
+- **Outdated data**: Check database sync status and last update time
+- **Memory usage**: Monitor during large data operations, consider pagination
+
+### Data Quality Issues
+- **Missing data**: Check if backend repository (mkts_backend) is running and updating remote DB
+- **Incorrect prices**: Verify Jita prices are current, check Fuzzworks API fallback
+- **Missing types**: Check SDE database is current and complete
+
+## Security & Configuration Tips
+
+- **Secrets management**: Store Turso URLs/tokens in `.streamlit/secrets.toml`; NEVER hard-code
+- **Environment variables**: `.env` supported via `python-dotenv`
+- **Git hygiene**: Database files and their pyturso/backup sidecars (`.db`, `-shm`, `-wal`, `-info`, `-changes`, `-wal-revert`, `.bak`, `-info.bak`) and logs (`*.log`) are git-ignored — all covered by the `*.db*` pattern in `.gitignore`
+- **API keys**: ESI API is public, but rate-limit aware code is in backend repo
+- **Authentication**: Turso auth tokens required for remote sync
+
 ## Architecture Summary
+
+```
+┌───────────────────────────────────────────────────────────────────────────────────────┐
+│                              Streamlit Frontend (app.py)                               │
+│  ┌──────────┬──────────┬──────────┬──────────┬──────────┬───────────┬───────────────┐ │
+│  │ Market   │ Doctrine │ Doctrine │ Low      │ Build    │ Downloads │ Pricer        │ │
+│  │ Stats    │ Status   │ Report   │ Stock    │ Costs    │           │               │ │
+│  └────┬─────┴────┬─────┴────┬─────┴────┬─────┴────┬─────┴─────┬─────┴───────┬───────┘ │
+│       └──────────┴──────────┴──────────┴──────────┴───────────┴─────────────┘         │
+│                                        │                                               │
+│                              services/ + repositories/                                 │
+└───────────────────────────────────────┬───────────────────────────────────────────────┘
+                                        │
+                                        ▼
+┌─────────────────────────────────────────────────────────────┐
+│              DatabaseConfig (config.py)                     │
+│  5 replicas: one per market hub (wcmktnewkeep,               │
+│  wcmktnorth, wcmktbkg), plus sdelite and buildcost           │
+│       │ Sync (pyturso pull, _SYNC_LOCK)                     │
+└───────┼─────────────────────────────────────────────────────┘
+        │
+        ▼
+┌─────────────────────────────────────────────────────────────┐
+│           Turso Cloud Database (Remote)                     │
+│                                                             │
+│  Updated by: mkts_backend repo (ESI API calls)             │
+│  https://github.com/OrthelT/mkts_backend                   │
+└─────────────────────────────────────────────────────────────┘
+```
 
 **Data Flow:**
 1. Backend repo (mkts_backend) fetches market data from ESI API
@@ -278,7 +343,12 @@ Include in PR description:
 5. `_SYNC_LOCK` serializes sync operations; SQLite handles reader concurrency
 
 **Key Principles:**
-- Frontend is read-only for market data
+- Frontend is read-only for market data. The `industry_index` ESI cache was the
+  one exception (a write into the synced `build_cost` replica); it now lives in
+  the local-only, never-synced `streamlit_cache.db`, so there is no exception
+  left for market data (see `repositories/build_cost_repo.py`). The admin
+  watchlist/doctrine write path (`admin_repo.py`) is separate and currently
+  disabled in the UI -- see the deferred local-write-plus-push redesign above.
 - Local SQLite replicas provide fast reads
 - Turso sync provides data freshness
 - Targeted cache invalidation after sync (market caches only)
@@ -392,6 +462,44 @@ from state.session_state import ss_get  # ✗ state!
 
 ## External Resources
 
+- **Current version**: 0.6.8 (see `README.md` for the full changelog)
+- **Python version**: 3.12+
+- **Package manager**: uv (preferred)
+- **Main branch**: main
+
+## Additional Resources & Documentation Index
+
+### Documentation (`docs/` directory)
+
+**User Documentation:**
+- `docs_cn.md` - Chinese translation of user guide
+
+**Technical Reference:**
+- `architecture_reference.md` - Definitive technical reference for the current architecture
+- `change_log.md` - Change log covering the v0.2.0 refactoring (Phases 1-13) through v0.6.x releases
+- `module_equivalents.md` - Module equivalents feature architecture, CLI usage, and aggregation pipeline
+- `testing.md` - Testing guidelines and pytest patterns
+
+**Guides:**
+- `admin_guide.md` - Administrative guide for managing the application
+- `walkthrough.md` - Step-by-step walkthroughs
+
+### Project Directories
+- **`domain/`**: Core business models (FitItem, FitSummary, StockStatus, ShipRole, PricedItem, MarketConfig, converters)
+- **`repositories/`**: Database access layer (BaseRepository, DoctrineRepository, MarketRepository, MarketOrdersRepository, BuildCostRepository, SDERepository)
+- **`services/`**: Business logic (DoctrineService, MarketService, BuildCostService, BuilderHelperService, JitaPriceService, PricerService, ImportHelperService, LowStockService, SelectionService, ModuleEquivalentsService, TypeResolutionService, TypeNameLocalization, categorization)
+- **`state/`**: Session state management (ss_get, ss_has, ss_set, ss_init, get_service, language_state, market_state)
+- **`ui/`**: UI formatting utilities, column configurations, reusable popover components, i18n translations, market selector, page chrome
+- **`pages/`**: Streamlit application pages
+- **`pages/components/`**: Extracted Streamlit rendering components (market_components, dashboard_components, db_refresh, page_chrome)
+- **`parser/`**: EFT fitting and item list parser (open source contribution)
+- **`tests/`**: pytest unit tests (677 tests, 22 subtests)
+- **`docs/`**: Documentation
+- **`logs/`**: Application logs (git-ignored)
+- **`images/`**: UI assets
+- **`depreciated-code/`**: Legacy code archive
+
+### External Resources
 - **Backend repository**: https://github.com/OrthelT/mkts_backend (ESI API integration, market data updates)
 - **Live app**: https://wcmkts.streamlit.app/
 

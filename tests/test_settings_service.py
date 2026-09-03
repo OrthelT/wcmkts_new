@@ -99,3 +99,16 @@ def test_doctrine_override_raises_when_market_key_is_wrong_type(monkeypatch):
     )
     with pytest.raises(ValueError, match="use_market_key"):
         settings_service.get_doctrine_override("wcmktnewkeep")
+
+
+def test_get_periodic_sync_aliases():
+    from settings_service import get_periodic_sync_aliases
+
+    aliases = get_periodic_sync_aliases()
+    assert aliases == ["build_cost"]
+
+
+def test_freshness_probe_accessor_removed():
+    import settings_service
+
+    assert not hasattr(settings_service, "get_freshness_probe_aliases")

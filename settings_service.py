@@ -27,14 +27,14 @@ def _load_settings(settings_path: Path = Path("settings.toml")) -> dict:
         raise
 
 
-def get_freshness_probe_aliases() -> list[str]:
-    """Return database aliases configured for post-sync freshness probes.
+def get_periodic_sync_aliases() -> list[str]:
+    """Return shared (non-market) DB aliases included in the periodic pull check.
 
-    Source of truth for "which DBs participate in periodic staleness
-    checking" — driven by ``[freshness_probes]`` in settings.toml.
+    Driven by ``[sync] periodic_sync_aliases`` in settings.toml. Market hub
+    aliases are always checked and are not listed here.
     """
     settings = _load_settings()
-    return list(settings.get("freshness_probes", {}).keys())
+    return list(settings.get("sync", {}).get("periodic_sync_aliases", []))
 
 
 def get_doctrine_override(market_alias: str) -> str | None:

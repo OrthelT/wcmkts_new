@@ -1,0 +1,21 @@
+name: Tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+      - run: uv sync
+      - run: uv run pytest -q
+        env:
+          # Pin the terminal width Rich tables render against so column
+          # truncation is deterministic across runners, instead of relying
+          # on whatever COLUMNS a given runner happens to default to.
+          COLUMNS: "80"
+          TERM: dumb

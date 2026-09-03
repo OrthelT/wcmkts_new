@@ -50,52 +50,21 @@ def initialize_databases() -> bool:
     return st.session_state.get("db_initialized", False)
 
 
-@st.cache_data(ttl=600)
-def check_for_db_updates(db_alias: str) -> tuple[bool, datetime]:
-    """Check whether local and remote databases are in sync.
-
-    Returns True if the database is in sync or if remote credentials are
-    unavailable (local-only mode).
-
-    The db_alias must be an explicit alias (e.g. "wcmktprod", "wcmktnorth")
-    so the cache key correctly distinguishes between markets.
-    """
-    db = DatabaseConfig(db_alias)
-    if not db.has_remote_credentials:
-        logger.info(f"check_for_db_updates(): skipping remote validation for {db_alias}")
-        local_time = datetime.now()
-        return True, local_time
-    check = db.local_matches_remote()
-    local_time = datetime.now()
-    return check, local_time
-
-
 def check_db(manual_override: bool = False):
-    """Check for database updates on *all* markets and sync any that are stale.
+    """Pull every market + configured shared DB; refresh UI if anything changed.
 
-    Both market databases receive ESI updates at the same time, so we check
-    all of them regardless of which market is currently active.
+    pull() IS the staleness check under pyturso: a cheap no-op round-trip
+    when the replica is current, True when new data was applied.
     """
-    from settings_service import get_all_market_configs, get_freshness_probe_aliases
+    from settings_service import get_all_market_configs, get_periodic_sync_aliases
 
     market_aliases = {cfg.database_alias for cfg in get_all_market_configs().values()}
-    # Any alias with a freshness probe that isn't a market hub is a shared DB
-    # (e.g. build_cost, sde) that also needs periodic staleness checks.
-    shared_aliases = [a for a in get_freshness_probe_aliases() if a not in market_aliases]
-    all_aliases = list(market_aliases) + shared_aliases
+    all_aliases = list(market_aliases) + get_periodic_sync_aliases()
 
-    if manual_override:
-        check_for_db_updates.clear()
-        logger.info("*" * 60)
-        logger.info("check_for_db_updates() cache cleared for manual override")
-        logger.info("*" * 60)
-
-    synced_any = False
     synced_aliases: list[str] = []
-    any_stale = False
     any_sync_failed = False
     local_only_mode = False
-    status_ctx = None  # lazily created the first time we actually sync
+    status_ctx = None  # lazily created the first time a pull returns changes
 
     for alias in all_aliases:
         db = DatabaseConfig(alias)
@@ -103,43 +72,27 @@ def check_db(manual_override: bool = False):
             logger.info(f"check_db(): skipping {alias}; no remote credentials configured")
             local_only_mode = True
             continue
-        check, local_time = check_for_db_updates(alias)
-        now = time.time()
-        logger.info(f"check_db() check: {check}, time: {local_time}, alias: {alias}")
-        logger.info(
-            f"last_check: {round(now - st.session_state.get('last_check', 0), 2)} seconds ago"
-        )
-
-        if not check:
-            any_stale = True
-            logger.info(f"check_db() {alias} is stale, syncing")
-            # Lazily create the status container on the first stale DB so
-            # users see feedback during both manual and periodic syncs, but
-            # no UI flashes when everything is already up to date.
+        try:
+            result = db.sync()
+        except Exception:
+            logger.error(f"Sync error for {alias}", exc_info=True)
+            any_sync_failed = True
+            st.toast(f"Sync error for {alias}", icon="❌")
+            continue
+        logger.info(f"check_db() {alias}: ok={result.ok} changed={result.changed}")
+        if not result.ok:
+            any_sync_failed = True
+            st.toast(f"Sync failed for {alias}", icon="❌")
+            continue
+        if result.changed:
+            synced_aliases.append(alias)
             if status_ctx is None:
                 st.toast("Syncing database…", icon="🔄")
                 st.space("medium")
                 status_ctx = st.status("Syncing database…", expanded=False)
-            status_ctx.update(label=f"Syncing {alias}…", state="running")
-            try:
-                db.sync()
-                if db.local_matches_remote():
-                    logger.info(f"{alias} synced and validated")
-                    synced_any = True
-                    synced_aliases.append(alias)
-                else:
-                    logger.warning(f"{alias} sync failed validation")
-                    any_sync_failed = True
-                    st.toast(f"Sync failed for {alias}", icon="❌")
-            except Exception:
-                logger.error(f"Sync error for {alias}", exc_info=True)
-                any_sync_failed = True
-                st.toast(f"Sync error for {alias}", icon="❌")
+            status_ctx.update(label=f"Synced {alias}", state="running")
 
-    if synced_any:
-        # Drop the freshness-check cache so the next run doesn't resync from
-        # a stale "stale" verdict cached before the sync happened.
-        check_for_db_updates.clear()
+    if synced_aliases:
         if not market_aliases.isdisjoint(synced_aliases):
             refresh_market_caches()
         if "build_cost" in synced_aliases:
@@ -156,11 +109,9 @@ def check_db(manual_override: bool = False):
             status_ctx.update(label=final_label, state=final_state, expanded=False)
         st.toast("Database synced successfully. Loading updated data.", icon="✅")
         st.rerun()
-    elif any_sync_failed and status_ctx is not None:
-        status_ctx.update(label="Sync failed", state="error", expanded=False)
-    elif local_only_mode and not any_stale and manual_override:
+    elif local_only_mode and manual_override:
         st.toast("Local-only mode: remote sync checks skipped", icon="ℹ️")
-    elif not any_stale and manual_override:
+    elif not any_sync_failed and manual_override:
         # User clicked "Update Data" but there's nothing new — tell them
         # when the next automated update will land.
         from state.language_state import get_active_language

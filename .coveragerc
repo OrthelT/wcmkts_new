@@ -18,7 +18,6 @@ omit =
     *.db*
     *.csv
     images/*
-    run_tests.py
     example_test_run.py
     app.py
     pages/*

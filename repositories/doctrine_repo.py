@@ -732,7 +732,7 @@ def _resolve_doctrine_display_alias(db_alias: str | None = None) -> str | None:
 
 
 @st.cache_data(ttl=600)
-def get_friendly_names_with_cache(db_alias: str = "wcmktprod") -> dict[str, str]:
+def get_friendly_names_with_cache(db_alias: str = "wcmktnewkeep") -> dict[str, str]:
     """Load doctrine_name -> friendly_name mapping from the doctrine_fits table.
 
     Returns a dict of {doctrine_name: friendly_name} for all rows where

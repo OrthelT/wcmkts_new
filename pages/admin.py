@@ -8,12 +8,8 @@ import streamlit as st
 from init_db import ensure_market_db_ready
 from logging_config import setup_logging
 from pages.components.header import render_page_title
-from repositories.sde_repo import SDERepository
-from config import DatabaseConfig
-from services.admin_service import get_admin_service
 from services.eve_sso_service import get_eve_sso_service
-from settings_service import SettingsService
-from state import clear_admin_auth_state, get_admin_identity
+from state import get_admin_identity
 from ui.market_selector import render_market_selector
 
 logger = setup_logging(__name__, log_file="admin_page.log")
@@ -81,12 +77,6 @@ def lookup_sde_row(
         "category_id": int(row["categoryID"]),
         "category_name": str(row["categoryName"]),
     }
-
-
-@st.cache_resource
-def _get_sde_types_for_admin() -> pd.DataFrame:
-    """Load the full sdeTypes table once per session for admin autocomplete + lookups."""
-    return SDERepository(DatabaseConfig("sde")).get_sde_table("sdetypes")
 
 
 def _ensure_state() -> None:
@@ -303,38 +293,13 @@ def main() -> None:
 
     _ensure_state()
 
-    settings = SettingsService()
-    service = get_admin_service()
-    watchlist_df = service.get_watchlist()
-    if watchlist_df.empty:
-        watchlist_df = pd.DataFrame(columns=WATCHLIST_COLUMNS)
-    sdetypes_df = _get_sde_types_for_admin()
-
-    st.caption(
-        f"Signed in as {verified_identity['character_name']} ({verified_identity['character_id']})"
+    st.warning(
+        "Admin is disabled during the pyturso migration. Reads and writes both "
+        "route through the remote write path, which was removed when pyturso "
+        "made every engine local. Re-enabling it needs a local-write-plus-push "
+        "rework, deferred by decision."
     )
-    st.caption(f"Write target: {settings.admin_write_target} | Market: {market.name}")
-
-    col_logout, col_login = st.columns(2)
-    with col_logout:
-        if st.button("Log out", width="content"):
-            clear_admin_auth_state()
-            st.switch_page("pages/admin_login.py")
-    with col_login:
-        st.page_link("pages/admin_login.py", label="Login Page", width="content")
-
-    _render_notice()
-
-    st.divider()
-    payload = _render_add_section(watchlist_df, sdetypes_df)
-    if payload is not None:
-        _commit_save(service, payload, signed_identity)
-        return
-
-    st.divider()
-    payload = _render_remove_section(watchlist_df)
-    if payload is not None:
-        _commit_save(service, payload, signed_identity)
+    st.stop()
 
 
 if __name__ == "__main__":

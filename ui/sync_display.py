@@ -107,6 +107,16 @@ def display_sync_status(language_code: str = "en"):
         unsafe_allow_html=True,
     )
 
+    from config import get_degraded_aliases
+
+    degraded = get_degraded_aliases()
+    for alias, restored in sorted(degraded.items()):
+        restored_at = restored.strftime("%m-%d %H:%M UTC")
+        msg = translate_text(language_code, "sync_status.degraded_backup", time=restored_at)
+        if alias != active_alias:
+            msg = f"[{alias}] {msg}"
+        st.sidebar.warning(msg)
+
     minutes_remaining = minutes_until_next_update()
     if minutes_remaining is None:
         st.sidebar.caption(translate_text(language_code, "sync_status.countdown_unavailable"))

@@ -530,13 +530,22 @@ def test_prepare_local_write_disposes_stale_connections():
     db._dispose_local_connections.assert_called_once()
 
 
-def test_default_write_engine_uses_local_target():
+def test_local_write_target_raises_not_implemented():
+    """A "local" admin write would commit into a CDC queue the frontend never
+    pushes — invisible to Turso and to every other viewer — so it is refused
+    exactly like a remote one."""
     db = MagicMock()
     db.engine = object()
-    db.remote_engine = object()
     repo = AdminRepository(db)
 
-    assert repo._get_write_engine() is db.engine
+    with pytest.raises(NotImplementedError):
+        repo._get_write_engine()
+
+
+def test_remote_write_target_raises_not_implemented():
+    repo = AdminRepository(MagicMock(), write_target="remote")
+    with pytest.raises(NotImplementedError):
+        repo._get_write_engine()
 
 
 def test_write_target_property_exposes_normalized_local_default():
@@ -553,7 +562,9 @@ def test_write_target_property_exposes_normalized_local_target():
     assert repo.write_target == "local"
 
 
-def test_remote_admin_reader_reads_remote_source():
+def test_admin_reader_reads_without_local_kwarg():
+    # Reads always go through BaseRepository.read_df() (local, pyturso-backed)
+    # regardless of write_target -- the local= kwarg was removed from read_df.
     db = MagicMock()
     repo = AdminRepository(db, write_target="remote")
     repo._reader = MagicMock()
@@ -562,7 +573,7 @@ def test_remote_admin_reader_reads_remote_source():
     repo.get_watchlist()
 
     _, kwargs = repo._reader.read_df.call_args
-    assert kwargs["local"] is False
+    assert "local" not in kwargs
 
 
 def test_get_doctrine_fit_eft_returns_current_fit_text(tmp_path):
@@ -880,3 +891,13 @@ def test_update_doctrine_fit_refreshes_existing_lead_ship(tmp_path):
 
     assert lead_ship["lead_ship"] == 4
     assert lead_ship["fit_id"] == 20
+
+
+def test_admin_pages_state_the_disabled_reason_before_failing():
+    """Both pages showed 'Write target: remote' and then raised. State the
+    deferral instead."""
+    from pathlib import Path
+
+    for page in ("pages/admin.py", "pages/admin_doctrines.py"):
+        text = Path(page).read_text()
+        assert "disabled during the pyturso migration" in text, page
