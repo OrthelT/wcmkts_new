@@ -26,8 +26,21 @@ DEFAULT_SHIP_TARGET = 20
 # Database Configuration
 # =============================================================================
 
-# Global lock to serialize sync operations within the process
-_SYNC_LOCK = threading.Lock()
+# Per-alias locks serializing sync operations within the process.
+# The lock exists to stop two threads mutating the *same* replica's files;
+# different aliases own disjoint files, so a single process-wide lock only
+# serialized unrelated network pulls and made concurrent bootstrap pointless.
+_SYNC_LOCKS: dict[str, threading.Lock] = {}
+_SYNC_LOCKS_GUARD = threading.Lock()
+
+
+def _sync_lock(alias: str) -> threading.Lock:
+    """Return the process-wide lock guarding one alias's replica files."""
+    with _SYNC_LOCKS_GUARD:
+        lock = _SYNC_LOCKS.get(alias)
+        if lock is None:
+            lock = _SYNC_LOCKS[alias] = threading.Lock()
+        return lock
 
 
 @dataclass(frozen=True)
@@ -393,7 +406,7 @@ class DatabaseConfig:
     def sync(self) -> SyncResult:
         """Pull remote changes into the local replica safely.
 
-        Serialized by _SYNC_LOCK with dispose-before-sync. Enforces the
+        Serialized by this alias's sync lock with dispose-before-sync. Enforces the
         file-state machine, retries once via nuke + fresh bootstrap on
         integrity failure, snapshots a backup pair on success, and clears
         the degraded registry.
@@ -417,7 +430,7 @@ class DatabaseConfig:
             f"sync() starting for {self.alias} (url={self.turso_url}) at "
             f"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}"
         )
-        with _SYNC_LOCK:
+        with _sync_lock(self.alias):
             self._dispose_local_connections()
             self._ensure_replica_consistency()
             file_existed = os.path.exists(self.path)
@@ -568,7 +581,7 @@ class DatabaseConfig:
             return False
 
         tmp_db, tmp_info = self.path + ".tmp", self.path + "-info.tmp"
-        with _SYNC_LOCK:
+        with _sync_lock(self.alias):
             try:
                 shutil.copy2(bak, tmp_db)
                 shutil.copy2(info_bak, tmp_info)

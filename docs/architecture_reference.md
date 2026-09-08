@@ -122,7 +122,7 @@ All domain dataclasses use `frozen=True` for immutability and safe caching.
 | File | Purpose |
 |------|---------|
 | `app.py` | Streamlit entry point with page routing |
-| `config.py` | `DatabaseConfig` -- SQLite/LibSQL connections, Turso sync, `_SYNC_LOCK` |
+| `config.py` | `DatabaseConfig` -- SQLite/LibSQL connections, Turso sync, per-alias `_sync_lock()` |
 | `models.py` | SQLAlchemy ORM models (MarketStats, Doctrines, DoctrineFits, etc.) |
 | `sdemodels.py` | SDE ORM models (InvTypes, InvGroups, InvCategories) |
 | `build_cost_models.py` | Manufacturing ORM models (Structures, IndustryIndex, Rigs) |
