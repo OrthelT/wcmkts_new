@@ -7,7 +7,7 @@ helping builders identify the most profitable items to manufacture.
 
 import streamlit as st
 
-from init_db import ensure_market_db_ready
+from pages.components.db_refresh import ensure_active_market_fresh
 from logging_config import setup_logging
 from state import get_active_language
 from services.builder_helper_service import get_builder_helper_service
@@ -54,7 +54,7 @@ def main():
     language_code = get_active_language()
     market = render_market_selector()
 
-    if not ensure_market_db_ready(market.database_alias):
+    if not ensure_active_market_fresh(market.database_alias):
         st.error(
             f"Database for **{market.name}** is not available. "
             "Check Turso credentials and network connectivity."

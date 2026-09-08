@@ -172,10 +172,33 @@ def maybe_run_check():
             for alias in aliases_to_check()
             if now - _last_check_by_alias.get(alias, 0.0) > _CHECK_INTERVAL_SECONDS
         ]
+        # Claim the stale aliases while still holding the lock. check_db()
+        # marks them too, but it re-acquires the lock to do so; without this
+        # claim two concurrent sessions can both see the same alias as stale
+        # and start the same pull.
+        for alias in stale:
+            _last_check_by_alias[alias] = now
     if not stale:
         return
     logger.info(f"running check_db() for stale aliases: {stale}")
     check_db(aliases=stale)
+
+
+def ensure_active_market_fresh(alias: str) -> bool:
+    """Ready the active hub's replica and run the periodic staleness check.
+
+    Every market-aware page calls this instead of ensure_market_db_ready()
+    directly. ensure_market_db_ready() returns immediately when a replica has
+    content, however stale, so a page that only called it served a hub the
+    user had just switched to without ever pulling it.
+
+    Returns:
+        True if the replica is ready to query, False otherwise.
+    """
+    if not ensure_market_db_ready(alias):
+        return False
+    maybe_run_check()
+    return True
 
 
 def ensure_init_and_check() -> bool:

@@ -136,3 +136,49 @@ class TestProcessWideGuard:
             db_refresh.maybe_run_check()
 
         assert all(ts is not None for ts in seen)
+
+
+class TestConcurrentClaim:
+    def test_two_threads_start_only_one_check(self, env):
+        """maybe_run_check() claims stale aliases while still holding the lock.
+
+        Marking only inside check_db() left a window in which two sessions
+        could both see the same alias as stale and start the same pull.
+        """
+        import threading
+
+        invocations = []
+        barrier = threading.Barrier(2)
+
+        def slow_check_db(aliases=None, manual_override=False):
+            invocations.append(aliases)
+
+        def run():
+            barrier.wait()
+            db_refresh.maybe_run_check()
+
+        with patch.object(db_refresh, "check_db", side_effect=slow_check_db):
+            threads = [threading.Thread(target=run) for _ in range(2)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
+        assert invocations == [[PRIMARY, SHARED]]
+
+
+class TestEnsureActiveMarketFresh:
+    def test_runs_the_periodic_check_when_the_db_is_ready(self):
+        with patch.object(
+            db_refresh, "ensure_market_db_ready", return_value=True
+        ) as ready, patch.object(db_refresh, "maybe_run_check") as check:
+            assert db_refresh.ensure_active_market_fresh(PRIMARY) is True
+        ready.assert_called_once_with(PRIMARY)
+        check.assert_called_once_with()
+
+    def test_skips_the_check_when_the_db_is_not_ready(self):
+        with patch.object(
+            db_refresh, "ensure_market_db_ready", return_value=False
+        ), patch.object(db_refresh, "maybe_run_check") as check:
+            assert db_refresh.ensure_active_market_fresh(PRIMARY) is False
+        check.assert_not_called()

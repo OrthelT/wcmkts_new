@@ -1,7 +1,7 @@
 import requests
 from state import get_active_language, ss_init
 from ui.market_selector import render_market_selector
-from init_db import ensure_market_db_ready
+from pages.components.db_refresh import ensure_active_market_fresh
 from ui.formatters import display_build_cost_tool_description
 from ui.i18n import translate_text
 from services import get_price_service, get_type_resolution_service
@@ -438,7 +438,7 @@ def main():
     language_code = get_active_language()
     market = render_market_selector()
 
-    if not ensure_market_db_ready(market.database_alias):
+    if not ensure_active_market_fresh(market.database_alias):
         st.error(
             f"Database for **{market.name}** is not available. "
             "Check Turso credentials and network connectivity."

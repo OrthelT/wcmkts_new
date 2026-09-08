@@ -510,22 +510,34 @@ class DatabaseConfig:
         """Copy the live ``.db`` + ``.db-info`` pair to ``.bak`` files.
 
         Pure file copy — the caller (sync()) is responsible for having
-        checkpointed the WAL first so the main file is complete. Each copy
-        goes to a temp file then an atomic os.replace(), so a mid-copy crash
-        cannot leave a torn backup. Best-effort: returns False on any error.
+        checkpointed the WAL first so the main file is complete. BOTH halves
+        are staged to ``.tmp`` files before either is published, then moved
+        into place back to back. Copying and replacing one file at a time
+        could leave a new ``.db.bak`` paired with an old ``-info.bak`` if the
+        second copy failed, and _backup_pair_exists() — which checks
+        existence only — would accept that torn pair. Best-effort: returns
+        False on any error.
         """
+        pairs = (
+            (self.path, self.path + ".bak"),
+            (self.path + "-info", self.path + "-info.bak"),
+        )
+        staged: list[tuple[str, str]] = []
         try:
-            for src, dst in (
-                (self.path, self.path + ".bak"),
-                (self.path + "-info", self.path + "-info.bak"),
-            ):
+            for src, dst in pairs:
                 tmp = dst + ".tmp"
                 shutil.copy2(src, tmp)
+                staged.append((tmp, dst))
+            for tmp, dst in staged:
                 os.replace(tmp, dst)
             logger.info(f"snapshot_backup: wrote backup pair for {self.alias}")
             return True
         except OSError as e:
             logger.error(f"snapshot_backup failed for {self.alias}: {e}")
+            for tmp, _ in staged:
+                with suppress(OSError):
+                    if os.path.exists(tmp):
+                        os.remove(tmp)
             return False
 
     def restore_from_backup(self) -> bool:
