@@ -432,6 +432,23 @@ class DatabaseConfig:
                 raise
             changed = changed or not file_existed  # fresh bootstrap == new data
 
+            if not changed:
+                # pull() applied nothing, so no byte of the replica moved.
+                # integrity_check reads the whole file (2.3 s on the 147 MB
+                # primary hub) and snapshot_backup copies it -- both would be
+                # re-verifying and re-copying bytes this sync did not touch.
+                # Corruption that arrives from outside sync is still caught:
+                # _ensure_replica_consistency nukes an unreadable replica on
+                # the next sync, and BaseRepository.read_df's ladder falls
+                # through to restore_from_backup() when a read actually fails.
+                if not self._backup_pair_exists():
+                    # Post-sync invariant: a usable backup pair exists, so the
+                    # restore ladder always has something to fall back to.
+                    self.snapshot_backup()
+                clear_degraded(self.alias)
+                logger.info("-" * 40)
+                return SyncResult(ok=True, changed=False)
+
             ok = self.integrity_check()
             if not ok:
                 logger.warning(
@@ -465,6 +482,16 @@ class DatabaseConfig:
                 with suppress(OSError):
                     os.remove(file_path)
                     logger.info(f"Removed replica artifact {file_path}")
+
+    def _backup_pair_exists(self) -> bool:
+        """True when both halves of the ``.bak`` pair are present.
+
+        A lone ``.db.bak`` is not a restorable backup -- restore_from_backup()
+        needs the ``-info.bak`` sidecar with it.
+        """
+        return os.path.exists(self.path + ".bak") and os.path.exists(
+            self.path + "-info.bak"
+        )
 
     def snapshot_backup(self) -> bool:
         """Copy the live ``.db`` + ``.db-info`` pair to ``.bak`` files.

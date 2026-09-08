@@ -224,10 +224,10 @@ with DatabaseConfig("wcmktnewkeep").engine.connect() as conn:
 ### Data Synchronization
 
 - **Manual sync**: Available via sidebar button in Streamlit UI
-- **Automatic sync**: Not configuration-scheduled. `pages/components/db_refresh.py:145` polls on Streamlit reruns and calls `check_db()` once more than **600 s** have passed since the last check, so the cadence follows session activity. Nothing in `settings.toml` tunes it
+- **Automatic sync**: Not configuration-scheduled. `maybe_run_check()` in `pages/components/db_refresh.py` polls on Streamlit reruns and calls `check_db()` for any alias whose last check is more than **600 s** old, so the cadence follows session activity. Nothing in `settings.toml` tunes it. The timestamps (`_last_check_by_alias`) are **per-alias and process-wide**, not per-session: the replica is a process-wide file, so a new browser session inherits an existing check instead of repeating it. Only the **active** market hub plus `[sync] periodic_sync_aliases` are checked (`aliases_to_check()`); an inactive hub has no timestamp, so switching to it triggers its check at once
 - **Sidebar countdown**: An *estimate*, not a schedule. `state/sync_state.py` (`_UPDATE_INTERVAL_MINUTES = 60`) adds 60 minutes to the last `updatelog` timestamp to guess when the **backend** next publishes. It schedules no frontend sync and is tied to no fixed minute past the hour
 - **Programmatic sync**: Use `DatabaseConfig.sync()` method
-- **Integrity validation**: Automatic PRAGMA integrity_check before/after sync
+- **Integrity validation**: `PRAGMA integrity_check` runs after a sync that actually changed the replica (a pull with new data, or a fresh bootstrap). A pull reporting `changed=False` moved no bytes, so `sync()` returns early and skips both the check and `snapshot_backup()` — verifying and re-copying a 147 MB file that nothing wrote to cost ~2.4 s per check. Corruption arriving from outside sync is still caught: `_ensure_replica_consistency()` nukes an unreadable replica on the next sync, and `BaseRepository.read_df()`'s ladder falls through to `restore_from_backup()` when a read actually fails
 - **Backup-restore fallback**: `BaseRepository.read_df()` auto-recovers a malformed local DB by syncing and retrying, then falling back to `DatabaseConfig.restore_from_backup()` (the last known-good `.bak`/`-info.bak` pair) if sync itself fails
 - **Cold-start safety**: `init_db.py` validates database *content* (not just file existence) via `verify_db_content()`. Invalid files (empty, corrupt, or old libsql-era replicas without a matching pyturso `-info` sidecar) are never deleted by `init_db` itself — `sync()` removes them under `_SYNC_LOCK` (via `_ensure_replica_consistency()`, which also nukes a paired `.db` with no user tables) and re-bootstraps. Bootstrap is single-flight: `_INIT_LOCK` in `init_db.py` serializes concurrent sessions so a second cold-starting session can't clobber the first session's in-flight sync; later entrants re-verify and skip completed work. `sync()` validates credentials before opening a `turso.sync` connection and cleans up artifacts (`.db`, `-shm`, `-wal`, `-info`, `-changes`, `-wal-revert`) on failure.
 
@@ -251,7 +251,7 @@ with DatabaseConfig("wcmktnewkeep").engine.connect() as conn:
 
 ### Current Test Coverage
 The test suite covers repositories, services, database config, i18n, parser, pricer/fit-availability, and infrastructure:
-- 677 tests + 22 subtests passing (`uv run pytest -q`)
+- 712 tests + 22 subtests passing (`uv run pytest -q`)
 
 ## Commit & Pull Request Guidelines
 
@@ -493,7 +493,7 @@ from state.session_state import ss_get  # ✗ state!
 - **`pages/`**: Streamlit application pages
 - **`pages/components/`**: Extracted Streamlit rendering components (market_components, dashboard_components, db_refresh, page_chrome)
 - **`parser/`**: EFT fitting and item list parser (open source contribution)
-- **`tests/`**: pytest unit tests (677 tests, 22 subtests)
+- **`tests/`**: pytest unit tests (712 tests, 22 subtests)
 - **`docs/`**: Documentation
 - **`logs/`**: Application logs (git-ignored)
 - **`images/`**: UI assets
