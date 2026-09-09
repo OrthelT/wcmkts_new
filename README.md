@@ -1,4 +1,4 @@
-# Winter Coalition Market App (v.0.7.0)
+# Winter Coalition Market App (v.0.7.1)
 A Streamlit application for viewing EVE Online market statistics for Winter Coalition. This tool provides real-time market data analysis, historical price tracking, and fitting information for various items in EVE Online markets.
 
 SUPPORT: Join the Discord for support https://discord.gg/BxatJE572Y
@@ -7,6 +7,9 @@ CONTRIBUTING: Contributors welcome. This project is fully open source under MIT 
 **Note:** Admin pages (watchlist and doctrine management) are currently disabled during the pyturso migration. Re-enabling them requires a local-write-plus-push redesign.
 
 # UPDATES:
+## version 0.7.1 
+Minor performance improvements reducing page load startup times. 
+
 ## version 0.7.0
 Major refactor to migrate database library from libsql to pyturso. 
 - database syncs are now executed with db.pull()
