@@ -19,7 +19,7 @@ It covers three market hubs (primary, deployment, market3) in one app; `ui/marke
 All pages follow consistent patterns with Streamlit best practices:
 
 1. **`market_dashboard.py`** (🏠 Market Dashboard, default landing page) - Doctrine Ships, Popular Modules, Minerals, and Isotopes tables with checkbox-driven deep links into Doctrine Status / Market Stats. Constrained to low-stock doctrine items by default (toggle to view all). KPIs sourced from the marketorders order book (matches Market Stats sell-order value).
-2. **`market_stats.py`** (📈 Market Stats) - Primary market data visualization with interactive Plotly charts, market orders, statistics, and historical data. 30-Day stats expander includes category pills (all/ships/doctrine ships/modules/materials, shuttles excluded from ships) and a daily ISK+volume activity chart.
+2. **`market_stats.py`** (📈 Market Stats) - Primary market data visualization with interactive Plotly charts, market orders, statistics, and historical data. The ISK volume chart's window is a day selector (7/30/60/90/120/365/all, default 30) in Chart Controls; the per-date sum happens in SQL, so the page never loads the full history frame. 30-Day stats expander includes category pills (all/ships/doctrine ships/modules/materials, shuttles excluded from ships) and a daily ISK+volume activity chart.
 3. **`doctrine_status.py`** (⚔️ Doctrine Status) - Doctrine fit status tracking with stock levels, costs, and market availability. Supports `module_id` query param for module-filtered deep links from the dashboard.
 4. **`doctrine_report.py`** (📝 Doctrine Report) - Detailed doctrine analysis and reporting
 5. **`low_stock.py`** (⚠️ Low Stock) - Low inventory alerting system with category filtering
@@ -51,7 +51,7 @@ All pages follow consistent patterns with Streamlit best practices:
 
 **Service Layer (`services/` directory):**
 - **`services/doctrine_service.py`**: DoctrineService and FitDataBuilder for doctrine fit aggregation
-- **`services/market_service.py`**: MarketService for 30-day metrics, ISK volume calculations, outlier handling, and Plotly chart creation
+- **`services/market_service.py`**: MarketService for 30-day metrics, ISK volume calculations, and Plotly chart creation. ISK volume arrives pre-aggregated per date from `MarketRepository.get_isk_volume_by_date()`; the service only re-groups it into weeks/months/years
 - **`services/build_cost_service.py`**: BuildCostService for stored build-cost catalog browsing and per-item snapshot summaries
 - **`services/builder_helper_service.py`**: BuilderHelperService for the Builder Helper profitability table — joins synced `buildcost.db` catalog with watchlist metadata and market prices; supports 30-day-avg / current price-basis toggle and computes market-supply columns (current stock, days of cover, doctrine `target_qty` via `DoctrineRepository.get_target_quantities()`, and a `min_days`-aware build `need` from the pure `_compute_need()` helper)
 - **`services/price_service.py`**: JitaPriceService with provider chain (DB cache → Fuzzwork → Janice) for Jita price lookups with caching. Sole batch entry point is `get_jita_prices(type_ids) -> BatchPriceResult`; use `.prices` (dict[TypeID, PriceResult]) or `.to_dict()` (dict[TypeID, Price]).
@@ -80,7 +80,7 @@ All pages follow consistent patterns with Streamlit best practices:
 - **`ui/market_selector.py`**: Sidebar pill toggle for switching between market hubs; returns active `MarketConfig`
 
 **Initialization & State:**
-- **`init_db.py`**: Database initialization with path verification and auto-sync for missing files
+- **`init_db.py`**: Database initialization with path verification and auto-sync for missing files. Bootstraps the aliases it is given (the active hub + `SHARED_ALIASES`, via `pages/components/db_refresh.aliases_to_initialize()`) concurrently; inactive hubs are left to `ensure_market_db_ready()`
 - **`sync_state.py`**: Updates session state with local/remote database update times for sync tracking (uses `ss_set()`)
 - **`settings_service.py`**: Module-level settings cache (stdlib only, no Streamlit dependency). Lives at root level, not in `services/`, to avoid circular imports
 - **`logging_config.py`**: Centralized logging setup with rotating file handlers to `./logs/`
@@ -229,7 +229,7 @@ with DatabaseConfig("wcmktnewkeep").engine.connect() as conn:
 - **Programmatic sync**: Use `DatabaseConfig.sync()` method
 - **Integrity validation**: `PRAGMA integrity_check` runs after a sync that actually changed the replica (a pull with new data, or a fresh bootstrap). A pull reporting `changed=False` moved no bytes, so `sync()` returns early and skips both the check and `snapshot_backup()` — verifying and re-copying a 147 MB file that nothing wrote to cost ~2.4 s per check. Corruption arriving from outside sync is still caught: `_ensure_replica_consistency()` nukes an unreadable replica on the next sync, and `BaseRepository.read_df()`'s ladder falls through to `restore_from_backup()` when a read actually fails
 - **Backup-restore fallback**: `BaseRepository.read_df()` auto-recovers a malformed local DB by syncing and retrying, then falling back to `DatabaseConfig.restore_from_backup()` (the last known-good `.bak`/`-info.bak` pair) if sync itself fails
-- **Cold-start safety**: `init_db.py` validates database *content* (not just file existence) via `verify_db_content()`. Invalid files (empty, corrupt, or old libsql-era replicas without a matching pyturso `-info` sidecar) are never deleted by `init_db` itself — `sync()` removes them under that alias's sync lock (via `_ensure_replica_consistency()`, which also nukes a paired `.db` with no user tables) and re-bootstraps. Bootstrap is single-flight: `_INIT_LOCK` in `init_db.py` serializes concurrent sessions so a second cold-starting session can't clobber the first session's in-flight sync; later entrants re-verify and skip completed work. `sync()` validates credentials before opening a `turso.sync` connection and cleans up artifacts (`.db`, `-shm`, `-wal`, `-info`, `-changes`, `-wal-revert`) on failure.
+- **Cold-start safety**: `init_db.py` validates database *content* (not just file existence) via `verify_db_content()`. Invalid files (empty, corrupt, or old libsql-era replicas without a matching pyturso `-info` sidecar) are never deleted by `init_db` itself — `sync()` removes them under that alias's sync lock (via `_ensure_replica_consistency()`, which also nukes a paired `.db` with no user tables) and re-bootstraps. Bootstrap is single-flight: `_INIT_LOCK` in `init_db.py` serializes concurrent sessions so a second cold-starting session can't clobber the first session's in-flight sync; later entrants re-verify and skip completed work. Within one call the requested aliases bootstrap in a `ThreadPoolExecutor` — the pulls are network-bound and each takes only its own alias's sync lock, so a cold container waits for the slowest pull rather than their sum, and only the active hub plus `SHARED_ALIASES` are pulled at all. `sync()` validates credentials before opening a `turso.sync` connection and cleans up artifacts (`.db`, `-shm`, `-wal`, `-info`, `-changes`, `-wal-revert`) on failure.
 
 **Important:** This application does NOT write market data. Market data updates are handled by the separate backend repository (mkts_backend) which calls ESI APIs and updates the Turso remote database.
 
@@ -251,7 +251,7 @@ with DatabaseConfig("wcmktnewkeep").engine.connect() as conn:
 
 ### Current Test Coverage
 The test suite covers repositories, services, database config, i18n, parser, pricer/fit-availability, and infrastructure:
-- 715 tests + 22 subtests passing (`uv run pytest -q`)
+- 738 tests + 22 subtests passing (`uv run pytest -q`)
 
 ## Commit & Pull Request Guidelines
 
@@ -493,7 +493,7 @@ from state.session_state import ss_get  # ✗ state!
 - **`pages/`**: Streamlit application pages
 - **`pages/components/`**: Extracted Streamlit rendering components (market_components, dashboard_components, db_refresh, page_chrome)
 - **`parser/`**: EFT fitting and item list parser (open source contribution)
-- **`tests/`**: pytest unit tests (715 tests, 22 subtests)
+- **`tests/`**: pytest unit tests (738 tests, 22 subtests)
 - **`docs/`**: Documentation
 - **`logs/`**: Application logs (git-ignored)
 - **`images/`**: UI assets

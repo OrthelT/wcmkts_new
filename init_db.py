@@ -2,6 +2,7 @@ from config import DatabaseConfig
 import os
 import sqlite3 as sql
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from logging_config import setup_logging
 from time import perf_counter
 from settings_service import get_all_market_configs
@@ -14,6 +15,9 @@ logger = setup_logging(__name__)
 # half-downloaded replica, judges it invalid, and re-syncs it redundantly.
 # The second entrant blocks, then re-verifies and skips completed work.
 _INIT_LOCK = threading.Lock()
+
+# Databases every page needs regardless of which market hub is active.
+SHARED_ALIASES: tuple[str, ...] = ("sde", "build_cost")
 
 
 def verify_db_path(path):
@@ -71,83 +75,84 @@ def verify_db_content(path):
         return False
 
 
-def init_db():
-    """Initialize ALL local databases, syncing from Turso when needed.
+def _bootstrap_alias(alias: str) -> str:
+    """Verify one replica, syncing it when missing or invalid.
+
+    Returns the status string recorded for the alias. Never raises: init_db()
+    runs these concurrently and needs every result, not the first failure.
+    """
+    try:
+        db = DatabaseConfig(alias)
+    except ValueError:
+        logger.error(f"Unknown database alias: {alias}")
+        return "failed🔴"
+
+    try:
+        if verify_db_content(db.path):
+            logger.info(f"DB exists and has content: {db.path}✔️")
+            return "success initialized🟢"
+
+        # Missing, empty, or invalid — sync() nukes and re-bootstraps
+        # invalid files under its own per-alias lock
+        if verify_db_path(db.path):
+            logger.warning(
+                f"DB file exists but is empty/invalid: {db.path}; "
+                "sync() will rebuild it"
+            )
+        else:
+            logger.warning(f"DB path does not exist: {db.path}⚠️")
+        logger.info(f"syncing db: {db.path}🛜")
+        db.sync()
+        if verify_db_content(db.path):
+            return "initialized and synced🟢"
+        return "synced but empty🔴"
+    except Exception as e:
+        logger.error(f"Error syncing db {alias}: {e}")
+        return "failed🔴"
+
+
+def init_db(aliases: list[str] | None = None):
+    """Initialize the given local databases, syncing from Turso when needed.
 
     Checks each database for both file existence AND valid content (tables).
     Invalid files are never removed here — sync() enforces the replica
-    validity invariants under the alias's sync lock and rebuilds via fresh bootstrap,
-    so an in-flight sync can't be clobbered from another thread.
+    validity invariants under the alias's sync lock and rebuilds via fresh
+    bootstrap, so an in-flight sync can't be clobbered from another thread.
 
     Serialized by _INIT_LOCK: concurrent sessions cold-starting together
     take turns, and the later ones re-verify (cheap) instead of re-syncing.
+    Within one call the aliases are bootstrapped concurrently — the pulls are
+    network-bound and each holds only its own alias's sync lock, so a cold
+    container waits roughly for the slowest pull rather than their sum.
 
-    Returns True only when every market and shared database has been
-    verified to contain tables.  Returns False if any database could
-    not be made ready (missing credentials, network failure, etc.).
+    Args:
+        aliases: databases to ready. Defaults to every market hub plus the
+            shared databases; callers that only need the active hub pass
+            ``aliases_to_initialize()``.
+
+    Returns True only when every requested database has been verified to
+    contain tables. Returns False if any could not be made ready (missing
+    credentials, network failure, etc.).
     """
     start_time = perf_counter()
     logger.info("-"*100)
     logger.info("initializing databases")
     logger.info("-"*100)
 
-    # Collect ALL market databases plus shared databases
-    market_configs = get_all_market_configs()
-    db_paths = {}
+    if aliases is None:
+        aliases = [
+            cfg.database_alias for cfg in get_all_market_configs().values()
+        ] + list(SHARED_ALIASES)
 
-    for key, cfg in market_configs.items():
-        try:
-            mkt_db = DatabaseConfig(cfg.database_alias)
-            db_paths[mkt_db.alias] = mkt_db.path
-        except ValueError:
-            logger.warning(f"Skipping unknown market alias: {cfg.database_alias}")
-
-    # Add shared databases
-    sde_db = DatabaseConfig("sde")
-    build_cost_db = DatabaseConfig("build_cost")
-    db_paths[sde_db.alias] = sde_db.path
-    db_paths[build_cost_db.alias] = build_cost_db.path
-
-    status = {}
+    # dict.fromkeys: de-duplicate while keeping the caller's order
+    targets = list(dict.fromkeys(aliases))
 
     with _INIT_LOCK:
-        for key, value in db_paths.items():
-            alias = key
-            db_path = value
-            db = DatabaseConfig(alias)
+        with ThreadPoolExecutor(max_workers=len(targets) or 1) as pool:
+            status = dict(zip(targets, pool.map(_bootstrap_alias, targets)))
 
-            try:
-                if verify_db_content(db_path):
-                    logger.info(f"DB exists and has content: {db_path}✔️")
-                    status[key] = "success initialized🟢"
-                else:
-                    # Missing, empty, or invalid — sync() nukes and
-                    # re-bootstraps invalid files under its own lock
-                    if verify_db_path(db_path):
-                        logger.warning(
-                            f"DB file exists but is empty/invalid: {db_path}; "
-                            "sync() will rebuild it"
-                        )
-                    else:
-                        logger.warning(f"DB path does not exist: {db_path}⚠️")
-                    logger.info("syncing db")
-                    logger.info(f"syncing db: {db_path}🛜")
-                    db.sync()
-                    if verify_db_content(db_path):
-                        status[key] = "initialized and synced🟢"
-                    else:
-                        status[key] = "synced but empty🔴"
-            except Exception as e:
-                logger.error(f"Error syncing db: {e}")
-                status[key] = "failed🔴"
-            logger.info(f"db initialization status: {key}: {status[key]}")
-    logger.info("-"*100)
-    logger.info("updating wcmkt state")
-    logger.info("-"*100)
-
-    logger.info("wcmkt state updated✅")
-
-    logger.info("-"*100)
+    for alias, result in status.items():
+        logger.info(f"db initialization status: {alias}: {result}")
 
     end_time = perf_counter()
     elapsed_time = round((end_time-start_time)*1000, 2)
@@ -160,6 +165,7 @@ def init_db():
         failed = [k for k, v in status.items() if "🟢" not in v]
         logger.error(f"init_db() completed with failures: {failed}")
     return all_ok
+
 
 def ensure_market_db_ready(db_alias: str) -> bool:
     """Verify a market database has content, syncing if necessary.

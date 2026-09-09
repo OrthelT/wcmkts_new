@@ -11,7 +11,7 @@ from datetime import datetime
 import streamlit as st
 
 from config import DatabaseConfig
-from init_db import ensure_market_db_ready, init_db
+from init_db import SHARED_ALIASES, ensure_market_db_ready, init_db
 from logging_config import setup_logging
 from repositories import invalidate_build_cost_caches
 from state.market_state import refresh_market_caches
@@ -31,8 +31,20 @@ _last_check_by_alias: dict[str, float] = {}
 _last_check_lock = threading.Lock()
 
 
+def aliases_to_initialize() -> list[str]:
+    """Databases a cold start must bootstrap: the active hub + shared DBs.
+
+    Inactive hubs are left to ensure_market_db_ready(), which bootstraps one
+    on demand when the user switches to it. Downloading all of them up front
+    cost ~20 s of a 55 s cold container start for replicas nothing reads.
+    """
+    from state.market_state import get_active_market
+
+    return [get_active_market().database_alias, *SHARED_ALIASES]
+
+
 def initialize_databases() -> bool:
-    """Initialize all databases (market, SDE, and build cost).
+    """Initialize the active market DB plus the shared (SDE, build cost) DBs.
 
     Only sets ``db_initialized`` to True once *every* database has been
     verified to contain tables.  If a previous attempt partially failed,
@@ -48,8 +60,9 @@ def initialize_databases() -> bool:
 
     if not st.session_state.get("db_initialized"):
         logger.info("-" * 30)
-        logger.info("Initializing databases (all markets + shared)")
-        result = init_db()
+        aliases = aliases_to_initialize()
+        logger.info(f"Initializing databases: {aliases}")
+        result = init_db(aliases=aliases)
         if result:
             st.session_state.db_initialized = True
         else:

@@ -182,3 +182,32 @@ class TestEnsureActiveMarketFresh:
         ), patch.object(db_refresh, "maybe_run_check") as check:
             assert db_refresh.ensure_active_market_fresh(PRIMARY) is False
         check.assert_not_called()
+
+
+class TestLazyBootstrap:
+    """Cold start bootstraps the active hub and the shared DBs, not all hubs.
+
+    Bootstrapping all five replicas took 55 s on a cold container, ~20 s of it
+    for hubs the user had not selected. A hub the user switches to is
+    bootstrapped on demand by ensure_market_db_ready().
+    """
+
+    def test_covers_the_active_hub_and_shared_dbs_only(self, env):
+        assert db_refresh.aliases_to_initialize() == [PRIMARY, "sde", "build_cost"]
+        assert OTHER_HUB not in db_refresh.aliases_to_initialize()
+
+    def test_initialize_databases_passes_those_aliases_to_init_db(self, env):
+        class _SessionState(dict):
+            __getattr__ = dict.get
+
+            def __setattr__(self, key, value):
+                self[key] = value
+
+        st_mock = MagicMock()
+        st_mock.session_state = _SessionState()
+        with patch.object(db_refresh, "st", st_mock), patch.object(
+            db_refresh, "init_db", return_value=True
+        ) as init:
+            assert db_refresh.initialize_databases() is True
+
+        init.assert_called_once_with(aliases=[PRIMARY, "sde", "build_cost"])
