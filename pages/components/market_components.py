@@ -12,17 +12,26 @@ import streamlit as st
 import pandas as pd
 import millify
 
-from config import get_settings
 from logging_config import setup_logging
 from state import ss_has
 from ui.i18n import translate_text
 
 logger = setup_logging(__name__)
 
-def _get_default_outlier_method() -> str:
-    """Get the default outlier method from settings."""
-    settings = get_settings()
-    return settings["outliers"]["default_method"]
+# Windows offered by the chart's day selector. None means the whole history;
+# 30 days is the default so the first paint aggregates ~44 k rows, not ~890 k.
+CHART_WINDOW_OPTIONS: list[int | None] = [7, 30, 60, 90, 120, 365, None]
+CHART_WINDOW_DEFAULT_INDEX = 1
+CHART_WINDOW_DEFAULT_DAYS = CHART_WINDOW_OPTIONS[CHART_WINDOW_DEFAULT_INDEX]
+
+
+def _format_days_option(days: int | None, language_code: str) -> str:
+    """Label one day-window option: '7d', '1y', or 'All'."""
+    if days is None:
+        return translate_text(language_code, "market_stats.days_all")
+    if days == 365:
+        return translate_text(language_code, "market_stats.days_one_year")
+    return f"{days}d"
 
 
 # =============================================================================
@@ -68,39 +77,20 @@ def render_isk_volume_chart_ui(service, language_code: str = "en") -> None:
                 end=max_date.strftime('%Y-%m-%d'),
             )
         )
-        col3, col4 = st.columns(2)
-        with col3:
-            start_date = st.date_input(
-                translate_text(language_code, "market_stats.start_date"),
-                value=None,
-                min_value=min_date.date(),
-                max_value=max_date.date(),
-                help=translate_text(
-                    language_code,
-                    "market_stats.start_date_help",
-                    start=min_date.strftime('%Y-%m-%d'),
-                    end=max_date.strftime('%Y-%m-%d'),
-                ),
-                key="chart_start_date",
-            )
-        with col4:
-            end_date = st.date_input(
-                translate_text(language_code, "market_stats.end_date"),
-                value=None,
-                min_value=min_date.date(),
-                max_value=max_date.date(),
-                help=translate_text(
-                    language_code,
-                    "market_stats.end_date_help",
-                    start=min_date.strftime('%Y-%m-%d'),
-                    end=max_date.strftime('%Y-%m-%d'),
-                ),
-                key="chart_end_date",
-            )
 
         with st.expander(translate_text(language_code, "market_stats.chart_controls")):
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             with col1:
+                st.write(f"**{translate_text(language_code, 'market_stats.days_shown')}:**")
+                days = st.radio(
+                    translate_text(language_code, "market_stats.days_shown"),
+                    options=CHART_WINDOW_OPTIONS,
+                    index=CHART_WINDOW_DEFAULT_INDEX,
+                    format_func=lambda d: _format_days_option(d, language_code),
+                    horizontal=True,
+                    key="chart_days_radio",
+                )
+            with col2:
                 st.write(f"**{translate_text(language_code, 'market_stats.moving_average_period')}:**")
                 moving_avg_period = st.radio(
                     translate_text(language_code, "market_stats.moving_average"),
@@ -109,9 +99,9 @@ def render_isk_volume_chart_ui(service, language_code: str = "en") -> None:
                     horizontal=True,
                     key="chart_moving_avg_radio",
                 )
-            with col2:
+            with col3:
                 st.write(f"**{translate_text(language_code, 'market_stats.date_aggregation')}:**")
-            date_period = st.radio(
+                date_period = st.radio(
                     translate_text(language_code, "market_stats.date_period"),
                     options=["daily", "weekly", "monthly", "yearly"],
                     index=0,
@@ -120,44 +110,10 @@ def render_isk_volume_chart_ui(service, language_code: str = "en") -> None:
                     key="chart_date_period_radio",
                 )
 
-            st.divider()
-            st.write(f"**{translate_text(language_code, 'market_stats.outlier_handling')}:**")
-            col5, col6, col7 = st.columns(3)
-
-            with col5:
-                default = _get_default_outlier_method()
-                idx = {"none": 2, "remove": 1, "cap": 0}.get(default, 0)
-                outlier_method = st.selectbox(
-                    translate_text(language_code, "market_stats.outlier_method"),
-                    options=["cap", "remove", "none"],
-                    index=idx,
-                    format_func=lambda x: translate_text(language_code, f"market_stats.outlier_method_{x}"),
-                    help=translate_text(language_code, "market_stats.outlier_method_help"),
-                )
-            with col6:
-                outlier_threshold = st.slider(
-                    translate_text(language_code, "market_stats.outlier_sensitivity"),
-                    min_value=1.0, max_value=3.0, value=1.5, step=0.1,
-                    help=translate_text(language_code, "market_stats.outlier_sensitivity_help"),
-                )
-            with col7:
-                cap_percentile = st.slider(
-                    translate_text(language_code, "market_stats.cap_at_percentile"),
-                    min_value=85, max_value=99, value=95, step=1,
-                    help=translate_text(language_code, "market_stats.cap_at_percentile_help"),
-                    disabled=(outlier_method != "cap"),
-                )
-
-            st.info(translate_text(language_code, "market_stats.outlier_handling_explained"))
-
         chart = service.create_isk_volume_chart(
             moving_avg_period=moving_avg_period,
             date_period=date_period,
-            start_date=start_date,
-            end_date=end_date,
-            outlier_method=outlier_method,
-            outlier_threshold=outlier_threshold,
-            cap_percentile=cap_percentile,
+            days=days,
             selected_category=selected_category,
             selected_category_id=selected_category_id,
         )
@@ -176,8 +132,11 @@ def render_isk_volume_table_ui(service, language_code: str = "en") -> None:
     Args:
         service: MarketService instance.
     """
-    start_date = st.session_state.get("chart_start_date", None)
-    end_date = st.session_state.get("chart_end_date", None)
+    days = (
+        st.session_state["chart_days_radio"]
+        if "chart_days_radio" in st.session_state
+        else CHART_WINDOW_DEFAULT_DAYS
+    )
     date_period = st.session_state.get("chart_date_period_radio") or "daily"
     selected_category = st.session_state.get("selected_category", None)
     selected_category_id = st.session_state.get("selected_category_id", None)
@@ -197,17 +156,15 @@ def render_isk_volume_table_ui(service, language_code: str = "en") -> None:
 
     table = service.create_isk_volume_table(
         date_period=str(date_period).lower(),
-        start_date=start_date,
-        end_date=end_date,
+        days=days,
         selected_category=selected_category,
         selected_category_id=selected_category_id,
     )
 
     filter_info = translate_text(
         language_code,
-        "market_stats.filter_info",
-        start_date=start_date,
-        end_date=end_date,
+        "market_stats.filter_info_window",
+        window=_format_days_option(days, language_code),
         date_period=translate_text(language_code, f"market_stats.period_{date_period}"),
     )
     if selected_category:

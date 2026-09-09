@@ -210,3 +210,135 @@ def test_30day_pills_hidden_when_item_selected():
     assert kwargs["selected_type_ids"] is None
     assert kwargs["selected_category"] is None
     assert kwargs["selected_category_id"] is None
+
+
+# ---------------------------------------------------------------------------
+# ISK volume chart window control
+# ---------------------------------------------------------------------------
+
+CHART_WINDOW_OPTIONS = [7, 30, 60, 90, 120, 365, None]
+
+
+def _radio_st(radio_values: dict):
+    """Mock ``st`` whose radios answer by key and whose fragment is a no-op."""
+    mock_st = MagicMock()
+    mock_st.fragment = lambda f: f
+    mock_st.columns.side_effect = lambda *a, **k: [MagicMock() for _ in range(
+        a[0] if a and isinstance(a[0], int) else len(a[0]) if a else 2
+    )]
+    mock_st.radio.side_effect = lambda *a, **k: radio_values[k["key"]]
+    return mock_st
+
+
+def _chart_service():
+    service = Mock()
+    service.get_available_date_range.return_value = (
+        pd.Timestamp("2024-11-01"), pd.Timestamp("2026-09-08"),
+    )
+    return service
+
+
+def test_chart_window_radio_offers_presets_and_defaults_to_30_days():
+    from pages.components import market_components
+
+    radio_values = {
+        "chart_days_radio": 30,
+        "chart_moving_avg_radio": 14,
+        "chart_date_period_radio": "daily",
+    }
+    mock_st = _radio_st(radio_values)
+    service = _chart_service()
+
+    with patch.object(market_components, "st", mock_st), \
+            patch.object(market_components, "translate_text", return_value="x"):
+        market_components.render_isk_volume_chart_ui(service, language_code="en")
+
+    days_call = next(
+        c for c in mock_st.radio.call_args_list if c.kwargs.get("key") == "chart_days_radio"
+    )
+    assert days_call.kwargs["options"] == CHART_WINDOW_OPTIONS
+    assert days_call.kwargs["index"] == 1  # 30 days
+
+
+def test_chart_receives_the_selected_window():
+    from pages.components import market_components
+
+    radio_values = {
+        "chart_days_radio": 7,
+        "chart_moving_avg_radio": 14,
+        "chart_date_period_radio": "daily",
+    }
+    mock_st = _radio_st(radio_values)
+    service = _chart_service()
+
+    with patch.object(market_components, "st", mock_st), \
+            patch.object(market_components, "translate_text", return_value="x"):
+        market_components.render_isk_volume_chart_ui(service, language_code="en")
+
+    assert service.create_isk_volume_chart.call_args.kwargs["days"] == 7
+
+
+def test_chart_controls_no_longer_render_outlier_widgets():
+    """Outlier handling was disabled in settings and is gone from the UI."""
+    from pages.components import market_components
+
+    radio_values = {
+        "chart_days_radio": 30,
+        "chart_moving_avg_radio": 14,
+        "chart_date_period_radio": "daily",
+    }
+    mock_st = _radio_st(radio_values)
+    service = _chart_service()
+
+    with patch.object(market_components, "st", mock_st), \
+            patch.object(market_components, "translate_text", return_value="x"):
+        market_components.render_isk_volume_chart_ui(service, language_code="en")
+
+    mock_st.selectbox.assert_not_called()
+    mock_st.slider.assert_not_called()
+    kwargs = service.create_isk_volume_chart.call_args.kwargs
+    assert "outlier_method" not in kwargs
+
+
+def test_table_follows_the_chart_window():
+    from pages.components import market_components
+
+    mock_st = MagicMock()
+    mock_st.session_state = {"chart_days_radio": 90, "chart_date_period_radio": "daily"}
+    service = Mock()
+    service.create_isk_volume_table.return_value = pd.DataFrame(
+        {"Date": ["2026-09-01"], "ISK Volume": ["1,000"]}
+    )
+
+    with patch.object(market_components, "st", mock_st), \
+            patch.object(market_components, "translate_text", return_value="x"):
+        market_components.render_isk_volume_table_ui(service, language_code="en")
+
+    assert service.create_isk_volume_table.call_args.kwargs["days"] == 90
+
+
+def test_table_defaults_to_30_days_before_the_chart_renders():
+    """The table must not fall back to 'all history' when the key is absent."""
+    from pages.components import market_components
+
+    mock_st = MagicMock()
+    mock_st.session_state = {}
+    service = Mock()
+    service.create_isk_volume_table.return_value = pd.DataFrame(
+        {"Date": ["2026-09-01"], "ISK Volume": ["1,000"]}
+    )
+
+    with patch.object(market_components, "st", mock_st), \
+            patch.object(market_components, "translate_text", return_value="x"):
+        market_components.render_isk_volume_table_ui(service, language_code="en")
+
+    assert service.create_isk_volume_table.call_args.kwargs["days"] == 30
+
+
+def test_window_option_labels():
+    from pages.components.market_components import _format_days_option
+
+    assert _format_days_option(7, "en") == "7d"
+    assert _format_days_option(120, "en") == "120d"
+    assert _format_days_option(365, "en") == "1y"
+    assert _format_days_option(None, "en") == "All"

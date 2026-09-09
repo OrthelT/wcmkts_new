@@ -104,18 +104,25 @@ def test_ensure_market_db_ready_does_not_delete(tmp_path, monkeypatch):
 
 def test_concurrent_init_db_serialized(tmp_path, monkeypatch):
     """Two sessions cold-starting at once must not bootstrap concurrently:
-    the second waits, re-verifies, and skips work the first already did."""
+    the second waits under _INIT_LOCK while the first finishes.
+
+    Within one call the per-alias syncs run in parallel, so the property under
+    test is that the two calls' sync windows do not overlap each other.
+    """
     _patch_init_db(monkeypatch, tmp_path, sync_sleep=0.03)
 
     barrier = threading.Barrier(2)
     errors = []
+    windows = []
 
     def run():
         barrier.wait()
+        start = time.monotonic()
         try:
-            init_db()
+            init_db(aliases=["sde", "build_cost"])
         except Exception as e:  # pragma: no cover - surfaced via assert below
             errors.append(e)
+        windows.append((start, time.monotonic()))
 
     threads = [threading.Thread(target=run) for _ in range(2)]
     for t in threads:
@@ -124,9 +131,47 @@ def test_concurrent_init_db_serialized(tmp_path, monkeypatch):
         t.join()
 
     assert not errors
-    intervals = sorted((start, end) for _, _, start, end in _FakeDB.sync_events)
-    for (_, prev_end), (next_start, _) in zip(intervals, intervals[1:]):
-        assert next_start >= prev_end, "sync() calls overlapped across threads"
+    first, second = sorted(windows)
+    # Each call syncs both aliases; the second call's syncs start only after
+    # the first call released _INIT_LOCK.
+    second_syncs = sorted(start for _, _, start, _ in _FakeDB.sync_events)[2:]
+    assert min(second_syncs) >= first[1] - 0.005, "bootstrap overlapped across sessions"
+
+
+def test_init_db_bootstraps_only_the_requested_aliases(tmp_path, monkeypatch):
+    """Inactive market hubs are not downloaded on a cold container start."""
+    _patch_init_db(monkeypatch, tmp_path)
+
+    init_db(aliases=["wcmktnewkeep", "sde", "build_cost"])
+
+    assert {alias for alias, _, _, _ in _FakeDB.sync_events} == {
+        "wcmktnewkeep", "sde", "build_cost",
+    }
+
+
+def test_requested_aliases_are_bootstrapped_in_parallel(tmp_path, monkeypatch):
+    """The pulls are network-bound and touch disjoint files, so they overlap."""
+    _patch_init_db(monkeypatch, tmp_path, sync_sleep=0.05)
+
+    start = time.monotonic()
+    init_db(aliases=["wcmktnewkeep", "sde", "build_cost"])
+    elapsed = time.monotonic() - start
+
+    assert len(_FakeDB.sync_events) == 3
+    assert elapsed < 0.12, f"3 x 50 ms syncs took {elapsed:.3f}s -- still serial"
+
+
+def test_unknown_alias_is_reported_as_a_failure(tmp_path, monkeypatch):
+    _patch_init_db(monkeypatch, tmp_path)
+
+    def raise_for_bogus(alias):
+        if alias == "bogus":
+            raise ValueError("Unknown database alias: bogus")
+        return _FakeDB(alias)
+
+    monkeypatch.setattr("init_db.DatabaseConfig", raise_for_bogus)
+
+    assert init_db(aliases=["bogus"]) is False
 
 
 class TestLibsqlMetadataRejected:

@@ -125,3 +125,41 @@ class TestThirtyDayPillKeys:
         for lang, table in TRANSLATIONS.items():
             for key in PILL_KEYS:
                 assert key in table, f"missing {key} in {lang}"
+
+
+CHART_WINDOW_KEYS = [
+    "market_stats.days_shown",
+    "market_stats.days_one_year",
+    "market_stats.days_all",
+]
+
+
+def test_chart_window_keys_resolve_in_english():
+    from ui.i18n import translate_text
+
+    for key in CHART_WINDOW_KEYS:
+        assert translate_text("en", key) != key, f"missing English translation for {key}"
+
+
+def test_filter_info_window_names_the_window_and_period():
+    from ui.i18n import translate_text
+
+    text = translate_text("en", "market_stats.filter_info_window", window="30d", date_period="Daily")
+    assert "30d" in text and "Daily" in text
+
+
+def test_orphaned_outlier_and_date_input_keys_removed():
+    """Outlier handling and the start/end date inputs are gone from the UI."""
+    from ui.i18n import translate_text
+
+    for key in (
+        "market_stats.outlier_handling",
+        "market_stats.outlier_method",
+        "market_stats.outlier_sensitivity",
+        "market_stats.cap_at_percentile",
+        "market_stats.outlier_handling_explained",
+        "market_stats.start_date",
+        "market_stats.end_date",
+        "market_stats.filter_info",
+    ):
+        assert translate_text("en", key) == key, f"{key} should no longer be translated"
