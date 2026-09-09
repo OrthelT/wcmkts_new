@@ -2,7 +2,7 @@
 Market Service
 
 Pure business logic for market data analysis: metric calculations, ISK volume
-aggregation, outlier handling, and chart creation. No Streamlit imports.
+aggregation and chart creation. No Streamlit imports.
 
 Design Principles:
 1. Dependency Injection - MarketRepository passed in, not created
@@ -15,12 +15,10 @@ from typing import Optional
 from datetime import datetime, timedelta
 
 import pandas as pd
-import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
 
-from config import get_settings
 from logging_config import setup_logging
 
 logger = setup_logging(__name__)
@@ -44,30 +42,6 @@ class MarketService:
     # =====================================================================
     # Data Access Orchestration
     # =====================================================================
-
-    def get_history_by_category(
-        self,
-        category: str = None,
-        category_id: int | None = None,
-    ) -> pd.DataFrame:
-        """Get market history, optionally filtered by SDE category.
-
-        Args:
-            category: SDE category name (e.g. 'Ship'). None for all history.
-            category_id: SDE category ID. Takes precedence over category name.
-
-        Returns:
-            DataFrame with market history rows.
-        """
-        if category is None and category_id is None:
-            return self._repo.get_all_history()
-
-        type_ids = self._repo.get_category_type_ids(category, category_id=category_id)
-        if not type_ids:
-            return pd.DataFrame()
-
-        df = self._repo.get_history_by_type_ids(type_ids)
-        return df if not df.empty else pd.DataFrame()
 
     def get_market_data(
         self,
@@ -353,51 +327,53 @@ class MarketService:
     def calculate_isk_volume_by_period(
         self,
         period: str = "daily",
-        start_date=None,
-        end_date=None,
+        days: int | None = 30,
         category: str = None,
         category_id: int | None = None,
     ) -> pd.Series:
         """Calculate ISK volume aggregated by time period.
 
+        The per-date sum is done in SQL (see
+        ``MarketRepository.get_isk_volume_by_date``); this only re-groups the
+        daily series into weeks, months, or years.
+
         Args:
             period: 'daily', 'weekly', 'monthly', or 'yearly'
-            start_date: Optional start date filter
-            end_date: Optional end date filter
+            days: window size in days; None for the whole history
             category: Optional SDE category name filter
             category_id: Optional SDE category ID filter
 
         Returns:
             Series indexed by date/period with ISK volume values.
         """
-        df = self.get_history_by_category(category, category_id=category_id)
+        type_ids = None
+        if category is not None or category_id is not None:
+            type_ids = self._repo.get_category_type_ids(
+                category, category_id=category_id
+            )
+            if not type_ids:
+                return pd.Series(dtype=float)
+
+        df = self._repo.get_isk_volume_by_date(days=days, type_ids=type_ids)
         if df.empty:
             return pd.Series(dtype=float)
 
+        df = df.copy()
         df["date"] = pd.to_datetime(df["date"])
 
-        if start_date is not None:
-            df = df[df["date"] >= pd.to_datetime(start_date)]
-        if end_date is not None:
-            df = df[df["date"] <= pd.to_datetime(end_date)]
-
-        df["total_isk_volume"] = df["average"] * df["volume"]
-
         if period == "weekly":
-            df["week"] = df["date"].dt.to_period("W")
-            grouped = df.groupby("week")["total_isk_volume"].sum()
+            grouped = df.groupby(df["date"].dt.to_period("W"))["total_isk_volume"].sum()
             grouped.index = grouped.index.to_timestamp()
         elif period == "monthly":
-            df["month"] = df["date"].dt.to_period("M")
-            grouped = df.groupby("month")["total_isk_volume"].sum()
+            grouped = df.groupby(df["date"].dt.to_period("M"))["total_isk_volume"].sum()
             grouped.index = grouped.index.to_timestamp()
         elif period == "yearly":
-            df["year"] = df["date"].dt.to_period("Y")
-            grouped = df.groupby("year")["total_isk_volume"].sum()
+            grouped = df.groupby(df["date"].dt.to_period("Y"))["total_isk_volume"].sum()
             grouped.index = grouped.index.to_timestamp()
         else:
-            grouped = df.groupby("date")["total_isk_volume"].sum()
+            grouped = df.set_index("date")["total_isk_volume"]
 
+        grouped.index.name = "date"
         return grouped
 
     def get_available_date_range(
@@ -461,66 +437,6 @@ class MarketService:
     # =====================================================================
 
     @staticmethod
-    def detect_outliers(
-        series: pd.Series, method: str = "iqr", threshold: float = 1.5
-    ) -> pd.Series:
-        """Detect outliers in a numeric Series.
-
-        Args:
-            series: Numeric data
-            method: 'iqr' or 'zscore'
-            threshold: Sensitivity (1.5 for IQR, 2-3 for z-score)
-
-        Returns:
-            Boolean Series where True = outlier.
-        """
-        if method == "iqr":
-            q1 = series.quantile(0.25)
-            q3 = series.quantile(0.75)
-            iqr = q3 - q1
-            return (series < q1 - threshold * iqr) | (series > q3 + threshold * iqr)
-        elif method == "zscore":
-            z = np.abs((series - series.mean()) / series.std())
-            return z > threshold
-        else:
-            raise ValueError("Method must be 'iqr' or 'zscore'")
-
-    @staticmethod
-    def handle_outliers(
-        series: pd.Series,
-        method: str = "none",
-        outlier_threshold: float = 1.5,
-        cap_percentile: int = 95,
-    ) -> pd.Series:
-        """Handle outliers by removing, capping, or leaving unchanged.
-
-        Args:
-            series: Numeric data
-            method: 'remove', 'cap', or 'none'
-            outlier_threshold: Detection threshold
-            cap_percentile: Percentile for capping (when method='cap')
-
-        Returns:
-            Series with outliers handled.
-        """
-        if method == "none":
-            return series
-
-        outliers = MarketService.detect_outliers(
-            series, threshold=outlier_threshold
-        )
-
-        if method == "remove":
-            return series[~outliers]
-        elif method == "cap":
-            cap_value = series.quantile(cap_percentile / 100)
-            result = series.astype(float).copy()
-            result[outliers] = cap_value
-            return result
-        else:
-            raise ValueError("Method must be 'remove', 'cap', or 'none'")
-
-    @staticmethod
     def clean_order_data(df: pd.DataFrame) -> pd.DataFrame:
         """Clean market order data: rename columns, calculate expiry.
 
@@ -563,11 +479,7 @@ class MarketService:
         self,
         moving_avg_period: int = 14,
         date_period: str = "daily",
-        start_date=None,
-        end_date=None,
-        outlier_method: str = None,
-        outlier_threshold: float = 1.5,
-        cap_percentile: int = 95,
+        days: int | None = 30,
         selected_category: str = None,
         selected_category_id: int | None = None,
     ) -> go.Figure:
@@ -576,24 +488,12 @@ class MarketService:
         Returns:
             Plotly Figure with bars and moving average line.
         """
-        if outlier_method is None:
-            outlier_method = _get_default_outlier_method()
-
         df = self.calculate_isk_volume_by_period(
             date_period,
-            start_date,
-            end_date,
+            days,
             selected_category,
             selected_category_id,
         )
-
-        if outlier_method != "none":
-            df = self.handle_outliers(
-                df,
-                method=outlier_method,
-                outlier_threshold=outlier_threshold,
-                cap_percentile=cap_percentile,
-            )
 
         period_labels = {
             "daily": "Daily",
@@ -620,16 +520,10 @@ class MarketService:
             hovertemplate="<b>%{x}</b><br>Mov Avg: %{y:,.0f}<extra></extra>",
         ))
 
-        title_suffix = ""
-        if outlier_method == "cap":
-            title_suffix = f" (Outliers capped at {cap_percentile}th percentile)"
-        elif outlier_method == "remove":
-            title_suffix = " (Outliers removed)"
-
         cat_suffix = f" - {selected_category}" if selected_category else ""
 
         fig.update_layout(
-            title=f"{label} ISK Volume with {moving_avg_period}-Period Moving Average{cat_suffix}{title_suffix}",
+            title=f"{label} ISK Volume with {moving_avg_period}-Period Moving Average{cat_suffix}",
             xaxis_title="Date",
             yaxis_title="ISK Volume",
         )
@@ -638,8 +532,7 @@ class MarketService:
     def create_isk_volume_table(
         self,
         date_period: str = "daily",
-        start_date=None,
-        end_date=None,
+        days: int | None = 30,
         selected_category: str = None,
         selected_category_id: int | None = None,
     ) -> pd.DataFrame:
@@ -650,8 +543,7 @@ class MarketService:
         """
         df = self.calculate_isk_volume_by_period(
             date_period,
-            start_date,
-            end_date,
+            days,
             selected_category,
             selected_category_id,
         )
@@ -791,10 +683,6 @@ class MarketService:
 # Module-level Helpers
 # =============================================================================
 
-def _get_default_outlier_method() -> str:
-    """Get default outlier method from settings.toml."""
-    settings = get_settings()
-    return settings["outliers"]["default_method"]
 
 
 # =============================================================================

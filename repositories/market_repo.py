@@ -130,6 +130,61 @@ def _get_history_window_impl(
     return repo.read_df(query, params=params).reset_index(drop=True)
 
 
+def _get_isk_volume_by_date_impl(
+    days: int | None = 30,
+    type_ids: list[int] | None = None,
+    db_alias: str = "wcmkt",
+) -> pd.DataFrame:
+    """Return daily ISK volume (SUM(average * volume)) per date.
+
+    Aggregated in SQL: the ISK volume chart only needs one row per date, and
+    market_history is ~890 k rows / 137 MB on the primary hub. Loading it all
+    to group in pandas cost ~3.5 s of the first render and pinned the frame in
+    cache for an hour, per hub.
+
+    Args:
+        days: window size; ``None`` means the whole history. The cutoff is
+            derived here rather than passed in so the cached wrapper's key
+            stays stable across reruns.
+        type_ids: optional scope. ``None`` means all items; an empty list is a
+            true empty scope and returns an empty frame without querying.
+
+    Returns:
+        DataFrame with 'date' and 'total_isk_volume' columns, ordered by date.
+    """
+    if type_ids is not None and not type_ids:
+        return pd.DataFrame(columns=["date", "total_isk_volume"])
+
+    where = []
+    params: dict = {}
+    if days is not None:
+        where.append("date >= :cutoff")
+        params["cutoff"] = (
+            datetime.now() - timedelta(days=days)
+        ).strftime("%Y-%m-%d %H:%M:%S")
+    if type_ids is not None:
+        where.append("type_id IN :type_ids")
+        params["type_ids"] = [int(tid) for tid in type_ids]
+
+    sql = (
+        "SELECT date, SUM(average * volume) AS total_isk_volume "
+        "FROM market_history"
+    )
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " GROUP BY date ORDER BY date"
+
+    query = text(sql)
+    if type_ids is not None:
+        query = query.bindparams(bindparam("type_ids", expanding=True))
+
+    repo = BaseRepository(DatabaseConfig(db_alias), logger)
+    df = repo.read_df(query, params=params or None)
+    if df.empty:
+        return pd.DataFrame(columns=["date", "total_isk_volume"])
+    return df.reset_index(drop=True)
+
+
 def _get_history_by_type_impl(type_id: int, db_alias: str = "wcmkt") -> pd.DataFrame:
     """Fetch market history for a specific type_id."""
     db = DatabaseConfig(db_alias)
@@ -467,6 +522,15 @@ def _get_history_window_cached(
     )
 
 
+@st.cache_data(ttl=1800)
+def _get_isk_volume_by_date_cached(
+    days: int | None = 30, type_ids: tuple | None = None, db_alias: str = "wcmkt"
+) -> pd.DataFrame:
+    return _get_isk_volume_by_date_impl(
+        days, None if type_ids is None else list(type_ids), db_alias
+    )
+
+
 @st.cache_data(ttl=3600)
 def _get_history_by_type_cached(type_id: int, db_alias: str = "wcmkt") -> pd.DataFrame:
     return _get_history_by_type_impl(type_id, db_alias)
@@ -554,6 +618,7 @@ def invalidate_market_caches():
     _get_all_history_cached.clear()
     _get_history_date_range_cached.clear()
     _get_history_window_cached.clear()
+    _get_isk_volume_by_date_cached.clear()
     _get_history_by_type_cached.clear()
     _get_history_by_type_ids_cached.clear()
     _get_30day_volume_metrics_cached.clear()
@@ -640,6 +705,14 @@ class MarketRepository(BaseRepository):
     ) -> pd.DataFrame:
         """Get the last ``days`` of market history (cached, TTL=1800s)."""
         return _get_history_window_cached(
+            days, None if type_ids is None else tuple(type_ids), self.db.alias
+        )
+
+    def get_isk_volume_by_date(
+        self, days: int | None = 30, type_ids: list[int] | None = None
+    ) -> pd.DataFrame:
+        """Get daily ISK volume aggregated in SQL (cached, TTL=1800s)."""
+        return _get_isk_volume_by_date_cached(
             days, None if type_ids is None else tuple(type_ids), self.db.alias
         )
 

@@ -1,10 +1,4 @@
 # Winter Coalition Market Stats Settings
-# Global setting for handeling chart outliers
-[outliers]
-    # Method: none, remove, cap
-    default_method = 'none'
-
-
 #doctrine role catagoriezation used with doctrine_report page.
 [ship_roles]
     # DPS - Primary damage dealers

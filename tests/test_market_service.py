@@ -29,6 +29,16 @@ def sample_history_df():
 
 
 @pytest.fixture
+def sample_isk_volume_df():
+    """40 days of pre-aggregated daily ISK volume, as SQL returns it."""
+    dates = pd.date_range(end=datetime.now(), periods=40, freq="D")
+    return pd.DataFrame({
+        "date": dates.strftime("%Y-%m-%d %H:%M:%S"),
+        "total_isk_volume": [1_000.0 + i * 10 for i in range(40)],
+    })
+
+
+@pytest.fixture
 def sample_orders_df():
     """Market orders with both buy and sell orders."""
     return pd.DataFrame({
@@ -56,6 +66,9 @@ def mock_repo():
     repo.get_history_date_range.return_value = (None, None)
     repo.get_category_type_ids.return_value = []
     repo.get_history_by_type_ids.return_value = pd.DataFrame()
+    repo.get_isk_volume_by_date.return_value = pd.DataFrame(
+        columns=["date", "total_isk_volume"]
+    )
     return repo
 
 
@@ -215,116 +228,91 @@ class TestCalculate30dayMetrics:
 # ---------------------------------------------------------------------------
 
 class TestCalculateISKVolumeByPeriod:
-    """Test ISK volume period aggregation."""
+    """ISK volume comes back pre-aggregated per date; the service only
+    re-groups it into weeks/months/years."""
 
-    def test_daily_aggregation(self, sample_history_df, mock_repo):
-        mock_repo.get_all_history.return_value = sample_history_df
+    def test_requests_the_selected_window_from_the_repository(
+        self, sample_isk_volume_df, mock_repo
+    ):
+        mock_repo.get_isk_volume_by_date.return_value = sample_isk_volume_df
+
+        from services.market_service import MarketService
+        service = MarketService(mock_repo)
+        service.calculate_isk_volume_by_period("daily", days=7)
+
+        mock_repo.get_isk_volume_by_date.assert_called_once_with(
+            days=7, type_ids=None
+        )
+
+    def test_never_loads_the_full_history_frame(
+        self, sample_isk_volume_df, mock_repo
+    ):
+        mock_repo.get_isk_volume_by_date.return_value = sample_isk_volume_df
+
+        from services.market_service import MarketService
+        service = MarketService(mock_repo)
+        service.calculate_isk_volume_by_period("daily", days=None)
+
+        mock_repo.get_all_history.assert_not_called()
+
+    def test_daily_returns_series_indexed_by_date(
+        self, sample_isk_volume_df, mock_repo
+    ):
+        mock_repo.get_isk_volume_by_date.return_value = sample_isk_volume_df
 
         from services.market_service import MarketService
         service = MarketService(mock_repo)
         result = service.calculate_isk_volume_by_period("daily")
 
         assert isinstance(result, pd.Series)
-        assert len(result) > 0
+        assert len(result) == 40
+        assert isinstance(result.index, pd.DatetimeIndex)
 
-    def test_weekly_aggregation(self, sample_history_df, mock_repo):
-        mock_repo.get_all_history.return_value = sample_history_df
+    def test_weekly_rolls_daily_rows_up(self, sample_isk_volume_df, mock_repo):
+        mock_repo.get_isk_volume_by_date.return_value = sample_isk_volume_df
 
         from services.market_service import MarketService
         service = MarketService(mock_repo)
-        result = service.calculate_isk_volume_by_period("weekly")
-
-        assert isinstance(result, pd.Series)
-        # Weekly should have fewer entries than daily
+        weekly = service.calculate_isk_volume_by_period("weekly")
         daily = service.calculate_isk_volume_by_period("daily")
-        assert len(result) <= len(daily)
 
-    def test_monthly_aggregation(self, sample_history_df, mock_repo):
-        mock_repo.get_all_history.return_value = sample_history_df
+        assert len(weekly) < len(daily)
+        assert weekly.sum() == pytest.approx(daily.sum())
+
+    def test_monthly_aggregation(self, sample_isk_volume_df, mock_repo):
+        mock_repo.get_isk_volume_by_date.return_value = sample_isk_volume_df
 
         from services.market_service import MarketService
         service = MarketService(mock_repo)
         result = service.calculate_isk_volume_by_period("monthly")
 
         assert isinstance(result, pd.Series)
+        assert result.sum() == pytest.approx(sample_isk_volume_df["total_isk_volume"].sum())
 
-    def test_date_range_filter(self, sample_history_df, mock_repo):
-        mock_repo.get_all_history.return_value = sample_history_df
+    def test_category_scope_is_passed_as_type_ids(
+        self, sample_isk_volume_df, mock_repo
+    ):
+        mock_repo.get_category_type_ids.return_value = [34, 35]
+        mock_repo.get_isk_volume_by_date.return_value = sample_isk_volume_df
 
         from services.market_service import MarketService
         service = MarketService(mock_repo)
-        start = datetime.now() - timedelta(days=10)
-        end = datetime.now()
-        result = service.calculate_isk_volume_by_period(
-            "daily", start_date=start, end_date=end
+        service.calculate_isk_volume_by_period("daily", days=30, category="Ship")
+
+        mock_repo.get_isk_volume_by_date.assert_called_once_with(
+            days=30, type_ids=[34, 35]
         )
 
-        assert len(result) <= 11  # 10 days + possible boundary
+    def test_category_with_no_types_returns_empty_without_querying(self, mock_repo):
+        """An empty scope is a true empty, never a widening to all items."""
+        mock_repo.get_category_type_ids.return_value = []
 
-
-# ---------------------------------------------------------------------------
-# Test: detect_outliers
-# ---------------------------------------------------------------------------
-
-class TestDetectOutliers:
-    """Test outlier detection (static method)."""
-
-    def test_iqr_detects_outlier(self):
         from services.market_service import MarketService
-        series = pd.Series([1, 2, 3, 4, 5, 100])
-        mask = MarketService.detect_outliers(series, method="iqr", threshold=1.5)
+        service = MarketService(mock_repo)
+        result = service.calculate_isk_volume_by_period("daily", category="Ship")
 
-        assert isinstance(mask, pd.Series)
-        assert mask.iloc[-1]  # 100 is outlier
-
-    def test_zscore_detects_outlier(self):
-        from services.market_service import MarketService
-        series = pd.Series([1, 2, 3, 4, 5, 100])
-        mask = MarketService.detect_outliers(series, method="zscore", threshold=2.0)
-
-        assert isinstance(mask, pd.Series)
-        assert mask.iloc[-1]  # 100 is outlier
-
-    def test_invalid_method_raises(self):
-        from services.market_service import MarketService
-        with pytest.raises(ValueError, match="Method must be"):
-            MarketService.detect_outliers(pd.Series([1, 2, 3]), method="invalid")
-
-
-# ---------------------------------------------------------------------------
-# Test: handle_outliers
-# ---------------------------------------------------------------------------
-
-class TestHandleOutliers:
-    """Test outlier handling methods."""
-
-    def test_remove_outliers(self):
-        from services.market_service import MarketService
-        series = pd.Series([1, 2, 3, 4, 5, 100])
-        result = MarketService.handle_outliers(series, method="remove")
-
-        assert len(result) < len(series)
-        assert 100 not in result.values
-
-    def test_cap_outliers(self):
-        from services.market_service import MarketService
-        series = pd.Series([1, 2, 3, 4, 5, 100])
-        result = MarketService.handle_outliers(series, method="cap", cap_percentile=95)
-
-        assert len(result) == len(series)
-        assert result.max() < 100
-
-    def test_none_method_returns_unchanged(self):
-        from services.market_service import MarketService
-        series = pd.Series([1, 2, 3, 4, 5, 100])
-        result = MarketService.handle_outliers(series, method="none")
-
-        pd.testing.assert_series_equal(result, series)
-
-    def test_invalid_method_raises(self):
-        from services.market_service import MarketService
-        with pytest.raises(ValueError):
-            MarketService.handle_outliers(pd.Series([1, 2]), method="invalid")
+        assert result.empty
+        mock_repo.get_isk_volume_by_date.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -334,8 +322,8 @@ class TestHandleOutliers:
 class TestCreateISKVolumeChart:
     """Test ISK volume chart creation."""
 
-    def test_returns_plotly_figure(self, sample_history_df, mock_repo):
-        mock_repo.get_all_history.return_value = sample_history_df
+    def test_returns_plotly_figure(self, sample_isk_volume_df, mock_repo):
+        mock_repo.get_isk_volume_by_date.return_value = sample_isk_volume_df
 
         from services.market_service import MarketService
         service = MarketService(mock_repo)
@@ -344,14 +332,45 @@ class TestCreateISKVolumeChart:
         assert isinstance(fig, go.Figure)
         assert len(fig.data) >= 2  # Bar + moving average line
 
-    def test_chart_with_outlier_cap(self, sample_history_df, mock_repo):
-        mock_repo.get_all_history.return_value = sample_history_df
+    def test_defaults_to_thirty_days(self, sample_isk_volume_df, mock_repo):
+        mock_repo.get_isk_volume_by_date.return_value = sample_isk_volume_df
 
         from services.market_service import MarketService
         service = MarketService(mock_repo)
-        fig = service.create_isk_volume_chart(outlier_method="cap")
+        service.create_isk_volume_chart()
 
-        assert isinstance(fig, go.Figure)
+        assert mock_repo.get_isk_volume_by_date.call_args.kwargs["days"] == 30
+
+    def test_passes_the_selected_window_through(
+        self, sample_isk_volume_df, mock_repo
+    ):
+        mock_repo.get_isk_volume_by_date.return_value = sample_isk_volume_df
+
+        from services.market_service import MarketService
+        service = MarketService(mock_repo)
+        service.create_isk_volume_chart(days=None)
+
+        assert mock_repo.get_isk_volume_by_date.call_args.kwargs["days"] is None
+
+
+# ---------------------------------------------------------------------------
+# Test: create_isk_volume_table
+# ---------------------------------------------------------------------------
+
+class TestCreateISKVolumeTable:
+    """The table shows the same window as the chart."""
+
+    def test_passes_the_selected_window_through(
+        self, sample_isk_volume_df, mock_repo
+    ):
+        mock_repo.get_isk_volume_by_date.return_value = sample_isk_volume_df
+
+        from services.market_service import MarketService
+        service = MarketService(mock_repo)
+        table = service.create_isk_volume_table(days=7)
+
+        assert mock_repo.get_isk_volume_by_date.call_args.kwargs["days"] == 7
+        assert list(table.columns) == ["Date", "ISK Volume"]
 
 
 # ---------------------------------------------------------------------------

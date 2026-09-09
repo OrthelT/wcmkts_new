@@ -824,3 +824,117 @@ class TestHistoryWindowQueries:
         cutoff = pd.Timestamp(mock_read_sql.call_args.kwargs["params"]["cutoff"])
         expected = pd.Timestamp.now() - pd.Timedelta(days=30)
         assert abs((cutoff - expected).total_seconds()) < 60
+
+
+class TestIskVolumeAggregation:
+    """Daily ISK volume aggregated in SQL rather than in pandas.
+
+    The chart used to load all ~890 k market_history rows (3.5 s, 137 MB
+    pinned per hub) only to sum them by date. SQLite returns one row per
+    date instead.
+    """
+
+    def _mock_engine(self):
+        mock_conn = Mock()
+        mock_conn.__enter__ = Mock(return_value=mock_conn)
+        mock_conn.__exit__ = Mock(return_value=None)
+        mock_engine = Mock()
+        mock_engine.connect.return_value = mock_conn
+        return mock_engine
+
+    def _patch_db(self, mock_db_cls):
+        mock_db = Mock()
+        type(mock_db).engine = PropertyMock(return_value=self._mock_engine())
+        mock_db_cls.return_value = mock_db
+
+    @patch("repositories.market_repo.DatabaseConfig")
+    @patch("pandas.read_sql_query")
+    def test_sums_isk_volume_per_date_in_sql(self, mock_read_sql, mock_db_cls):
+        mock_read_sql.return_value = pd.DataFrame(
+            {"date": ["2026-09-01"], "total_isk_volume": [1_000.0]}
+        )
+        self._patch_db(mock_db_cls)
+
+        from repositories.market_repo import _get_isk_volume_by_date_impl
+        result = _get_isk_volume_by_date_impl(days=30)
+
+        sql = " ".join(str(mock_read_sql.call_args[0][0]).upper().split())
+        assert "SUM(AVERAGE * VOLUME)" in sql
+        assert "GROUP BY DATE" in sql
+        assert "SELECT *" not in sql
+        assert list(result.columns) == ["date", "total_isk_volume"]
+
+    @patch("repositories.market_repo.DatabaseConfig")
+    @patch("pandas.read_sql_query")
+    def test_days_applies_cutoff_days_before_now(self, mock_read_sql, mock_db_cls):
+        mock_read_sql.return_value = pd.DataFrame()
+        self._patch_db(mock_db_cls)
+
+        from repositories.market_repo import _get_isk_volume_by_date_impl
+        _get_isk_volume_by_date_impl(days=7)
+
+        sql = " ".join(str(mock_read_sql.call_args[0][0]).upper().split())
+        assert "DATE >= :CUTOFF" in sql
+        cutoff = pd.Timestamp(mock_read_sql.call_args.kwargs["params"]["cutoff"])
+        expected = pd.Timestamp.now() - pd.Timedelta(days=7)
+        assert abs((cutoff - expected).total_seconds()) < 60
+
+    @patch("repositories.market_repo.DatabaseConfig")
+    @patch("pandas.read_sql_query")
+    def test_days_none_queries_the_whole_history(self, mock_read_sql, mock_db_cls):
+        mock_read_sql.return_value = pd.DataFrame()
+        self._patch_db(mock_db_cls)
+
+        from repositories.market_repo import _get_isk_volume_by_date_impl
+        _get_isk_volume_by_date_impl(days=None)
+
+        sql = " ".join(str(mock_read_sql.call_args[0][0]).upper().split())
+        assert "CUTOFF" not in sql
+        assert mock_read_sql.call_args.kwargs["params"] is None
+
+    @patch("repositories.market_repo.DatabaseConfig")
+    @patch("pandas.read_sql_query")
+    def test_scopes_to_type_ids(self, mock_read_sql, mock_db_cls):
+        mock_read_sql.return_value = pd.DataFrame()
+        self._patch_db(mock_db_cls)
+
+        from repositories.market_repo import _get_isk_volume_by_date_impl
+        _get_isk_volume_by_date_impl(days=30, type_ids=[34, 35])
+
+        sql = " ".join(str(mock_read_sql.call_args[0][0]).upper().split())
+        assert "TYPE_ID IN" in sql
+        assert mock_read_sql.call_args.kwargs["params"]["type_ids"] == [34, 35]
+
+    @patch("repositories.market_repo.DatabaseConfig")
+    @patch("pandas.read_sql_query")
+    def test_empty_type_ids_returns_empty_without_querying(
+        self, mock_read_sql, mock_db_cls
+    ):
+        """An empty scope is a true empty, never a widening to all items."""
+        self._patch_db(mock_db_cls)
+
+        from repositories.market_repo import _get_isk_volume_by_date_impl
+        assert _get_isk_volume_by_date_impl(days=30, type_ids=[]).empty
+        mock_read_sql.assert_not_called()
+
+    @patch("repositories.market_repo._get_isk_volume_by_date_cached")
+    def test_repository_method_delegates_to_cache(self, mock_cached):
+        expected = pd.DataFrame({"date": ["2026-09-01"], "total_isk_volume": [1.0]})
+        mock_cached.return_value = expected
+
+        from repositories.market_repo import MarketRepository
+        mock_db = Mock()
+        mock_db.alias = "wcmkt"
+        repo = MarketRepository(mock_db)
+        result = repo.get_isk_volume_by_date(days=30, type_ids=[34])
+
+        assert result is expected
+        mock_cached.assert_called_once_with(30, (34,), "wcmkt")
+
+    @patch("repositories.market_repo._get_isk_volume_by_date_cached")
+    def test_invalidate_clears_the_isk_volume_cache(self, mock_cached):
+        from repositories.market_repo import invalidate_market_caches
+
+        invalidate_market_caches()
+
+        mock_cached.clear.assert_called_once()
