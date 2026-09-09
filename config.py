@@ -26,8 +26,21 @@ DEFAULT_SHIP_TARGET = 20
 # Database Configuration
 # =============================================================================
 
-# Global lock to serialize sync operations within the process
-_SYNC_LOCK = threading.Lock()
+# Per-alias locks serializing sync operations within the process.
+# The lock exists to stop two threads mutating the *same* replica's files;
+# different aliases own disjoint files, so a single process-wide lock only
+# serialized unrelated network pulls and made concurrent bootstrap pointless.
+_SYNC_LOCKS: dict[str, threading.Lock] = {}
+_SYNC_LOCKS_GUARD = threading.Lock()
+
+
+def _sync_lock(alias: str) -> threading.Lock:
+    """Return the process-wide lock guarding one alias's replica files."""
+    with _SYNC_LOCKS_GUARD:
+        lock = _SYNC_LOCKS.get(alias)
+        if lock is None:
+            lock = _SYNC_LOCKS[alias] = threading.Lock()
+        return lock
 
 
 @dataclass(frozen=True)
@@ -393,7 +406,7 @@ class DatabaseConfig:
     def sync(self) -> SyncResult:
         """Pull remote changes into the local replica safely.
 
-        Serialized by _SYNC_LOCK with dispose-before-sync. Enforces the
+        Serialized by this alias's sync lock with dispose-before-sync. Enforces the
         file-state machine, retries once via nuke + fresh bootstrap on
         integrity failure, snapshots a backup pair on success, and clears
         the degraded registry.
@@ -417,7 +430,7 @@ class DatabaseConfig:
             f"sync() starting for {self.alias} (url={self.turso_url}) at "
             f"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}"
         )
-        with _SYNC_LOCK:
+        with _sync_lock(self.alias):
             self._dispose_local_connections()
             self._ensure_replica_consistency()
             file_existed = os.path.exists(self.path)
@@ -431,6 +444,23 @@ class DatabaseConfig:
                     self._remove_replica_files()
                 raise
             changed = changed or not file_existed  # fresh bootstrap == new data
+
+            if not changed:
+                # pull() applied nothing, so no byte of the replica moved.
+                # integrity_check reads the whole file (2.3 s on the 147 MB
+                # primary hub) and snapshot_backup copies it -- both would be
+                # re-verifying and re-copying bytes this sync did not touch.
+                # Corruption that arrives from outside sync is still caught:
+                # _ensure_replica_consistency nukes an unreadable replica on
+                # the next sync, and BaseRepository.read_df's ladder falls
+                # through to restore_from_backup() when a read actually fails.
+                if not self._backup_pair_exists():
+                    # Post-sync invariant: a usable backup pair exists, so the
+                    # restore ladder always has something to fall back to.
+                    self.snapshot_backup()
+                clear_degraded(self.alias)
+                logger.info("-" * 40)
+                return SyncResult(ok=True, changed=False)
 
             ok = self.integrity_check()
             if not ok:
@@ -466,26 +496,48 @@ class DatabaseConfig:
                     os.remove(file_path)
                     logger.info(f"Removed replica artifact {file_path}")
 
+    def _backup_pair_exists(self) -> bool:
+        """True when both halves of the ``.bak`` pair are present.
+
+        A lone ``.db.bak`` is not a restorable backup -- restore_from_backup()
+        needs the ``-info.bak`` sidecar with it.
+        """
+        return os.path.exists(self.path + ".bak") and os.path.exists(
+            self.path + "-info.bak"
+        )
+
     def snapshot_backup(self) -> bool:
         """Copy the live ``.db`` + ``.db-info`` pair to ``.bak`` files.
 
         Pure file copy — the caller (sync()) is responsible for having
-        checkpointed the WAL first so the main file is complete. Each copy
-        goes to a temp file then an atomic os.replace(), so a mid-copy crash
-        cannot leave a torn backup. Best-effort: returns False on any error.
+        checkpointed the WAL first so the main file is complete. BOTH halves
+        are staged to ``.tmp`` files before either is published, then moved
+        into place back to back. Copying and replacing one file at a time
+        could leave a new ``.db.bak`` paired with an old ``-info.bak`` if the
+        second copy failed, and _backup_pair_exists() — which checks
+        existence only — would accept that torn pair. Best-effort: returns
+        False on any error.
         """
+        pairs = (
+            (self.path, self.path + ".bak"),
+            (self.path + "-info", self.path + "-info.bak"),
+        )
+        staged: list[tuple[str, str]] = []
         try:
-            for src, dst in (
-                (self.path, self.path + ".bak"),
-                (self.path + "-info", self.path + "-info.bak"),
-            ):
+            for src, dst in pairs:
                 tmp = dst + ".tmp"
                 shutil.copy2(src, tmp)
+                staged.append((tmp, dst))
+            for tmp, dst in staged:
                 os.replace(tmp, dst)
             logger.info(f"snapshot_backup: wrote backup pair for {self.alias}")
             return True
         except OSError as e:
             logger.error(f"snapshot_backup failed for {self.alias}: {e}")
+            for tmp, _ in staged:
+                with suppress(OSError):
+                    if os.path.exists(tmp):
+                        os.remove(tmp)
             return False
 
     def restore_from_backup(self) -> bool:
@@ -541,7 +593,7 @@ class DatabaseConfig:
             return False
 
         tmp_db, tmp_info = self.path + ".tmp", self.path + "-info.tmp"
-        with _SYNC_LOCK:
+        with _sync_lock(self.alias):
             try:
                 shutil.copy2(bak, tmp_db)
                 shutil.copy2(info_bak, tmp_info)

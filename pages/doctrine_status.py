@@ -18,7 +18,7 @@ from repositories import get_sde_repository
 from state import get_active_language, ss_init, ss_get
 from ui.i18n import translate_text
 from ui.market_selector import render_market_selector
-from init_db import ensure_market_db_ready
+from pages.components.db_refresh import ensure_active_market_fresh
 from ui.sync_display import display_sync_status
 from services.module_equivalents_service import get_module_equivalents_service
 from ui.formatters import drop_localized_backup_columns
@@ -447,7 +447,7 @@ def main():
     # menu button) instead of vanishing after a single render.
     qp_ship_id, qp_module_id = resolve_deeplink_filter(st.query_params, st.session_state)
 
-    if not ensure_market_db_ready(market.database_alias):
+    if not ensure_active_market_fresh(market.database_alias):
         st.error(
             f"Database for **{market.name}** is not available. "
             "Check credentials and network connectivity."

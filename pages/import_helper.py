@@ -7,7 +7,7 @@ Shows local market items with Jita comparison data for import decisions.
 import pandas as pd
 import streamlit as st
 
-from init_db import ensure_market_db_ready
+from pages.components.db_refresh import ensure_active_market_fresh
 from logging_config import setup_logging
 from state import get_active_language
 from services import ImportHelperFilters
@@ -28,7 +28,7 @@ def main():
 
     render_page_title(translate_text(language_code, "import_helper.title", market_name=market.name))
 
-    if not ensure_market_db_ready(market.database_alias):
+    if not ensure_active_market_fresh(market.database_alias):
         st.error(
             f"Database for **{market.name}** is not available. "
             "Check Turso credentials and network connectivity."

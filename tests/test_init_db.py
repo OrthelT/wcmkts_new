@@ -80,7 +80,7 @@ def _patch_init_db(monkeypatch, tmp_path, sync_sleep=0.0):
 
 def test_invalid_db_not_deleted_before_sync(tmp_path, monkeypatch):
     """init_db must NOT delete an invalid replica itself — deleting outside
-    _SYNC_LOCK can destroy another session's in-flight bootstrap. Cleanup is
+    the alias's sync lock can destroy another session's in-flight bootstrap. Cleanup is
     sync()'s job, under its lock."""
     _patch_init_db(monkeypatch, tmp_path)
     # a .db without -info: invalid per verify_db_content, needs resync

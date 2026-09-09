@@ -163,3 +163,34 @@ def test_restore_refuses_non_pyturso_backup_metadata(db, info, kind, caplog):
     assert "testalias" not in get_degraded_aliases()
     assert f"backup metadata is '{kind}'" in caplog.text
     assert os.path.exists(db.path + ".bak")  # backup left in place
+
+
+def test_snapshot_backup_leaves_old_pair_intact_when_second_copy_fails(db):
+    """Both halves are staged before either is published.
+
+    Copying and replacing one file at a time could pair a new .db.bak with an
+    old -info.bak, and _backup_pair_exists() (existence only) would accept
+    that torn pair, so sync()'s no-change path would never rewrite it.
+    """
+    import glob
+    import shutil
+
+    _write_live_pair(db, b"old-data" * 4)
+    assert db.snapshot_backup() is True
+
+    _write_live_pair(db, b"new-data" * 4)
+    real_copy2 = shutil.copy2
+    calls = []
+
+    def flaky_copy2(src, dst):
+        calls.append(src)
+        if len(calls) == 2:  # the small -info copy
+            raise OSError("disk full")
+        return real_copy2(src, dst)
+
+    with patch.object(config_module.shutil, "copy2", side_effect=flaky_copy2):
+        assert db.snapshot_backup() is False
+
+    with open(db.path + ".bak", "rb") as f:
+        assert f.read() == b"old-data" * 4  # old pair still intact, not torn
+    assert glob.glob(db.path + "*.tmp") == []

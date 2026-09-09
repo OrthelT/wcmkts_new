@@ -4,7 +4,8 @@ Tests for RWLock - DEPRECATED
 RWLock was removed from config.py in Phase 8 of the architecture refactoring.
 The underlying libsql bug that required RWLock has been fixed.
 
-Sync serialization is now handled by a simple threading.Lock (_SYNC_LOCK).
+Sync serialization is now handled by a per-alias threading.Lock
+(config._sync_lock(alias)).
 Regular database reads require no locking as SQLite handles its own
 reader concurrency.
 
@@ -23,10 +24,10 @@ class TestRWLockRemoved(unittest.TestCase):
                         "RWLock should be removed from config module")
 
     def test_sync_lock_still_exists(self):
-        """_SYNC_LOCK should still exist for sync serialization"""
-        from config import _SYNC_LOCK
+        """Per-alias sync locks should still exist for sync serialization"""
+        from config import _sync_lock
         import threading
-        self.assertIsInstance(_SYNC_LOCK, type(threading.Lock()))
+        self.assertIsInstance(_sync_lock("sde"), type(threading.Lock()))
 
 
 if __name__ == "__main__":

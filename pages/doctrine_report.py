@@ -18,7 +18,7 @@ from services.module_equivalents_service import get_module_equivalents_service
 from state import get_active_language, ss_init
 from ui.i18n import translate_text
 from ui.market_selector import render_market_selector
-from init_db import ensure_market_db_ready
+from pages.components.db_refresh import ensure_active_market_fresh
 from ui.sync_display import display_sync_status
 from ui.formatters import drop_localized_backup_columns
 from pages.components.header import render_page_title
@@ -373,7 +373,7 @@ def main():
     market = render_market_selector()
     sde_repo = get_sde_repository()
 
-    if not ensure_market_db_ready(market.database_alias):
+    if not ensure_active_market_fresh(market.database_alias):
         st.error(
             f"Database for **{market.name}** is not available. "
             "Check Turso credentials and network connectivity."

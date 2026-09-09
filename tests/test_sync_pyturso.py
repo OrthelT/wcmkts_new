@@ -253,3 +253,76 @@ class TestSync:
         assert conn.pull.call_count == 2
         assert not os.path.exists(db.path)
         assert not os.path.exists(db.path + "-info")
+
+
+class TestNoChangeFastPath:
+    """A pull that applied nothing must not re-verify or re-copy the replica.
+
+    integrity_check reads the whole file (2.3 s on the 147 MB primary hub) and
+    snapshot_backup copies it. Both are pure waste when pull() reports that no
+    byte of the replica changed -- see the startup performance evaluation.
+    """
+
+    def _run(self, db, pull_returns, integrity=True):
+        conn = _mock_sync_conn(pull_returns=pull_returns)
+
+        def fake_pull():
+            _write(db.path)
+            _write_info(db)
+            return pull_returns
+
+        conn.pull.side_effect = fake_pull
+        with patch("config.tursosync.connect", return_value=conn), patch.object(
+            DatabaseConfig, "integrity_check", return_value=integrity
+        ) as integrity_mock, patch.object(
+            DatabaseConfig, "_dispose_local_connections"
+        ), patch.object(DatabaseConfig, "snapshot_backup", return_value=True) as snap_mock:
+            result = db.sync()
+        return result, integrity_mock, snap_mock
+
+    def _existing_replica_with_backup(self, db):
+        _make_db(db.path)
+        _write_info(db)
+        _write(db.path + ".bak")
+        _write(db.path + "-info.bak")
+
+    def test_no_change_pull_skips_integrity_check(self, db):
+        self._existing_replica_with_backup(db)
+        result, integrity_mock, _ = self._run(db, pull_returns=False)
+        integrity_mock.assert_not_called()
+        assert result == SyncResult(ok=True, changed=False)
+
+    def test_no_change_pull_skips_backup_snapshot(self, db):
+        self._existing_replica_with_backup(db)
+        _, _, snap_mock = self._run(db, pull_returns=False)
+        snap_mock.assert_not_called()
+
+    def test_no_change_pull_still_snapshots_when_backup_missing(self, db):
+        """The post-sync invariant is "a usable backup pair exists". A missing
+        .bak (never taken, or manually deleted) must still be created, or the
+        read_df restore ladder has nothing to fall back to."""
+        _make_db(db.path)
+        _write_info(db)
+        _, _, snap_mock = self._run(db, pull_returns=False)
+        snap_mock.assert_called_once()
+
+    def test_no_change_pull_snapshots_when_only_info_backup_missing(self, db):
+        """Both halves of the pair are required; a lone .db.bak is not a backup."""
+        self._existing_replica_with_backup(db)
+        os.remove(db.path + "-info.bak")
+        _, _, snap_mock = self._run(db, pull_returns=False)
+        snap_mock.assert_called_once()
+
+    def test_changed_pull_still_verifies_and_snapshots(self, db):
+        self._existing_replica_with_backup(db)
+        result, integrity_mock, snap_mock = self._run(db, pull_returns=True)
+        integrity_mock.assert_called_once()
+        snap_mock.assert_called_once()
+        assert result == SyncResult(ok=True, changed=True)
+
+    def test_fresh_bootstrap_still_verifies_and_snapshots(self, db):
+        """No prior file: pull() reports changed=False but this is new data."""
+        result, integrity_mock, snap_mock = self._run(db, pull_returns=False)
+        integrity_mock.assert_called_once()
+        snap_mock.assert_called_once()
+        assert result.changed is True

@@ -4,6 +4,7 @@ Moved from market_stats.py so the dashboard (default landing page)
 can drive DB initialization and periodic staleness checks.
 """
 
+import threading
 import time
 from datetime import datetime
 
@@ -17,6 +18,17 @@ from state.market_state import refresh_market_caches
 from state.sync_state import update_wcmkt_state
 
 logger = setup_logging(__name__)
+
+# Minimum gap between staleness checks for a given database.
+_CHECK_INTERVAL_SECONDS = 600
+
+# When each alias was last checked, keyed by alias. Process-wide rather than
+# per-session on purpose: the replica is a process-wide file, so a check one
+# session just performed is equally valid for every other session. Holding
+# this in st.session_state made every new browser session pay a full
+# multi-database sync before its first paint.
+_last_check_by_alias: dict[str, float] = {}
+_last_check_lock = threading.Lock()
 
 
 def initialize_databases() -> bool:
@@ -50,16 +62,30 @@ def initialize_databases() -> bool:
     return st.session_state.get("db_initialized", False)
 
 
-def check_db(manual_override: bool = False):
-    """Pull every market + configured shared DB; refresh UI if anything changed.
+def aliases_to_check() -> list[str]:
+    """Databases the periodic check covers: the active hub + shared DBs.
+
+    Inactive market hubs are deliberately excluded. Each was costing a pull
+    plus a full-file verification on every check, and nothing reads them until
+    the user switches hubs -- at which point ensure_market_db_ready() bootstraps
+    the replica and this function starts including it.
+    """
+    from settings_service import get_periodic_sync_aliases
+    from state.market_state import get_active_market
+
+    return [get_active_market().database_alias] + get_periodic_sync_aliases()
+
+
+def check_db(manual_override: bool = False, aliases: list[str] | None = None):
+    """Pull the given DBs (active hub + shared by default); refresh UI on change.
 
     pull() IS the staleness check under pyturso: a cheap no-op round-trip
     when the replica is current, True when new data was applied.
     """
-    from settings_service import get_all_market_configs, get_periodic_sync_aliases
+    from settings_service import get_all_market_configs
 
     market_aliases = {cfg.database_alias for cfg in get_all_market_configs().values()}
-    all_aliases = list(market_aliases) + get_periodic_sync_aliases()
+    all_aliases = aliases if aliases is not None else aliases_to_check()
 
     synced_aliases: list[str] = []
     any_sync_failed = False
@@ -67,6 +93,11 @@ def check_db(manual_override: bool = False):
     status_ctx = None  # lazily created the first time a pull returns changes
 
     for alias in all_aliases:
+        # Mark before pulling, not after: a successful pull ends in st.rerun(),
+        # which aborts this function, and an unmarked alias would re-enter the
+        # guard on the next run and sync in a loop.
+        with _last_check_lock:
+            _last_check_by_alias[alias] = time.time()
         db = DatabaseConfig(alias)
         if not db.has_remote_credentials:
             logger.info(f"check_db(): skipping {alias}; no remote credentials configured")
@@ -98,9 +129,6 @@ def check_db(manual_override: bool = False):
         if "build_cost" in synced_aliases:
             invalidate_build_cost_caches()
         update_wcmkt_state()
-        # Mark this run as having completed a check so the periodic guard
-        # in maybe_run_check() doesn't immediately re-fire after the rerun.
-        st.session_state["last_check"] = time.time()
         if status_ctx is not None:
             final_state = "error" if any_sync_failed else "complete"
             final_label = (
@@ -131,24 +159,46 @@ def check_db(manual_override: bool = False):
 
 
 def maybe_run_check():
-    """Run a periodic staleness check every 600 seconds.
+    """Check any database whose last check is older than the interval.
 
-    ``last_check`` is written BEFORE ``check_db()`` runs. This matters
-    because ``check_db()`` may call ``st.rerun()`` on a successful sync,
-    which would abort before any post-call assignment and re-trigger this
-    guard on the next run — causing an infinite sync loop.
+    The timestamps are per-alias and process-wide, so a second session on the
+    same hub inherits the first session's check instead of repeating it, while
+    a hub the user has just switched to has no timestamp and is checked at once.
     """
     now = time.time()
-    if "last_check" not in st.session_state:
-        logger.info("last_check not in st.session_state, setting to now")
-        st.session_state["last_check"] = now
-        check_db()
-    elif now - st.session_state.get("last_check", 0) > 600:
-        logger.info(
-            f"now - last_check={now - st.session_state.get('last_check', 0)}, running check_db()"
-        )
-        st.session_state["last_check"] = now
-        check_db()
+    with _last_check_lock:
+        stale = [
+            alias
+            for alias in aliases_to_check()
+            if now - _last_check_by_alias.get(alias, 0.0) > _CHECK_INTERVAL_SECONDS
+        ]
+        # Claim the stale aliases while still holding the lock. check_db()
+        # marks them too, but it re-acquires the lock to do so; without this
+        # claim two concurrent sessions can both see the same alias as stale
+        # and start the same pull.
+        for alias in stale:
+            _last_check_by_alias[alias] = now
+    if not stale:
+        return
+    logger.info(f"running check_db() for stale aliases: {stale}")
+    check_db(aliases=stale)
+
+
+def ensure_active_market_fresh(alias: str) -> bool:
+    """Ready the active hub's replica and run the periodic staleness check.
+
+    Every market-aware page calls this instead of ensure_market_db_ready()
+    directly. ensure_market_db_ready() returns immediately when a replica has
+    content, however stale, so a page that only called it served a hub the
+    user had just switched to without ever pulling it.
+
+    Returns:
+        True if the replica is ready to query, False otherwise.
+    """
+    if not ensure_market_db_ready(alias):
+        return False
+    maybe_run_check()
+    return True
 
 
 def ensure_init_and_check() -> bool:

@@ -22,7 +22,7 @@ from domain import InputFormat
 from domain.enums import StockStatus
 from domain.market_config import MarketConfig
 from domain.pricer import FitAvailabilitySummary, ItemAvailability, PricerResult
-from init_db import ensure_market_db_ready
+from pages.components.db_refresh import ensure_active_market_fresh
 from logging_config import setup_logging
 from pages.components.header import render_page_title
 from pages.components.layout import render_legal_notice
@@ -798,7 +798,7 @@ def main():
     market = render_market_selector()
     sde_repo = get_sde_repository()
 
-    if not ensure_market_db_ready(market.database_alias):
+    if not ensure_active_market_fresh(market.database_alias):
         st.error(
             f"Database for **{market.name}** is not available. "
             "Check Turso credentials and network connectivity."

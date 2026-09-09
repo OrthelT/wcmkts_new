@@ -52,6 +52,8 @@ def mock_repo():
     repo.get_all_orders.return_value = pd.DataFrame()
     repo.get_all_stats.return_value = pd.DataFrame()
     repo.get_all_history.return_value = pd.DataFrame()
+    repo.get_history_window.return_value = pd.DataFrame()
+    repo.get_history_date_range.return_value = (None, None)
     repo.get_category_type_ids.return_value = []
     repo.get_history_by_type_ids.return_value = pd.DataFrame()
     return repo
@@ -66,7 +68,7 @@ class TestCalculate30dayMetrics:
 
     def test_returns_correct_tuple_structure(self, sample_history_df, mock_repo):
         """Should return (avg_vol, avg_isk, vol_delta, isk_delta, df_30, df_7)."""
-        mock_repo.get_all_history.return_value = sample_history_df
+        mock_repo.get_history_window.return_value = sample_history_df
 
         from services.market_service import MarketService
         service = MarketService(mock_repo)
@@ -82,7 +84,7 @@ class TestCalculate30dayMetrics:
 
     def test_empty_history_returns_zeros(self, mock_repo):
         """Empty history should return all zeros."""
-        mock_repo.get_all_history.return_value = pd.DataFrame()
+        mock_repo.get_history_window.return_value = pd.DataFrame()
 
         from services.market_service import MarketService
         service = MarketService(mock_repo)
@@ -194,7 +196,7 @@ class TestCalculate30dayMetrics:
 
         assert result == (0, 0, 0, 0, 0, 0)
         mock_repo.get_history_by_type_ids.assert_not_called()
-        mock_repo.get_all_history.assert_not_called()
+        mock_repo.get_history_window.assert_not_called()
 
     def test_type_ids_take_precedence_over_category(self, sample_history_df, mock_repo):
         mock_repo.get_history_by_type_ids.return_value = sample_history_df
@@ -603,3 +605,72 @@ class TestGetCurrentMarketSnapshot:
         assert result.iloc[0]["order_volume"] == pytest.approx(2000.0)
         assert result.iloc[1]["current_sell_price"] == pytest.approx(5.5)
         assert result.iloc[1]["order_volume"] == pytest.approx(1000.0)
+
+
+# ---------------------------------------------------------------------------
+# Test: narrow history queries (startup performance)
+# ---------------------------------------------------------------------------
+
+class TestGetAvailableDateRange:
+    """The date range must come from a MIN/MAX query, not a full-table load."""
+
+    def test_unfiltered_range_uses_the_date_range_query(self, mock_repo):
+        mock_repo.get_history_date_range.return_value = (
+            pd.Timestamp("2024-11-01"), pd.Timestamp("2026-09-07"),
+        )
+
+        from services.market_service import MarketService
+        service = MarketService(mock_repo)
+        result = service.get_available_date_range()
+
+        assert result == (pd.Timestamp("2024-11-01"), pd.Timestamp("2026-09-07"))
+        mock_repo.get_history_date_range.assert_called_once_with(None)
+        mock_repo.get_all_history.assert_not_called()
+
+    def test_category_range_scopes_to_that_category(self, mock_repo):
+        mock_repo.get_category_type_ids.return_value = [34, 35]
+        mock_repo.get_history_date_range.return_value = (
+            pd.Timestamp("2025-01-01"), pd.Timestamp("2026-01-01"),
+        )
+
+        from services.market_service import MarketService
+        service = MarketService(mock_repo)
+        result = service.get_available_date_range(category="Drone")
+
+        mock_repo.get_history_date_range.assert_called_once_with([34, 35])
+        mock_repo.get_history_by_type_ids.assert_not_called()
+        assert result[0] == pd.Timestamp("2025-01-01")
+
+    def test_category_with_no_types_returns_none_pair(self, mock_repo):
+        mock_repo.get_category_type_ids.return_value = []
+
+        from services.market_service import MarketService
+        service = MarketService(mock_repo)
+
+        assert service.get_available_date_range(category="Nonexistent") == (None, None)
+        mock_repo.get_history_date_range.assert_not_called()
+
+    def test_empty_history_returns_none_pair(self, mock_repo):
+        mock_repo.get_history_date_range.return_value = (None, None)
+
+        from services.market_service import MarketService
+        service = MarketService(mock_repo)
+
+        assert service.get_available_date_range() == (None, None)
+
+
+class TestCalculate30dayMetricsWindowedFetch:
+    """The unfiltered 30-day panel must fetch 30 days, not all 890 k rows."""
+
+    def test_unfiltered_scope_fetches_only_the_30_day_window(
+        self, sample_history_df, mock_repo
+    ):
+        mock_repo.get_history_window.return_value = sample_history_df
+
+        from services.market_service import MarketService
+        service = MarketService(mock_repo)
+        avg_vol, *_ = service.calculate_30day_metrics()
+
+        mock_repo.get_history_window.assert_called_once_with(30)
+        mock_repo.get_all_history.assert_not_called()
+        assert avg_vol > 0

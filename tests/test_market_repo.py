@@ -705,3 +705,122 @@ class TestThirtyDayFilterTypeIdsImpl:
 
         from repositories.market_repo import _get_30day_filter_type_ids_impl
         assert _get_30day_filter_type_ids_impl("modules") == []
+
+
+class TestHistoryWindowQueries:
+    """Narrow history queries that replace whole-table scans.
+
+    market_history is ~890 k rows / 137 MB on the primary hub. Loading all of
+    it to compute a min/max date, or to look at the last 30 days, was the
+    second-largest cost in the dashboard's first render.
+    """
+
+    def _mock_engine(self):
+        mock_conn = Mock()
+        mock_conn.__enter__ = Mock(return_value=mock_conn)
+        mock_conn.__exit__ = Mock(return_value=None)
+        mock_engine = Mock()
+        mock_engine.connect.return_value = mock_conn
+        return mock_engine
+
+    def _patch_db(self, mock_db_cls):
+        mock_db = Mock()
+        type(mock_db).engine = PropertyMock(return_value=self._mock_engine())
+        mock_db_cls.return_value = mock_db
+
+    @patch("repositories.market_repo.DatabaseConfig")
+    @patch("pandas.read_sql_query")
+    def test_date_range_returns_min_and_max_as_timestamps(self, mock_read_sql, mock_db_cls):
+        mock_read_sql.return_value = pd.DataFrame(
+            {"min_date": ["2024-11-01 00:00:00.000000"],
+             "max_date": ["2026-09-07 00:00:00.000000"]}
+        )
+        self._patch_db(mock_db_cls)
+
+        from repositories.market_repo import _get_history_date_range_impl
+        min_date, max_date = _get_history_date_range_impl()
+
+        assert min_date == pd.Timestamp("2024-11-01")
+        assert max_date == pd.Timestamp("2026-09-07")
+
+    @patch("repositories.market_repo.DatabaseConfig")
+    @patch("pandas.read_sql_query")
+    def test_date_range_aggregates_in_sql_not_pandas(self, mock_read_sql, mock_db_cls):
+        """The query must ask SQLite for MIN/MAX, not pull rows and reduce here."""
+        mock_read_sql.return_value = pd.DataFrame(
+            {"min_date": ["2024-11-01"], "max_date": ["2026-09-07"]}
+        )
+        self._patch_db(mock_db_cls)
+
+        from repositories.market_repo import _get_history_date_range_impl
+        _get_history_date_range_impl()
+
+        sql = str(mock_read_sql.call_args[0][0]).upper()
+        assert "MIN(DATE)" in sql and "MAX(DATE)" in sql
+        assert "SELECT *" not in sql
+
+    @patch("repositories.market_repo.DatabaseConfig")
+    @patch("pandas.read_sql_query")
+    def test_date_range_empty_table_returns_none_pair(self, mock_read_sql, mock_db_cls):
+        """MIN/MAX over an empty table yields one row of NULLs, not zero rows."""
+        mock_read_sql.return_value = pd.DataFrame({"min_date": [None], "max_date": [None]})
+        self._patch_db(mock_db_cls)
+
+        from repositories.market_repo import _get_history_date_range_impl
+        assert _get_history_date_range_impl() == (None, None)
+
+    @patch("repositories.market_repo.DatabaseConfig")
+    @patch("pandas.read_sql_query")
+    def test_date_range_scopes_to_type_ids(self, mock_read_sql, mock_db_cls):
+        mock_read_sql.return_value = pd.DataFrame(
+            {"min_date": ["2025-01-01"], "max_date": ["2026-01-01"]}
+        )
+        self._patch_db(mock_db_cls)
+
+        from repositories.market_repo import _get_history_date_range_impl
+        _get_history_date_range_impl(type_ids=[34, 35])
+
+        sql = str(mock_read_sql.call_args[0][0]).upper()
+        assert "TYPE_ID IN" in sql
+        assert mock_read_sql.call_args.kwargs["params"]["type_ids"] == [34, 35]
+
+    @patch("repositories.market_repo.DatabaseConfig")
+    @patch("pandas.read_sql_query")
+    def test_date_range_empty_type_ids_returns_none_without_querying(
+        self, mock_read_sql, mock_db_cls
+    ):
+        """An empty scope is a true empty, never a widening to all items."""
+        self._patch_db(mock_db_cls)
+
+        from repositories.market_repo import _get_history_date_range_impl
+        assert _get_history_date_range_impl(type_ids=[]) == (None, None)
+        mock_read_sql.assert_not_called()
+
+    @patch("repositories.market_repo.DatabaseConfig")
+    @patch("pandas.read_sql_query")
+    def test_history_window_filters_by_cutoff_in_sql(self, mock_read_sql, mock_db_cls):
+        mock_read_sql.return_value = pd.DataFrame(
+            {"type_id": [34], "date": ["2026-09-01"], "average": [5.0], "volume": [10]}
+        )
+        self._patch_db(mock_db_cls)
+
+        from repositories.market_repo import _get_history_window_impl
+        result = _get_history_window_impl(days=30)
+
+        sql = str(mock_read_sql.call_args[0][0]).upper()
+        assert "DATE >= :CUTOFF" in sql
+        assert "cutoff" in mock_read_sql.call_args.kwargs["params"]
+        assert len(result) == 1
+
+    @patch("repositories.market_repo.DatabaseConfig")
+    @patch("pandas.read_sql_query")
+    def test_history_window_cutoff_is_days_before_now(self, mock_read_sql, mock_db_cls):
+        mock_read_sql.return_value = pd.DataFrame()
+        self._patch_db(mock_db_cls)
+
+        from repositories.market_repo import _get_history_window_impl
+        _get_history_window_impl(days=30)
+
+        cutoff = pd.Timestamp(mock_read_sql.call_args.kwargs["params"]["cutoff"])
+        expected = pd.Timestamp.now() - pd.Timedelta(days=30)
+        assert abs((cutoff - expected).total_seconds()) < 60

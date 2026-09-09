@@ -23,7 +23,7 @@ from repositories import get_sde_repository
 from repositories.market_repo import MarketRepository
 from repositories.base import BaseRepository
 from ui.market_selector import render_market_selector
-from init_db import ensure_market_db_ready
+from pages.components.db_refresh import ensure_active_market_fresh
 from pages.components.header import render_page_title
 from pages.components.layout import render_legal_notice
 logger = setup_logging(__name__, log_file="downloads.log")
@@ -555,7 +555,7 @@ def sde_downloads_section():
 def main():
     market = render_market_selector()
 
-    if not ensure_market_db_ready(market.database_alias):
+    if not ensure_active_market_fresh(market.database_alias):
         st.error(
             f"Database for **{market.name}** is not available. "
             "Check Turso credentials and network connectivity."

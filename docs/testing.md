@@ -31,7 +31,7 @@ tests/
 ├── conftest.py                        # Path setup
 ├── test_base_repository.py            # BaseRepository + malformed-DB recovery
 ├── test_build_cost_service.py         # BuildCostService
-├── test_database_config_concurrency.py # DatabaseConfig sync + _SYNC_LOCK
+├── test_database_config_concurrency.py # DatabaseConfig sync + per-alias sync locks
 ├── test_doctrine_repo.py              # DoctrineRepository
 ├── test_i18n.py                       # UI translation (i18n.py)
 ├── test_import_helper_service.py      # ImportHelperService
@@ -53,7 +53,7 @@ tests/
 
 ## Current Test Coverage
 
-**677 tests + 22 subtests** covering repositories, services, database config, i18n, parser, pricer/fit-availability, and infrastructure:
+**715 tests + 22 subtests** covering repositories, services, database config, i18n, parser, pricer/fit-availability, and infrastructure:
 
 - **Success cases**: Normal function operation
 - **Data validation**: Return types and structure
@@ -158,7 +158,7 @@ uv run pytest tests/test_settings_toml.py -v
 
 ## Key Metrics
 
-- **Total tests**: 677 + 22 subtests (as of v0.6.8)
+- **Total tests**: 715 + 22 subtests (as of v0.6.8)
 - **Test types**: Unit tests, integration tests, configuration validation
 - **Run time**: ~2-3 seconds (fast unit tests only; integration tests may be slower)
 - **Success rate**: 100% (CI enforced)

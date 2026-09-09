@@ -23,7 +23,7 @@ from ui.i18n import translate_text
 from pages.components.header import render_page_title
 from pages.components.layout import render_legal_notice
 from ui.column_definitions import get_low_stock_column_config
-from init_db import ensure_market_db_ready
+from pages.components.db_refresh import ensure_active_market_fresh
 from ui.sync_display import display_sync_status
 logger = setup_logging(__name__, log_file="low_stock.log")
 
@@ -221,7 +221,7 @@ def main():
     market = render_market_selector()
     sde_repo = get_sde_repository()
 
-    if not ensure_market_db_ready(market.database_alias):
+    if not ensure_active_market_fresh(market.database_alias):
         st.error(
             f"Database for **{market.name}** is not available. "
             "Check Turso credentials and network connectivity."

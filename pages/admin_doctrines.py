@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from init_db import ensure_market_db_ready
+from pages.components.db_refresh import ensure_active_market_fresh
 from logging_config import setup_logging
 from pages.components.header import render_page_title
 from services.eve_sso_service import get_eve_sso_service
@@ -16,7 +16,7 @@ logger = setup_logging(__name__, log_file="admin_doctrines_page.log")
 
 def main() -> None:
     market = render_market_selector()
-    if not ensure_market_db_ready(market.database_alias):
+    if not ensure_active_market_fresh(market.database_alias):
         st.error(
             f"Database for **{market.name}** is not available. "
             "Check Turso credentials and network connectivity."

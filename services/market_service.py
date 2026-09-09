@@ -251,7 +251,10 @@ class MarketService:
                     return 0, 0, 0, 0, 0, 0
                 df = self._repo.get_history_by_type_ids(type_ids)
             else:
-                df = self._repo.get_all_history()
+                # Unfiltered scope: fetch the window this method reports on
+                # rather than the whole table. The pandas cutoffs below still
+                # apply -- they carve the 7-day slice out of the same frame.
+                df = self._repo.get_history_window(30)
 
             if df.empty:
                 return 0, 0, 0, 0, 0, 0
@@ -404,14 +407,19 @@ class MarketService:
     ) -> tuple:
         """Get min and max dates from market history.
 
+        Aggregated in SQL rather than reduced from a loaded frame: this only
+        needs two dates, and the unfiltered history is ~890 k rows.
+
         Returns:
             (min_date, max_date) as pandas Timestamps, or (None, None).
         """
-        df = self.get_history_by_category(category, category_id=category_id)
-        if df.empty:
+        if category is None and category_id is None:
+            return self._repo.get_history_date_range(None)
+
+        type_ids = self._repo.get_category_type_ids(category, category_id=category_id)
+        if not type_ids:
             return None, None
-        df["date"] = pd.to_datetime(df["date"])
-        return df["date"].min(), df["date"].max()
+        return self._repo.get_history_date_range(type_ids)
 
     @staticmethod
     def get_top_n_items(

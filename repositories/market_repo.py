@@ -58,6 +58,78 @@ def _get_all_history_impl(db_alias: str = "wcmkt") -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
+def _get_history_date_range_impl(
+    type_ids: list[int] | None = None,
+    db_alias: str = "wcmkt",
+) -> tuple:
+    """Return (min_date, max_date) from market_history as pandas Timestamps.
+
+    Aggregated in SQL. The callers only need two dates, and market_history is
+    ~890 k rows / 137 MB on the primary hub -- loading it to call .min()/.max()
+    in pandas cost ~3.4 s and pinned the whole frame in cache.
+
+    Args:
+        type_ids: optional scope. ``None`` means all items; an empty list is a
+            true empty scope and returns (None, None) without querying.
+
+    Returns:
+        (min_date, max_date), or (None, None) when the scope holds no rows.
+    """
+    if type_ids is not None and not type_ids:
+        return None, None
+
+    repo = BaseRepository(DatabaseConfig(db_alias), logger)
+    if type_ids is None:
+        query = text(
+            "SELECT MIN(date) AS min_date, MAX(date) AS max_date FROM market_history"
+        )
+        params = None
+    else:
+        query = text(
+            "SELECT MIN(date) AS min_date, MAX(date) AS max_date "
+            "FROM market_history WHERE type_id IN :type_ids"
+        ).bindparams(bindparam("type_ids", expanding=True))
+        params = {"type_ids": [int(tid) for tid in type_ids]}
+
+    df = repo.read_df(query, params=params)
+    if df.empty:
+        return None, None
+    min_date = pd.to_datetime(df.loc[0, "min_date"], errors="coerce")
+    max_date = pd.to_datetime(df.loc[0, "max_date"], errors="coerce")
+    if pd.isna(min_date) or pd.isna(max_date):
+        return None, None
+    return min_date, max_date
+
+
+def _get_history_window_impl(
+    days: int,
+    type_ids: list[int] | None = None,
+    db_alias: str = "wcmkt",
+) -> pd.DataFrame:
+    """Fetch the last ``days`` of market_history, optionally scoped to type_ids.
+
+    The cutoff is derived here rather than passed in so the cached wrapper's
+    key stays stable across calls; a caller-supplied datetime.now() would miss
+    the cache on every rerun and grow it without bound.
+    """
+    if type_ids is not None and not type_ids:
+        return pd.DataFrame()
+
+    cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+    repo = BaseRepository(DatabaseConfig(db_alias), logger)
+    if type_ids is None:
+        query = text("SELECT * FROM market_history WHERE date >= :cutoff")
+        params = {"cutoff": cutoff}
+    else:
+        query = text(
+            "SELECT * FROM market_history "
+            "WHERE date >= :cutoff AND type_id IN :type_ids"
+        ).bindparams(bindparam("type_ids", expanding=True))
+        params = {"cutoff": cutoff, "type_ids": [int(tid) for tid in type_ids]}
+
+    return repo.read_df(query, params=params).reset_index(drop=True)
+
+
 def _get_history_by_type_impl(type_id: int, db_alias: str = "wcmkt") -> pd.DataFrame:
     """Fetch market history for a specific type_id."""
     db = DatabaseConfig(db_alias)
@@ -378,6 +450,24 @@ def _get_all_history_cached(db_alias: str = "wcmkt") -> pd.DataFrame:
 
 
 @st.cache_data(ttl=3600)
+def _get_history_date_range_cached(
+    type_ids: tuple | None = None, db_alias: str = "wcmkt"
+) -> tuple:
+    return _get_history_date_range_impl(
+        None if type_ids is None else list(type_ids), db_alias
+    )
+
+
+@st.cache_data(ttl=1800)
+def _get_history_window_cached(
+    days: int, type_ids: tuple | None = None, db_alias: str = "wcmkt"
+) -> pd.DataFrame:
+    return _get_history_window_impl(
+        days, None if type_ids is None else list(type_ids), db_alias
+    )
+
+
+@st.cache_data(ttl=3600)
 def _get_history_by_type_cached(type_id: int, db_alias: str = "wcmkt") -> pd.DataFrame:
     return _get_history_by_type_impl(type_id, db_alias)
 
@@ -462,6 +552,8 @@ def invalidate_market_caches():
     _get_all_stats_cached.clear()
     _get_all_orders_cached.clear()
     _get_all_history_cached.clear()
+    _get_history_date_range_cached.clear()
+    _get_history_window_cached.clear()
     _get_history_by_type_cached.clear()
     _get_history_by_type_ids_cached.clear()
     _get_30day_volume_metrics_cached.clear()
@@ -536,6 +628,20 @@ class MarketRepository(BaseRepository):
     def get_all_history(self) -> pd.DataFrame:
         """Get all market history (cached, TTL=3600s)."""
         return _get_all_history_cached(self.db.alias)
+
+    def get_history_date_range(self, type_ids: list[int] | None = None) -> tuple:
+        """Get (min_date, max_date) for market history (cached, TTL=3600s)."""
+        return _get_history_date_range_cached(
+            None if type_ids is None else tuple(type_ids), self.db.alias
+        )
+
+    def get_history_window(
+        self, days: int, type_ids: list[int] | None = None
+    ) -> pd.DataFrame:
+        """Get the last ``days`` of market history (cached, TTL=1800s)."""
+        return _get_history_window_cached(
+            days, None if type_ids is None else tuple(type_ids), self.db.alias
+        )
 
     def get_history_by_type(self, type_id: int) -> pd.DataFrame:
         """Get market history for a specific type (cached, TTL=3600s)."""

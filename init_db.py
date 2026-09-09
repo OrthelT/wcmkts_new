@@ -76,7 +76,7 @@ def init_db():
 
     Checks each database for both file existence AND valid content (tables).
     Invalid files are never removed here — sync() enforces the replica
-    validity invariants under _SYNC_LOCK and rebuilds via fresh bootstrap,
+    validity invariants under the alias's sync lock and rebuilds via fresh bootstrap,
     so an in-flight sync can't be clobbered from another thread.
 
     Serialized by _INIT_LOCK: concurrent sessions cold-starting together
@@ -185,7 +185,7 @@ def ensure_market_db_ready(db_alias: str) -> bool:
         if verify_db_content(db.path):
             return True
 
-        # Missing or invalid — sync() removes invalid files under _SYNC_LOCK
+        # Missing or invalid — sync() removes invalid files under the alias's lock
         logger.warning(f"Market database '{db_alias}' ({db.path}) not ready, attempting sync")
         try:
             db.sync()

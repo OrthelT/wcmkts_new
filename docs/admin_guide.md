@@ -78,7 +78,7 @@ Database synchronization is managed by the `DatabaseConfig` class in `config.py`
 - Automatic sync is not configurable. `pages/components/db_refresh.py` polls on Streamlit reruns and syncs once more than 600 seconds have passed since the last check, so cadence follows session activity
 - The sidebar's "next scheduled sync" is an estimate of the **backend's** next publish — 60 minutes after the last `updatelog` timestamp (`_UPDATE_INTERVAL_MINUTES` in `state/sync_state.py`) — not a schedule this app keeps
 - Manual sync via sidebar button triggers `DatabaseConfig.sync()` on the active market database
-- `sync()` serializes via `_SYNC_LOCK` (threading.Lock) and runs `PRAGMA integrity_check` after sync
+- `sync()` serializes via a per-alias `threading.Lock` (`_sync_lock(alias)`) and runs `PRAGMA integrity_check` after a sync that changed the replica
 - CLI sync: `uv run python config.py <alias>` (e.g., `uv run python config.py wcmktnewkeep`)
 
 ### Doctrine Targets Configuration
