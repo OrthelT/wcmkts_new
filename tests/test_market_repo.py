@@ -205,35 +205,20 @@ class TestMarketRepositoryMalformedRecovery:
 
     @patch("repositories.market_repo.DatabaseConfig")
     @patch("pandas.read_sql_query")
-    def test_orders_backup_restore_fallback_on_persistent_error(self, mock_read_sql, mock_db_cls):
-        """Orders function falls back to backup restore when sync doesn't fix a persistent error."""
-        expected = pd.DataFrame({"order_id": [1], "type_id": [34], "price": [10.0]})
+    def test_orders_persistent_error_raises_after_sync(self, mock_read_sql, mock_db_cls):
+        """When a rebuild sync does not fix a malformed replica, the error
+        surfaces instead of being papered over with stale local data."""
         mock_engine, _ = self._mock_engine()
         mock_db = Mock()
         type(mock_db).engine = PropertyMock(return_value=mock_engine)
-        mock_db.restore_from_backup.return_value = True
         mock_db_cls.return_value = mock_db
-
-        call_count = 0
-
-        def side_effect(*args, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            # First call (local) fails, retry after sync (call 2) also fails,
-            # retry after backup restore (call 3) succeeds.
-            if call_count <= 2:
-                raise Exception("database disk image is malformed")
-            return expected
-
-        mock_read_sql.side_effect = side_effect
+        mock_read_sql.side_effect = Exception("database disk image is malformed")
 
         from repositories.market_repo import _get_all_orders_impl
-        result = _get_all_orders_impl()
+        with pytest.raises(Exception, match="malformed"):
+            _get_all_orders_impl()
 
-        assert isinstance(result, pd.DataFrame)
-        assert len(result) == 1
         mock_db.sync.assert_called_once()
-        mock_db.restore_from_backup.assert_called_once()
 
 
 class TestMarketRepositoryClass:

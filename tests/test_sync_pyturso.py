@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from config import DatabaseConfig, SyncResult, clear_degraded, get_degraded_aliases
+from config import DatabaseConfig, SyncResult
 
 
 @pytest.fixture
@@ -17,8 +17,7 @@ def db(tmp_path):
     db.path = str(tmp_path / "test.db")
     db.turso_url = "libsql://example.turso.io"
     db.token = "tok"
-    yield db
-    clear_degraded("testalias")
+    return db
 
 
 def _write(path, data=b"x" * 32):
@@ -129,12 +128,10 @@ class TestSync:
 
         with patch("config.tursosync.connect", return_value=conn) as connect_mock, patch.object(
             DatabaseConfig, "integrity_check", return_value=integrity
-        ), patch.object(DatabaseConfig, "_dispose_local_connections"), patch.object(
-            DatabaseConfig, "snapshot_backup", return_value=True
-        ) as snap_mock:
+        ), patch.object(DatabaseConfig, "_dispose_local_connections"):
             conn.pull.side_effect = fake_pull_side_effect
             result = db.sync()
-        return result, connect_mock, snap_mock
+        return result, connect_mock
 
     def test_missing_credentials_raise(self, db):
         db.turso_url = None
@@ -145,33 +142,22 @@ class TestSync:
         _make_db(db.path)
         _write_info(db)
         conn = _mock_sync_conn(pull_returns=False)
-        result, _, snap = self._run_sync(db, conn)
+        result, _ = self._run_sync(db, conn)
         assert result == SyncResult(ok=True, changed=False)
         conn.checkpoint.assert_called_once()
         conn.close.assert_called_once()
-        snap.assert_called_once()
 
     def test_pull_with_changes(self, db):
         _make_db(db.path)
         _write_info(db)
         conn = _mock_sync_conn(pull_returns=True)
-        result, _, _ = self._run_sync(db, conn)
+        result, _ = self._run_sync(db, conn)
         assert result == SyncResult(ok=True, changed=True)
 
     def test_fresh_bootstrap_counts_as_changed(self, db):
         conn = _mock_sync_conn(pull_returns=False)  # bootstrap then no-op pull
-        result, _, _ = self._run_sync(db, conn)
+        result, _ = self._run_sync(db, conn)
         assert result.changed is True
-
-    def test_success_clears_degraded(self, db):
-        import config as config_module
-
-        config_module._DEGRADED_REGISTRY["testalias"] = None
-        _make_db(db.path)
-        _write_info(db)
-        result, _, _ = self._run_sync(db, _mock_sync_conn())
-        assert result.ok
-        assert "testalias" not in get_degraded_aliases()
 
     def test_pull_failure_on_fresh_file_cleans_up_and_raises(self, db):
         conn = MagicMock()
@@ -220,9 +206,7 @@ class TestSync:
         conn.pull.side_effect = fake_pull
         with patch("config.tursosync.connect", return_value=conn), patch.object(
             DatabaseConfig, "integrity_check", side_effect=lambda self=None: next(integrity_results)
-        ), patch.object(DatabaseConfig, "_dispose_local_connections"), patch.object(
-            DatabaseConfig, "snapshot_backup", return_value=True
-        ):
+        ), patch.object(DatabaseConfig, "_dispose_local_connections"):
             result = db.sync()
         assert result == SyncResult(ok=True, changed=True)
         assert conn.pull.call_count == 2
@@ -256,11 +240,11 @@ class TestSync:
 
 
 class TestNoChangeFastPath:
-    """A pull that applied nothing must not re-verify or re-copy the replica.
+    """A pull that applied nothing must not re-verify the replica.
 
-    integrity_check reads the whole file (2.3 s on the 147 MB primary hub) and
-    snapshot_backup copies it. Both are pure waste when pull() reports that no
-    byte of the replica changed -- see the startup performance evaluation.
+    integrity_check reads the whole file (2.3 s on the 147 MB primary hub),
+    which is pure waste when pull() reports that no byte of the replica
+    changed -- see the startup performance evaluation.
     """
 
     def _run(self, db, pull_returns, integrity=True):
@@ -276,53 +260,26 @@ class TestNoChangeFastPath:
             DatabaseConfig, "integrity_check", return_value=integrity
         ) as integrity_mock, patch.object(
             DatabaseConfig, "_dispose_local_connections"
-        ), patch.object(DatabaseConfig, "snapshot_backup", return_value=True) as snap_mock:
+        ):
             result = db.sync()
-        return result, integrity_mock, snap_mock
-
-    def _existing_replica_with_backup(self, db):
-        _make_db(db.path)
-        _write_info(db)
-        _write(db.path + ".bak")
-        _write(db.path + "-info.bak")
+        return result, integrity_mock
 
     def test_no_change_pull_skips_integrity_check(self, db):
-        self._existing_replica_with_backup(db)
-        result, integrity_mock, _ = self._run(db, pull_returns=False)
+        _make_db(db.path)
+        _write_info(db)
+        result, integrity_mock = self._run(db, pull_returns=False)
         integrity_mock.assert_not_called()
         assert result == SyncResult(ok=True, changed=False)
 
-    def test_no_change_pull_skips_backup_snapshot(self, db):
-        self._existing_replica_with_backup(db)
-        _, _, snap_mock = self._run(db, pull_returns=False)
-        snap_mock.assert_not_called()
-
-    def test_no_change_pull_still_snapshots_when_backup_missing(self, db):
-        """The post-sync invariant is "a usable backup pair exists". A missing
-        .bak (never taken, or manually deleted) must still be created, or the
-        read_df restore ladder has nothing to fall back to."""
+    def test_changed_pull_still_verifies(self, db):
         _make_db(db.path)
         _write_info(db)
-        _, _, snap_mock = self._run(db, pull_returns=False)
-        snap_mock.assert_called_once()
-
-    def test_no_change_pull_snapshots_when_only_info_backup_missing(self, db):
-        """Both halves of the pair are required; a lone .db.bak is not a backup."""
-        self._existing_replica_with_backup(db)
-        os.remove(db.path + "-info.bak")
-        _, _, snap_mock = self._run(db, pull_returns=False)
-        snap_mock.assert_called_once()
-
-    def test_changed_pull_still_verifies_and_snapshots(self, db):
-        self._existing_replica_with_backup(db)
-        result, integrity_mock, snap_mock = self._run(db, pull_returns=True)
+        result, integrity_mock = self._run(db, pull_returns=True)
         integrity_mock.assert_called_once()
-        snap_mock.assert_called_once()
         assert result == SyncResult(ok=True, changed=True)
 
-    def test_fresh_bootstrap_still_verifies_and_snapshots(self, db):
+    def test_fresh_bootstrap_still_verifies(self, db):
         """No prior file: pull() reports changed=False but this is new data."""
-        result, integrity_mock, snap_mock = self._run(db, pull_returns=False)
+        result, integrity_mock = self._run(db, pull_returns=False)
         integrity_mock.assert_called_once()
-        snap_mock.assert_called_once()
         assert result.changed is True

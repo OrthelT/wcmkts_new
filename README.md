@@ -472,7 +472,7 @@ The `DatabaseConfig` class (`config.py`) is a centralized configuration manager 
 
 - **Multi-Database Support**: Manages connections to multiple databases (market data for each hub, SDE, build costs)
 - **Sync Dialect**: Uses the `sqlite+turso_sync` engine when Turso credentials are present; falls back to a plain read-only local SQLite connection when they are not (so the app still runs local-only without secrets)
-- **Automatic Synchronization**: `sync()` pulls remote changes into the local replica, retrying via nuke + fresh bootstrap on an integrity-check failure, and snapshots a `.bak` pair on success
+- **Automatic Synchronization**: `sync()` pulls remote changes into the local replica, retrying via nuke + fresh bootstrap on an integrity-check failure
 - **Lazy Loading**: Engines are created only when needed and cached per alias
 - **Validation**: `integrity_check()` and `remote_matches_metadata()` guard against a corrupt or wrongly-targeted replica
 
@@ -547,7 +547,7 @@ detailed_columns = mkt_db.get_table_columns("marketorders", full_info=True)
 ### Methods
 
 #### `sync() -> SyncResult`
-Pulls remote changes into the local replica. Serialized across calls, disposes local connections first, enforces the replica-consistency state machine, retries once via nuke + fresh bootstrap on a post-sync integrity-check failure, and snapshots a `.bak`/`.bak-info` pair on success.
+Pulls remote changes into the local replica. Serialized across calls, disposes local connections first, enforces the replica-consistency state machine, and retries once via nuke + fresh bootstrap on a post-sync integrity-check failure.
 
 **Returns:** `SyncResult(ok, changed)` — truthy on success, preserving the legacy bool contract.
 
@@ -555,9 +555,6 @@ Pulls remote changes into the local replica. Serialized across calls, disposes l
 
 #### `remote_matches_metadata() -> bool | None`
 Whether this replica's `-info` sidecar was bootstrapped against the currently configured Turso remote (compares host + path only). Returns `None` when either side is unknown.
-
-#### `restore_from_backup() -> bool`
-Replaces the live replica with the last `.bak`/`.bak-info` pair snapshotted by a prior successful `sync()`. Used by `read_df()`'s recovery ladder when a retried sync still fails.
 
 #### `get_table_list() -> list[str]`
 Retrieves a list of table names from this alias's replica (excluding SQLite system tables).

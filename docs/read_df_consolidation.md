@@ -11,14 +11,14 @@ Only one of them carries the resilience guarantees the architecture advertises:
 
 | Pattern | Recovery on malformed/corrupt DB? |
 |---|---|
-| `BaseRepository.read_df(text(...))` | ✅ `db.sync()` + retry, then `db.restore_from_backup()` + retry |
+| `BaseRepository.read_df(text(...))` | ✅ `db.sync()` (rebuilds the replica) + retry |
 | Bare `db.engine.connect()` + `pd.read_sql_query` | ❌ |
 | SQLAlchemy ORM `select()` reads | n/a — **not used anywhere** |
 
 `read_df()` (`repositories/base.py`) is the intended single chokepoint: local
-read → on malformed error `db.sync()` + retry → if that still fails,
-`db.restore_from_backup()` (swap in the last-known-good backup pair) + retry →
-raise. Every site that calls `engine.connect()` directly silently opts out of
+read → on malformed error `db.sync()` (whose state machine nukes and
+re-bootstraps the replica from Turso) + retry → raise. Every site that calls
+`engine.connect()` directly silently opts out of
 that, so a corrupt local `.db` makes those queries throw
 ("no such table" / "database disk image is malformed") instead of self-healing —
 exactly the failure mode `read_df()` exists to prevent (and that `init_db.py` /
@@ -32,8 +32,7 @@ logic should change; only *how* each query is executed.
 - **Reads stay raw SQL** via `sqlalchemy.text(...)`. The ORM is *not* adopted for
   reads — it earns its keep only for schema definition/seeding (`demo_data.py`),
   the single write path (`admin_repo.py`), and as schema documentation.
-- **Every read flows through `read_df()`** so recovery (sync-and-retry, then
-  backup-restore) is uniform.
+- **Every read flows through `read_df()`** so sync-and-retry recovery is uniform.
 - Params are **named**; `IN` clauses use `bindparam(name, expanding=True)`.
 
 ## Scope: 47 direct-`engine.connect()` local read sites across 9 files
@@ -93,7 +92,7 @@ df = repo.read_df(query, params={"ids": ids})
 Notes:
 - `read_df()` accepts a `text()` clause (or a raw SQL string) plus `params`, and
   takes a `recover=` kwarg (default `True`) if a site needs to opt out of the
-  sync/backup-restore recovery ladder.
+  sync-and-retry recovery ladder.
 - Where a module already holds a `DatabaseConfig` (e.g. services with
   `self._mkt_db`), build `BaseRepository(self._mkt_db, self._logger)` rather than
   constructing a new `DatabaseConfig`.
@@ -119,7 +118,7 @@ Notes:
   without test churn. Sites that mock `engine.connect()` directly will need their
   mocks updated to the `read_df()` boundary.
 - Manual smoke: rename/corrupt a local `.db` and confirm pages recover via
-  sync-and-retry / backup-restore instead of surfacing "no such table".
+  sync-and-retry instead of surfacing "no such table".
 
 ## Suggested sequencing
 
