@@ -6,23 +6,23 @@ CONTRIBUTING: Contributors welcome. This project is fully open source under MIT 
 
 **Note:** Admin pages (watchlist and doctrine management) are currently disabled during the pyturso migration. Re-enabling them requires a local-write-plus-push redesign.
 
-# UPDATES:
-## versions 0.7.1 and 0.7.2
-A number of performance improvements to reduce initial page load and startup times. Significant improvements to page load times.  
+# UPDATES
+## Versions 0.7.1 and 0.7.2
+Versions 0.7.1 and 0.7.2 include a number of performance optimizations that significantly reduce startup and page load times.
 ### Performance Improvements
-Measured on 4-HWWF Keepstar market database, dashboard landing page:
-| scenario | pre-PR80 | main | speedup |
-|---|---|---|---|
-| cold process, first render | 9.1 s | **2.29 s** | 4.0× |
-| new session, warm process | 4.99 s | **0.18 s** | 27× |
-| rerun within a session | 0.77 s | **0.18 s** | 4.2× |
-| cold bootstrap, full database rebuild | 54.3 s | **27.7 s** | 2.0× |
-| on-disk footprint after cold start | 759 MB | **246 MB** | 3.1× smaller |
-### Optimmizations
-- tamed overactive database staleness check 
-- deprecated local database backup subsystem
-- lazy-load data on market selection 
-- load only 30 days market history by default. User may select longer timespans.
+Measured on the 4-HWWF Keepstar market database using the dashboard landing page:
+| Scenario | Pre-PR80 | Main | Improvement |
+|---|---:|---:|---:|
+| Cold process, first render | 9.1 s | **2.29 s** | 4.0× faster |
+| New session, warm process | 4.99 s | **0.18 s** | 27× faster |
+| Rerun within a session | 0.77 s | **0.18 s** | 4.2× faster |
+| Cold bootstrap, full database rebuild | 54.3 s | **27.7 s** | 2.0× faster |
+| On-disk footprint after cold start | 759 MB | **246 MB** | 3.1× smaller |
+### Optimizations
+- Reduced unnecessary database staleness checks.
+- Deprecated the local database backup subsystem.
+- Added lazy loading of data when a market is selected.
+- Limited the default market history load to 30 days. Users can still select longer time ranges when needed.
 
 ## version 0.7.0
 Major refactor to migrate database library from libsql to pyturso. 
