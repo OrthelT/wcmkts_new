@@ -1,4 +1,4 @@
-# Winter Coalition Market App (v.0.7.1)
+# Winter Coalition Market App (v.0.7.2)
 A Streamlit application for viewing EVE Online market statistics for Winter Coalition. This tool provides real-time market data analysis, historical price tracking, and fitting information for various items in EVE Online markets.
 
 SUPPORT: Join the Discord for support https://discord.gg/BxatJE572Y
@@ -7,8 +7,22 @@ CONTRIBUTING: Contributors welcome. This project is fully open source under MIT 
 **Note:** Admin pages (watchlist and doctrine management) are currently disabled during the pyturso migration. Re-enabling them requires a local-write-plus-push redesign.
 
 # UPDATES:
-## version 0.7.1 
-Minor performance improvements reducing page load startup times. 
+## versions 0.7.1 and 0.7.2
+A number of performance improvements to reduce initial page load and startup times. Significant improvements to page load times.  
+### Performance Improvements
+Measured on 4-HWWF Keepstar market database, dashboard landing page:
+| scenario | pre-PR80 | main | speedup |
+|---|---|---|---|
+| cold process, first render | 9.1 s | **2.29 s** | 4.0× |
+| new session, warm process | 4.99 s | **0.18 s** | 27× |
+| rerun within a session | 0.77 s | **0.18 s** | 4.2× |
+| cold bootstrap, full database rebuild | 54.3 s | **27.7 s** | 2.0× |
+| on-disk footprint after cold start | 759 MB | **246 MB** | 3.1× smaller |
+### Optimmizations
+- tamed overactive database staleness check 
+- deprecated local database backup subsystem
+- lazy-load data on market selection 
+- load only 30 days market history by default. User may select longer timespans.
 
 ## version 0.7.0
 Major refactor to migrate database library from libsql to pyturso. 
