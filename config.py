@@ -10,7 +10,6 @@ import threading
 from contextlib import suppress
 from time import perf_counter
 from dataclasses import dataclass
-import shutil
 import turso.sync as tursosync
 
 logger = setup_logging(__name__)
@@ -58,21 +57,6 @@ class SyncResult:
 
     def __bool__(self) -> bool:
         return self.ok
-
-
-# Aliases currently serving restored backup data (value = restore time, UTC).
-# Module-level: degraded-ness is a property of the on-disk file, i.e. process-wide.
-_DEGRADED_REGISTRY: dict[str, datetime] = {}
-
-
-def get_degraded_aliases() -> dict[str, datetime]:
-    """Return a copy of {alias: restore_time} for DBs serving backup data."""
-    return dict(_DEGRADED_REGISTRY)
-
-
-def clear_degraded(alias: str) -> None:
-    """Remove ``alias`` from the degraded registry (no-op if absent)."""
-    _DEGRADED_REGISTRY.pop(alias, None)
 
 
 def get_settings() -> dict:
@@ -320,25 +304,6 @@ class DatabaseConfig:
             "files and re-sync explicitly."
         )
 
-    @staticmethod
-    def _classify_backup_metadata(info_bak_path: str) -> tuple[str, str | None]:
-        """Classify a ``*-info.bak`` sidecar and return its recorded remote.
-
-        classify_metadata/metadata_remote_url derive the sidecar path by
-        appending ``-info`` to whatever base path is passed in. A backup's
-        sidecar is named ``{db}-info.bak`` — not ``{db}.bak-info`` — so it
-        must be staged under a ``-info``-suffixed name before it can be
-        classified.
-        """
-        import tempfile
-
-        from replica_metadata import classify_metadata, metadata_remote_url
-
-        with tempfile.TemporaryDirectory() as tmp:
-            staged_base = os.path.join(tmp, "backup")
-            shutil.copy2(info_bak_path, staged_base + "-info")
-            return classify_metadata(staged_base), metadata_remote_url(staged_base)
-
     def _db_has_tables(self) -> bool:
         """True when the local .db opens as sqlite and has ≥1 user table.
 
@@ -383,7 +348,7 @@ class DatabaseConfig:
         """Open a sync connection, pull, checkpoint, close.
 
         Returns pull()'s changed flag. checkpoint() folds the WAL into the
-        main file so snapshot_backup() copies a complete database.
+        main file so the replica is complete for plain-sqlite readers.
         """
         sync_start = perf_counter()
         conn = tursosync.connect(
@@ -403,13 +368,21 @@ class DatabaseConfig:
         )
         return changed
 
-    def sync(self) -> SyncResult:
+    def sync(self, *, force_rebuild: bool = False) -> SyncResult:
         """Pull remote changes into the local replica safely.
 
-        Serialized by this alias's sync lock with dispose-before-sync. Enforces the
-        file-state machine, retries once via nuke + fresh bootstrap on
-        integrity failure, snapshots a backup pair on success, and clears
-        the degraded registry.
+        Serialized by this alias's sync lock with dispose-before-sync. Enforces
+        the file-state machine and retries once via nuke + fresh bootstrap on
+        integrity failure.
+
+        Args:
+            force_rebuild: remove the replica before pulling, so the pull is a
+                fresh bootstrap. The consistency state machine only proves the
+                replica *opens* -- a corrupt data page leaves sqlite_master
+                readable, and an unchanged pull then returns through the
+                no-change fast path without an integrity check. Callers that
+                have already seen a read fail on this replica use this to make
+                the rebuild happen instead of hoping sync() detects it.
 
         Returns:
             SyncResult(ok, changed). Truthiness == ok, preserving the
@@ -432,6 +405,11 @@ class DatabaseConfig:
         )
         with _sync_lock(self.alias):
             self._dispose_local_connections()
+            if force_rebuild:
+                logger.warning(
+                    f"force_rebuild: removing {self.alias} replica for fresh bootstrap"
+                )
+                self._remove_replica_files()
             self._ensure_replica_consistency()
             file_existed = os.path.exists(self.path)
             try:
@@ -446,19 +424,12 @@ class DatabaseConfig:
             changed = changed or not file_existed  # fresh bootstrap == new data
 
             if not changed:
-                # pull() applied nothing, so no byte of the replica moved.
-                # integrity_check reads the whole file (2.3 s on the 147 MB
-                # primary hub) and snapshot_backup copies it -- both would be
-                # re-verifying and re-copying bytes this sync did not touch.
-                # Corruption that arrives from outside sync is still caught:
-                # _ensure_replica_consistency nukes an unreadable replica on
-                # the next sync, and BaseRepository.read_df's ladder falls
-                # through to restore_from_backup() when a read actually fails.
-                if not self._backup_pair_exists():
-                    # Post-sync invariant: a usable backup pair exists, so the
-                    # restore ladder always has something to fall back to.
-                    self.snapshot_backup()
-                clear_degraded(self.alias)
+                # pull() applied nothing, so no byte of the replica moved and
+                # integrity_check would re-read the whole file (2.3 s on the
+                # 147 MB primary hub) for nothing. Corruption that arrives
+                # from outside sync is still caught: _ensure_replica_consistency
+                # nukes an unreadable replica on the next sync, and
+                # BaseRepository.read_df rebuilds when a read actually fails.
                 logger.info("-" * 40)
                 return SyncResult(ok=True, changed=False)
 
@@ -479,10 +450,7 @@ class DatabaseConfig:
                     raise
                 ok = self.integrity_check()
 
-            if ok:
-                self.snapshot_backup()  # best-effort; logs on failure
-                clear_degraded(self.alias)
-            else:
+            if not ok:
                 logger.error(f"Fresh bootstrap for {self.alias} still fails integrity.")
             logger.info("-" * 40)
             return SyncResult(ok=ok, changed=changed)
@@ -495,132 +463,6 @@ class DatabaseConfig:
                 with suppress(OSError):
                     os.remove(file_path)
                     logger.info(f"Removed replica artifact {file_path}")
-
-    def _backup_pair_exists(self) -> bool:
-        """True when both halves of the ``.bak`` pair are present.
-
-        A lone ``.db.bak`` is not a restorable backup -- restore_from_backup()
-        needs the ``-info.bak`` sidecar with it.
-        """
-        return os.path.exists(self.path + ".bak") and os.path.exists(
-            self.path + "-info.bak"
-        )
-
-    def snapshot_backup(self) -> bool:
-        """Copy the live ``.db`` + ``.db-info`` pair to ``.bak`` files.
-
-        Pure file copy — the caller (sync()) is responsible for having
-        checkpointed the WAL first so the main file is complete. BOTH halves
-        are staged to ``.tmp`` files before either is published, then moved
-        into place back to back. Copying and replacing one file at a time
-        could leave a new ``.db.bak`` paired with an old ``-info.bak`` if the
-        second copy failed, and _backup_pair_exists() — which checks
-        existence only — would accept that torn pair. Best-effort: returns
-        False on any error.
-        """
-        pairs = (
-            (self.path, self.path + ".bak"),
-            (self.path + "-info", self.path + "-info.bak"),
-        )
-        staged: list[tuple[str, str]] = []
-        try:
-            for src, dst in pairs:
-                tmp = dst + ".tmp"
-                shutil.copy2(src, tmp)
-                staged.append((tmp, dst))
-            for tmp, dst in staged:
-                os.replace(tmp, dst)
-            logger.info(f"snapshot_backup: wrote backup pair for {self.alias}")
-            return True
-        except OSError as e:
-            logger.error(f"snapshot_backup failed for {self.alias}: {e}")
-            for tmp, _ in staged:
-                with suppress(OSError):
-                    if os.path.exists(tmp):
-                        os.remove(tmp)
-            return False
-
-    def restore_from_backup(self) -> bool:
-        """Replace the live replica with the last-known-good backup pair.
-
-        Checks the backup pair exists BEFORE touching live files — a
-        malformed live file is diagnostic evidence when no backup exists.
-        The backup pair is first copied to ``.tmp`` staging files next to
-        the live path; only once BOTH staged copies succeed are local
-        connections disposed, the live replica files removed, and the
-        staged files moved into place with ``os.replace()``. This keeps
-        the live files completely untouched if staging fails partway
-        (e.g. a disk error on the second copy), rather than leaving a
-        torn replica (a ``.db`` with no matching ``-info`` sidecar)
-        behind. On success, registers the alias in the degraded
-        registry; a later successful sync() clears it (the restored
-        pair is a valid replica, so the next pull() catches it up
-        incrementally).
-        """
-        bak, info_bak = self.path + ".bak", self.path + "-info.bak"
-        if not (os.path.exists(bak) and os.path.exists(info_bak)):
-            logger.error(
-                f"restore_from_backup({self.alias}): no backup pair; "
-                "leaving live files untouched"
-            )
-            return False
-
-        kind, recorded_url = self._classify_backup_metadata(info_bak)
-        if kind != "pyturso":
-            # A libsql-era or corrupt -info.bak is not a replica pyturso can
-            # open. Restoring it would overwrite the live pair and only then
-            # fail integrity_check(), having destroyed the diagnostic
-            # evidence for nothing.
-            logger.error(
-                f"restore_from_backup({self.alias}): backup metadata is "
-                f"'{kind}', not pyturso; refusing to restore, leaving live "
-                "files untouched"
-            )
-            return False
-
-        if (
-            recorded_url
-            and self.turso_url
-            and self._remote_key(recorded_url) != self._remote_key(self.turso_url)
-        ):
-            logger.error(
-                f"restore_from_backup({self.alias}): backup pair was "
-                f"bootstrapped against a different Turso remote "
-                f"({recorded_url}) than the one configured now "
-                f"({self.turso_url}); refusing to restore, leaving live "
-                "files untouched"
-            )
-            return False
-
-        tmp_db, tmp_info = self.path + ".tmp", self.path + "-info.tmp"
-        with _sync_lock(self.alias):
-            try:
-                shutil.copy2(bak, tmp_db)
-                shutil.copy2(info_bak, tmp_info)
-            except OSError as e:
-                logger.error(f"restore_from_backup({self.alias}) staging copy failed: {e}")
-                for tmp in (tmp_db, tmp_info):
-                    with suppress(OSError):
-                        if os.path.exists(tmp):
-                            os.remove(tmp)
-                return False
-
-            self._dispose_local_connections()
-            self._remove_replica_files()
-            os.replace(tmp_db, self.path)
-            os.replace(tmp_info, self.path + "-info")
-
-            if not self.integrity_check():
-                logger.error(
-                    f"restore_from_backup({self.alias}): restored copy failed integrity"
-                )
-                return False
-            _DEGRADED_REGISTRY[self.alias] = datetime.now(timezone.utc)
-            logger.warning(
-                f"{self.alias} restored from backup taken before last failure; "
-                "serving degraded data until next successful sync"
-            )
-            return True
 
     def get_table_list(self) -> list[str]:
         engine = self.engine

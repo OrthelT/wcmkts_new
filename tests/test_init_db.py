@@ -245,37 +245,6 @@ class TestLibsqlMetadataRejected:
                 db.sync()
         connect_mock.assert_not_called()
 
-    def test_restore_refuses_backup_from_different_remote(self, tmp_path):
-        # A .db.bak/.db-info.bak pair from test must not be restored after
-        # production secrets are configured.
-        import json
-
-        from config import DatabaseConfig
-
-        db = DatabaseConfig.__new__(DatabaseConfig)
-        db.alias = "primary"
-        db.path = str(tmp_path / "m.db")
-        db.turso_url = "https://wcmktnewkeep-orthelt.aws-us-east-1.turso.io"
-        db.token = "t"
-        db._engine = None
-
-        (tmp_path / "m.db.bak").write_bytes(b"x" * 16)
-        (tmp_path / "m.db-info.bak").write_text(
-            json.dumps(
-                {
-                    "version": "v1",
-                    "client_unique_id": "test-client-id",
-                    "saved_configuration": {
-                        "remote_url": "https://wcmktnewkeeptest-orthelt.aws-us-east-1.turso.io"
-                    },
-                }
-            )
-        )
-
-        assert db.restore_from_backup() is False
-        assert not (tmp_path / "m.db").exists()
-        assert not (tmp_path / "m.db-info").exists()
-
 
 class TestRemoteMatchesMetadata:
     """Frontend equivalent of the backend's TestRemoteMatchesMetadata: pins

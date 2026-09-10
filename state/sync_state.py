@@ -103,9 +103,7 @@ def update_wcmkt_state(db_alias: str = None) -> None:
     Uses the updatelog table to determine when the database was last refreshed.
     Under the pyturso embedded-replica model there is no separate remote
     timestamp to record: remote is unknowable without a pull, and after a
-    pull, local IS remote. Callers needing to know whether the currently
-    served data is a restored backup should check
-    ``config.get_degraded_aliases()`` instead.
+    pull, local IS remote.
 
     Args:
         db_alias: Database alias to check. If None, uses the active market.

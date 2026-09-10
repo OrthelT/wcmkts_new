@@ -112,7 +112,6 @@ class TestPerAliasSyncLocks(unittest.TestCase):
 
         with patch.object(DatabaseConfig, "_dispose_local_connections"), \
              patch.object(DatabaseConfig, "_ensure_replica_consistency"), \
-             patch.object(DatabaseConfig, "_backup_pair_exists", return_value=True), \
              patch.object(DatabaseConfig, "_pull_once", pull), \
              patch("config.os.path.exists", return_value=True):
             threads = [threading.Thread(target=run, args=(db,)) for db in dbs]
