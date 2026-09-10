@@ -37,7 +37,7 @@ All pages follow consistent patterns with Streamlit best practices:
   - Uses a per-alias lock (`_sync_lock(alias)`) to serialize sync operations on the same replica; SQLite handles reader concurrency
   - Manages 5 databases: one per market hub (`wcmktnewkeep`, `wcmktnorth`, `wcmktbkg`), plus `sde` (static data) and `build_cost` (manufacturing)
   - `sync()` returns `SyncResult` (bool-compatible via `__bool__`, truthy == `ok`) -- callers handle UI feedback and targeted cache invalidation
-  - Methods: `integrity_check()`, `sync()`, `get_most_recent_update()`
+  - Methods: `integrity_check()`, `sync(force_rebuild=False)`, `get_most_recent_update()`
 - **`models.py`**: SQLAlchemy ORM models using modern `mapped_column()` syntax
   - MarketStats, MarketOrders, MarketHistory, Doctrines, ShipTargets, DoctrineFits, ModuleEquivalents, etc.
 - **`sdemodels.py`**: SDE (Static Data Export) ORM models for InvTypes, InvGroups, InvCategories, Localization
@@ -109,7 +109,7 @@ The application uses Turso's embedded-replica pattern for optimal performance:
 - Synchronization is pull-based via the `pyturso` library: `sync()` opens a `turso.sync` connection and calls `pull()` (a real network round-trip each time -- there is no separate lightweight "check" step)
 - Sync serialized via a per-alias `threading.Lock` (`_sync_lock(alias)`), so different databases can sync in parallel while two threads never mutate the same replica's files. SQLite handles its own reader concurrency
 - Integrity checks with `PRAGMA integrity_check` after sync; a failed check triggers one nuke + fresh-bootstrap retry
-- Malformed database auto-recovery in `BaseRepository.read_df()`: local read -> on malformed-class error, `db.sync()` (rebuilds the replica from Turso) + retry -> raise. Turso is the durable copy; there is no local backup to fall back to
+- Malformed database auto-recovery in `BaseRepository.read_df()`: local read -> on malformed-class error, `db.sync()` + retry -> still malformed and `integrity_check()` fails, `db.sync(force_rebuild=True)` (removes the replica, then bootstraps fresh) + retry -> raise. Turso is the durable copy; there is no local backup to fall back to
 - `sync()` returns `SyncResult` (bool-compatible via `__bool__`, truthy == `ok`) -- callers handle UI feedback (toasts) and targeted cache invalidation
 
 **Note:** Market data updates come from the separate backend repository (mkts_backend) which handles ESI API calls and populates the Turso remote database. This frontend application only reads and syncs from Turso.
@@ -179,7 +179,8 @@ The convention for every read is:
 2. Use **named** params, and `bindparam("ids", expanding=True)` for `IN` clauses
    (never string-interpolate values into SQL).
 3. Execute it through **`BaseRepository.read_df()`** — the single chokepoint that
-   provides malformed-DB recovery via sync-and-retry. A bare
+   provides malformed-DB recovery via sync-and-retry, escalating to a forced
+   rebuild when the replica stays corrupt. A bare
    `db.engine.connect()` + `pd.read_sql_query` gets **none** of that resilience,
    so a corrupt local `.db` makes those queries throw "no such table" instead of
    self-healing.
@@ -228,7 +229,7 @@ with DatabaseConfig("wcmktnewkeep").engine.connect() as conn:
 - **Sidebar countdown**: An *estimate*, not a schedule. `state/sync_state.py` (`_UPDATE_INTERVAL_MINUTES = 60`) adds 60 minutes to the last `updatelog` timestamp to guess when the **backend** next publishes. It schedules no frontend sync and is tied to no fixed minute past the hour
 - **Programmatic sync**: Use `DatabaseConfig.sync()` method
 - **Integrity validation**: `PRAGMA integrity_check` runs after a sync that actually changed the replica (a pull with new data, or a fresh bootstrap). A pull reporting `changed=False` moved no bytes, so `sync()` returns early and skips the check — verifying a 147 MB file that nothing wrote to cost ~2.4 s per check. Corruption arriving from outside sync is still caught: `_ensure_replica_consistency()` nukes an unreadable replica on the next sync, and `BaseRepository.read_df()` rebuilds it when a read actually fails
-- **Rebuild-on-corruption**: `BaseRepository.read_df()` auto-recovers a malformed local DB by calling `sync()` (whose state machine nukes and re-bootstraps the replica) and retrying the read. There are no local `.bak` files: Turso holds the durable copy, so the rebuild is the recovery. The rebuild pull can take ~20 s, so `read_df()` shows a "Rebuilding local database" spinner while it runs
+- **Rebuild-on-corruption**: `BaseRepository.read_df()` auto-recovers a malformed local DB by calling `sync()` (whose state machine nukes and re-bootstraps the replica) and retrying the read. If the retry is still malformed, `read_df()` runs `integrity_check()`; a failing check means the replica really is corrupt, so it calls `sync(force_rebuild=True)` — which removes the replica under the alias lock and bootstraps fresh — and retries once more. That escalation is required because `sync()`'s state machine only proves the replica *opens*: corruption confined to a data page leaves `sqlite_master` readable, so `_ensure_replica_consistency()` preserves the file and an unchanged pull returns through the no-change fast path with no integrity check. Gating on `integrity_check()` keeps a caller bug (`no such table` against a sound replica) from re-downloading the whole database. There are no local `.bak` files: Turso holds the durable copy, so the rebuild is the recovery. The rebuild pull can take ~20 s, so `read_df()` shows a "Rebuilding local database" spinner while it runs
 - **Cold-start safety**: `init_db.py` validates database *content* (not just file existence) via `verify_db_content()`. Invalid files (empty, corrupt, or old libsql-era replicas without a matching pyturso `-info` sidecar) are never deleted by `init_db` itself — `sync()` removes them under that alias's sync lock (via `_ensure_replica_consistency()`, which also nukes a paired `.db` with no user tables) and re-bootstraps. Bootstrap is single-flight: `_INIT_LOCK` in `init_db.py` serializes concurrent sessions so a second cold-starting session can't clobber the first session's in-flight sync; later entrants re-verify and skip completed work. Within one call the requested aliases bootstrap in a `ThreadPoolExecutor` — the pulls are network-bound and each takes only its own alias's sync lock, so a cold container waits for the slowest pull rather than their sum, and only the active hub plus `SHARED_ALIASES` are pulled at all. `sync()` validates credentials before opening a `turso.sync` connection and cleans up artifacts (`.db`, `-shm`, `-wal`, `-info`, `-changes`, `-wal-revert`) on failure.
 
 **Important:** This application does NOT write market data. Market data updates are handled by the separate backend repository (mkts_backend) which calls ESI APIs and updates the Turso remote database.
@@ -251,7 +252,7 @@ with DatabaseConfig("wcmktnewkeep").engine.connect() as conn:
 
 ### Current Test Coverage
 The test suite covers repositories, services, database config, i18n, parser, pricer/fit-availability, and infrastructure:
-- 719 tests + 22 subtests passing (`uv run pytest -q`)
+- 725 tests + 22 subtests passing (`uv run pytest -q`)
 
 ## Commit & Pull Request Guidelines
 
@@ -281,7 +282,7 @@ Include in PR description:
 - **Local files missing**: Run `init_db.py` to initialize databases
 - **Sync failures**: Check Turso credentials in `.streamlit/secrets.toml`
 - **Integrity errors**: DatabaseConfig will auto-recover with `integrity_check()` and sync
-- **Malformed database**: Repository functions auto-detect and recover by rebuilding the replica via sync-and-retry in the `read_df()` ladder
+- **Malformed database**: Repository functions auto-detect and recover via the `read_df()` ladder — sync-and-retry, then a forced fresh bootstrap when `integrity_check()` confirms the replica is still corrupt
 - **Connection errors**: Review logs in `logs/` directory
 - **Empty db file on cold start**: Opening a `turso.sync` connection creates the `.db` file before syncing. If credentials are missing or sync fails, the empty file persists and causes "no such table" errors on subsequent runs. `init_db.py` detects this via `verify_db_content()` and re-runs `sync()`, which removes the invalid files under that alias's sync lock before re-bootstrapping. If `.db-info` exists alongside an empty `.db`, it indicates a prior interrupted sync.
 - **Credential naming mismatch**: Database aliases in `[db_paths]` (e.g., `sde`, `build_cost`) may not match Turso secret section names (e.g., `sdelite_turso`, `buildcost_turso`). Use `[db_turso_keys]` in `settings.toml` to map aliases to their correct secret section names. When adding a new database, ensure its turso key is either `{alias}_turso` or has an override in `[db_turso_keys]`.
@@ -493,7 +494,7 @@ from state.session_state import ss_get  # ✗ state!
 - **`pages/`**: Streamlit application pages
 - **`pages/components/`**: Extracted Streamlit rendering components (market_components, dashboard_components, db_refresh, page_chrome)
 - **`parser/`**: EFT fitting and item list parser (open source contribution)
-- **`tests/`**: pytest unit tests (719 tests, 22 subtests)
+- **`tests/`**: pytest unit tests (725 tests, 22 subtests)
 - **`docs/`**: Documentation
 - **`logs/`**: Application logs (git-ignored)
 - **`images/`**: UI assets

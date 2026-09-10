@@ -11,14 +11,15 @@ Only one of them carries the resilience guarantees the architecture advertises:
 
 | Pattern | Recovery on malformed/corrupt DB? |
 |---|---|
-| `BaseRepository.read_df(text(...))` | ✅ `db.sync()` (rebuilds the replica) + retry |
+| `BaseRepository.read_df(text(...))` | ✅ `db.sync()` + retry, then `db.sync(force_rebuild=True)` + retry |
 | Bare `db.engine.connect()` + `pd.read_sql_query` | ❌ |
 | SQLAlchemy ORM `select()` reads | n/a — **not used anywhere** |
 
 `read_df()` (`repositories/base.py`) is the intended single chokepoint: local
 read → on malformed error `db.sync()` (whose state machine nukes and
-re-bootstraps the replica from Turso) + retry → raise. Every site that calls
-`engine.connect()` directly silently opts out of
+re-bootstraps the replica from Turso) + retry → if still malformed and
+`integrity_check()` fails, `db.sync(force_rebuild=True)` + retry → raise.
+Every site that calls `engine.connect()` directly silently opts out of
 that, so a corrupt local `.db` makes those queries throw
 ("no such table" / "database disk image is malformed") instead of self-healing —
 exactly the failure mode `read_df()` exists to prevent (and that `init_db.py` /

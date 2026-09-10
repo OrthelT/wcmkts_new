@@ -7,7 +7,8 @@ read_df() pattern with malformed-DB recovery.
 
 Design Principles:
 1. Dependency Injection - Receives DatabaseConfig, doesn't create it
-2. Malformed DB Recovery - Rebuilds the replica from Turso and retries
+2. Malformed DB Recovery - Rebuilds the replica from Turso and retries,
+   escalating to a forced fresh bootstrap when the replica stays corrupt
 3. Consistent interface - All repositories inherit this pattern
 """
 
@@ -72,7 +73,8 @@ class BaseRepository:
     Provides read_df() with automatic malformed-DB recovery:
     1. Try local read
     2. On malformed/corrupt error -> sync + retry local
-    3. If that fails -> raise
+    3. Still malformed and integrity_check fails -> forced rebuild + retry
+    4. If that fails -> raise
 
     Attributes:
         db: DatabaseConfig instance for database access
@@ -102,7 +104,17 @@ class BaseRepository:
           1. local read via db.engine
           2. on malformed-class error -> db.sync() + retry local
              (sync's state machine nukes + re-bootstraps when needed)
-          3. raise -- caller surfaces an explicit error/empty state
+          3. still malformed -> integrity_check(); if it fails,
+             db.sync(force_rebuild=True) + retry local
+          4. raise -- caller surfaces an explicit error/empty state
+
+        Step 3 exists because sync()'s state machine only proves the replica
+        *opens*: corruption confined to a data page leaves sqlite_master
+        readable, so the file is preserved, and a pull with no new remote
+        data returns through the no-change fast path without an integrity
+        check. Gating the forced rebuild on integrity_check() keeps a caller
+        bug ("no such table" against a sound replica) from re-downloading
+        the whole database.
 
         Turso holds the durable copy, so a rebuild is the only recovery:
         there is no local backup to fall back to.
@@ -129,4 +141,19 @@ class BaseRepository:
             )
             with _rebuild_status(self.db.alias):
                 self.db.sync()
-                return _run_local()
+                try:
+                    return _run_local()
+                except Exception as retry_err:
+                    if not _is_malformed_error(str(retry_err).lower()):
+                        raise
+                    if self.db.integrity_check():
+                        # The replica is sound, so the query is the problem
+                        # (a table this hub genuinely lacks, a typo). A
+                        # rebuild would re-download 147 MB and change nothing.
+                        raise
+                    self._logger.error(
+                        f"{self.db.alias} still malformed after sync "
+                        f"('{retry_err}'); forcing a fresh bootstrap"
+                    )
+                    self.db.sync(force_rebuild=True)
+                    return _run_local()

@@ -118,6 +118,72 @@ class TestEnsureReplicaConsistency:
         assert not os.path.exists(db.path + "-info")
 
 
+def _corrupt_data_page(path, page_size=4096, page=601, rows=3000):
+    """Build a real sqlite db and scribble over one data page.
+
+    Page 1 (sqlite_master) stays intact, so the file still opens and reports
+    its tables -- this is the corruption shape _db_has_tables() cannot see.
+    """
+    conn = sqlite3.connect(path)
+    conn.execute(f"PRAGMA page_size={page_size}")
+    conn.execute("CREATE TABLE t (id INTEGER PRIMARY KEY, payload BLOB)")
+    conn.executemany(
+        "INSERT INTO t (payload) VALUES (randomblob(1200))", [()] * rows
+    )
+    conn.commit()
+    conn.close()
+    with open(path, "r+b") as f:
+        f.seek((page - 1) * page_size)
+        f.write(b"\xde\xad\xbe\xef" * (page_size // 4))
+
+
+class TestCorruptDataPage:
+    """Characterizes the gap that sync(force_rebuild=True) closes.
+
+    A replica corrupt only in a data page opens fine and lists its tables,
+    so _ensure_replica_consistency() preserves it; an unchanged pull then
+    returns through the no-change fast path with no integrity check. Only a
+    caller that already saw a read fail can know a rebuild is needed.
+    """
+
+    def test_consistency_check_preserves_it_but_reads_fail(self, db):
+        _corrupt_data_page(db.path)
+        _write_info(db)
+
+        assert db._db_has_tables() is True
+        db._ensure_replica_consistency()
+        assert os.path.exists(db.path), "consistency check kept the corrupt file"
+
+        conn = sqlite3.connect(f"file:{db.path}?mode=ro", uri=True)
+        try:
+            with pytest.raises(sqlite3.DatabaseError, match="malformed"):
+                conn.execute("SELECT count(*) FROM t").fetchone()
+        finally:
+            conn.close()
+
+    def test_force_rebuild_removes_the_corrupt_file(self, db):
+        _corrupt_data_page(db.path)
+        _write_info(db)
+        conn = _mock_sync_conn(pull_returns=False)
+        seen = {}
+
+        def fake_pull():
+            seen["db_present_at_pull"] = os.path.exists(db.path)
+            _make_db(db.path)
+            _write_info(db)
+            return conn.pull.return_value
+
+        with patch("config.tursosync.connect", return_value=conn), patch.object(
+            DatabaseConfig, "integrity_check", return_value=True
+        ) as integrity_mock, patch.object(DatabaseConfig, "_dispose_local_connections"):
+            conn.pull.side_effect = fake_pull
+            result = db.sync(force_rebuild=True)
+
+        assert seen["db_present_at_pull"] is False
+        assert result == SyncResult(ok=True, changed=True)
+        integrity_mock.assert_called_once()
+
+
 class TestSync:
     def _run_sync(self, db, conn, integrity=True):
         def fake_pull_side_effect():
@@ -158,6 +224,54 @@ class TestSync:
         conn = _mock_sync_conn(pull_returns=False)  # bootstrap then no-op pull
         result, _ = self._run_sync(db, conn)
         assert result.changed is True
+
+    def test_force_rebuild_nukes_replica_and_checks_integrity(self, db):
+        """A .db whose data pages are corrupt still satisfies
+        _ensure_replica_consistency (sqlite_master reads fine), and an
+        unchanged pull would return through the no-change fast path with no
+        integrity check. force_rebuild removes the files first, so the pull
+        is a fresh bootstrap and the check runs."""
+        _make_db(db.path)
+        _write_info(db)
+        conn = _mock_sync_conn(pull_returns=False)
+        seen = {}
+
+        def fake_pull():
+            seen["db_present_at_pull"] = os.path.exists(db.path)
+            _write(db.path)
+            _write_info(db)
+            return conn.pull.return_value
+
+        with patch("config.tursosync.connect", return_value=conn), patch.object(
+            DatabaseConfig, "integrity_check", return_value=True
+        ) as integrity_mock, patch.object(DatabaseConfig, "_dispose_local_connections"):
+            conn.pull.side_effect = fake_pull
+            result = db.sync(force_rebuild=True)
+
+        assert seen["db_present_at_pull"] is False
+        assert result == SyncResult(ok=True, changed=True)
+        integrity_mock.assert_called_once()
+
+    def test_ordinary_sync_keeps_a_consistent_replica(self, db):
+        """The force_rebuild path must not leak into normal syncs: a valid
+        replica is pulled into, never removed first."""
+        _make_db(db.path)
+        _write_info(db)
+        conn = _mock_sync_conn(pull_returns=False)
+        seen = {}
+
+        def fake_pull():
+            seen["db_present_at_pull"] = os.path.exists(db.path)
+            return conn.pull.return_value
+
+        with patch("config.tursosync.connect", return_value=conn), patch.object(
+            DatabaseConfig, "integrity_check", return_value=True
+        ), patch.object(DatabaseConfig, "_dispose_local_connections"):
+            conn.pull.side_effect = fake_pull
+            result = db.sync()
+
+        assert seen["db_present_at_pull"] is True
+        assert result == SyncResult(ok=True, changed=False)
 
     def test_pull_failure_on_fresh_file_cleans_up_and_raises(self, db):
         conn = MagicMock()

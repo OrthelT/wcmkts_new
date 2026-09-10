@@ -4,12 +4,13 @@ Tests for BaseRepository.read_df():
 - malformed error -> sync (rebuild) + retry
 - sync failure -> error propagates
 - retry-after-sync failure -> that error propagates
+- still malformed after sync -> forced rebuild + retry
 - recover=False skips recovery entirely
 - params passthrough
 """
 
 import unittest
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock, PropertyMock, call, patch
 
 import pandas as pd
 
@@ -180,6 +181,52 @@ class TestReadDf(unittest.TestCase):
                 repo.read_df("SELECT * FROM test")
         self.assertIn("still broken after rebuild", str(ctx.exception))
         mock_db.sync.assert_called_once()
+
+    def test_still_malformed_after_sync_forces_rebuild(self):
+        """Corruption in a data page leaves sqlite_master readable, so an
+        ordinary sync() preserves the file and an unchanged pull returns
+        through the no-change fast path with no integrity check. When the
+        retry hits the same page, read_df must force a fresh bootstrap
+        rather than surface the error."""
+        expected = pd.DataFrame({"id": [7]})
+        engine, _ = self._mock_engine_with_data(expected)
+        repo, mock_db = self._make_repo(engine=engine)
+        mock_db.integrity_check.return_value = False
+        calls = iter([
+            Exception("database disk image is malformed"),
+            Exception("database disk image is malformed"),
+            expected,
+        ])
+
+        def side_effect(*a, **k):
+            v = next(calls)
+            if isinstance(v, Exception):
+                raise v
+            return v
+
+        with patch("repositories.base.pd.read_sql_query", side_effect=side_effect):
+            result = repo.read_df("SELECT * FROM test")
+        self.assertEqual(
+            mock_db.sync.call_args_list, [call(), call(force_rebuild=True)]
+        )
+        pd.testing.assert_frame_equal(result, expected)
+
+    def test_healthy_replica_after_sync_does_not_force_rebuild(self):
+        """"no such table" is also what a caller bug looks like (typo'd
+        table, or one absent from this hub's schema). A passing integrity
+        check means the replica is sound, so re-downloading 147 MB would
+        fix nothing."""
+        engine, _ = self._mock_engine_with_data(None)
+        repo, mock_db = self._make_repo(engine=engine)
+        mock_db.integrity_check.return_value = True
+        with patch(
+            "repositories.base.pd.read_sql_query",
+            side_effect=Exception("no such table: typo_table"),
+        ):
+            with self.assertRaises(Exception) as ctx:
+                repo.read_df("SELECT * FROM typo_table")
+        self.assertIn("no such table", str(ctx.exception))
+        mock_db.sync.assert_called_once_with()
 
     def test_recover_false_raises_immediately(self):
         engine, _ = self._mock_engine_with_data(None)

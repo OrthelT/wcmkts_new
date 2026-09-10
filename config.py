@@ -368,12 +368,21 @@ class DatabaseConfig:
         )
         return changed
 
-    def sync(self) -> SyncResult:
+    def sync(self, *, force_rebuild: bool = False) -> SyncResult:
         """Pull remote changes into the local replica safely.
 
         Serialized by this alias's sync lock with dispose-before-sync. Enforces
         the file-state machine and retries once via nuke + fresh bootstrap on
         integrity failure.
+
+        Args:
+            force_rebuild: remove the replica before pulling, so the pull is a
+                fresh bootstrap. The consistency state machine only proves the
+                replica *opens* -- a corrupt data page leaves sqlite_master
+                readable, and an unchanged pull then returns through the
+                no-change fast path without an integrity check. Callers that
+                have already seen a read fail on this replica use this to make
+                the rebuild happen instead of hoping sync() detects it.
 
         Returns:
             SyncResult(ok, changed). Truthiness == ok, preserving the
@@ -396,6 +405,11 @@ class DatabaseConfig:
         )
         with _sync_lock(self.alias):
             self._dispose_local_connections()
+            if force_rebuild:
+                logger.warning(
+                    f"force_rebuild: removing {self.alias} replica for fresh bootstrap"
+                )
+                self._remove_replica_files()
             self._ensure_replica_consistency()
             file_existed = os.path.exists(self.path)
             try:
