@@ -217,22 +217,24 @@ class TestGetTypesForGroup:
 
 
 class TestGetSdeTable:
-    def test_valid_table_returns_data(self):
+    @pytest.mark.parametrize("table_name", ["invTypes", "sdetypes"])
+    def test_valid_table_returns_data(self, table_name):
         from repositories.sde_repo import _get_sde_table_impl
         engine, conn = _mock_engine()
         expected = pd.DataFrame({"typeID": [34], "typeName": ["Tritanium"]})
 
         with patch("pandas.read_sql_query", return_value=expected):
-            result = _get_sde_table_impl(engine, "invTypes")
+            result = _get_sde_table_impl(engine, table_name)
 
         assert len(result) == 1
 
-    def test_invalid_table_raises_valueerror(self):
+    @pytest.mark.parametrize("table_name", ["DROP TABLE invTypes; --", "inv_info"])
+    def test_invalid_table_raises_valueerror(self, table_name):
         from repositories.sde_repo import _get_sde_table_impl
         engine, _ = _mock_engine()
 
         with pytest.raises(ValueError, match="Invalid SDE table name"):
-            _get_sde_table_impl(engine, "DROP TABLE invTypes; --")
+            _get_sde_table_impl(engine, table_name)
 
 
 class TestGetTech2TypeIds:

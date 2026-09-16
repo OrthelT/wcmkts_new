@@ -53,7 +53,6 @@ VALID_SDE_TABLES = frozenset({
     "invTypeMaterials",
     "invTypeReactions",
     "invTypes",
-    "inv_info",
     "localizations",
     "sdetypes",
 })

@@ -162,7 +162,7 @@ def _create_doctrine_admin_db(path: Path) -> None:
         conn.execute(
             text(
                 """
-                CREATE TABLE inv_info (
+                CREATE TABLE sdetypes (
                     typeID INT,
                     typeName TEXT,
                     groupID INT,
@@ -177,7 +177,7 @@ def _create_doctrine_admin_db(path: Path) -> None:
         conn.execute(
             text(
                 """
-                INSERT INTO inv_info
+                INSERT INTO sdetypes
                     (typeID, typeName, groupID, volume, groupName, categoryID, categoryName)
                 VALUES
                     (1, 'Vedmak', 25, 10000, 'Cruiser', 6, 'Ship'),

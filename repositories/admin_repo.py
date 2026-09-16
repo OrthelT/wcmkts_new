@@ -558,7 +558,7 @@ class AdminRepository:
             """
             SELECT typeID AS type_id, typeName AS type_name, groupID AS group_id,
                    groupName AS group_name, categoryID AS category_id, categoryName AS category_name
-            FROM inv_info
+            FROM sdetypes
             WHERE typeName = :type_name
             LIMIT 1
             """
