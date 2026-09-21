@@ -394,7 +394,7 @@ token = "your_turso_auth_token"
 url = "libsql://your-market3-database.turso.io"
 token = "your_turso_auth_token"
 
-[sdelite_turso]
+[sdelite2_turso]
 url = "libsql://your-sde.turso.io"
 token = "your_sde_auth_token"
 
@@ -425,7 +425,7 @@ token = "..."
 url = "libsql://..."
 token = "..."
 
-[sdelite_turso]
+[sdelite2_turso]
 url = "libsql://..."
 token = "..."
 
@@ -435,6 +435,13 @@ token = "..."
 ```
 
 `.env` variables may be used for other tooling, but the app resolves secrets via Streamlit.
+
+For existing deployments migrating to SDE v2, add `[sdelite2_turso]` with the
+new SDE database's URL and a token authorized to access it before deploying
+this version. Update `.streamlit/secrets.toml` for local runs or the app's
+secrets in Streamlit Community Cloud for the hosted deployment. Restart the
+app after updating secrets. On startup, it syncs the new `sdelite2.db` replica;
+the old `[sdelite_turso]` section and `sdelite.db` file are no longer used.
 
 ### Cursor Agent Worktrees
 
@@ -499,7 +506,7 @@ The class supports the following database aliases (from `settings.toml`):
 | `wcmktnewkeep` | Primary market database | `wcmktnewkeep.db` | Main market data and orders (4-HWWF) |
 | `wcmktnorth` | Deployment market database | `wcmktnorth2.db` | Deployment market data (X47L-Q) |
 | `wcmktbkg` | Third market database | `wcmktbkg.db` | BKG-Q2 market data |
-| `sde` | Static Data Export | `sdelite.db` | EVE Online static data (items, categories) |
+| `sde` | Static Data Export | `sdelite2.db` | EVE Online static data (items, categories) |
 | `build_cost` | Build cost calculations | `buildcost.db` | Structure data and industry indexes |
 
 ### Usage Examples
@@ -604,7 +611,7 @@ token = "your_auth_token"
 url = "your_turso_url"
 token = "your_auth_token"
 
-[sdelite_turso]
+[sdelite2_turso]
 url = "your_turso_url"
 token = "your_auth_token"
 
