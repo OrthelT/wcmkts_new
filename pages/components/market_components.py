@@ -219,8 +219,9 @@ def configure_top_n_items_ui() -> None:
             help="Select top items based on average daily stats or total amount",
         )
     st.number_input(
-        label="Top Items", value=5, min_value=1, max_value=10, step=1,
-        key="top_items_count", help="Select the number of top items to display",
+        label="Top Items", value=10, min_value=1, step=1,
+        key="top_items_count",
+        help="Select the number of top items to display (capped by the items available)",
     )
 
 

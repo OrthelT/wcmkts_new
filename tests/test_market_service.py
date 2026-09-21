@@ -555,6 +555,35 @@ class TestGetMarketData:
         if not sell.empty:
             assert all(sell["type_id"] == 34)
 
+    def test_sell_ascending_buy_descending(self, mock_repo):
+        orders = pd.DataFrame({
+            "order_id": [1, 2, 3, 4],
+            "type_id": [34, 34, 34, 34],
+            "type_name": ["Tritanium"] * 4,
+            "price": [5.0, 4.5, 10.0, 9.5],
+            "volume_remain": [1000, 500, 200, 300],
+            "is_buy_order": [0, 0, 1, 1],
+            "duration": [90, 90, 90, 90],
+            "issued": pd.to_datetime(["2026-01-01"] * 4),
+        })
+        mock_repo.get_all_orders.return_value = orders
+        mock_repo.get_all_stats.return_value = pd.DataFrame()
+
+        from services.market_service import MarketService
+        sell, buy, _ = MarketService(mock_repo).get_market_data(show_all=True)
+
+        assert sell["price"].tolist() == [4.5, 5.0]
+        assert buy["price"].tolist() == [10.0, 9.5]
+
+    def test_multi_item_sort_groups_by_name(self, sample_orders_df, mock_repo):
+        mock_repo.get_all_orders.return_value = sample_orders_df
+        mock_repo.get_all_stats.return_value = pd.DataFrame()
+
+        from services.market_service import MarketService
+        sell, _, _ = MarketService(mock_repo).get_market_data(show_all=True)
+
+        assert sell["type_name"].tolist() == ["Pyerite", "Tritanium"]
+
     def test_empty_orders(self, mock_repo):
         mock_repo.get_all_orders.return_value = pd.DataFrame()
         mock_repo.get_all_stats.return_value = pd.DataFrame()

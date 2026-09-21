@@ -612,6 +612,19 @@ def main():
                 )
             )
 
+    # Sell-order price/volume distribution, between the order tables and the
+    # history charts. Skipped for the unfiltered view: prices across every item
+    # span too many orders of magnitude to bin usefully, and the chart would
+    # carry the whole order book to the browser.
+    has_filter = bool(ss_get("selected_item_id")) or bool(
+        (category_info or {}).get("type_ids")
+    )
+    if has_filter and not sell_data.empty:
+        st.plotly_chart(
+            market_service.create_price_volume_chart(sell_data),
+            width="stretch",
+        )
+
     # Market History section
     if st.session_state.get('selected_item') is not None:
         st.subheader(

@@ -82,13 +82,27 @@ class MarketService:
         sell_df = orders_df[orders_df["is_buy_order"] == 0].reset_index(drop=True)
         buy_df = orders_df[orders_df["is_buy_order"] == 1].reset_index(drop=True)
 
-        # Clean order data
+        # Clean order data. Sort so the tables open on the prices that matter:
+        # cheapest sell first, highest buy first, grouped per item when the
+        # view spans more than one type.
         if not sell_df.empty:
-            sell_df = self.clean_order_data(sell_df)
+            sell_df = self._sort_orders(self.clean_order_data(sell_df), ascending=True)
         if not buy_df.empty:
-            buy_df = self.clean_order_data(buy_df)
+            buy_df = self._sort_orders(self.clean_order_data(buy_df), ascending=False)
 
         return sell_df, buy_df, stats_df
+
+    @staticmethod
+    def _sort_orders(df: pd.DataFrame, ascending: bool) -> pd.DataFrame:
+        """Sort orders by price, keeping each item's orders together."""
+        if "price" not in df.columns:
+            return df
+        sort_cols = ["price"]
+        order = [ascending]
+        if "type_name" in df.columns and df["type_name"].nunique() > 1:
+            sort_cols.insert(0, "type_name")
+            order.insert(0, True)
+        return df.sort_values(sort_cols, ascending=order).reset_index(drop=True)
 
     def get_current_market_snapshot(self, type_ids: list[int]) -> pd.DataFrame:
         """Get current local sell price and sell-order volume for specific type IDs."""
@@ -450,6 +464,10 @@ class MarketService:
         df.rename(
             columns={"typeID": "type_id", "typeName": "type_name"}, inplace=True
         )
+        # A source frame carrying both spellings ends up with two identically
+        # named columns after the rename; keep the first so later lookups
+        # return a Series rather than a DataFrame.
+        df = df.loc[:, ~df.columns.duplicated()]
 
         cols = [
             "order_id", "is_buy_order", "type_id", "type_name",
