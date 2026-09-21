@@ -109,14 +109,14 @@
 # Every [markets.*] database_alias must have an entry here (see reminder above).
 [db_paths]
     "wcmktnorth" = "wcmktnorth2.db"
-    "sde" = "sdelite.db"
+    "sde" = "sdelite2.db"
     "build_cost" = "buildcost.db"
     "wcmkttest" = "wcmkttest.db"
     "wcmktnewkeep" = "wcmktnewkeep.db"
     "wcmktbkg" = "wcmktbkg.db"
 
 [db_turso_keys]
-    "sde" = "sdelite_turso"
+    "sde" = "sdelite2_turso"
     "build_cost" = "buildcost_turso"
 
 # Shared (non-market) databases included in the periodic 600s pull check.
