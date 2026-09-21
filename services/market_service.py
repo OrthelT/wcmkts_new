@@ -82,13 +82,27 @@ class MarketService:
         sell_df = orders_df[orders_df["is_buy_order"] == 0].reset_index(drop=True)
         buy_df = orders_df[orders_df["is_buy_order"] == 1].reset_index(drop=True)
 
-        # Clean order data
+        # Clean order data. Sort so the tables open on the prices that matter:
+        # cheapest sell first, highest buy first, grouped per item when the
+        # view spans more than one type.
         if not sell_df.empty:
-            sell_df = self.clean_order_data(sell_df)
+            sell_df = self._sort_orders(self.clean_order_data(sell_df), ascending=True)
         if not buy_df.empty:
-            buy_df = self.clean_order_data(buy_df)
+            buy_df = self._sort_orders(self.clean_order_data(buy_df), ascending=False)
 
         return sell_df, buy_df, stats_df
+
+    @staticmethod
+    def _sort_orders(df: pd.DataFrame, ascending: bool) -> pd.DataFrame:
+        """Sort orders by price, keeping each item's orders together."""
+        if "price" not in df.columns:
+            return df
+        sort_cols = ["price"]
+        order = [ascending]
+        if "type_name" in df.columns and df["type_name"].nunique() > 1:
+            sort_cols.insert(0, "type_name")
+            order.insert(0, True)
+        return df.sort_values(sort_cols, ascending=order).reset_index(drop=True)
 
     def get_current_market_snapshot(self, type_ids: list[int]) -> pd.DataFrame:
         """Get current local sell price and sell-order volume for specific type IDs."""
@@ -450,6 +464,10 @@ class MarketService:
         df.rename(
             columns={"typeID": "type_id", "typeName": "type_name"}, inplace=True
         )
+        # A source frame carrying both spellings ends up with two identically
+        # named columns after the rename; keep the first so later lookups
+        # return a Series rather than a DataFrame.
+        df = df.loc[:, ~df.columns.duplicated()]
 
         cols = [
             "order_id", "is_buy_order", "type_id", "type_name",
@@ -651,8 +669,26 @@ class MarketService:
         )
         return fig
 
+    @staticmethod
+    def _price_outlier_cutoff(prices: pd.Series) -> Optional[float]:
+        """Upper price bound for the histogram x-axis, or None when nothing is an outlier.
+        Use Tukey's upper fence (Q3 + 1.5 * IQR), floored at 1.5x the median to exclude
+        outliers that throw off chart scaling.
+        """
+        prices = pd.Series(pd.to_numeric(prices, errors="coerce").dropna())
+        if prices.empty:
+            return None
+        q1, median, q3 = prices.quantile([0.25, 0.5, 0.75])
+        cutoff = max(q3 + 1.5 * (q3 - q1), median * 1.5)
+        return float(cutoff) if prices.max() > cutoff else None
+
     def create_price_volume_chart(self, df: pd.DataFrame) -> go.Figure:
         """Create price-volume histogram for sell orders.
+
+        For a single item, orders priced far above the rest are left out of
+        the bins so one troll order cannot stretch the x-axis; the subtitle
+        reports how many were left out. Multi-item views are never clipped,
+        because an expensive item there is data, not an outlier.
 
         Args:
             df: DataFrame with 'price' and 'volume_remain' columns.
@@ -660,13 +696,27 @@ class MarketService:
         Returns:
             Plotly Figure with histogram.
         """
+        title = "Market Orders Distribution"
+        single_item = "type_id" not in df.columns or df["type_id"].nunique() <= 1
+        cutoff = self._price_outlier_cutoff(df["price"]) if single_item else None
+        if cutoff is not None:
+            outliers = df[df["price"] > cutoff]
+            df = df[df["price"] <= cutoff]
+            units = int(outliers["volume_remain"].sum())
+            title += (
+                f"<br><sup>{len(outliers)} order{'s' if len(outliers) != 1 else ''} "
+                f"above {cutoff:,.0f} ISK not shown "
+                f"({units:,} unit{'s' if units != 1 else ''}, "
+                f"max {outliers['price'].max():,.0f} ISK)</sup>"
+            )
+
         fig = px.histogram(
             df,
             x="price",
             y="volume_remain",
             histfunc="sum",
             nbins=50,
-            title="Market Orders Distribution",
+            title=title,
             labels={"price": "Price (ISK)", "volume_remain": "Volume Available"},
         )
         fig.update_layout(
