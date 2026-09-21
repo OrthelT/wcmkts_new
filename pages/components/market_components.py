@@ -78,37 +78,36 @@ def render_isk_volume_chart_ui(service, language_code: str = "en") -> None:
             )
         )
 
-        with st.expander(translate_text(language_code, "market_stats.chart_controls")):
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.write(f"**{translate_text(language_code, 'market_stats.days_shown')}:**")
-                days = st.radio(
-                    translate_text(language_code, "market_stats.days_shown"),
-                    options=CHART_WINDOW_OPTIONS,
-                    index=CHART_WINDOW_DEFAULT_INDEX,
-                    format_func=lambda d: _format_days_option(d, language_code),
-                    horizontal=True,
-                    key="chart_days_radio",
-                )
-            with col2:
-                st.write(f"**{translate_text(language_code, 'market_stats.moving_average_period')}:**")
-                moving_avg_period = st.radio(
-                    translate_text(language_code, "market_stats.moving_average"),
-                    options=[3, 7, 14, 30],
-                    index=2,
-                    horizontal=True,
-                    key="chart_moving_avg_radio",
-                )
-            with col3:
-                st.write(f"**{translate_text(language_code, 'market_stats.date_aggregation')}:**")
-                date_period = st.radio(
-                    translate_text(language_code, "market_stats.date_period"),
-                    options=["daily", "weekly", "monthly", "yearly"],
-                    index=0,
-                    format_func=lambda x: translate_text(language_code, f"market_stats.period_{x}"),
-                    horizontal=True,
-                    key="chart_date_period_radio",
-                )
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.write(f"**{translate_text(language_code, 'market_stats.days_shown')}:**")
+            days = st.radio(
+                translate_text(language_code, "market_stats.days_shown"),
+                options=CHART_WINDOW_OPTIONS,
+                index=CHART_WINDOW_DEFAULT_INDEX,
+                format_func=lambda d: _format_days_option(d, language_code),
+                horizontal=True,
+                key="chart_days_radio",
+            )
+        with col2:
+            st.write(f"**{translate_text(language_code, 'market_stats.moving_average_period')}:**")
+            moving_avg_period = st.radio(
+                translate_text(language_code, "market_stats.moving_average"),
+                options=[3, 7, 14, 30],
+                index=1,
+                horizontal=True,
+                key="chart_moving_avg_radio",
+            )
+        with col3:
+            st.write(f"**{translate_text(language_code, 'market_stats.date_aggregation')}:**")
+            date_period = st.radio(
+                translate_text(language_code, "market_stats.date_period"),
+                options=["daily", "weekly", "monthly", "yearly"],
+                index=0,
+                format_func=lambda x: translate_text(language_code, f"market_stats.period_{x}"),
+                horizontal=True,
+                key="chart_date_period_radio",
+            )
 
         chart = service.create_isk_volume_chart(
             moving_avg_period=moving_avg_period,
@@ -164,16 +163,18 @@ def render_isk_volume_table_ui(service, language_code: str = "en") -> None:
     filter_info = translate_text(
         language_code,
         "market_stats.filter_info_window",
-        window=_format_days_option(days, language_code),
-        date_period=translate_text(language_code, f"market_stats.period_{date_period}"),
+        window=f":orange[{_format_days_option(days, language_code)}]",
+        date_period=(
+            f":orange[{translate_text(language_code, f'market_stats.period_{date_period}')}]"
+        ),
     )
     if selected_category:
         filter_info += translate_text(
             language_code,
             "market_stats.filter_info_category",
-            category_name=selected_category,
+            category_name=f":orange[{selected_category}]",
         )
-    st.write(filter_info)
+    st.markdown(filter_info)
 
     if table.empty:
         msg = (
@@ -187,7 +188,7 @@ def render_isk_volume_table_ui(service, language_code: str = "en") -> None:
         )
         st.warning(msg)
     else:
-        st.dataframe(table, width="content", column_config=data_table_config)
+        st.dataframe(table, width="content", column_config=data_table_config, hide_index=True)
 
 
 # =============================================================================
@@ -430,10 +431,6 @@ def render_30day_metrics_ui(service, language_code: str = "en") -> None:
                     language_code=language_code,
                 )
 
-    chart = service.create_30day_activity_chart(df_30days)
-    if chart is not None:
-        st.plotly_chart(chart, width='stretch')
-
     st.divider()
 
 
@@ -443,7 +440,8 @@ def render_30day_metrics_ui(service, language_code: str = "en") -> None:
 
 def render_current_market_status_ui(
     sell_data, stats, selected_item, sell_order_count, sell_total_value,
-    fit_df, fits_on_mkt, cat_id, language_code: str = "en"
+    fit_df, fits_on_mkt, cat_id, language_code: str = "en",
+    *, buy_order_count: int, buy_total_value: float,
 ) -> None:
     """Render current market status metrics section.
 
@@ -453,6 +451,8 @@ def render_current_market_status_ui(
         selected_item: Currently selected item name.
         sell_order_count: Number of sell orders.
         sell_total_value: Total value of sell orders.
+        buy_order_count: Number of buy orders.
+        buy_total_value: Total value of buy orders.
         fit_df: DataFrame with fitting data.
         fits_on_mkt: Number of fits on market.
         cat_id: Category ID of selected item.
@@ -523,14 +523,24 @@ def render_current_market_status_ui(
         else:
             st.metric(translate_text(language_code, "market_stats.sell_orders_value"), "0 ISK")
 
+        st.metric(
+            translate_text(language_code, "market_stats.market_value_buy_orders"),
+            f"{millify.millify(buy_total_value, precision=2)} ISK" if buy_total_value > 0 else "0 ISK",
+        )
+
     with col3:
-        days_remaining = stats["days_remaining"].min()
+        days_remaining = stats["days_remaining"].min() if not stats.empty else None
         if pd.notna(days_remaining) and selected_item:
             st.metric(translate_text(language_code, "low_stock.column_days"), f"{days_remaining:.1f}")
         elif sell_order_count > 0:
             st.metric(translate_text(language_code, "market_stats.total_sell_orders"), f"{sell_order_count:,.0f}")
         else:
             st.metric(translate_text(language_code, "market_stats.total_sell_orders"), "0")
+
+        st.metric(
+            translate_text(language_code, "market_stats.total_buy_orders"),
+            f"{buy_order_count:,.0f}",
+        )
 
     with col4:
         if fit_df is not None and not fit_df.empty and fits_on_mkt is not None:

@@ -365,7 +365,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "market_stats.all_sell_orders": "All Sell Orders",
         "market_stats.winter_co_doctrine": "Winter Co. Doctrine",
         "market_stats.category_plural": "{category_name}s",
-        "market_stats.thirty_day_market_stats": "30-Day Market Stats (expand to view metrics)",
+        "market_stats.thirty_day_market_stats": "30-Day Market Stats (click to collapse)",
         "market_stats.sell_orders_for": "Sell Orders for {name}",
         "market_stats.all_buy_orders": "All Buy Orders",
         "market_stats.buy_orders_for": "Buy Orders for {name}",
@@ -1055,7 +1055,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "market_stats.all_sell_orders": "全部卖单",
         "market_stats.winter_co_doctrine": "凛冬建制",
         "market_stats.category_plural": "{category_name}",
-        "market_stats.thirty_day_market_stats": "30日市场统计（展开查看）",
+        "market_stats.thirty_day_market_stats": "30日市场统计（点击收起）",
         "market_stats.sell_orders_for": "{name} 的卖单",
         "market_stats.all_buy_orders": "全部买单",
         "market_stats.buy_orders_for": "{name} 的买单",
@@ -1414,6 +1414,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.column_fetched_at": "抓取时间",
     },
     "de": {
+        "market_stats.thirty_day_market_stats": "30-Tage-Marktstatistik (zum Einklappen klicken)",
         "app.page_title": "WinterCo Märkte",
         "app.language_label": "Sprache",
         "nav.section.market_stats": "Marktstatistiken",
@@ -2002,6 +2003,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.column_fetched_at": "Abgerufen am",
     },
     "fr": {
+        "market_stats.thirty_day_market_stats": "Statistiques du marché sur 30 jours (cliquer pour replier)",
         "app.page_title": "Marchés WinterCo",
         "app.language_label": "Langue",
         "nav.section.market_stats": "Statistiques de marché",
@@ -2587,6 +2589,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.column_fetched_at": "Récupéré le",
     },
     "ru": {
+        "market_stats.thirty_day_market_stats": "Статистика рынка за 30 дней (нажмите, чтобы свернуть)",
         "app.page_title": "Рынки WinterCo",
         "app.language_label": "Язык",
         "nav.section.market_stats": "Статистика рынка",
@@ -3172,6 +3175,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.column_fetched_at": "Получено",
     },
     "es": {
+        "market_stats.thirty_day_market_stats": "Estadísticas del mercado de 30 días (haz clic para contraer)",
         "app.page_title": "Mercados WinterCo",
         "app.language_label": "Idioma",
         "nav.section.market_stats": "Estadisticas del Mercado",
@@ -3680,6 +3684,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.column_fetched_at": "Obtenido",
     },
     "ja": {
+        "market_stats.thirty_day_market_stats": "30日間の市場統計（クリックで折りたたむ）",
         "dashboard.column_fits": "Fits",
         "dashboard.column_ship_hulls": "船体",
         "dashboard.column_target_pct": "フィット目標 %",
@@ -3881,6 +3886,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "market_stats.pill_materials": "素材",
     },
     "ko": {
+        "market_stats.thirty_day_market_stats": "30일 시장 통계 (클릭하여 접기)",
         "dashboard.column_fits": "Fits",
         "dashboard.column_ship_hulls": "선체",
         "dashboard.column_target_pct": "핏 목표 %",

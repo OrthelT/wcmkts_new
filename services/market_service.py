@@ -495,7 +495,7 @@ class MarketService:
 
     def create_isk_volume_chart(
         self,
-        moving_avg_period: int = 14,
+        moving_avg_period: int = 7,
         date_period: str = "daily",
         days: int | None = 30,
         selected_category: str = None,

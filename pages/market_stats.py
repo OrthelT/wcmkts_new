@@ -2,7 +2,6 @@ import time
 import streamlit as st
 import pandas as pd
 from logging_config import setup_logging
-import millify
 from config import get_settings
 from services import get_doctrine_service
 from services.market_service import get_market_service
@@ -346,6 +345,7 @@ def main():
     t1 = time.perf_counter()
     category_info = ss_get('selected_category_info')
     selected_item_id = ss_get('selected_item_id')
+    has_filter = bool(selected_item_id) or bool((category_info or {}).get('type_ids'))
     sell_data, buy_data, stats = market_service.get_market_data(
         show_all, category_info=category_info, selected_item_id=selected_item_id
     )
@@ -362,6 +362,8 @@ def main():
 
     # Initialize fitting data
     fit_df = pd.DataFrame()
+    fits_on_mkt = None
+    cat_id = None
     service = get_doctrine_service()
     display_sell_data = apply_localized_type_names(
         sell_data,
@@ -448,9 +450,7 @@ def main():
         )
 
         # Headers
-        if show_all:
-            st.header(translate_text(language_code, "market_stats.all_sell_orders"), divider="green")
-        elif ss_has('selected_item_id'):
+        if ss_has('selected_item_id'):
             selected_item_id = ss_get('selected_item_id')
             try:
                 image_id = selected_item_id
@@ -506,17 +506,20 @@ def main():
                 divider="green",
             )
 
-        # Current Market Status
-        render_current_market_status_ui(
-            sell_data=display_sell_data,
-            stats=display_stats,
-            selected_item=display_selected_item,
-            sell_order_count=sell_order_count,
-            sell_total_value=sell_total_value,
-            fit_df=fit_df, fits_on_mkt=fits_on_mkt, cat_id=cat_id,
-            language_code=language_code,
-        )
+    # Current Market Status
+    render_current_market_status_ui(
+        sell_data=display_sell_data,
+        stats=display_stats,
+        selected_item=display_selected_item,
+        sell_order_count=sell_order_count,
+        sell_total_value=sell_total_value,
+        buy_order_count=buy_order_count,
+        buy_total_value=buy_total_value,
+        fit_df=fit_df, fits_on_mkt=fits_on_mkt, cat_id=cat_id,
+        language_code=language_code,
+    )
 
+    if not sell_data.empty:
         # 30-Day Historical Metrics
         with st.expander(
             translate_text(language_code, "market_stats.thirty_day_market_stats"),
@@ -524,114 +527,96 @@ def main():
         ):
             render_30day_metrics_ui(market_service, language_code)
 
-        st.divider()
+        if has_filter:
+            st.divider()
 
-        # Sell orders display
-        display_df = display_sell_data.copy()
-        if ss_has('selected_item'):
-            st.subheader(
-                translate_text(
-                    language_code,
-                    "market_stats.sell_orders_for",
-                    name=display_selected_item,
-                ),
-                divider="blue",
-            )
-        elif ss_has('selected_category'):
-            cat_label = st.session_state.selected_category
-            if not cat_label.endswith("s"):
-                cat_label += "s"
-            st.subheader(
-                translate_text(language_code, "market_stats.sell_orders_for", name=cat_label),
-                divider="blue",
-            )
-        else:
-            st.subheader(translate_text(language_code, "market_stats.all_sell_orders"), divider="green")
-
-        if 'is_buy_order' in display_df.columns:
-            display_df.drop(columns='is_buy_order', inplace=True)
-        st.dataframe(
-            drop_localized_backup_columns(display_df),
-            hide_index=True,
-            column_config=display_formats,
-            height=_orders_table_height(len(display_df)),
-        )
-
-    # Buy orders
-    if not buy_data.empty:
-        if show_all:
-            st.subheader(translate_text(language_code, "market_stats.all_buy_orders"), divider="orange")
-        elif ss_has('selected_item'):
-            st.subheader(
-                translate_text(
-                    language_code,
-                    "market_stats.buy_orders_for",
-                    name=display_selected_item,
-                ),
-                divider="orange",
-            )
-        elif ss_has('selected_category'):
-            cat_label = st.session_state.selected_category
-            if not cat_label.endswith("s"):
-                cat_label += "s"
-            st.subheader(
-                translate_text(language_code, "market_stats.buy_orders_for", name=cat_label),
-                divider="orange",
-            )
-        else:
-            st.subheader(translate_text(language_code, "market_stats.all_buy_orders"), divider="orange")
-
-        col1, col2 = st.columns(2)
-        with col1:
-            if buy_total_value > 0:
-                st.metric(
-                    translate_text(language_code, "market_stats.market_value_buy_orders"),
-                    f"{millify.millify(buy_total_value, precision=2)} ISK",
+            # Sell orders display
+            display_df = display_sell_data.copy()
+            if ss_has('selected_item'):
+                st.subheader(
+                    translate_text(
+                        language_code,
+                        "market_stats.sell_orders_for",
+                        name=display_selected_item,
+                    ),
+                    divider="blue",
+                )
+            elif ss_has('selected_category'):
+                cat_label = st.session_state.selected_category
+                if not cat_label.endswith("s"):
+                    cat_label += "s"
+                st.subheader(
+                    translate_text(language_code, "market_stats.sell_orders_for", name=cat_label),
+                    divider="blue",
                 )
             else:
-                st.metric(translate_text(language_code, "market_stats.market_value_buy_orders"), "0 ISK")
-        with col2:
-            if buy_order_count > 0:
-                st.metric(translate_text(language_code, "market_stats.total_buy_orders"), f"{buy_order_count:,.0f}")
+                st.subheader(translate_text(language_code, "market_stats.all_sell_orders"), divider="green")
+
+            if 'is_buy_order' in display_df.columns:
+                display_df.drop(columns='is_buy_order', inplace=True)
+            st.dataframe(
+                drop_localized_backup_columns(display_df),
+                hide_index=True,
+                column_config=display_formats,
+                height=_orders_table_height(len(display_df)),
+            )
+
+    if has_filter:
+        # Buy orders
+        if not buy_data.empty:
+            if ss_has('selected_item'):
+                st.subheader(
+                    translate_text(
+                        language_code,
+                        "market_stats.buy_orders_for",
+                        name=display_selected_item,
+                    ),
+                    divider="orange",
+                )
+            elif ss_has('selected_category'):
+                cat_label = st.session_state.selected_category
+                if not cat_label.endswith("s"):
+                    cat_label += "s"
+                st.subheader(
+                    translate_text(language_code, "market_stats.buy_orders_for", name=cat_label),
+                    divider="orange",
+                )
             else:
-                st.metric(translate_text(language_code, "market_stats.total_buy_orders"), "0")
+                st.subheader(translate_text(language_code, "market_stats.all_buy_orders"), divider="orange")
 
-        buy_display_df = display_buy_data.copy()
-        if 'is_buy_order' in buy_display_df.columns:
-            buy_display_df.drop(columns='is_buy_order', inplace=True)
-        st.dataframe(
-            drop_localized_backup_columns(buy_display_df),
-            hide_index=True,
-            column_config=display_formats,
-            height=_orders_table_height(len(buy_display_df)),
-        )
+            buy_display_df = display_buy_data.copy()
+            if 'is_buy_order' in buy_display_df.columns:
+                buy_display_df.drop(columns='is_buy_order', inplace=True)
+            st.dataframe(
+                drop_localized_backup_columns(buy_display_df),
+                hide_index=True,
+                column_config=display_formats,
+                height=_orders_table_height(len(buy_display_df)),
+            )
 
-    elif not sell_data.empty:
-        if st.session_state.selected_item is not None:
-            st.write(
-                translate_text(
-                    language_code,
-                    "market_stats.no_current_buy_orders",
-                    item_name=display_selected_item,
+        elif not sell_data.empty:
+            if st.session_state.selected_item is not None:
+                st.write(
+                    translate_text(
+                        language_code,
+                        "market_stats.no_current_buy_orders",
+                        item_name=display_selected_item,
+                    )
                 )
-            )
-    else:
-        if st.session_state.selected_item is not None:
-            st.write(
-                translate_text(
-                    language_code,
-                    "market_stats.no_current_market_orders",
-                    item_name=display_selected_item,
+        else:
+            if st.session_state.selected_item is not None:
+                st.write(
+                    translate_text(
+                        language_code,
+                        "market_stats.no_current_market_orders",
+                        item_name=display_selected_item,
+                    )
                 )
-            )
 
     # Sell-order price/volume distribution, between the order tables and the
     # history charts. Skipped for the unfiltered view: prices across every item
     # span too many orders of magnitude to bin usefully, and the chart would
     # carry the whole order book to the browser.
-    has_filter = bool(ss_get("selected_item_id")) or bool(
-        (category_info or {}).get("type_ids")
-    )
     if has_filter and not sell_data.empty:
         st.plotly_chart(
             market_service.create_price_volume_chart(sell_data),
@@ -660,8 +645,10 @@ def main():
             translate_text(language_code, "market_stats.price_history", filter_info=filter_info + suffix),
             divider="blue",
         )
-        render_isk_volume_chart_ui(market_service, language_code)
-        with st.expander(translate_text(language_code, "market_stats.expand_market_history_data")):
+        chart_col, history_col = st.columns([2, 1])
+        with chart_col:
+            render_isk_volume_chart_ui(market_service, language_code)
+        with history_col:
             render_isk_volume_table_ui(market_service, language_code)
 
     # Item history chart
