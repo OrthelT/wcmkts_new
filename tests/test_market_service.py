@@ -722,3 +722,53 @@ class TestCalculate30dayMetricsWindowedFetch:
         mock_repo.get_history_window.assert_called_once_with(30)
         mock_repo.get_all_history.assert_not_called()
         assert avg_vol > 0
+
+
+class TestPriceVolumeChart:
+    """create_price_volume_chart scales the x-axis to the bulk of the orders."""
+
+    @staticmethod
+    def _orders(prices, type_ids=None):
+        return pd.DataFrame({
+            "type_id": type_ids or [29340] * len(prices),
+            "price": prices,
+            "volume_remain": [10] * len(prices),
+        })
+
+    def test_outlier_order_excluded_and_reported(self):
+        from services.market_service import MarketService
+
+        prices = [37.5e6, 37.5e6, 38e6, 39e6, 40e6, 45e6, 46e6, 47e6, 372e6]
+        fig = MarketService(Mock()).create_price_volume_chart(self._orders(prices))
+
+        assert max(fig.data[0].x) == 47e6
+        assert "1 order above" in fig.layout.title.text
+        assert "372,000,000" in fig.layout.title.text
+
+    def test_no_outlier_keeps_all_orders_and_plain_title(self):
+        from services.market_service import MarketService
+
+        prices = [37.5e6, 38e6, 39e6, 40e6, 45e6]
+        fig = MarketService(Mock()).create_price_volume_chart(self._orders(prices))
+
+        assert len(fig.data[0].x) == len(prices)
+        assert fig.layout.title.text == "Market Orders Distribution"
+
+    def test_identical_prices_with_outlier(self):
+        """IQR of 0 must not exclude every order above the shared price."""
+        from services.market_service import MarketService
+
+        prices = [37.5e6] * 8 + [38e6, 372e6]
+        fig = MarketService(Mock()).create_price_volume_chart(self._orders(prices))
+
+        assert max(fig.data[0].x) == 38e6
+
+    def test_multi_item_view_is_never_clipped(self):
+        from services.market_service import MarketService
+
+        prices = [1e6, 1e6, 1e6, 1e6, 500e6]
+        df = self._orders(prices, type_ids=[1, 1, 1, 1, 2])
+        fig = MarketService(Mock()).create_price_volume_chart(df)
+
+        assert max(fig.data[0].x) == 500e6
+        assert fig.layout.title.text == "Market Orders Distribution"

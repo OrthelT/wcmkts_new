@@ -669,8 +669,26 @@ class MarketService:
         )
         return fig
 
+    @staticmethod
+    def _price_outlier_cutoff(prices: pd.Series) -> Optional[float]:
+        """Upper price bound for the histogram x-axis, or None when nothing is an outlier.
+        Use Tukey's upper fence (Q3 + 1.5 * IQR), floored at 1.5x the median to exclude
+        outliers that throw off chart scaling.
+        """
+        prices = pd.Series(pd.to_numeric(prices, errors="coerce").dropna())
+        if prices.empty:
+            return None
+        q1, median, q3 = prices.quantile([0.25, 0.5, 0.75])
+        cutoff = max(q3 + 1.5 * (q3 - q1), median * 1.5)
+        return float(cutoff) if prices.max() > cutoff else None
+
     def create_price_volume_chart(self, df: pd.DataFrame) -> go.Figure:
         """Create price-volume histogram for sell orders.
+
+        For a single item, orders priced far above the rest are left out of
+        the bins so one troll order cannot stretch the x-axis; the subtitle
+        reports how many were left out. Multi-item views are never clipped,
+        because an expensive item there is data, not an outlier.
 
         Args:
             df: DataFrame with 'price' and 'volume_remain' columns.
@@ -678,13 +696,27 @@ class MarketService:
         Returns:
             Plotly Figure with histogram.
         """
+        title = "Market Orders Distribution"
+        single_item = "type_id" not in df.columns or df["type_id"].nunique() <= 1
+        cutoff = self._price_outlier_cutoff(df["price"]) if single_item else None
+        if cutoff is not None:
+            outliers = df[df["price"] > cutoff]
+            df = df[df["price"] <= cutoff]
+            units = int(outliers["volume_remain"].sum())
+            title += (
+                f"<br><sup>{len(outliers)} order{'s' if len(outliers) != 1 else ''} "
+                f"above {cutoff:,.0f} ISK not shown "
+                f"({units:,} unit{'s' if units != 1 else ''}, "
+                f"max {outliers['price'].max():,.0f} ISK)</sup>"
+            )
+
         fig = px.histogram(
             df,
             x="price",
             y="volume_remain",
             histfunc="sum",
             nbins=50,
-            title="Market Orders Distribution",
+            title=title,
             labels={"price": "Price (ISK)", "volume_remain": "Volume Available"},
         )
         fig.update_layout(

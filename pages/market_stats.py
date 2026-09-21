@@ -227,6 +227,17 @@ def check_selected_category(
 # =============================================================================
 # Title
 # =============================================================================
+# fix visible row height, but render full table scrolling
+_ORDERS_TABLE_VISIBLE_ROWS = 10
+_ORDERS_TABLE_HEIGHT = 35 * (_ORDERS_TABLE_VISIBLE_ROWS + 1) + 20
+
+
+def _orders_table_height(row_count: int) -> int | str:
+    """Fixed scrolling height for order tables; shorter tables fit their rows."""
+    if row_count <= _ORDERS_TABLE_VISIBLE_ROWS:
+        return "auto"
+    return _ORDERS_TABLE_HEIGHT
+
 
 def render_title_headers(market_name: str, language_code: str):
     render_page_title(
@@ -543,6 +554,7 @@ def main():
             drop_localized_backup_columns(display_df),
             hide_index=True,
             column_config=display_formats,
+            height=_orders_table_height(len(display_df)),
         )
 
     # Buy orders
@@ -591,6 +603,7 @@ def main():
             drop_localized_backup_columns(buy_display_df),
             hide_index=True,
             column_config=display_formats,
+            height=_orders_table_height(len(buy_display_df)),
         )
 
     elif not sell_data.empty:
