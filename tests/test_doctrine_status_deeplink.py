@@ -164,3 +164,59 @@ class TestClearDeeplinkShip:
         with patch.object(ds.st, "session_state", ss):
             ds._clear_deeplink_ship()
         assert ds.resolve_deeplink_filter({}, ss) == (None, None)
+
+
+class TestBuildModuleFilterOptions:
+    """build_module_filter_options lists each non-hull item once, sorted by name."""
+
+    def test_excludes_hulls_dedupes_and_sorts(self):
+        import pandas as pd
+
+        from pages.doctrine_status import build_module_filter_options
+
+        raw = pd.DataFrame(
+            {
+                "fit_id": [1, 1, 1, 2, 2],
+                "ship_id": [603, 603, 603, 604, 604],
+                "type_id": [603, 2048, 21894, 604, 2048],
+                "type_name": ["Merlin", "Damage Control II", "Caldari Navy Antimatter Charge S", "Kestrel", "Damage Control II"],
+            }
+        )
+        assert build_module_filter_options(raw) == {
+            21894: "Caldari Navy Antimatter Charge S",
+            2048: "Damage Control II",
+        }
+        assert list(build_module_filter_options(raw)) == [21894, 2048]
+
+    def test_empty_df_returns_empty(self):
+        import pandas as pd
+
+        from pages.doctrine_status import build_module_filter_options
+
+        assert build_module_filter_options(pd.DataFrame()) == {}
+
+
+class TestOnModuleFilterChange:
+    """The sidebar selectbox writes the module deep-link key, so the existing
+    module filter/banner path applies it."""
+
+    def _run(self, state):
+        from unittest.mock import patch
+
+        from pages import doctrine_status as ds
+
+        with patch.object(ds.st, "session_state", state):
+            ds._on_module_filter_change()
+        return state
+
+    def test_selection_sets_module_and_clears_ship(self):
+        state = self._run({"ds_module_filter": 2048, "ds_deeplink_ship_id": 603})
+        assert state["ds_deeplink_module_id"] == 2048
+        assert "ds_deeplink_ship_id" not in state
+
+    def test_all_clears_module_and_keeps_ship(self):
+        state = self._run(
+            {"ds_module_filter": None, "ds_deeplink_module_id": 2048, "ds_deeplink_ship_id": 603}
+        )
+        assert "ds_deeplink_module_id" not in state
+        assert state["ds_deeplink_ship_id"] == 603

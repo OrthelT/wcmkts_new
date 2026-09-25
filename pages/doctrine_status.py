@@ -13,6 +13,7 @@ from services.type_name_localization import (
     apply_localized_names_to_records,
     apply_localized_type_names,
     get_localized_name,
+    get_localized_name_map,
 )
 from repositories import get_sde_repository
 from state import get_active_language, ss_init, ss_get
@@ -30,6 +31,7 @@ logger = setup_logging(__name__, log_file="doctrine_status.log")
 
 _DEEPLINK_SHIP_KEY = "ds_deeplink_ship_id"
 _DEEPLINK_MODULE_KEY = "ds_deeplink_module_id"
+_MODULE_FILTER_WIDGET_KEY = "ds_module_filter"
 
 
 def _consume_int_param(query_params, key: str) -> int | None:
@@ -91,6 +93,25 @@ def _clear_deeplink_module() -> None:
 def _clear_deeplink_ship() -> None:
     """Drop only the persisted ship deep-link. Mirrors [_clear_deeplink_module] for the ship filter."""
     st.session_state.pop(_DEEPLINK_SHIP_KEY, None)
+
+
+def build_module_filter_options(raw_df: pd.DataFrame) -> dict[int, str]:
+    """Map type_id -> type_name for every non-hull item in the market's fits, sorted by name."""
+    if raw_df.empty:
+        return {}
+    items = raw_df[raw_df["type_id"] != raw_df["ship_id"]][["type_id", "type_name"]]
+    items = items.dropna().drop_duplicates("type_id").sort_values("type_name")
+    return {int(tid): str(name) for tid, name in zip(items["type_id"], items["type_name"])}
+
+
+def _on_module_filter_change() -> None:
+    """Route the sidebar module selectbox through the module deep-link state."""
+    module_id = st.session_state.get(_MODULE_FILTER_WIDGET_KEY)
+    if module_id is None:
+        st.session_state.pop(_DEEPLINK_MODULE_KEY, None)
+    else:
+        st.session_state[_DEEPLINK_MODULE_KEY] = module_id
+        st.session_state.pop(_DEEPLINK_SHIP_KEY, None)
 
 
 def _render_deeplink_banner(
@@ -549,6 +570,23 @@ def main():
         translate_text(language_code, "doctrine_status.filter_ship_group"),
         [None] + ship_group_ids,
         format_func=lambda gid: all_label if gid is None else ship_group_name_map[gid],
+    )
+
+    # Module/charge filter — reuses the module_id deep-link path below
+    module_name_map = build_module_filter_options(fit_build_result.raw_df)
+    module_name_map.update(
+        get_localized_name_map(list(module_name_map), sde_repo, language_code, logger)
+    )
+    module_ids = sorted(module_name_map, key=lambda tid: module_name_map[tid])
+    st.session_state[_MODULE_FILTER_WIDGET_KEY] = (
+        qp_module_id if qp_module_id in module_name_map else None
+    )
+    st.sidebar.selectbox(
+        translate_text(language_code, "doctrine_status.filter_module"),
+        [None] + module_ids,
+        format_func=lambda tid: all_label if tid is None else module_name_map[tid],
+        key=_MODULE_FILTER_WIDGET_KEY,
+        on_change=_on_module_filter_change,
     )
 
     # Get unique ship names for selection
