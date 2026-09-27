@@ -192,7 +192,9 @@ def render_market_popover(
     display = display_text or type_name
     unique_key = f"popover_{type_id}_{key_suffix}"
 
-    with st.popover(display, width="content", type="tertiary"):
+    # wrap=True: Streamlit 1.63+ truncates labels of controls placed directly in
+    # st.columns, which would cut off the trailing stock count.
+    with st.popover(display, width="content", type="tertiary", wrap=True):
         # Header with image
         col1, col2 = st.columns([0.25, 0.75])
 
@@ -373,7 +375,7 @@ def render_ship_with_popover(
         target: Target stock level
         key_suffix: Unique key suffix
     """
-    with st.popover(ship_name, width="content", type="tertiary"):
+    with st.popover(ship_name, width="content", type="tertiary", wrap=True):
         # Header with ship image
         col1, col2 = st.columns([0.3, 0.7])
 

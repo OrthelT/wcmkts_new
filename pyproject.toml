@@ -16,7 +16,7 @@ dependencies = [
     # sqlalchemy floor 2.0.42 is declared by the first-party pyturso SQLAlchemy dialect;
     # dialect's package metadata under-declares its floor as >=2.0
     "sqlalchemy>=2.0.42",
-    "streamlit>=1.52.2",
+    "streamlit>=1.64.0",
     "tzdata>=2025.2",
 ]
 

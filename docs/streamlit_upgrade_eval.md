@@ -18,6 +18,9 @@ The upgrade is low-risk and worth doing. None of the APIs that 1.59–1.64 remov
 
 The recommended order is: upgrade and verify (§1), then #1 and #4 (small and independent), then #2, then #3. Do #5 only after profiling.
 
+## USER COMMENT 
+This seems like a solid plan. Proceed with these updates. I have upgraded Streamlit to 1.64 and reinstalled skills. 
+
 ---
 
 ## 1. Upgrade safety
@@ -39,14 +42,28 @@ The breaking and behavior changes from 1.59–1.64 were checked against the code
 | Query strings capped at 512 KiB / 1,000 fields (1.60) | Deep links use one small param |
 
 **Steps:**
-1. Run `uv add "streamlit>=1.64"`.
+1. Run `uv add "streamlit>=1.64"`. (*USER COMMENT: Already done*)
 2. Run `uv run pytest -q`.
 3. Click through each page on each hub.
 4. Run Build Costs → Calculate.
 5. Test the dashboard deep links.
-6. Run `streamlit skills` (or reinstall `.claude/skills/developing-with-streamlit`). The copy the project has now is the 1.58 version and does not document 1.59–1.64 features such as ButtonColumn, background refresh and keyed reruns.
+6. Run `streamlit skills` (or reinstall `.claude/skills/developing-with-streamlit`). The copy the project has now is the 1.58 version and does not document 1.59–1.64 features such as ButtonColumn, background refresh and keyed reruns. (*USER COMMENT: Already done*)
 
-**Side finding:** `config.toml` at the repo root (`[theme] base = "dark"`) is dead config. Streamlit reads only `.streamlit/config.toml` and `~/.streamlit/config.toml`. Move it if the dark theme is intended; `.streamlit/config.toml` is also where `runner.cacheBackgroundRefreshTTLMultiplier` would go.
+**Side finding:** `config.toml` at the repo root (`[theme] base = "dark"`) is dead config. Streamlit reads only `.streamlit/config.toml` and `~/.streamlit/config.toml`. Move it if the dark theme is intended; `.streamlit/config.toml` is also where `runner.cacheBackgroundRefreshTTLMultiplier` would go. (*Resolved 2026-09-26: deleted. The theme keeps following each user's system setting.*)
+
+**Verification results (2026-09-26, Streamlit 1.64.0):**
+- `pyproject.toml` floor raised to `streamlit>=1.64.0`. `uv run pytest -q`: 736 passed.
+- All 10 pages render with no exceptions on all 3 hubs (4H, X47, BKG).
+- Build Costs → Calculate runs the `asyncio.run` path and renders results.
+- Dashboard deep links open the correct item from all 4 tables, to both destinations. Browser Back does not re-trigger navigation.
+- doctrine_status Select All / Clear All: 0 → 127 → 0 checked. A manual uncheck in between survives.
+- `wrap=False` (1.63) did truncate labels at a 1100 px viewport:
+  - pricer: the display checkboxes, and the submit button in German.
+  - doctrine_report: the item popovers, which cut off the trailing stock count.
+  - The "← Dashboard" back button in Japanese.
+
+  Fixed with `wrap=True` in `pages/pricer.py`, `ui/popovers.py` and `pages/components/header.py`. A scan of all pages in all 8 languages now finds no truncated control labels. Two things still truncate, both unrelated to the upgrade: the doctrine_status fit names (their own CSS ellipsis) and the `st.badge` status labels in doctrine_report (not a control).
+- Pre-existing issue, not caused by the upgrade: on a cold server process, a direct load of a subpage URL runs the page through legacy `pages/` discovery and skips `app.py`. Reproduced identically on 1.58 with a minimal app.
 
 ---
 

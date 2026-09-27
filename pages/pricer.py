@@ -462,6 +462,7 @@ def _render_action_chips(result: PricerResult, language_code: str):
 
 def _render_control_row(language_code: str):
     """Toggle row above the input area."""
+    # wrap=True on each checkbox: Streamlit 1.63+ truncates labels in st.columns.
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         ss_set(
@@ -470,6 +471,7 @@ def _render_control_row(language_code: str):
                 translate_text(language_code, "pricer.show_jita_prices"),
                 value=ss_get("pricer_show_jita", True),
                 key="show_jita_prices",
+                wrap=True,
             ),
         )
     with c2:
@@ -479,6 +481,7 @@ def _render_control_row(language_code: str):
                 translate_text(language_code, "pricer.show_stock_metrics"),
                 value=ss_get("pricer_show_stock_metrics", True),
                 key="show_stock_metrics",
+                wrap=True,
                 help=translate_text(language_code, "pricer.show_stock_metrics_help"),
             ),
         )
@@ -489,6 +492,7 @@ def _render_control_row(language_code: str):
                 translate_text(language_code, "pricer.highlight_doctrine_items"),
                 value=ss_get("pricer_highlight_doctrine", True),
                 key="highlight_doctrine",
+                wrap=True,
                 help=translate_text(
                     language_code, "pricer.highlight_doctrine_items_help"
                 ),
@@ -501,6 +505,7 @@ def _render_control_row(language_code: str):
                 translate_text(language_code, "pricer.fits.toggle_equivalents"),
                 value=ss_get("pricer_fit_equivalents", True),
                 key="pricer_fit_equivalents_cb",
+                wrap=True,
                 help=translate_text(
                     language_code, "pricer.fits.toggle_equivalents_help"
                 ),
@@ -883,6 +888,7 @@ def main():
                 type="primary",
                 width='stretch',
                 key="pricer_submit",
+                wrap=True,
             )
 
     if price_button:

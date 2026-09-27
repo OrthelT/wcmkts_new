@@ -1208,7 +1208,7 @@ requires-dist = [
     { name = "pytz", specifier = ">=2024.1" },
     { name = "requests", specifier = ">=2.31.0" },
     { name = "sqlalchemy", specifier = ">=2.0.42" },
-    { name = "streamlit", specifier = ">=1.52.2" },
+    { name = "streamlit", specifier = ">=1.64.0" },
     { name = "tzdata", specifier = ">=2025.2" },
 ]
 
