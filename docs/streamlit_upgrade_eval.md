@@ -212,6 +212,9 @@ Rules:
 These need no upgrade, but they surfaced during the inventory and are cheap to fix:
 
 1. **`ui/popovers.py:67-95` `get_doctrine_usage`.** It runs an **uncached** `engine.connect()` query per popover, and popover bodies execute on every rerun. doctrine_report renders one per item. Move it to a cached repository method through `read_df()`.
+   *Implemented 2026-09-27.* The query is gone. `build_doctrine_usage(raw_df)` in `services/doctrine_service.py` builds a `{type_id: usage}` map once per render (about 7 ms) from the fits frame the page already loads, and doctrine_report passes it into `render_market_popover`. Measured with AppTest on the primary hub, warm render went from 0.51–0.56 s to 0.45–0.46 s. Two behavior changes, both intended:
+   - **Market scoping.** The old query read every row of `doctrines`, so a popover also listed fits flagged for another hub. On the deployment hub it showed the primary-only Exequror fit (362) and an orphan Ferox Navy Issue fit (474, no `doctrine_fits` row). The map uses the market-filtered frame, so those fits no longer appear.
+   - **Counts for items with equivalents.** "N fits" now uses combined equivalent stock, which matches the popover's "Stock (Combined)" figure. For example, Guardian changed from 50 to 110.
 2. **`pages/build_costs.py:43` `requests.head(url)` with no timeout.** It runs on every rerun while results are displayed (`:757`). A hung image host hangs the page. Cache it and add a timeout, or drop the check and let `st.image` fail visibly.
 3. **`build_costs.py:301`, inside the materials fragment.** `resolve_type_names` makes an **uncached ESI POST** on every fragment rerun. Cache it by the tuple of `type_ids`.
 4. **`build_cost_service.py:310`.** ESI `/industry/systems` `requests.get` has no timeout.

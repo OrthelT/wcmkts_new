@@ -73,7 +73,7 @@ All pages follow consistent patterns with Streamlit best practices:
 - **`domain/market_config.py`**: `MarketConfig` frozen dataclass representing a market hub's configuration (key, name, short_name, region_id, database_alias)
 
 **UI Components (`ui/` directory):**
-- **`ui/popovers.py`**: Reusable market data popover components with item images, market stats, Jita prices, and doctrine usage. Pass pre-fetched `jita_prices` dict to avoid per-popover API calls (Jita fetching is disabled by default)
+- **`ui/popovers.py`**: Reusable market data popover components with item images, market stats, Jita prices, and doctrine usage. Pass pre-fetched `jita_prices` dict to avoid per-popover API calls (Jita fetching is disabled by default). Pass a `doctrine_usage` map from `services.doctrine_service.build_doctrine_usage(raw_df)` for the "Used In Fits" section; the popover runs no doctrine query of its own
 - **`ui/formatters.py`**: Pure formatting functions for prices, percentages, image URLs
 - **`ui/column_definitions.py`**: Streamlit column_config definitions for data tables; supports localized column headers via `get_doctrine_report_column_config(language_code)` and friends
 - **`ui/i18n.py`**: Lightweight UI translation system with ~132 keys covering navigation, labels, tooltips, and column headers across 8 languages (EN, ZH, DE, FR, RU, ES, JP, KR). Used via `translate_text(language_code, key)`.

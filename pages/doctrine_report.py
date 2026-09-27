@@ -6,7 +6,7 @@ from logging_config import setup_logging
 from services import get_doctrine_service
 from services.categorization import categorize_ship_by_role
 from ui.formatters import get_doctrine_report_column_config, get_image_url
-from services.doctrine_service import format_doctrine_name
+from services.doctrine_service import build_doctrine_usage, format_doctrine_name
 from services.type_name_localization import (
     apply_localized_names,
     apply_localized_type_names,
@@ -184,6 +184,7 @@ def display_low_stock_modules(
     selected_doctrine_id: int,
     sde_repo,
     language_code: str,
+    doctrine_usage: dict[int, list[dict]],
 ):
     """Display low stock modules for the selected doctrine"""
         # Get module data from master_df for the selected doctrine
@@ -358,7 +359,8 @@ def display_low_stock_modules(
                                 type_name=module_name,
                                 quantity=stock,
                                 display_text=display_text,
-                                key_suffix=f"dr_mod_{fit_id}_{type_id}"
+                                key_suffix=f"dr_mod_{fit_id}_{type_id}",
+                                doctrine_usage=doctrine_usage,
                             )
 
                 # Show caption if any module has equivalents
@@ -502,6 +504,7 @@ def main():
         selected_doctrine_id,
         sde_repo,
         language_code,
+        build_doctrine_usage(master_df),
     )
 
     # Display selected modules if any

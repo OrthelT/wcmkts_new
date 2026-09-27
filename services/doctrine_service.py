@@ -1433,3 +1433,22 @@ def format_doctrine_name(raw_name: str) -> str:
     Delegates to the repository-layer DB-backed lookup with caching.
     """
     return _repo_get_doctrine_display_name(raw_name)
+
+
+def build_doctrine_usage(raw_df: pd.DataFrame) -> dict[int, list[dict]]:
+    """Map each type_id to the fits that use it: ship_name, fit_qty, fits_on_mkt.
+
+    ``raw_df`` is ``FitBuildResult.raw_df``, which is already scoped to the
+    active market's fits. Built once per render so market popovers need no
+    per-item query.
+    """
+    columns = ["type_id", "ship_name", "fit_qty", "fits_on_mkt"]
+    if raw_df.empty or not set(columns) <= set(raw_df.columns):
+        return {}
+    usage: dict[int, list[dict]] = {}
+    rows = raw_df[columns].dropna(subset=["type_id"]).drop_duplicates()
+    # One pass over plain records: a per-group groupby().to_dict() costs ~0.4 s
+    # for ~800 type_ids, on every rerun.
+    for row in rows.to_dict("records"):
+        usage.setdefault(int(row.pop("type_id")), []).append(row)
+    return usage

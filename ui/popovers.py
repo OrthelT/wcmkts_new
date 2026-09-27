@@ -11,7 +11,6 @@ Design Principles:
 """
 
 import streamlit as st
-import pandas as pd
 from typing import Optional
 from millify import millify
 
@@ -62,36 +61,6 @@ def get_item_market_data(type_id: int, type_name: str) -> dict:
 
     except Exception:
         return {}
-
-
-def get_doctrine_usage(type_id: int) -> list[dict]:
-    """
-    Get doctrine usage information for an item.
-
-    Args:
-        type_id: EVE type ID
-
-    Returns:
-        List of dicts with ship_name, fit_qty, fits_on_mkt
-    """
-    from config import DatabaseConfig
-    from sqlalchemy import text
-
-    try:
-        mkt_db = DatabaseConfig("wcmkt")
-        query = text("""
-            SELECT DISTINCT ship_name, fit_qty, fits_on_mkt
-            FROM doctrines
-            WHERE type_id = :type_id
-        """)
-
-        with mkt_db.engine.connect() as conn:
-            df = pd.read_sql_query(query, conn, params={"type_id": type_id})
-
-        return df.to_dict("records")
-
-    except Exception:
-        return []
 
 
 def get_equivalent_modules(type_id: int) -> list[dict]:
@@ -169,7 +138,7 @@ def render_market_popover(
     type_name: str,
     quantity: int = 1,
     display_text: Optional[str] = None,
-    show_doctrine_usage: bool = True,
+    doctrine_usage: Optional[dict[int, list[dict]]] = None,
     show_jita: bool = False,
     show_equivalents: bool = True,
     key_suffix: str = "",
@@ -183,7 +152,9 @@ def render_market_popover(
         type_name: Item name
         quantity: Quantity to show (default 1)
         display_text: Text to display (defaults to type_name)
-        show_doctrine_usage: Whether to show doctrine usage info
+        doctrine_usage: Pre-built {type_id: [fit usage dicts]} map (see
+            services.doctrine_service.build_doctrine_usage). The "Used In Fits"
+            section is shown only when provided.
         show_jita: Whether to show Jita prices (default False to avoid API calls)
         show_equivalents: Whether to show equivalent modules section
         key_suffix: Unique suffix for the popover key
@@ -294,7 +265,7 @@ def render_market_popover(
                 mod_type_id = mod["type_id"]
 
                 # Show which fits use this specific equivalent
-                mod_usage = get_doctrine_usage(mod_type_id) if show_doctrine_usage else []
+                mod_usage = (doctrine_usage or {}).get(mod_type_id, [])
                 fit_names = [u.get("ship_name", "") for u in mod_usage[:3]]
                 usage_suffix = f" (used in: {', '.join(fit_names)})" if fit_names else ""
 
@@ -306,8 +277,8 @@ def render_market_popover(
             st.caption(f"  **Total: {combined_stock:,}**")
 
         # Doctrine usage
-        if show_doctrine_usage:
-            usage = get_doctrine_usage(type_id)
+        if doctrine_usage is not None:
+            usage = doctrine_usage.get(type_id, [])
             if usage:
                 st.divider()
                 st.markdown("**Used In Fits**")
