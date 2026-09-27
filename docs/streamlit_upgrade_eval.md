@@ -94,6 +94,18 @@ def _get_all_stats_cached(db_alias: str = "wcmkt") -> pd.DataFrame:
 
 **Verify:** after `.clear()` on a background-mode function, the next call recomputes in the foreground and does not return the cleared value. Add a unit test.
 
+**Implemented (2026-09-27):**
+- Background mode on 14 `market_repo` caches, all 8 `doctrine_repo` caches, and the `build_cost_repo` builder catalog.
+- Left in foreground mode:
+  - `_get_all_history_cached`: downloads only, about 915k rows. Background mode would hold it for 2× TTL.
+  - `_get_watchlist_type_ids_cached` and `_get_market_type_ids_cached`: no callers.
+  - The SDE category caches: sync does not clear them.
+  - The rigs/structures caches: small tables with a 1 h TTL.
+- `get_target_quantities_with_cache` and `get_friendly_names_with_cache` read the market DB but were missing from `refresh_market_caches()`, so they could serve pre-sync data for up to one TTL. Both are now cleared.
+- Streamlit discards a background refresh whose write lands after a `.clear()` (a generation counter in `cache_utils.py`). A refresh that started before a sync therefore cannot write pre-sync data back after the invalidation.
+- `tests/test_cache_refresh_mode.py` checks two things. First, every background-mode cache is cleared by the sync invalidation; removing either new clear fails this test. Second, `.clear()` on an expired background entry recomputes instead of serving it.
+- An AppTest run against the real replicas with a 1 s TTL served the stale value. The refresh then ran in `CacheBackgroundRefresh_*` threads with no errors.
+
 ---
 
 ## 3. Market dashboard: ButtonColumn + callback navigation (1.59 + 1.63)

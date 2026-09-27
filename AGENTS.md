@@ -215,6 +215,7 @@ with DatabaseConfig("wcmktnewkeep").engine.connect() as conn:
 ### Performance Considerations
 
 - **Caching**: Use `@st.cache_data` for volatile data with TTL tiers (600s/1800s/3600s). Use `@st.cache_resource` for immutable data (SDE lookups, no TTL)
+- **Background cache refresh**: Replica-backed caches on render paths use `refresh_mode="background"`, so a TTL expiry serves the expired entry while a worker thread recomputes it. This is safe only because TTL expiry never brings new data: a sync that changes a replica clears the caches (`refresh_market_caches()` / `invalidate_build_cost_caches()`), and the next read recomputes in the foreground. Add background mode only to a cache that sync invalidation clears (`tests/test_cache_refresh_mode.py` enforces this). Pass a concrete `db_alias`: the worker thread has no session state, so `DatabaseConfig("wcmkt")` would resolve to the primary hub
 - **Database connections**: Use `@st.cache_resource` for database engines
 - **Cache invalidation**: Use targeted invalidation (e.g., `invalidate_market_caches()`) after sync, not global clears
 - **Connection pooling**: DatabaseConfig manages connection pooling automatically

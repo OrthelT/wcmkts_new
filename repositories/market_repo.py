@@ -488,13 +488,21 @@ def _get_watchlist_impl(db_alias: str = "wcmkt") -> pd.DataFrame:
 # =============================================================================
 # Cached Wrappers (Streamlit cache layer)
 # =============================================================================
+# refresh_mode="background": on TTL expiry, serve the expired entry and recompute
+# in a worker thread. TTL expiry never brings new data -- only a sync that changes
+# the replica does, and check_db() then clears these caches, so the next read
+# recomputes in the foreground. Use background mode only on caches that
+# invalidate_market_caches() clears, and keep db_alias a concrete alias: the
+# worker thread has no session state, so DatabaseConfig("wcmkt") would resolve
+# to the primary hub. _get_all_history_cached stays foreground (download-only,
+# ~915k rows; background mode would hold it for 2x TTL).
 
-@st.cache_data(ttl=600, show_spinner="Loading market stats...")
+@st.cache_data(ttl=600, show_spinner="Loading market stats...", refresh_mode="background")
 def _get_all_stats_cached(db_alias: str = "wcmkt") -> pd.DataFrame:
     return _get_all_stats_impl(db_alias)
 
 
-@st.cache_data(ttl=1800, show_spinner="Loading market orders...")
+@st.cache_data(ttl=1800, show_spinner="Loading market orders...", refresh_mode="background")
 def _get_all_orders_cached(db_alias: str = "wcmkt") -> pd.DataFrame:
     return _get_all_orders_impl(db_alias)
 
@@ -504,7 +512,7 @@ def _get_all_history_cached(db_alias: str = "wcmkt") -> pd.DataFrame:
     return _get_all_history_impl(db_alias)
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, refresh_mode="background")
 def _get_history_date_range_cached(
     type_ids: tuple | None = None, db_alias: str = "wcmkt"
 ) -> tuple:
@@ -513,7 +521,7 @@ def _get_history_date_range_cached(
     )
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=1800, refresh_mode="background")
 def _get_history_window_cached(
     days: int, type_ids: tuple | None = None, db_alias: str = "wcmkt"
 ) -> pd.DataFrame:
@@ -522,7 +530,7 @@ def _get_history_window_cached(
     )
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=1800, refresh_mode="background")
 def _get_isk_volume_by_date_cached(
     days: int | None = 30, type_ids: tuple | None = None, db_alias: str = "wcmkt"
 ) -> pd.DataFrame:
@@ -531,17 +539,17 @@ def _get_isk_volume_by_date_cached(
     )
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, refresh_mode="background")
 def _get_history_by_type_cached(type_id: int, db_alias: str = "wcmkt") -> pd.DataFrame:
     return _get_history_by_type_impl(type_id, db_alias)
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=1800, refresh_mode="background")
 def _get_history_by_type_ids_cached(type_ids: tuple, db_alias: str = "wcmkt") -> pd.DataFrame:
     return _get_history_by_type_ids_impl(list(type_ids), db_alias)
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=1800, refresh_mode="background")
 def _get_30day_volume_metrics_cached(type_ids: tuple, db_alias: str = "wcmkt") -> pd.DataFrame:
     return _get_30day_volume_metrics_impl(list(type_ids), db_alias)
 
@@ -556,7 +564,7 @@ def _get_category_type_ids_by_id_cached(category_id: int) -> list:
     return _get_category_type_ids_by_id_impl(category_id)
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=1800, refresh_mode="background")
 def _get_30day_filter_type_ids_cached(filter_key: str, db_alias: str = "wcmkt") -> list:
     return _get_30day_filter_type_ids_impl(filter_key, db_alias)
 
@@ -571,22 +579,22 @@ def _get_market_type_ids_cached(db_alias: str = "wcmkt") -> list:
     return _get_market_type_ids_impl(db_alias)
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, refresh_mode="background")
 def _get_local_price_cached(type_id: int, db_alias: str = "wcmkt") -> Optional[float]:
     return _get_local_price_impl(type_id, db_alias)
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=1800, refresh_mode="background")
 def _get_sell_order_summary_cached(type_ids: tuple, db_alias: str = "wcmkt") -> pd.DataFrame:
     return _get_sell_order_summary_impl(list(type_ids), db_alias)
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, refresh_mode="background")
 def _get_stats_for_type_ids_cached(type_ids: tuple, db_alias: str = "wcmkt") -> pd.DataFrame:
     return _get_stats_for_type_ids_impl(list(type_ids), db_alias)
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=1800, refresh_mode="background")
 def _get_order_book_summary_cached(db_alias: str = "wcmkt") -> dict:
     return _get_order_book_summary_impl(db_alias)
 
@@ -596,7 +604,7 @@ def _get_sde_info_cached(type_ids: tuple) -> pd.DataFrame:
     return _get_sde_info_impl(list(type_ids))
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=1800, refresh_mode="background")
 def _get_watchlist_cached(db_alias: str = "wcmkt") -> pd.DataFrame:
     return _get_watchlist_impl(db_alias)
 

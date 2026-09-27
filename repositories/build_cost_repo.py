@@ -203,7 +203,9 @@ def _get_all_structures_cached(_url: str, is_super: bool) -> pd.DataFrame:
     return _get_all_structures_impl(_build_cost_reader(), is_super)
 
 
-@st.cache_data(ttl=600, show_spinner="Loading builder cost catalog...")
+# Background refresh: TTL expiry never brings new data, and
+# invalidate_build_cost_caches() clears this after a build_cost sync.
+@st.cache_data(ttl=600, show_spinner="Loading builder cost catalog...", refresh_mode="background")
 def _get_builder_cost_catalog_cached(_url: str) -> pd.DataFrame:
     return _get_builder_cost_catalog_impl()
 

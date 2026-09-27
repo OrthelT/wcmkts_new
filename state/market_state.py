@@ -125,16 +125,20 @@ def refresh_market_caches() -> None:
             get_all_fits_with_cache,
             get_fit_by_id_with_cache,
             get_all_targets_with_cache,
+            get_target_quantities_with_cache,
             get_target_by_fit_id_with_cache,
             get_target_by_ship_id_with_cache,
             get_fit_name_with_cache,
+            get_friendly_names_with_cache,
         )
         get_all_fits_with_cache.clear()
         get_fit_by_id_with_cache.clear()
         get_all_targets_with_cache.clear()
+        get_target_quantities_with_cache.clear()
         get_target_by_fit_id_with_cache.clear()
         get_target_by_ship_id_with_cache.clear()
         get_fit_name_with_cache.clear()
+        get_friendly_names_with_cache.clear()
     except ImportError:
         pass
 
