@@ -10,7 +10,6 @@ Sections:
 import streamlit as st
 import millify
 
-from logging_config import setup_logging
 from services import get_price_service
 from services.market_service import get_market_service
 from init_db import ensure_market_db_ready
@@ -32,9 +31,6 @@ from repositories import get_sde_repository, get_doctrine_repository
 from ui.i18n import translate_text
 from ui.market_selector import render_market_selector
 from ui.sync_display import display_sync_status
-
-logger = setup_logging(__name__)
-
 
 # =============================================================================
 # KPI Section
@@ -75,26 +71,11 @@ def _render_kpi_bar(market_service, language_code: str):
 # =============================================================================
 
 
-def _navigate_to_market_stats(type_id: int):
-    """Navigate to market stats page with the given item pre-selected."""
-    st.switch_page("pages/market_stats.py", query_params={"item_id": str(type_id)})
-
-
-def _navigate_to_doctrine_status(type_id: int):
-    """Navigate to doctrine status page with the given ship pre-selected."""
-    st.switch_page("pages/doctrine_status.py", query_params={"ship_id": str(type_id)})
-
-
-def _navigate_to_doctrine_status_module(type_id: int):
-    """Navigate to doctrine status page filtered to fits using the given module."""
-    st.switch_page("pages/doctrine_status.py", query_params={"module_id": str(type_id)})
-
-
 def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_repo, language_code):
-    """Render the commodity tables; each doctrine row routes via its own toggle."""
+    """Render the commodity tables; their row buttons navigate on click."""
     top_row = st.columns(2, gap="small")
     with top_row[0]:
-        selected = render_comparison_table(
+        render_comparison_table(
             market_service=market_service,
             price_service=price_service,
             sde_repo=sde_repo,
@@ -103,11 +84,9 @@ def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_rep
             language_code=language_code,
             dataframe_key="dash_minerals",
         )
-        if selected:
-            _navigate_to_market_stats(selected)
 
     with top_row[1]:
-        selected = render_comparison_table(
+        render_comparison_table(
             market_service=market_service,
             price_service=price_service,
             sde_repo=sde_repo,
@@ -116,10 +95,8 @@ def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_rep
             language_code=language_code,
             dataframe_key="dash_isotopes",
         )
-        if selected:
-            _navigate_to_market_stats(selected)
 
-    ship_id, target = render_doctrine_ships_table(
+    render_doctrine_ships_table(
         doctrine_repo=doctrine_repo,
         market_service=market_service,
         price_service=price_service,
@@ -127,17 +104,8 @@ def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_rep
         language_code=language_code,
         dataframe_key="dash_doctrine_ships",
     )
-    if ship_id and target == "market_stats":
-        _navigate_to_market_stats(ship_id)
-    elif ship_id and target == "doctrine_status":
-        _navigate_to_doctrine_status(ship_id)
-    elif ship_id:
-        logger.error(
-            "Unknown ship target=%r for type_id=%s; ignoring click",
-            target, ship_id,
-        )
 
-    module_type_id, module_target = render_popular_modules_table(
+    render_popular_modules_table(
         market_service=market_service,
         price_service=price_service,
         doctrine_repo=doctrine_repo,
@@ -145,15 +113,6 @@ def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_rep
         language_code=language_code,
         dataframe_key="dash_popular_modules",
     )
-    if module_type_id and module_target == "market_stats":
-        _navigate_to_market_stats(module_type_id)
-    elif module_type_id and module_target == "doctrine_status":
-        _navigate_to_doctrine_status_module(module_type_id)
-    elif module_type_id:
-        logger.error(
-            "Unknown module_target=%r for type_id=%s; ignoring click",
-            module_target, module_type_id,
-        )
 
 
 # =============================================================================

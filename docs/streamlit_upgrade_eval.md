@@ -155,6 +155,26 @@ A single-action column (two separate `ButtonColumn`s, or one icon button per row
 
 Confirm with a 10-line test app: sort a column, click a button, check the resolved `type_id`. Also confirm that ButtonColumn renders on a `pandas.Styler` input, since all 4 tables pass Styler objects.
 
+**Implemented (2026-10-01).**
+
+The spike app in the browser (Streamlit 1.64) answered the open questions:
+- `click.row` is the row's position in the data passed to `st.dataframe`. After a header sort, visual row 1 resolved to data row 0, which is the correct item. Resolution is therefore sort-proof.
+- ButtonColumn renders on a `pandas.Styler`.
+- A list value renders as a "⋮" menu, and `click.label` is the full label string.
+- `st.switch_page` inside `on_click` navigates directly. Back does not navigate again.
+
+The user chose two pinned icon columns over a menu: 📈 Market Stats, plus ⚔️ Doctrine Status on the ships and modules tables. Hover text gives the translated page name.
+
+Changes:
+- `_open_clicked_item` (the callback) and `_with_open_buttons` (which adds the columns) replace `_get_selected_type_id`, `_resolve_selection`, `_render_destination_toggle` and `_render_row_open_hint`.
+- The renderers return `None`, and `_render_commodity_grid` only renders.
+- The i18n keys `dashboard.row_open_in`, `dashboard.row_open_hint` and `dashboard.hint_click_market_stats` are removed from all 8 languages.
+- The ships table displays `fit_id`, so its type_ids come from `result_df.loc[display_df.index]`. A test guards this alignment.
+
+Browser test on the real app (4H): every table/destination pair opened the clicked item. The pairs were minerals, isotopes, ships and modules → Market Stats, and ships and modules → Doctrine Status. The modules case was clicked after a descending sort.
+
+The Back quirk from session 2 is still there and predates this change. After dashboard → market_stats, history keeps an extra `market_stats?item_id=<id>` entry. Back can land on that entry, which shows the all-items view.
+
 ---
 
 ## 4. Keyed fragment reruns (1.63)

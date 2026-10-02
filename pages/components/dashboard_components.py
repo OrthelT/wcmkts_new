@@ -3,9 +3,10 @@
 Extracted from market_stats.py so the dashboard page can render
 mineral/isotope/doctrine/module comparison tables.
 
-When a ``dataframe_key`` is passed, tables become selectable: clicking a row
-returns the selected ``type_id`` so the calling page can navigate to a detail
-page via ``st.switch_page()``.
+When a ``dataframe_key`` is passed, each table gets pinned ButtonColumn icons that
+open the row's item on Market Stats (and, for doctrine tables, Doctrine Status).
+Navigation happens in the button's ``on_click`` callback, before the next script
+run, so a click never pays for a full dashboard rerun.
 """
 
 import pandas as pd
@@ -160,55 +161,73 @@ def _coerce_numeric(
     return df
 
 
-def _get_selected_type_id(event, source_df: pd.DataFrame) -> int | None:
-    """Extract the type_id from a dataframe selection event.
+_MARKET_STATS_PAGE = "pages/market_stats.py"
+_DOCTRINE_STATUS_PAGE = "pages/doctrine_status.py"
 
-    Args:
-        event: The return value from st.dataframe(on_select="rerun").
-        source_df: A DataFrame (with a type_id column) whose row order matches
-            the displayed table — on_select returns a positional index.
 
-    Returns:
-        The selected type_id, or None if nothing was selected.
+def _open_clicked_item(
+    click_key: str, type_ids: list[int], page: str, query_param: str,
+) -> None:
+    """ButtonColumn ``on_click``: open the clicked row's item on ``page``.
+
+    ``click.row`` is the row's position in the data passed to ``st.dataframe``;
+    a header sort in the browser does not change it. ``type_ids`` is built from
+    that same frame, so it resolves the row the user clicked.
     """
-    if event is None:
-        return None
-    rows = event.selection.get("rows", [])
-    if not rows:
-        return None
-    row_idx = rows[0]
-    if row_idx < 0 or row_idx >= len(source_df):
-        # A legitimate click cannot produce an out-of-range index — this means
-        # source_df is misaligned with the rendered table (realignment drift or
-        # a stale event). Log loudly rather than silently navigating nowhere.
+    click = st.session_state.get(click_key)
+    if click is None:
+        return
+    if not 0 <= click.row < len(type_ids):
+        # A real click cannot produce an out-of-range row: type_ids is
+        # misaligned with the rendered table. Do not navigate to a wrong item.
         logger.error(
-            "on_select row_idx %r out of range for source_df of length %d "
-            "(realignment drift?)",
-            row_idx, len(source_df),
+            "Button click row %r out of range for %d rows (key=%s)",
+            click.row, len(type_ids), click_key,
         )
-        return None
-    return int(source_df.iloc[row_idx]["type_id"])
+        return
+    st.switch_page(page, query_params={query_param: str(type_ids[click.row])})
 
 
-def _resolve_selection(
-    event, source_df: pd.DataFrame, display_df: pd.DataFrame, destination: str,
-) -> tuple[int | None, str | None]:
-    """Map a dataframe selection event back to ``(type_id, destination)``.
+def _with_open_buttons(
+    table_df: pd.DataFrame,
+    column_config: dict,
+    key_prefix: str,
+    type_ids: list[int],
+    language_code: str,
+    doctrine_param: str | None = None,
+) -> tuple[pd.DataFrame, dict]:
+    """Prepend pinned icon buttons that open each row on Market Stats.
 
-    on_select returns a *positional* index into the displayed rows, but
-    ``source_df`` is the full (unfiltered) frame. ``display_df`` may be filtered
-    (low-stock) and sorted (alphabetical), so its index is a subset of
-    source_df's labels in display order. Realign source_df to that order before
-    positional extraction, so a click on a filtered table resolves to the row
-    the user actually saw rather than the same position in the full frame.
-
-    Returns ``(None, None)`` when nothing was selected.
+    ``doctrine_param`` adds a second button that opens Doctrine Status filtered
+    by that query param (``ship_id`` or ``module_id``). ``type_ids`` must be in
+    ``table_df`` row order. Headers reuse the sidebar nav icons; the hover text
+    names the page.
     """
-    selection_source = source_df.loc[display_df.index]
-    selected = _get_selected_type_id(event, selection_source)
-    if selected is None:
-        return None, None
-    return selected, destination
+    buttons = [
+        ("open_market_stats", ":material/query_stats:", "📈", "nav.page.market_stats",
+         _MARKET_STATS_PAGE, "item_id"),
+    ]
+    if doctrine_param:
+        buttons.append(
+            ("open_doctrine_status", ":material/swords:", "⚔️", "nav.page.doctrine_status",
+             _DOCTRINE_STATUS_PAGE, doctrine_param)
+        )
+    table_df = table_df.copy()
+    column_config = dict(column_config)
+    for position, (col, icon, header, label_key, page, param) in enumerate(buttons):
+        table_df.insert(position, col, icon)
+        click_key = f"{key_prefix}_{col}"
+        column_config[col] = st.column_config.ButtonColumn(
+            header,
+            help=translate_text(language_code, label_key),
+            width=40,
+            pinned=True,
+            type="tertiary",
+            on_click=_open_clicked_item,
+            args=(click_key, type_ids, page, param),
+            key=click_key,
+        )
+    return table_df, column_config
 
 
 def _status_cell_style(status_label: str) -> str:
@@ -251,37 +270,6 @@ def _jita_diff_cell_style(diff_value: float) -> str:
     return "color: #728049"
 
 
-_DESTINATION_OPTIONS = ("doctrine_status", "market_stats")
-_DEFAULT_DESTINATION = "doctrine_status"
-
-
-def _render_destination_toggle(key: str, language_code: str) -> str:
-    """Render a per-table destination toggle; return the chosen page token.
-
-    ``segmented_control`` returns None when the user deselects the active
-    segment — fall back to the dashboard's primary destination so a row click
-    always resolves somewhere (mirrors the prior page-level guard).
-    """
-    choice = st.segmented_control(
-        translate_text(language_code, "dashboard.row_open_in"),
-        options=list(_DESTINATION_OPTIONS),
-        format_func=lambda token: translate_text(language_code, f"nav.page.{token}"),
-        default=_DEFAULT_DESTINATION,
-        key=key,
-        label_visibility="visible",
-        help="Additional information that will be displayed when selecting a checkbox."
-        )
-    return choice or _DEFAULT_DESTINATION
-
-
-def _render_row_open_hint(destination: str, language_code: str) -> None:
-    """Render the dynamic 'click a row to open it in X' hint below the destination toggle."""
-    dest_label = translate_text(language_code, f"nav.page.{destination}")
-    st.caption(
-        translate_text(language_code, "dashboard.row_open_hint", destination=dest_label)
-    )
-
-
 # =========================================================================
 # Comparison Table (minerals, isotopes, popular modules)
 # =========================================================================
@@ -295,23 +283,20 @@ def render_comparison_table(
     title_key: str,
     language_code: str,
     dataframe_key: str | None = None,
-) -> int | None:
+) -> None:
     """Render a fixed item price comparison table for the active market.
 
     Args:
-        dataframe_key: If provided, enables row selection and returns
-            the selected type_id when a row is clicked.
-
-    Returns:
-        Selected type_id if a row was clicked, None otherwise.
+        dataframe_key: If provided, adds a button that opens each row on
+            Market Stats.
     """
     comparison_df = market_service.get_current_market_snapshot(type_ids)
     if comparison_df.empty:
-        return None
+        return
 
     jita_price_map = _require_jita_prices(price_service, type_ids)
     if jita_price_map is None:
-        return None
+        return
     comparison_df = _add_jita_prices(comparison_df, jita_price_map)
 
     comparison_df["order_volume"] = (
@@ -338,32 +323,24 @@ def render_comparison_table(
     ]
     display_df = comparison_df[display_cols].copy()
     table_df = drop_localized_backup_columns(display_df)
+    column_config = get_market_comparison_column_config(language_code)
+    if dataframe_key:
+        table_df, column_config = _with_open_buttons(
+            table_df, column_config, dataframe_key,
+            comparison_df["type_id"].astype(int).tolist(), language_code,
+        )
     styled_table = table_df.style.map(
         _jita_diff_cell_style, subset=["pct_diff_vs_jita_sell"]
     )
 
     st.subheader(translate_text(language_code, title_key), divider="gray")
-
-    if dataframe_key:
-        st.caption(translate_text(language_code, "dashboard.hint_click_market_stats"))
-        event = st.dataframe(
-            styled_table,
-            hide_index=True,
-            column_config=get_market_comparison_column_config(language_code),
-            on_select="rerun",
-            selection_mode="single-row",
-            key=dataframe_key,
-            height="stretch",
-        )
-        return _get_selected_type_id(event, comparison_df)
-    else:
-        st.dataframe(
-            styled_table,
-            hide_index=True,
-            column_config=get_market_comparison_column_config(language_code),
-            height="stretch",
-        )
-        return None
+    st.dataframe(
+        styled_table,
+        hide_index=True,
+        column_config=column_config,
+        key=dataframe_key,
+        height="stretch",
+    )
 
 
 # =========================================================================
@@ -497,34 +474,30 @@ def render_popular_modules_table(
     sde_repo,
     language_code: str,
     dataframe_key: str | None = None,
-) -> tuple[int | None, str | None]:
+) -> None:
     """Render doctrine modules table with stock, target %, qty needed, and fit count.
 
     Shows all non-ship items from the doctrines table, sorted alphabetically.
-    The per-table destination toggle decides whether a row click opens Doctrine
-    Status or Market Stats.
-
-    Returns:
-        (type_id, destination) where destination is the toggle's value, or
-        (None, None) if nothing was clicked.
+    With a ``dataframe_key``, each row gets buttons that open the module on
+    Market Stats or on Doctrine Status filtered to the fits that use it.
     """
     try:
         module_targets = _compute_module_targets(doctrine_repo)
     except ValueError as e:
         st.error(f"Doctrine configuration error: {e}")
-        return None, None
+        return
     if module_targets.empty:
-        return None, None
+        return
 
     type_ids = module_targets["type_id"].tolist()
 
     snapshot = market_service.get_current_market_snapshot(type_ids)
     if snapshot.empty:
-        return None, None
+        return
 
     jita_price_map = _require_jita_prices(price_service, type_ids)
     if jita_price_map is None:
-        return None, None
+        return
     snapshot = _add_jita_prices(snapshot, jita_price_map)
     snapshot["order_volume"] = (
         pd.to_numeric(snapshot["order_volume"], errors="coerce").fillna(0).round().astype(int)
@@ -559,8 +532,6 @@ def render_popular_modules_table(
     st.subheader(
         translate_text(language_code, "dashboard.doctrine_modules"), divider="gray",
     )
-    destination = _render_destination_toggle("dash_modules_destination", language_code)
-    _render_row_open_hint(destination, language_code)
     display_df = snapshot[display_cols].copy()
 
     mod_dash_filter_selection = _render_filter_columns("mod_dash_filter", language_code)
@@ -568,29 +539,24 @@ def render_popular_modules_table(
         display_df = display_df[display_df["target_pct"] < 100]
 
     table_df = drop_localized_backup_columns(display_df)
+    column_config = get_doctrine_modules_column_config(language_code)
+    if dataframe_key:
+        table_df, column_config = _with_open_buttons(
+            table_df, column_config, dataframe_key,
+            display_df["type_id"].astype(int).tolist(), language_code,
+            doctrine_param="module_id",
+        )
     styled_table = table_df.style.map(
         _jita_diff_cell_style, subset=["pct_diff_vs_jita_sell"]
     )
 
-    if dataframe_key:
-        event = st.dataframe(
-            styled_table,
-            hide_index=True,
-            column_config=get_doctrine_modules_column_config(language_code),
-            on_select="rerun",
-            selection_mode="single-row",
-            key=dataframe_key,
-            width="stretch",
-        )
-        return _resolve_selection(event, snapshot, display_df, destination)
-
     st.dataframe(
         styled_table,
         hide_index=True,
-        column_config=get_doctrine_modules_column_config(language_code),
+        column_config=column_config,
+        key=dataframe_key,
         width="stretch",
     )
-    return None, None
 
 
 # =========================================================================
@@ -666,19 +632,15 @@ def render_doctrine_ships_table(
     sde_repo,
     language_code: str,
     dataframe_key: str | None = None,
-) -> tuple[int | None, str | None]:
+) -> None:
     """Render doctrine ships stock vs targets table.
 
-    The per-table destination toggle decides whether a row click opens Doctrine
-    Status or Market Stats.
-
-    Returns:
-        (type_id, destination) where destination is the toggle's value, or
-        (None, None) if nothing was clicked.
+    With a ``dataframe_key``, each row gets buttons that open the hull on
+    Market Stats or on Doctrine Status.
     """
     fits_df = doctrine_repo.get_all_fits()
     if fits_df.empty:
-        return None, None
+        return
 
     # Apply module equivalents: recalculate fits_on_mkt using combined stock
     # across interchangeable modules (mirrors FitDataBuilder.apply_module_equivalents)
@@ -697,7 +659,7 @@ def render_doctrine_ships_table(
     hull_rows = fits_df[fits_df["type_id"] == fits_df["ship_id"]].copy()
     hull_rows = hull_rows.drop_duplicates(subset=["fit_id"], keep="first")
     if hull_rows.empty:
-        return None, None
+        return
 
     ship_type_ids = hull_rows["ship_id"].unique().tolist()
 
@@ -715,7 +677,7 @@ def render_doctrine_ships_table(
     # Surfaces st.error + logs and bails if the backend has no data at all.
     jita_map = _require_jita_prices(price_service, ship_type_ids)
     if jita_map is None:
-        return None, None
+        return
 
     # Build result DataFrame — one row per fit_id
     rows = []
@@ -779,7 +741,7 @@ def render_doctrine_ships_table(
         )
 
     if not rows:
-        return None, None
+        return
 
     result_df = pd.DataFrame(rows)
     result_df = apply_localized_type_names(result_df, sde_repo, language_code, logger)
@@ -794,14 +756,19 @@ def render_doctrine_ships_table(
     st.subheader(
         translate_text(language_code, "dashboard.doctrine_ships"), divider="gray",
     )
-    # st.caption(translate_text(language_code, "dashboard.hint_click_market_stats"))
     doc_dash_filter_selection = _render_filter_columns("doc_dash_filter", language_code)
-    destination = _render_destination_toggle("dash_ships_destination", language_code)
-    _render_row_open_hint(destination, language_code)
     if doc_dash_filter_selection == "low_stock":
         display_df = display_df[display_df["target_pct"] < 100]
 
     table_df = drop_localized_backup_columns(display_df)
+    column_config = get_doctrine_ships_column_config(language_code)
+    if dataframe_key:
+        # display_df carries fit_id, not type_id; look the hull up by row label.
+        table_df, column_config = _with_open_buttons(
+            table_df, column_config, dataframe_key,
+            result_df.loc[display_df.index, "type_id"].astype(int).tolist(), language_code,
+            doctrine_param="ship_id",
+        )
     status_labels = result_df["status"]
     if doc_dash_filter_selection == "all":
         styled_table = table_df.style.apply(
@@ -810,22 +777,10 @@ def render_doctrine_ships_table(
     else:
         styled_table = table_df
 
-    if dataframe_key:
-        event = st.dataframe(
-            styled_table,
-            hide_index=True,
-            column_config=get_doctrine_ships_column_config(language_code),
-            on_select="rerun",
-            selection_mode="single-row",
-            key=dataframe_key,
-            width="stretch",
-        )
-        return _resolve_selection(event, result_df, display_df, destination)
-
     st.dataframe(
         styled_table,
         hide_index=True,
-        column_config=get_doctrine_ships_column_config(language_code),
+        column_config=column_config,
+        key=dataframe_key,
         width="stretch",
     )
-    return None, None

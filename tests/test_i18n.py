@@ -78,17 +78,6 @@ def test_translate_text_returns_spanish_build_cost_label():
     assert result == "Desglose de materiales"
 
 
-def test_row_open_hint_formats_destination():
-    out = translate_text("en", "dashboard.row_open_hint", destination="Doctrine Status")
-    assert "Doctrine Status" in out
-
-
-def test_row_open_in_label_present_all_languages():
-    from ui.i18n import get_language_options
-    for code in get_language_options():
-        assert translate_text(code, "dashboard.row_open_in") != "dashboard.row_open_in"
-
-
 def test_back_to_dashboard_label_english():
     assert translate_text("en", "nav.back_to_dashboard") == "← Dashboard"
 
