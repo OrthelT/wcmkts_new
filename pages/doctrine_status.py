@@ -32,6 +32,8 @@ logger = setup_logging(__name__, log_file="doctrine_status.log")
 _DEEPLINK_SHIP_KEY = "ds_deeplink_ship_id"
 _DEEPLINK_MODULE_KEY = "ds_deeplink_module_id"
 _MODULE_FILTER_WIDGET_KEY = "ds_module_filter"
+# Fit checkboxes rerun only this sidebar fragment, not the ~127-fit loop.
+_SELECTION_PANEL_KEY = "selection_panel"
 
 
 def _consume_int_param(query_params, key: str) -> int | None:
@@ -270,6 +272,22 @@ def _rebuild_selections():
     }
 
 
+def _on_fit_checkbox_change(
+    cb_key: str, type_id: int, name_en: str, fits_on_market: int, qty_needed: int
+) -> None:
+    """Apply one checkbox change to the selection, then rerun only the sidebar panel.
+
+    The main fit loop doesn't run on a fragment rerun, so the selection must be
+    updated here. An uncheck rescans every checkbox because the same type_id
+    can stay checked in another fit.
+    """
+    if st.session_state[cb_key]:
+        _add_selection(type_id, name_en, fits_on_market, qty_needed)
+    else:
+        _rebuild_selections()
+    st.rerun(_SELECTION_PANEL_KEY)
+
+
 def _status_text_color(status: StockStatus) -> str:
     """Return a readable HTML color for compact stock status text."""
     return {
@@ -356,7 +374,13 @@ def _render_low_stock_modules_panel(
                         mod_type_id in st.session_state.selected_type_ids
                     )
                 is_selected = st.checkbox(
-                    "1", key=module_cb_key, label_visibility="hidden"
+                    "1",
+                    key=module_cb_key,
+                    label_visibility="hidden",
+                    on_change=_on_fit_checkbox_change,
+                    args=(
+                        module_cb_key, mod_type_id, mod_name_en, mod_fits, mod_qty_needed,
+                    ),
                 )
                 if is_selected:
                     _add_selection(
@@ -456,6 +480,141 @@ def _render_fit_details_table(
         column_config=col_config,
         width="stretch",
     )
+
+
+@st.fragment(key=_SELECTION_PANEL_KEY)
+def _render_selection_panel(grouped_fits, sde_repo, language_code: str) -> None:
+    """Sidebar export section, unified for ships and modules.
+
+    A keyed fragment so fit checkboxes rerun only this panel. Select All and
+    Clear All still call st.rerun() for a full rerun, because they reset
+    checkbox widgets in the main fit loop.
+    """
+    st.sidebar.markdown("---")
+    st.sidebar.header(translate_text(language_code, "doctrine_report.export_options"))
+
+    col1, col2 = st.sidebar.columns(2)
+
+    # Select All — adds all visible ships + modules
+    if col1.button(translate_text(language_code, "doctrine_status.select_all"), width="content"):
+        for _, group_data in grouped_fits:
+            for _, row in group_data.iterrows():
+                if row.get("ship_name_en", row["ship_name"]) not in st.session_state.displayed_ships:
+                    continue
+                sid = int(row["ship_id"])
+                target_count = int(row["ship_target"]) if pd.notna(row["ship_target"]) else 0
+                h = int(row["hulls"]) if pd.notna(row["hulls"]) else 0
+                _add_selection(
+                    sid,
+                    row.get("ship_name_en", row["ship_name"]),
+                    h,
+                    max(0, target_count - h),
+                )
+                for mod in row["lowest_modules"]:
+                    _add_selection(
+                        mod["type_id"],
+                        mod.get("module_name_en", mod["module_name"]),
+                        mod["fits_on_market"], mod["qty_needed"],
+                    )
+        st.session_state.export_data_rendered = False
+        # Clear checkbox states so they reinitialize
+        keys_to_clear = [
+            k for k in st.session_state.keys()
+            if str(k).startswith("ship_") or str(k).startswith("mod_")
+        ]
+        for k in keys_to_clear:
+            del st.session_state[k]
+        st.rerun()
+
+    # Clear All
+    if col2.button(translate_text(language_code, "doctrine_status.clear_all"), width="content"):
+        st.session_state.selected_type_ids = set()
+        st.session_state.type_id_info = {}
+        st.session_state.rendered_export_data = {}
+        st.session_state.export_data_rendered = False
+        keys_to_clear = [
+            k for k in st.session_state.keys()
+            if str(k).startswith("ship_") or str(k).startswith("mod_")
+        ]
+        for k in keys_to_clear:
+            del st.session_state[k]
+        logger.info("Cleared all selections")
+        st.rerun()
+
+    # Display lightweight selection list (no DB queries)
+    selected = st.session_state.selected_type_ids
+    if selected:
+        st.sidebar.markdown("---")
+        st.sidebar.header(translate_text(language_code, "doctrine_status.selected_items"), divider="blue")
+        help_msg = translate_text(language_code, "doctrine_status.selected_items_help")
+        st.sidebar.caption(f"*{help_msg}*")
+
+        selection_lines = []
+        for tid in sorted(selected):
+            info = st.session_state.type_id_info.get(tid, {})
+            name = info.get("module_name", f"Unknown ({tid})")
+            qty = info.get("qty_needed", 0)
+            display_name = get_localized_name(tid, name, sde_repo, language_code, logger)
+            selection_lines.append(f"{display_name} {qty}")
+        st.sidebar.code("\n".join(selection_lines), language=None)
+
+        # Render market data button — triggers DB queries only when clicked
+        if st.sidebar.button(
+            translate_text(language_code, "doctrine_status.render_market_data"),
+            type="primary",
+        ):
+            # No st.rerun(): the block below reads the flag in this same run,
+            # and a rerun from inside the fragment would rerun the whole page.
+            render_export_data()
+            st.session_state.export_data_rendered = True
+        # Show rendered market data and export options
+        if ss_get("export_data_rendered"):
+            st.sidebar.markdown("---")
+            st.sidebar.subheader(translate_text(language_code, "doctrine_status.market_data"))
+
+            detail_lines = []
+            rendered = st.session_state.get("rendered_export_data", {})
+            for tid in sorted(selected):
+                data = rendered.get(tid, {})
+                name = data.get("name", st.session_state.type_id_info.get(tid, {}).get("module_name", f"Unknown ({tid})"))
+                display_name = get_localized_name(tid, name, sde_repo, language_code, logger)
+                stock = data.get("total_stock", 0)
+                fits_mkt = data.get("fits_on_mkt", 0)
+                qty = data.get("qty_needed", 0)
+                detail_lines.append(
+                    translate_text(
+                        language_code,
+                        "doctrine_status.market_data_line",
+                        name=display_name,
+                        stock=stock,
+                        fits=fits_mkt,
+                        need=qty,
+                    )
+                )
+            st.sidebar.code("\n".join(detail_lines), language=None)
+
+            # Build CSV export
+            csv_lines = ["Name,TypeID,TotalStock,FitsOnMkt,QtyNeeded\n"]
+            for tid in sorted(selected):
+                data = rendered.get(tid, {})
+                name = data.get("name", "")
+                stock = data.get("total_stock", 0)
+                fits_mkt = data.get("fits_on_mkt", 0)
+                qty = data.get("qty_needed", 0)
+                csv_lines.append(f"{name},{tid},{stock},{fits_mkt},{qty}\n")
+
+            csv_export = "".join(csv_lines)
+
+            st.sidebar.download_button(
+                label=translate_text(language_code, "doctrine_report.download_csv"),
+                data=csv_export,
+                file_name="doctrine_export.csv",
+                mime="text/csv",
+            )
+    else:
+        st.sidebar.info(
+            translate_text(language_code, "doctrine_status.select_items_for_export")
+        )
 
 
 def main():
@@ -800,10 +959,14 @@ def main():
                         st.session_state[ship_cb_key] = (
                             ship_id in st.session_state.selected_type_ids
                         )
-                    ship_selected = st.checkbox(
-                        "x", key=ship_cb_key, label_visibility="hidden"
-                    )
                     hull_qty_needed = max(0, target - hulls)
+                    ship_selected = st.checkbox(
+                        "x",
+                        key=ship_cb_key,
+                        label_visibility="hidden",
+                        on_change=_on_fit_checkbox_change,
+                        args=(ship_cb_key, ship_id, ship_name_en, hulls, hull_qty_needed),
+                    )
                     if ship_selected:
                         _add_selection(
                             ship_id,
@@ -891,133 +1054,7 @@ def main():
     # Rebuild selections from checkbox states after all checkboxes have rendered
     _rebuild_selections()
 
-    # =========================================================================
-    # Sidebar Export Section — unified for ships and modules
-    # =========================================================================
-    st.sidebar.markdown("---")
-    st.sidebar.header(translate_text(language_code, "doctrine_report.export_options"))
-
-    col1, col2 = st.sidebar.columns(2)
-
-    # Select All — adds all visible ships + modules
-    if col1.button(translate_text(language_code, "doctrine_status.select_all"), width="content"):
-        for _, group_data in grouped_fits:
-            for _, row in group_data.iterrows():
-                if row.get("ship_name_en", row["ship_name"]) not in st.session_state.displayed_ships:
-                    continue
-                sid = int(row["ship_id"])
-                target_count = int(row["ship_target"]) if pd.notna(row["ship_target"]) else 0
-                h = int(row["hulls"]) if pd.notna(row["hulls"]) else 0
-                _add_selection(
-                    sid,
-                    row.get("ship_name_en", row["ship_name"]),
-                    h,
-                    max(0, target_count - h),
-                )
-                for mod in row["lowest_modules"]:
-                    _add_selection(
-                        mod["type_id"],
-                        mod.get("module_name_en", mod["module_name"]),
-                        mod["fits_on_market"], mod["qty_needed"],
-                    )
-        st.session_state.export_data_rendered = False
-        # Clear checkbox states so they reinitialize
-        keys_to_clear = [
-            k for k in st.session_state.keys()
-            if str(k).startswith("ship_") or str(k).startswith("mod_")
-        ]
-        for k in keys_to_clear:
-            del st.session_state[k]
-        st.rerun()
-
-    # Clear All
-    if col2.button(translate_text(language_code, "doctrine_status.clear_all"), width="content"):
-        st.session_state.selected_type_ids = set()
-        st.session_state.type_id_info = {}
-        st.session_state.rendered_export_data = {}
-        st.session_state.export_data_rendered = False
-        keys_to_clear = [
-            k for k in st.session_state.keys()
-            if str(k).startswith("ship_") or str(k).startswith("mod_")
-        ]
-        for k in keys_to_clear:
-            del st.session_state[k]
-        logger.info("Cleared all selections")
-        st.rerun()
-
-    # Display lightweight selection list (no DB queries)
-    selected = st.session_state.selected_type_ids
-    if selected:
-        st.sidebar.markdown("---")
-        st.sidebar.header(translate_text(language_code, "doctrine_status.selected_items"), divider="blue")
-        help_msg = translate_text(language_code, "doctrine_status.selected_items_help")
-        st.sidebar.caption(f"*{help_msg}*")
-
-        selection_lines = []
-        for tid in sorted(selected):
-            info = st.session_state.type_id_info.get(tid, {})
-            name = info.get("module_name", f"Unknown ({tid})")
-            qty = info.get("qty_needed", 0)
-            display_name = get_localized_name(tid, name, sde_repo, language_code, logger)
-            selection_lines.append(f"{display_name} {qty}")
-        st.sidebar.code("\n".join(selection_lines), language=None)
-
-        # Render market data button — triggers DB queries only when clicked
-        if st.sidebar.button(
-            translate_text(language_code, "doctrine_status.render_market_data"),
-            type="primary",
-        ):
-            render_export_data()
-            st.session_state.export_data_rendered = True
-            st.rerun()
-        # Show rendered market data and export options
-        if ss_get("export_data_rendered"):
-            st.sidebar.markdown("---")
-            st.sidebar.subheader(translate_text(language_code, "doctrine_status.market_data"))
-
-            detail_lines = []
-            rendered = st.session_state.get("rendered_export_data", {})
-            for tid in sorted(selected):
-                data = rendered.get(tid, {})
-                name = data.get("name", st.session_state.type_id_info.get(tid, {}).get("module_name", f"Unknown ({tid})"))
-                display_name = get_localized_name(tid, name, sde_repo, language_code, logger)
-                stock = data.get("total_stock", 0)
-                fits_mkt = data.get("fits_on_mkt", 0)
-                qty = data.get("qty_needed", 0)
-                detail_lines.append(
-                    translate_text(
-                        language_code,
-                        "doctrine_status.market_data_line",
-                        name=display_name,
-                        stock=stock,
-                        fits=fits_mkt,
-                        need=qty,
-                    )
-                )
-            st.sidebar.code("\n".join(detail_lines), language=None)
-
-            # Build CSV export
-            csv_lines = ["Name,TypeID,TotalStock,FitsOnMkt,QtyNeeded\n"]
-            for tid in sorted(selected):
-                data = rendered.get(tid, {})
-                name = data.get("name", "")
-                stock = data.get("total_stock", 0)
-                fits_mkt = data.get("fits_on_mkt", 0)
-                qty = data.get("qty_needed", 0)
-                csv_lines.append(f"{name},{tid},{stock},{fits_mkt},{qty}\n")
-
-            csv_export = "".join(csv_lines)
-
-            st.sidebar.download_button(
-                label=translate_text(language_code, "doctrine_report.download_csv"),
-                data=csv_export,
-                file_name="doctrine_export.csv",
-                mime="text/csv",
-            )
-    else:
-        st.sidebar.info(
-            translate_text(language_code, "doctrine_status.select_items_for_export")
-        )
+    _render_selection_panel(grouped_fits, sde_repo, language_code)
 
     # Display last update timestamp
     st.sidebar.markdown("---")

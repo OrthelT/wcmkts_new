@@ -647,7 +647,7 @@ def main():
         )
         chart_col, history_col = st.columns([2, 1])
         with chart_col:
-            render_isk_volume_chart_ui(market_service, language_code)
+            render_isk_volume_chart_ui(market_service, language_code, with_table=True)
         with history_col:
             render_isk_volume_table_ui(market_service, language_code)
 
