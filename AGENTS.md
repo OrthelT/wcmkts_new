@@ -222,6 +222,7 @@ with DatabaseConfig("wcmktnewkeep").engine.connect() as conn:
 - **Malformed DB recovery**: Built into `BaseRepository.read_df()` and repository `_impl()` functions
 - **Lazy download generation**: Use `st.download_button(data=callable)` pattern for on-demand data generation. Pass a function reference (not the result) to defer data loading until user clicks download. See `pages/downloads.py` for examples.
 - **Keyed fragment reruns**: A control that changes only one section calls `st.rerun("<fragment key>")` from its `on_change`, so only that fragment reruns: doctrine_status `selection_panel`, market_stats `isk_chart` + `isk_table`, pricer `pricer_results`. The keyed fragment must have rendered in the last full run, or `st.rerun()` raises. Because the rest of the page does not run, the callback must update any state the fragment reads
+- **No `iterrows()` on render paths**: building a Series per row costs far more than the cached reads. In builder_helper and low_stock it was 85–90% of a filter change (about 350 ms and 790 ms; now about 43 ms and 72 ms). Use vectorized pandas, or iterate `df.to_dict("records")` when per-row Python logic is needed. Profile before adding a cache: a cache hides this cost, and it needs sync invalidation
 - **Batch API fetching for popovers**: Streamlit popover content executes on every page rerun even when closed. Avoid API calls inside popovers by batch-fetching data before render loops. See `prefetch_popover_data()` in `pages/doctrine_status.py` for the pattern.
 
 ### Data Synchronization

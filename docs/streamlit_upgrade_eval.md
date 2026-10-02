@@ -201,6 +201,27 @@ Rules:
 
 **Related 1.63/1.64 feature:** `on_change="ignore"` on `st.slider`, `st.text_input`, `st.number_input`, `st.select_slider` and `st.selectbox`. It updates the widget without a rerun and applies the value on the next rerun. This gives form-like batching without the `st.form` visual container. It is a candidate for the builder_helper and low_stock filter sidebars if they get an explicit "Apply" button. `st.form` also works today.
 
+**Implemented (2026-10-02): builder_helper and low_stock.** Profiling changed the fix. With every input already cached, a filter change still cost about 350 ms in `get_builder_data` and about 790 ms in `get_low_stock_items`. Nearly all of that was pandas row iteration, not database reads:
+- builder_helper: `iterrows()` in `_build_numeric_map`, `_build_metadata_index` and the main loop built about 13k row Series per call.
+- low_stock: `groupby("type_id").apply(... iterrows ...)`, which builds the `ships` column, took 1.3 s of a 1.4 s profiled call.
+
+Caching the service output would have hidden that cost instead of removing it. It would also have put `st.cache_data` in the service layer, which the layering rules forbid, and added a new sync-invalidation path. Instead:
+- `_build_numeric_map` is vectorized with `pd.to_numeric`. The two row loops iterate `to_dict("records")`.
+- The `ships` column is built with one string concatenation plus `groupby().agg(list)`. Items used in no fit still get `[]`.
+- The low_stock base query (marketstats LEFT JOIN doctrines) moved from a raw `engine.connect()` to `MarketRepository.get_stats_with_doctrine_usage()`. It runs through `read_df()`, is cached with ttl 600 and background mode, and is cleared by `invalidate_market_caches()`.
+
+Results:
+
+| Call | Before | After |
+|---|---|---|
+| `get_builder_data`, warm | about 350 ms | about 43 ms |
+| `get_low_stock_items`, default filters, warm | about 790 ms | about 72 ms |
+| `get_low_stock_items`, tech2 filter, warm | about 290 ms | about 68 ms |
+
+Outputs are unchanged: 18 frames (low_stock with 5 filter sets × en/de, builder_helper with en/de × both price bases × min_days 0/14) are identical before and after, including dtypes and index.
+
+Left alone: `get_category_options`, `get_doctrine_options` and `get_fit_options` are also raw `engine.connect()` reads on the low_stock render path, but each takes 1–8 ms. Moving them is part of the `docs/read_df_consolidation.md` plan, not a performance fix.
+
 ---
 
 ## 5. Parallel fragments (1.58, already installed)

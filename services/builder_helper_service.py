@@ -80,17 +80,19 @@ def _build_numeric_map(
     key_column: str,
     value_column: str,
 ) -> dict[int, float]:
-    """Convert a two-column DataFrame into an int-to-float mapping."""
+    """Convert a two-column DataFrame into an int-to-float mapping.
+
+    Rows whose key or value is missing or non-numeric are dropped.
+    """
     if df.empty or key_column not in df.columns or value_column not in df.columns:
         return {}
 
-    result: dict[int, float] = {}
-    for _, row in df[[key_column, value_column]].iterrows():
-        key = _to_int(row.get(key_column))
-        value = _to_float(row.get(value_column))
-        if key is not None and value is not None:
-            result[key] = value
-    return result
+    keys = pd.to_numeric(df[key_column], errors="coerce")
+    values = pd.to_numeric(df[value_column], errors="coerce")
+    valid = keys.notna() & values.notna()
+    return dict(
+        zip(keys[valid].astype(int).tolist(), values[valid].astype(float).tolist())
+    )
 
 
 _METADATA_FIELDS = ("type_name", "group_name", "category_name")
@@ -107,7 +109,9 @@ def _build_metadata_index(
     for source in (stats_df, watchlist_df):
         if source is None or source.empty or "type_id" not in source.columns:
             continue
-        for _, row in source.iterrows():
+        # to_dict("records"), not iterrows(): building a Series per row
+        # dominated this page's render time.
+        for row in source.to_dict("records"):
             type_id = _to_int(row.get("type_id"))
             if type_id is None:
                 continue
@@ -207,7 +211,7 @@ class BuilderHelperService:
         )
 
         rows = []
-        for _, row in builder_df.iterrows():
+        for row in builder_df.to_dict("records"):
             type_id = _to_int(row.get("type_id"))
             if type_id is None:
                 continue

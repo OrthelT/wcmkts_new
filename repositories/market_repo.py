@@ -485,6 +485,25 @@ def _get_watchlist_impl(db_alias: str = "wcmkt") -> pd.DataFrame:
     return repo.read_df(query).reset_index(drop=True)
 
 
+def _get_stats_with_doctrine_usage_impl(db_alias: str = "wcmkt") -> pd.DataFrame:
+    """Fetch marketstats LEFT JOINed to doctrines: one row per (item, doctrine fit).
+
+    Items used in no fit get one row with is_doctrine = 0 and null ship columns.
+    """
+    repo = BaseRepository(DatabaseConfig(db_alias), logger)
+    query = text(
+        """
+        SELECT ms.*,
+               CASE WHEN d.type_id IS NOT NULL THEN 1 ELSE 0 END as is_doctrine,
+               d.ship_name,
+               d.fits_on_mkt
+        FROM marketstats ms
+        LEFT JOIN doctrines d ON ms.type_id = d.type_id
+        """
+    )
+    return repo.read_df(query)
+
+
 # =============================================================================
 # Cached Wrappers (Streamlit cache layer)
 # =============================================================================
@@ -609,6 +628,11 @@ def _get_watchlist_cached(db_alias: str = "wcmkt") -> pd.DataFrame:
     return _get_watchlist_impl(db_alias)
 
 
+@st.cache_data(ttl=600, refresh_mode="background")
+def _get_stats_with_doctrine_usage_cached(db_alias: str = "wcmkt") -> pd.DataFrame:
+    return _get_stats_with_doctrine_usage_impl(db_alias)
+
+
 # =============================================================================
 # Cache Invalidation
 # =============================================================================
@@ -638,6 +662,7 @@ def invalidate_market_caches():
     _get_stats_for_type_ids_cached.clear()
     _get_order_book_summary_cached.clear()
     _get_30day_filter_type_ids_cached.clear()
+    _get_stats_with_doctrine_usage_cached.clear()
     logger.info("Market caches invalidated")
 
 
@@ -810,6 +835,10 @@ class MarketRepository(BaseRepository):
     def get_watchlist(self) -> pd.DataFrame:
         """Get the full watchlist with type metadata (cached, TTL=1800s)."""
         return _get_watchlist_cached(self.db.alias)
+
+    def get_stats_with_doctrine_usage(self) -> pd.DataFrame:
+        """Get marketstats joined to doctrine usage, one row per item and fit (cached, TTL=600s)."""
+        return _get_stats_with_doctrine_usage_cached(self.db.alias)
 
     def get_update_time(self, local_update_status: Optional[dict] = None) -> Optional[str]:
         """Get formatted last update time string."""
