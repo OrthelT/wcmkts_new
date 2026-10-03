@@ -292,41 +292,6 @@ def render_market_popover(
                     st.caption(f"  ...and {len(usage) - 5} more")
 
 
-def render_item_with_popover(
-    type_id: int,
-    type_name: str,
-    quantity: int = 1,
-    stock: int = 0,
-    show_stock: bool = True,
-    key_suffix: str = "",
-) -> None:
-    """
-    Render an item display with market popover.
-
-    Format: "Item Name (stock)" with popover on click.
-
-    Args:
-        type_id: EVE type ID
-        type_name: Item name
-        quantity: Quantity in fit
-        stock: Current stock on market
-        show_stock: Whether to show stock in display text
-        key_suffix: Unique key suffix
-    """
-    if show_stock:
-        display_text = f"{type_name} ({stock:,})"
-    else:
-        display_text = type_name
-
-    render_market_popover(
-        type_id=type_id,
-        type_name=type_name,
-        quantity=quantity,
-        display_text=display_text,
-        key_suffix=key_suffix,
-    )
-
-
 def render_ship_with_popover(
     ship_id: int,
     ship_name: str,

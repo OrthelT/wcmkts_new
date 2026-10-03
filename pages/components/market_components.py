@@ -208,7 +208,9 @@ def render_isk_volume_table_ui(service, language_code: str = "en") -> None:
                     category_name=selected_category,
                 )
                 if selected_category
-                else translate_text(language_code, "market_stats.no_market_history_selected_filters")
+                else translate_text(
+                    language_code, "market_stats.no_market_history_selected_filters"
+                )
             )
             st.warning(msg)
         else:

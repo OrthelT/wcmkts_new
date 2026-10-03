@@ -20,6 +20,7 @@ import pathlib
 
 import pandas as pd
 import streamlit as st
+from sqlalchemy.exc import SQLAlchemyError
 from millify import millify
 
 
@@ -38,17 +39,22 @@ PRICE_SOURCE_TRANSLATION_KEYS = {
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
+def _check_image_url(url: str) -> bool:
+    """Cached HEAD check. A request error raises, so st.cache_data doesn't store it."""
+    response = requests.head(url, timeout=5)
+    return response.status_code == 200 and "image" in response.headers.get(
+        "content-type", ""
+    )
+
+
 def is_valid_image_url(url: str) -> bool:
     """Check if the URL returns a valid image.
 
-    Cached because the results view calls it on every rerun; a False result
-    only switches to the icon URL, so a day-long cache is harmless.
+    The results view calls this on every rerun, so answers from the image host
+    are cached; a transient request error is not.
     """
     try:
-        response = requests.head(url, timeout=5)
-        return response.status_code == 200 and "image" in response.headers.get(
-            "content-type", ""
-        )
+        return _check_image_url(url)
     except Exception as e:
         logger.error(f"Error checking image URL {url}: {e}")
         return False
@@ -270,10 +276,24 @@ def check_industry_index_expiry():
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def _resolve_type_names_from_esi(type_ids: tuple[int, ...]) -> dict[int, str]:
-    """Resolve type names via ESI, cached so fragment reruns skip the POST."""
+def _resolve_type_names_from_esi_cached(type_ids: tuple[int, ...]) -> dict[int, str]:
+    """Resolve type names via ESI, cached so fragment reruns skip the POST.
+
+    The service logs and swallows ESI errors, returning nothing; raising on an
+    empty result keeps that failure out of the cache.
+    """
     resolved = get_type_resolution_service().resolve_type_names(list(type_ids))
+    if not resolved:
+        raise LookupError(f"ESI resolved none of {len(type_ids)} type IDs")
     return {item["id"]: item["name"] for item in resolved}
+
+
+def _resolve_type_names_from_esi(type_ids: tuple[int, ...]) -> dict[int, str]:
+    try:
+        return _resolve_type_names_from_esi_cached(type_ids)
+    except LookupError as e:
+        logger.error(str(e))
+        return {}
 
 
 @st.fragment()
@@ -312,7 +332,11 @@ def display_material_costs(
     type_ids = [int(k) for k in materials_data.keys()]
     # The SDE lookup is cached and falls back to English, so ESI is only
     # needed for type IDs the SDE does not know.
-    type_names = get_sde_repository().get_localized_names(type_ids, language_code)
+    try:
+        type_names = get_sde_repository().get_localized_names(type_ids, language_code)
+    except SQLAlchemyError as e:
+        logger.error(f"SDE name lookup failed, falling back to ESI: {e}")
+        type_names = {}
     missing_ids = tuple(sorted(set(type_ids) - type_names.keys()))
     if missing_ids:
         type_names = {**_resolve_type_names_from_esi(missing_ids), **type_names}

@@ -858,11 +858,9 @@ def main():
     ss_init(
         {
             "pricer_show_jita": True,
-            "pricer_show_doctrine": True,
             "pricer_highlight_doctrine": True,
             "pricer_show_stock_metrics": True,
             "pricer_fit_equivalents": True,
-            "pricer_eft_result": False,
             "pricer_input_text": "",
         }
     )
@@ -875,10 +873,6 @@ def main():
     result: PricerResult = (
         ss_get("pricer_result") if ss_has("pricer_result") else None
     )
-
-    if result is not None:
-        eft_type = result.input_type == InputFormat.EFT
-        ss_set("pricer_eft_result", eft_type)
 
     cached_input_text = ss_get("pricer_input_text", None)
 

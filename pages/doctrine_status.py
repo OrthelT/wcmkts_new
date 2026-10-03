@@ -499,14 +499,15 @@ def _render_selection_panel(grouped_fits, sde_repo, language_code: str) -> None:
     if col1.button(translate_text(language_code, "doctrine_status.select_all"), width="content"):
         for _, group_data in grouped_fits:
             for _, row in group_data.iterrows():
-                if row.get("ship_name_en", row["ship_name"]) not in st.session_state.displayed_ships:
+                ship_name_en = row.get("ship_name_en", row["ship_name"])
+                if ship_name_en not in st.session_state.displayed_ships:
                     continue
                 sid = int(row["ship_id"])
                 target_count = int(row["ship_target"]) if pd.notna(row["ship_target"]) else 0
                 h = int(row["hulls"]) if pd.notna(row["hulls"]) else 0
                 _add_selection(
                     sid,
-                    row.get("ship_name_en", row["ship_name"]),
+                    ship_name_en,
                     h,
                     max(0, target_count - h),
                 )
@@ -545,7 +546,9 @@ def _render_selection_panel(grouped_fits, sde_repo, language_code: str) -> None:
     selected = st.session_state.selected_type_ids
     if selected:
         st.sidebar.markdown("---")
-        st.sidebar.header(translate_text(language_code, "doctrine_status.selected_items"), divider="blue")
+        st.sidebar.header(
+            translate_text(language_code, "doctrine_status.selected_items"), divider="blue"
+        )
         help_msg = translate_text(language_code, "doctrine_status.selected_items_help")
         st.sidebar.caption(f"*{help_msg}*")
 
@@ -576,7 +579,10 @@ def _render_selection_panel(grouped_fits, sde_repo, language_code: str) -> None:
             rendered = st.session_state.get("rendered_export_data", {})
             for tid in sorted(selected):
                 data = rendered.get(tid, {})
-                name = data.get("name", st.session_state.type_id_info.get(tid, {}).get("module_name", f"Unknown ({tid})"))
+                fallback = st.session_state.type_id_info.get(tid, {}).get(
+                    "module_name", f"Unknown ({tid})"
+                )
+                name = data.get("name", fallback)
                 display_name = get_localized_name(tid, name, sde_repo, language_code, logger)
                 stock = data.get("total_stock", 0)
                 fits_mkt = data.get("fits_on_mkt", 0)
