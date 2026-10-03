@@ -669,7 +669,7 @@ def main():
         selected_history = market_service._repo.get_history_by_type(selected_item_id)
 
         if history_chart:
-            st.plotly_chart(history_chart, config={'width': 'content'})
+            st.plotly_chart(history_chart, width="stretch")
 
         if selected_history is not None and not selected_history.empty:
                     logger.info(f"Displaying history data for {selected_item_id}")

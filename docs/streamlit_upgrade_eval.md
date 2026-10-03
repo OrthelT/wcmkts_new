@@ -268,6 +268,14 @@ These need no upgrade, but they surfaced during the inventory and are cheap to f
 5. **Plotly width in the wrong place.** `market_components.py:119` and `market_stats.py:672` pass `width` inside the plotly `config={}` dict, where it has no effect. Use the `width=` argument, as `market_stats.py:621` does.
 6. **Caches missing from `refresh_market_caches()`.** `_get_equivalent_type_ids_cached` (`module_equivalents_service.py:333`) and `_get_category_type_ids*` are not cleared. The category data comes from the SDE, so that is fine. Check whether the equivalents data comes from the market DB. If it does, it can serve pre-sync data for up to 1 h.
 
+**Implemented (2026-10-03): items 2–6.**
+- **Item 2.** `is_valid_image_url` now has `timeout=5` and `@st.cache_data(ttl=86400)`. A `False` result only switches to the icon URL, so a long cache costs nothing.
+- **Item 3.** The materials fragment reads names from the cached SDE lookup (`SDERepository.get_localized_names`, which falls back to English). ESI is called only for type IDs the SDE lacks, through the cached `_resolve_type_names_from_esi(tuple)`. In the browser, every material resolved from the SDE, so a normal fragment rerun makes no network call.
+- **Item 4.** The `/industry/systems` GET uses `timeout=API_TIMEOUT` (20 s). The page already catches and logs the resulting exception. The test stubs now assert that a timeout is passed.
+- **Item 5.** Both charts use `width="stretch"`. Since the default is `"stretch"`, the dead `config` key meant both already rendered at stretch width. The history chart was `use_container_width=False` before the 1.50 migration, but it has displayed at stretch width since then, so the fix keeps the width users see. `"content"` would shrink it to Plotly's 700 px default, because the figure sets no width.
+- **Item 6.** `_get_equivalent_type_ids_cached` reads `module_equivalents` from the market DB, so `refresh_market_caches()` now clears it. `tests/test_cache_refresh_mode.py` checks that all three equivalents caches are cleared.
+- Browser check (4H): Build Costs → Calculate rendered the Abaddon render image and the material breakdown, and switching the breakdown structure reran the fragment. Charts on the dashboard and Market Stats keep their widths. No exceptions. `uv run pytest -q`: 738 passed.
+
 ## Sources
 
 - [Streamlit 2026 release notes](https://docs.streamlit.io/develop/quick-reference/release-notes/2026) (1.53–1.64)

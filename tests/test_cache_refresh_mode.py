@@ -65,6 +65,29 @@ class TestBackgroundCachesAreSyncInvalidated:
         assert not_cleared == []
 
 
+class TestModuleEquivalentsCachesAreSyncInvalidated:
+    @patch("pages.downloads.clear_download_caches")
+    def test_market_sync_invalidation_clears_equivalents_caches(self, _mock_downloads):
+        import services.module_equivalents_service as equivalents
+        from state.market_state import refresh_market_caches
+
+        # module_equivalents lives in the market DB, so a sync can change it.
+        names = [
+            "_get_equivalent_type_ids_cached",
+            "_get_equivalence_group_cached",
+            "_get_all_equivalence_groups_cached",
+        ]
+        patches = [patch.object(getattr(equivalents, n), "clear") for n in names]
+        mocks = dict(zip(names, (p.start() for p in patches)))
+        try:
+            refresh_market_caches()
+        finally:
+            for p in patches:
+                p.stop()
+
+        assert sorted(n for n, m in mocks.items() if not m.called) == []
+
+
 class TestClearBypassesStaleServing:
     def test_clear_recomputes_instead_of_serving_expired_entry(self):
         replica = {"value": "pre-sync"}

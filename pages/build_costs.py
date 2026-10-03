@@ -37,10 +37,15 @@ PRICE_SOURCE_TRANSLATION_KEYS = {
 # =============================================================================
 
 
+@st.cache_data(ttl=86400, show_spinner=False)
 def is_valid_image_url(url: str) -> bool:
-    """Check if the URL returns a valid image."""
+    """Check if the URL returns a valid image.
+
+    Cached because the results view calls it on every rerun; a False result
+    only switches to the icon URL, so a day-long cache is harmless.
+    """
     try:
-        response = requests.head(url)
+        response = requests.head(url, timeout=5)
         return response.status_code == 200 and "image" in response.headers.get(
             "content-type", ""
         )
@@ -264,6 +269,13 @@ def check_industry_index_expiry():
 # =============================================================================
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def _resolve_type_names_from_esi(type_ids: tuple[int, ...]) -> dict[int, str]:
+    """Resolve type names via ESI, cached so fragment reruns skip the POST."""
+    resolved = get_type_resolution_service().resolve_type_names(list(type_ids))
+    return {item["id"]: item["name"] for item in resolved}
+
+
 @st.fragment()
 def display_material_costs(
     results: dict,
@@ -298,20 +310,19 @@ def display_material_costs(
     materials_data = results[selected_structure_for_materials]["materials"]
 
     type_ids = [int(k) for k in materials_data.keys()]
-    type_names = get_type_resolution_service().resolve_type_names(type_ids)
-    type_names_dict = {item["id"]: item["name"] for item in type_names}
-    sde_repo = get_sde_repository()
-    localized_type_names = get_localized_name_map(type_ids, sde_repo, language_code, logger)
+    # The SDE lookup is cached and falls back to English, so ESI is only
+    # needed for type IDs the SDE does not know.
+    type_names = get_sde_repository().get_localized_names(type_ids, language_code)
+    missing_ids = tuple(sorted(set(type_ids) - type_names.keys()))
+    if missing_ids:
+        type_names = {**_resolve_type_names_from_esi(missing_ids), **type_names}
 
     materials_list = []
     for type_id_str, material_info in materials_data.items():
         type_id = int(type_id_str)
-        type_name = localized_type_names.get(
+        type_name = type_names.get(
             type_id,
-            type_names_dict.get(
-                type_id,
-                translate_text(language_code, "build_costs.unknown_type", type_id=type_id),
-            ),
+            translate_text(language_code, "build_costs.unknown_type", type_id=type_id),
         )
 
         materials_list.append(

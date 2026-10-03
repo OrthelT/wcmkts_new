@@ -134,7 +134,7 @@ def render_isk_volume_chart_ui(
             selected_category=selected_category,
             selected_category_id=selected_category_id,
         )
-        st.plotly_chart(chart, config={"width": "stretch"})
+        st.plotly_chart(chart, width="stretch")
 
     chart_fragment()
 

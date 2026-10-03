@@ -255,7 +255,7 @@ with DatabaseConfig("wcmktnewkeep").engine.connect() as conn:
 
 ### Current Test Coverage
 The test suite covers repositories, services, database config, i18n, parser, pricer/fit-availability, and infrastructure:
-- 725 tests + 22 subtests passing (`uv run pytest -q`)
+- 738 tests passing (`uv run pytest -q`)
 
 ## Commit & Pull Request Guidelines
 
@@ -497,7 +497,7 @@ from state.session_state import ss_get  # ✗ state!
 - **`pages/`**: Streamlit application pages
 - **`pages/components/`**: Extracted Streamlit rendering components (market_components, dashboard_components, db_refresh, page_chrome)
 - **`parser/`**: EFT fitting and item list parser (open source contribution)
-- **`tests/`**: pytest unit tests (725 tests, 22 subtests)
+- **`tests/`**: pytest unit tests (738 tests)
 - **`docs/`**: Documentation
 - **`logs/`**: Application logs (git-ignored)
 - **`images/`**: UI assets

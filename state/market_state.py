@@ -147,9 +147,11 @@ def refresh_market_caches() -> None:
         from services.module_equivalents_service import (
             _get_equivalence_group_cached,
             _get_all_equivalence_groups_cached,
+            _get_equivalent_type_ids_cached,
         )
         _get_equivalence_group_cached.clear()
         _get_all_equivalence_groups_cached.clear()
+        _get_equivalent_type_ids_cached.clear()
     except ImportError:
         pass
 
