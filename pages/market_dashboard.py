@@ -22,6 +22,7 @@ from pages.components.dashboard_components import (
     MINERAL_TYPE_IDS,
     ISOTOPE_AND_FUEL_BLOCK_TYPE_IDS,
     render_comparison_table,
+    render_shortcut_key,
     render_doctrine_ships_table,
     render_popular_modules_table,
 )
@@ -73,6 +74,7 @@ def _render_kpi_bar(market_service, language_code: str):
 
 def _render_commodity_grid(market_service, price_service, sde_repo, doctrine_repo, language_code):
     """Render the commodity tables; their row buttons navigate on click."""
+    render_shortcut_key(language_code)
     top_row = st.columns(2, gap="small")
     with top_row[0]:
         render_comparison_table(

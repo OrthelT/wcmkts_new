@@ -163,6 +163,8 @@ def _coerce_numeric(
 
 _MARKET_STATS_PAGE = "pages/market_stats.py"
 _DOCTRINE_STATUS_PAGE = "pages/doctrine_status.py"
+_MARKET_STATS_ICON = ":material/query_stats:"
+_DOCTRINE_STATUS_ICON = ":material/swords:"
 
 
 def _open_clicked_item(
@@ -188,6 +190,20 @@ def _open_clicked_item(
     st.switch_page(page, query_params={query_param: str(type_ids[click.row])})
 
 
+def render_shortcut_key(language_code: str) -> None:
+    """Caption naming the page each row button opens."""
+    st.caption(
+        translate_text(
+            language_code,
+            "dashboard.shortcut_key",
+            market_icon=_MARKET_STATS_ICON,
+            market_stats=translate_text(language_code, "nav.page.market_stats"),
+            doctrine_icon=_DOCTRINE_STATUS_ICON,
+            doctrine_status=translate_text(language_code, "nav.page.doctrine_status"),
+        )
+    )
+
+
 def _with_open_buttons(
     table_df: pd.DataFrame,
     column_config: dict,
@@ -204,12 +220,12 @@ def _with_open_buttons(
     names the page.
     """
     buttons = [
-        ("open_market_stats", ":material/query_stats:", "📈", "nav.page.market_stats",
+        ("open_market_stats", _MARKET_STATS_ICON, "📈", "nav.page.market_stats",
          _MARKET_STATS_PAGE, "item_id"),
     ]
     if doctrine_param:
         buttons.append(
-            ("open_doctrine_status", ":material/swords:", "⚔️", "nav.page.doctrine_status",
+            ("open_doctrine_status", _DOCTRINE_STATUS_ICON, "⚔️", "nav.page.doctrine_status",
              _DOCTRINE_STATUS_PAGE, doctrine_param)
         )
     table_df = table_df.copy()
@@ -219,7 +235,7 @@ def _with_open_buttons(
         click_key = f"{key_prefix}_{col}"
         column_config[col] = st.column_config.ButtonColumn(
             header,
-            help=translate_text(language_code, label_key),
+            help=f"Open {translate_text(language_code, label_key)}",
             width=40,
             pinned=True,
             type="tertiary",

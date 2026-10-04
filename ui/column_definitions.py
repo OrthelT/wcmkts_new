@@ -460,6 +460,7 @@ def get_builder_helper_column_config(language_code: str = "en") -> dict:
             help=translate_text(language_code, "builder_helper.column_select_help"),
             default=False,
             width="small",
+            pinned=True,
         ),
         "type_id": st.column_config.NumberColumn(
             "ID",
