@@ -339,7 +339,7 @@ def render_comparison_table(
         hide_index=True,
         column_config=column_config,
         key=dataframe_key,
-        height="stretch",
+        height="auto",
     )
 
 

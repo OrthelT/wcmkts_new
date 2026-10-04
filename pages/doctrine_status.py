@@ -16,7 +16,7 @@ from services.type_name_localization import (
     get_localized_name_map,
 )
 from repositories import get_sde_repository
-from state import get_active_language, ss_init, ss_get
+from state import get_active_language, get_active_market_key, ss_init, ss_get
 from ui.i18n import translate_text
 from ui.market_selector import render_market_selector
 from pages.components.db_refresh import ensure_active_market_fresh
@@ -176,115 +176,75 @@ def _localize_summary_df(
 
 
 def render_export_data():
-    """Query market stock data for all selected type_ids. Stores results in session state."""
-    ss_init({"rendered_export_data": {}})
+    """Query market stock for selected type_ids not loaded yet; store it in session state.
+
+    An item the doctrines table doesn't know is stored as None, so the panel shows
+    no figures for it instead of zeros. A failed query stores nothing and is
+    retried on the next panel run. The stored figures belong to one market hub,
+    so a hub switch drops them.
+    """
+    market_key = get_active_market_key()
+    if st.session_state.get("rendered_export_market") != market_key:
+        st.session_state.rendered_export_data = {}
+        st.session_state.rendered_export_market = market_key
     svc = get_doctrine_service()
 
     for type_id in st.session_state.selected_type_ids:
         if type_id in st.session_state.rendered_export_data:
             continue
-
-        info = st.session_state.type_id_info.get(type_id, {})
-        name = info.get("module_name", f"Unknown ({type_id})")
-
         try:
             module_stock = svc.repository.get_module_stock(type_id)
-            if module_stock:
-                st.session_state.rendered_export_data[type_id] = {
-                    "name": name,
-                    "type_id": type_id,
-                    "total_stock": module_stock.total_stock,
-                    "fits_on_mkt": module_stock.fits_on_mkt,
-                    "qty_needed": info.get("qty_needed", 0),
-                }
-            else:
-                st.session_state.rendered_export_data[type_id] = {
-                    "name": name,
-                    "type_id": type_id,
-                    "total_stock": 0,
-                    "fits_on_mkt": 0,
-                    "qty_needed": info.get("qty_needed", 0),
-                }
         except Exception as e:
-            logger.error(f"Error querying stock for {name} (type_id={type_id}): {e}")
-            st.session_state.rendered_export_data[type_id] = {
-                "name": name,
-                "type_id": type_id,
-                "total_stock": 0,
-                "fits_on_mkt": 0,
-                "qty_needed": info.get("qty_needed", 0),
-            }
+            logger.error(f"Error querying stock for type_id={type_id}: {e}")
+            continue
+        st.session_state.rendered_export_data[type_id] = (
+            {"total_stock": module_stock.total_stock, "fits_on_mkt": module_stock.fits_on_mkt}
+            if module_stock
+            else None
+        )
 
 
-def _add_selection(type_id: int, module_name: str, fits_on_market: int, qty_needed: int):
-    """Add a type_id to the unified selection, keeping max qty_needed."""
-    st.session_state.selected_type_ids.add(type_id)
-    existing = st.session_state.type_id_info.get(type_id, {})
-    st.session_state.type_id_info[type_id] = {
-        "module_name": module_name,
+def _register_checkbox(
+    cb_key: str, type_id: int, name_en: str, fits_on_market: int, qty_needed: int
+) -> None:
+    """Record what a fit checkbox selects, so the selection can be rebuilt from it."""
+    st.session_state.checkbox_items[cb_key] = {
+        "type_id": type_id,
+        "module_name": name_en,
         "fits_on_market": fits_on_market,
-        "qty_needed": max(qty_needed, existing.get("qty_needed", 0)),
+        "qty_needed": qty_needed,
     }
-
-
-def _remove_selection(type_id: int):
-    """Remove a type_id from the unified selection."""
-    st.session_state.selected_type_ids.discard(type_id)
 
 
 def _rebuild_selections():
-    """Rebuild selected_type_ids from all checkbox states.
+    """Derive selected_type_ids and type_id_info from the checked fit checkboxes.
 
-    Fixes the multi-fit bug: when the same type_id appears in multiple fits,
-    incremental add/remove causes the last-processed unchecked checkbox to win.
-    Instead, we scan all checkbox keys after rendering to determine the true set.
+    The same type_id can appear in several fits. It stays selected while any of
+    its checkboxes is checked, and its qty_needed is the largest among the checked
+    ones. Recomputing from scratch lets an uncheck lower the quantity.
     """
-    checked_type_ids = set()
-    for key, value in st.session_state.items():
-        key =str(key)
-        if key.startswith("mod_"):
-            if value is not True:
-                continue
-            # Format: mod_{fit_id}_{position}_{type_id}
-            parts = key.split("_")
-            if len(parts) >= 4:
-                try:
-                    checked_type_ids.add(int(parts[-1]))
-                except ValueError:
-                    pass
-        elif key.startswith("ship_"):
-            if value is not True:
-                continue
-            # Format: ship_{fit_id}_{ship_id}
-            parts = key.split("_")
-            if len(parts) >= 3:
-                try:
-                    checked_type_ids.add(int(parts[-1]))
-                except ValueError:
-                    pass
-
-    st.session_state.selected_type_ids = checked_type_ids
-    # Remove type_id_info entries for unchecked items
-    st.session_state.type_id_info = {
-        tid: info
-        for tid, info in st.session_state.type_id_info.items()
-        if tid in checked_type_ids
-    }
+    type_id_info = {}
+    for cb_key, item in st.session_state.checkbox_items.items():
+        if st.session_state.get(cb_key) is not True:
+            continue
+        current = type_id_info.get(item["type_id"])
+        if current is None or item["qty_needed"] > current["qty_needed"]:
+            type_id_info[item["type_id"]] = {
+                "module_name": item["module_name"],
+                "fits_on_market": item["fits_on_market"],
+                "qty_needed": item["qty_needed"],
+            }
+    st.session_state.type_id_info = type_id_info
+    st.session_state.selected_type_ids = set(type_id_info)
 
 
-def _on_fit_checkbox_change(
-    cb_key: str, type_id: int, name_en: str, fits_on_market: int, qty_needed: int
-) -> None:
-    """Apply one checkbox change to the selection, then rerun only the sidebar panel.
+def _on_fit_checkbox_change() -> None:
+    """Rebuild the selection, then rerun only the sidebar panel.
 
     The main fit loop doesn't run on a fragment rerun, so the selection must be
-    updated here. An uncheck rescans every checkbox because the same type_id
-    can stay checked in another fit.
+    rebuilt here.
     """
-    if st.session_state[cb_key]:
-        _add_selection(type_id, name_en, fits_on_market, qty_needed)
-    else:
-        _rebuild_selections()
+    _rebuild_selections()
     st.rerun(_SELECTION_PANEL_KEY)
 
 
@@ -373,22 +333,15 @@ def _render_low_stock_modules_panel(
                     st.session_state[module_cb_key] = (
                         mod_type_id in st.session_state.selected_type_ids
                     )
-                is_selected = st.checkbox(
+                _register_checkbox(
+                    module_cb_key, mod_type_id, mod_name_en, mod_fits, mod_qty_needed
+                )
+                st.checkbox(
                     "1",
                     key=module_cb_key,
                     label_visibility="hidden",
                     on_change=_on_fit_checkbox_change,
-                    args=(
-                        module_cb_key, mod_type_id, mod_name_en, mod_fits, mod_qty_needed,
-                    ),
                 )
-                if is_selected:
-                    _add_selection(
-                        mod_type_id,
-                        mod_name_en,
-                        mod_fits,
-                        mod_qty_needed,
-                    )
 
             with col_b:
                 equiv_prefix = "🔄 " if has_equiv else ""
@@ -495,28 +448,19 @@ def _render_selection_panel(grouped_fits, sde_repo, language_code: str) -> None:
 
     col1, col2 = st.sidebar.columns(2)
 
-    # Select All — adds all visible ships + modules
+    # Select All — adds all visible ships + modules. The checkboxes reinitialize
+    # from selected_type_ids on the rerun, and _rebuild_selections() then derives
+    # type_id_info from them.
     if col1.button(translate_text(language_code, "doctrine_status.select_all"), width="content"):
         for _, group_data in grouped_fits:
-            for _, row in group_data.iterrows():
+            for row in group_data.to_dict("records"):
                 ship_name_en = row.get("ship_name_en", row["ship_name"])
                 if ship_name_en not in st.session_state.displayed_ships:
                     continue
-                sid = int(row["ship_id"])
-                target_count = int(row["ship_target"]) if pd.notna(row["ship_target"]) else 0
-                h = int(row["hulls"]) if pd.notna(row["hulls"]) else 0
-                _add_selection(
-                    sid,
-                    ship_name_en,
-                    h,
-                    max(0, target_count - h),
+                st.session_state.selected_type_ids.add(int(row["ship_id"]))
+                st.session_state.selected_type_ids.update(
+                    mod["type_id"] for mod in row["lowest_modules"]
                 )
-                for mod in row["lowest_modules"]:
-                    _add_selection(
-                        mod["type_id"],
-                        mod.get("module_name_en", mod["module_name"]),
-                        mod["fits_on_market"], mod["qty_needed"],
-                    )
         st.session_state.export_data_rendered = False
         # Clear checkbox states so they reinitialize
         keys_to_clear = [
@@ -568,46 +512,43 @@ def _render_selection_panel(grouped_fits, sde_repo, language_code: str) -> None:
         ):
             # No st.rerun(): the block below reads the flag in this same run,
             # and a rerun from inside the fragment would rerun the whole page.
-            render_export_data()
             st.session_state.export_data_rendered = True
         # Show rendered market data and export options
         if ss_get("export_data_rendered"):
+            # Queries only items selected since the last render, so an item
+            # checked afterwards gets real figures instead of blanks.
+            render_export_data()
             st.sidebar.markdown("---")
             st.sidebar.subheader(translate_text(language_code, "doctrine_status.market_data"))
 
-            detail_lines = []
+            # Name and quantity come from the live selection, so they follow
+            # checkbox changes. Stock comes from the market query; an item
+            # with no stock data shows blanks rather than zeros.
             rendered = st.session_state.get("rendered_export_data", {})
+            detail_lines = []
+            csv_lines = ["Name,TypeID,TotalStock,FitsOnMkt,QtyNeeded\n"]
             for tid in sorted(selected):
-                data = rendered.get(tid, {})
-                fallback = st.session_state.type_id_info.get(tid, {}).get(
-                    "module_name", f"Unknown ({tid})"
-                )
-                name = data.get("name", fallback)
+                info = st.session_state.type_id_info.get(tid, {})
+                name = info.get("module_name", f"Unknown ({tid})")
+                qty = info.get("qty_needed", 0)
+                stock_data = rendered.get(tid)
+                stock = stock_data["total_stock"] if stock_data else None
+                fits_mkt = stock_data["fits_on_mkt"] if stock_data else None
                 display_name = get_localized_name(tid, name, sde_repo, language_code, logger)
-                stock = data.get("total_stock", 0)
-                fits_mkt = data.get("fits_on_mkt", 0)
-                qty = data.get("qty_needed", 0)
                 detail_lines.append(
                     translate_text(
                         language_code,
                         "doctrine_status.market_data_line",
                         name=display_name,
-                        stock=stock,
-                        fits=fits_mkt,
+                        stock="—" if stock is None else stock,
+                        fits="—" if fits_mkt is None else fits_mkt,
                         need=qty,
                     )
                 )
+                csv_stock = "" if stock is None else stock
+                csv_fits = "" if fits_mkt is None else fits_mkt
+                csv_lines.append(f"{name},{tid},{csv_stock},{csv_fits},{qty}\n")
             st.sidebar.code("\n".join(detail_lines), language=None)
-
-            # Build CSV export
-            csv_lines = ["Name,TypeID,TotalStock,FitsOnMkt,QtyNeeded\n"]
-            for tid in sorted(selected):
-                data = rendered.get(tid, {})
-                name = data.get("name", "")
-                stock = data.get("total_stock", 0)
-                fits_mkt = data.get("fits_on_mkt", 0)
-                qty = data.get("qty_needed", 0)
-                csv_lines.append(f"{name},{tid},{stock},{fits_mkt},{qty}\n")
 
             csv_export = "".join(csv_lines)
 
@@ -763,6 +704,7 @@ def main():
             "displayed_ships": unique_ships.copy(),
             "selected_type_ids": set(),
             "type_id_info": {},
+            "checkbox_items": {},
             "export_data_rendered": False,
         }
     )
@@ -966,20 +908,15 @@ def main():
                             ship_id in st.session_state.selected_type_ids
                         )
                     hull_qty_needed = max(0, target - hulls)
-                    ship_selected = st.checkbox(
+                    _register_checkbox(
+                        ship_cb_key, ship_id, ship_name_en, hulls, hull_qty_needed
+                    )
+                    st.checkbox(
                         "x",
                         key=ship_cb_key,
                         label_visibility="hidden",
                         on_change=_on_fit_checkbox_change,
-                        args=(ship_cb_key, ship_id, ship_name_en, hulls, hull_qty_needed),
                     )
-                    if ship_selected:
-                        _add_selection(
-                            ship_id,
-                            ship_name_en,
-                            hulls,
-                            hull_qty_needed,
-                        )
 
                 with left_cols[1]:
                     with st.container(height='stretch', vertical_alignment='center', horizontal_alignment='left'):
