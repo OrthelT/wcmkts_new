@@ -509,7 +509,8 @@ def _get_stats_with_doctrine_usage_impl(db_alias: str = "wcmkt") -> pd.DataFrame
 # =============================================================================
 # refresh_mode="background": on TTL expiry, serve the expired entry and recompute
 # in a worker thread. TTL expiry never brings new data -- only a sync that changes
-# the replica does, and check_db() then clears these caches, so the next read
+# the replica does, and clear_caches_for_changed_replicas() then clears these
+# caches (keyed on config.replica_version, so any sync caller counts), so the next read
 # recomputes in the foreground. Use background mode only on caches that
 # invalidate_market_caches() clears, and keep db_alias a concrete alias: the
 # worker thread has no session state, so DatabaseConfig("wcmkt") would resolve

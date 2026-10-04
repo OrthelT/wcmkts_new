@@ -28,6 +28,7 @@ from repositories import DoctrineRepository
 from repositories.doctrine_repo import get_doctrine_display_name as _repo_get_doctrine_display_name
 from services.price_service import JitaPriceService, FitCostAnalysis
 from logging_config import setup_logging
+from config import replica_version
 
 logger = setup_logging(__name__, log_file="doctrine_service.log")
 
@@ -990,8 +991,12 @@ class DoctrineService:
         self._price_service = price_service
         self._logger = logger or logging.getLogger(__name__)
 
-        # Cached build result
+        # Cached build result, and the replica version it was built from. This
+        # object lives in one session's state, but another session's sync can
+        # change the replica, so the version -- not clear_cache() -- is what
+        # tells this session its copy is out of date.
         self._cached_result: Optional[FitBuildResult] = None
+        self._cached_version: Optional[int] = None
 
     @property
     def repository(self) -> DoctrineRepository:
@@ -1037,7 +1042,14 @@ class DoctrineService:
         Returns:
             FitBuildResult with raw data, summaries, and domain models
         """
-        if use_cache and self._cached_result is not None:
+        # Read before building: a sync that lands mid-build leaves the stored
+        # version behind, so the next call rebuilds.
+        version = replica_version(self._repo.db_alias)
+        if (
+            use_cache
+            and self._cached_result is not None
+            and self._cached_version == version
+        ):
             return self._cached_result
 
         self._logger.info("Building fit data")
@@ -1055,6 +1067,7 @@ class DoctrineService:
         )
 
         self._cached_result = result
+        self._cached_version = version
         return result
 
     def get_all_fit_summaries(self) -> list[FitSummary]:

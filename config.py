@@ -42,6 +42,18 @@ def _sync_lock(alias: str) -> threading.Lock:
         return lock
 
 
+# How many syncs have changed each alias's replica in this process. Anything
+# holding data derived from a replica (st.cache_data entries, session-state
+# copies) compares this against the version it was built from, so every sync
+# caller -- check_db(), read_df() recovery, bootstrap -- invalidates the same way.
+_REPLICA_VERSIONS: dict[str, int] = {}
+
+
+def replica_version(alias: str) -> int:
+    """Return the count of syncs that changed ``alias``'s replica in this process."""
+    return _REPLICA_VERSIONS.get(alias, 0)
+
+
 @dataclass(frozen=True)
 class SyncResult:
     """Outcome of DatabaseConfig.sync().
@@ -452,6 +464,9 @@ class DatabaseConfig:
 
             if not ok:
                 logger.error(f"Fresh bootstrap for {self.alias} still fails integrity.")
+            # Reached only when the pull changed the replica; still under the
+            # alias lock, so the read-modify-write cannot race another sync.
+            _REPLICA_VERSIONS[self.alias] = replica_version(self.alias) + 1
             logger.info("-" * 40)
             return SyncResult(ok=ok, changed=changed)
 

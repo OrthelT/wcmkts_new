@@ -3,6 +3,7 @@ from streamlit.elements.lib.layout_utils import Height
 import streamlit as st
 import pandas as pd
 from millify import millify
+from config import replica_version
 from logging_config import setup_logging
 from services import get_doctrine_service
 from domain import StockStatus
@@ -180,14 +181,14 @@ def render_export_data():
 
     An item the doctrines table doesn't know is stored as None, so the panel shows
     no figures for it instead of zeros. A failed query stores nothing and is
-    retried on the next panel run. The stored figures belong to one market hub,
-    so a hub switch drops them.
+    retried on the next panel run. The stored figures belong to one market hub
+    and one version of its replica, so a hub switch or a sync drops them.
     """
-    market_key = get_active_market_key()
-    if st.session_state.get("rendered_export_market") != market_key:
-        st.session_state.rendered_export_data = {}
-        st.session_state.rendered_export_market = market_key
     svc = get_doctrine_service()
+    stamp = (get_active_market_key(), replica_version(svc.repository.db_alias))
+    if st.session_state.get("rendered_export_stamp") != stamp:
+        st.session_state.rendered_export_data = {}
+        st.session_state.rendered_export_stamp = stamp
 
     for type_id in st.session_state.selected_type_ids:
         if type_id in st.session_state.rendered_export_data:

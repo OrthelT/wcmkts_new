@@ -75,14 +75,15 @@ class TestRenderExportData:
     @pytest.fixture
     def repo(self):
         repo = MagicMock()
+        repo.db_alias = "wcmktnewkeep"
         svc = SimpleNamespace(repository=repo)
         with patch.object(ds, "get_doctrine_service", return_value=svc), patch.object(
             ds, "get_active_market_key", return_value="primary"
-        ):
+        ), patch.object(ds, "replica_version", return_value=3):
             yield repo
 
     def test_queries_only_items_not_loaded(self, state, repo):
-        state.rendered_export_market = "primary"
+        state.rendered_export_stamp = ("primary", 3)
         state.rendered_export_data = {100: {"total_stock": 9, "fits_on_mkt": 1}}
         state.selected_type_ids = {100, 200}
         repo.get_module_stock.return_value = SimpleNamespace(total_stock=40, fits_on_mkt=4)
@@ -105,7 +106,7 @@ class TestRenderExportData:
         assert 300 not in state.rendered_export_data
 
     def test_hub_switch_drops_previous_hub_figures(self, state, repo):
-        state.rendered_export_market = "deployment"
+        state.rendered_export_stamp = ("deployment", 3)
         state.rendered_export_data = {100: {"total_stock": 9, "fits_on_mkt": 1}}
         state.selected_type_ids = {100}
         repo.get_module_stock.return_value = SimpleNamespace(total_stock=2, fits_on_mkt=0)
@@ -114,4 +115,16 @@ class TestRenderExportData:
 
         repo.get_module_stock.assert_called_once_with(100)
         assert state.rendered_export_data == {100: {"total_stock": 2, "fits_on_mkt": 0}}
-        assert state.rendered_export_market == "primary"
+        assert state.rendered_export_stamp == ("primary", 3)
+
+    def test_sync_drops_pre_sync_figures(self, state, repo):
+        # Same hub, but the replica changed since the figures were stored.
+        state.rendered_export_stamp = ("primary", 2)
+        state.rendered_export_data = {100: {"total_stock": 9, "fits_on_mkt": 1}}
+        state.selected_type_ids = {100}
+        repo.get_module_stock.return_value = SimpleNamespace(total_stock=2, fits_on_mkt=0)
+
+        ds.render_export_data()
+
+        repo.get_module_stock.assert_called_once_with(100)
+        assert state.rendered_export_data == {100: {"total_stock": 2, "fits_on_mkt": 0}}

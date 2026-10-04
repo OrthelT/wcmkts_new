@@ -10,7 +10,7 @@ from datetime import datetime
 
 import streamlit as st
 
-from config import DatabaseConfig
+from config import DatabaseConfig, replica_version
 from init_db import SHARED_ALIASES, ensure_market_db_ready, init_db
 from logging_config import setup_logging
 from repositories import invalidate_build_cost_caches
@@ -29,6 +29,34 @@ _CHECK_INTERVAL_SECONDS = 600
 # multi-database sync before its first paint.
 _last_check_by_alias: dict[str, float] = {}
 _last_check_lock = threading.Lock()
+
+# The replica version each alias's caches were last cleared at. Process-wide,
+# like the st.cache_data entries it guards.
+_cleared_version_by_alias: dict[str, int] = {}
+
+
+def clear_caches_for_changed_replicas(aliases: list[str]) -> None:
+    """Clear the caches of any alias whose replica changed since the last clear.
+
+    The single invalidation path for every sync caller. check_db() is not the
+    only one: BaseRepository.read_df() syncs to recover a malformed replica, and
+    that pull can bring new data without passing through check_db().
+    """
+    from settings_service import get_all_market_configs
+
+    # Read each version before clearing: a sync that lands mid-clear leaves the
+    # stored version behind, so the next run clears again.
+    versions = {alias: replica_version(alias) for alias in aliases}
+    changed = [a for a, v in versions.items() if v != _cleared_version_by_alias.get(a, 0)]
+    if not changed:
+        return
+    market_aliases = {cfg.database_alias for cfg in get_all_market_configs().values()}
+    if not market_aliases.isdisjoint(changed):
+        refresh_market_caches()
+    if "build_cost" in changed:
+        invalidate_build_cost_caches()
+    for alias in changed:
+        _cleared_version_by_alias[alias] = versions[alias]
 
 
 def aliases_to_initialize() -> list[str]:
@@ -95,9 +123,6 @@ def check_db(manual_override: bool = False, aliases: list[str] | None = None):
     pull() IS the staleness check under pyturso: a cheap no-op round-trip
     when the replica is current, True when new data was applied.
     """
-    from settings_service import get_all_market_configs
-
-    market_aliases = {cfg.database_alias for cfg in get_all_market_configs().values()}
     all_aliases = aliases if aliases is not None else aliases_to_check()
 
     synced_aliases: list[str] = []
@@ -136,11 +161,8 @@ def check_db(manual_override: bool = False, aliases: list[str] | None = None):
                 status_ctx = st.status("Syncing database…", expanded=False)
             status_ctx.update(label=f"Synced {alias}", state="running")
 
+    clear_caches_for_changed_replicas(all_aliases)
     if synced_aliases:
-        if not market_aliases.isdisjoint(synced_aliases):
-            refresh_market_caches()
-        if "build_cost" in synced_aliases:
-            invalidate_build_cost_caches()
         update_wcmkt_state()
         if status_ctx is not None:
             final_state = "error" if any_sync_failed else "complete"
@@ -178,6 +200,9 @@ def maybe_run_check():
     same hub inherits the first session's check instead of repeating it, while
     a hub the user has just switched to has no timestamp and is checked at once.
     """
+    # Runs on every page run, not only when a check is due: a recovery sync in
+    # read_df() can change a replica between checks.
+    clear_caches_for_changed_replicas(aliases_to_check())
     now = time.time()
     with _last_check_lock:
         stale = [

@@ -215,7 +215,7 @@ with DatabaseConfig("wcmktnewkeep").engine.connect() as conn:
 ### Performance Considerations
 
 - **Caching**: Use `@st.cache_data` for volatile data with TTL tiers (600s/1800s/3600s). Use `@st.cache_resource` for immutable data (SDE lookups, no TTL)
-- **Background cache refresh**: Replica-backed caches on render paths use `refresh_mode="background"`, so a TTL expiry serves the expired entry while a worker thread recomputes it. This is safe only because TTL expiry never brings new data: a sync that changes a replica clears the caches (`refresh_market_caches()` / `invalidate_build_cost_caches()`), and the next read recomputes in the foreground. Add background mode only to a cache that sync invalidation clears (`tests/test_cache_refresh_mode.py` enforces this). Pass a concrete `db_alias`: the worker thread has no session state, so `DatabaseConfig("wcmkt")` would resolve to the primary hub
+- **Background cache refresh**: Replica-backed caches on render paths use `refresh_mode="background"`, so a TTL expiry serves the expired entry while a worker thread recomputes it. This is safe only because TTL expiry never brings new data: a sync that changes a replica clears the caches (`refresh_market_caches()` / `invalidate_build_cost_caches()`), and the next read recomputes in the foreground. The clear is driven by `config.replica_version(alias)`, which `sync()` increments whenever a pull changes the replica: `clear_caches_for_changed_replicas()` in `pages/components/db_refresh.py` runs on every page run and covers every sync caller (`check_db()`, `read_df()` recovery, bootstrap). Session-state copies of replica data (`DoctrineService._cached_result`, doctrine_status `rendered_export_data`) store the version they were built from and rebuild on mismatch. Add background mode only to a cache that sync invalidation clears (`tests/test_cache_refresh_mode.py` enforces this). Pass a concrete `db_alias`: the worker thread has no session state, so `DatabaseConfig("wcmkt")` would resolve to the primary hub
 - **Database connections**: Use `@st.cache_resource` for database engines
 - **Cache invalidation**: Use targeted invalidation (e.g., `invalidate_market_caches()`) after sync, not global clears
 - **Connection pooling**: DatabaseConfig manages connection pooling automatically
@@ -255,7 +255,7 @@ with DatabaseConfig("wcmktnewkeep").engine.connect() as conn:
 
 ### Current Test Coverage
 The test suite covers repositories, services, database config, i18n, parser, pricer/fit-availability, and infrastructure:
-- 750 tests passing (`uv run pytest -q`)
+- 759 tests passing (`uv run pytest -q`)
 
 ## Commit & Pull Request Guidelines
 
@@ -497,7 +497,7 @@ from state.session_state import ss_get  # ✗ state!
 - **`pages/`**: Streamlit application pages
 - **`pages/components/`**: Extracted Streamlit rendering components (market_components, dashboard_components, db_refresh, page_chrome)
 - **`parser/`**: EFT fitting and item list parser (open source contribution)
-- **`tests/`**: pytest unit tests (750 tests)
+- **`tests/`**: pytest unit tests (759 tests)
 - **`docs/`**: Documentation
 - **`logs/`**: Application logs (git-ignored)
 - **`images/`**: UI assets

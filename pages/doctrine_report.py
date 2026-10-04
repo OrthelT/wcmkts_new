@@ -504,7 +504,11 @@ def main():
         selected_doctrine_id,
         sde_repo,
         language_code,
-        build_doctrine_usage(master_df),
+        # Only this doctrine's items open popovers. Filter by type_id, not
+        # fit_id, so "Used In Fits" still lists fits from other doctrines.
+        build_doctrine_usage(
+            master_df[master_df["type_id"].isin(doctrine_modules["type_id"].unique())]
+        ),
     )
 
     # Display selected modules if any

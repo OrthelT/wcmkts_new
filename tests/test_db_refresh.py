@@ -26,8 +26,10 @@ SHARED = "build_cost"
 def reset_check_state():
     """Each test starts with an empty process-wide check registry."""
     db_refresh._last_check_by_alias.clear()
+    db_refresh._cleared_version_by_alias.clear()
     yield
     db_refresh._last_check_by_alias.clear()
+    db_refresh._cleared_version_by_alias.clear()
 
 
 def _market_config(alias):
@@ -165,6 +167,45 @@ class TestConcurrentClaim:
                 t.join()
 
         assert invocations == [[PRIMARY, SHARED]]
+
+
+class TestClearCachesForChangedReplicas:
+    """Caches follow the replica version, whichever caller ran the sync."""
+
+    def _versions(self, versions):
+        return patch.object(
+            db_refresh, "replica_version", side_effect=lambda a: versions.get(a, 0)
+        )
+
+    def test_changed_market_replica_clears_market_caches_once(self, env):
+        with self._versions({PRIMARY: 1}):
+            db_refresh.clear_caches_for_changed_replicas([PRIMARY, SHARED])
+            db_refresh.clear_caches_for_changed_replicas([PRIMARY, SHARED])
+        db_refresh.refresh_market_caches.assert_called_once_with()
+        db_refresh.invalidate_build_cost_caches.assert_not_called()
+
+    def test_changed_build_cost_replica_clears_build_cost_caches(self, env):
+        with self._versions({SHARED: 1}):
+            db_refresh.clear_caches_for_changed_replicas([PRIMARY, SHARED])
+        db_refresh.invalidate_build_cost_caches.assert_called_once_with()
+        db_refresh.refresh_market_caches.assert_not_called()
+
+    def test_unchanged_replicas_clear_nothing(self, env):
+        with self._versions({}):
+            db_refresh.clear_caches_for_changed_replicas([PRIMARY, SHARED])
+        db_refresh.refresh_market_caches.assert_not_called()
+        db_refresh.invalidate_build_cost_caches.assert_not_called()
+
+    def test_recovery_sync_between_checks_is_picked_up_by_the_next_run(self, env):
+        """read_df() recovery changes the replica without calling check_db()."""
+        synced, _ = env
+        versions = {}
+        with self._versions(versions):
+            db_refresh.maybe_run_check()  # check not due again for 600 s
+            versions[PRIMARY] = 1  # a recovery sync pulled new data
+            db_refresh.maybe_run_check()
+        assert synced == [PRIMARY, SHARED]  # no second pull
+        db_refresh.refresh_market_caches.assert_called_once_with()
 
 
 class TestEnsureActiveMarketFresh:

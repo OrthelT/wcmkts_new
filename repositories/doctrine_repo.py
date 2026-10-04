@@ -106,6 +106,11 @@ class DoctrineRepository:
         self._logger = logger or logging.getLogger(__name__)
         self._reader = BaseRepository(db, self._logger)
 
+    @property
+    def db_alias(self) -> str:
+        """Alias of the market database this repository reads."""
+        return self._db.alias
+
     # =========================================================================
     # Core Fit Data
     # =========================================================================
