@@ -460,51 +460,59 @@ def _render_action_chips(result: PricerResult, language_code: str):
             st.rerun()
 
 
+# The display checkboxes rerun only this fragment, not the whole page.
+_RESULTS_FRAGMENT_KEY = "pricer_results"
+
+
+def _on_display_toggle(widget_key: str, state_key: str) -> None:
+    """Store a display checkbox value, then rerun only the results fragment.
+
+    The results render above the controls, so the value must be stored here,
+    before the rerun, for the results to read the new value.
+    """
+    ss_set(state_key, st.session_state[widget_key])
+    st.rerun(_RESULTS_FRAGMENT_KEY)
+
+
+def _render_display_toggle(
+    label_key: str, widget_key: str, state_key: str, language_code: str,
+    help_key: str | None = None,
+) -> None:
+    # wrap=True: Streamlit 1.63+ truncates labels in st.columns.
+    st.checkbox(
+        translate_text(language_code, label_key),
+        value=ss_get(state_key, True),
+        key=widget_key,
+        wrap=True,
+        help=translate_text(language_code, help_key) if help_key else None,
+        on_change=_on_display_toggle,
+        args=(widget_key, state_key),
+    )
+
+
 def _render_control_row(language_code: str):
     """Toggle row above the input area."""
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        ss_set(
-            "pricer_show_jita",
-            st.checkbox(
-                translate_text(language_code, "pricer.show_jita_prices"),
-                value=ss_get("pricer_show_jita", True),
-                key="show_jita_prices",
-            ),
+        _render_display_toggle(
+            "pricer.show_jita_prices", "show_jita_prices", "pricer_show_jita", language_code,
         )
     with c2:
-        ss_set(
-            "pricer_show_stock_metrics",
-            st.checkbox(
-                translate_text(language_code, "pricer.show_stock_metrics"),
-                value=ss_get("pricer_show_stock_metrics", True),
-                key="show_stock_metrics",
-                help=translate_text(language_code, "pricer.show_stock_metrics_help"),
-            ),
+        _render_display_toggle(
+            "pricer.show_stock_metrics", "show_stock_metrics", "pricer_show_stock_metrics",
+            language_code, help_key="pricer.show_stock_metrics_help",
         )
     with c3:
-        ss_set(
-            "pricer_highlight_doctrine",
-            st.checkbox(
-                translate_text(language_code, "pricer.highlight_doctrine_items"),
-                value=ss_get("pricer_highlight_doctrine", True),
-                key="highlight_doctrine",
-                help=translate_text(
-                    language_code, "pricer.highlight_doctrine_items_help"
-                ),
-            ),
+        _render_display_toggle(
+            "pricer.highlight_doctrine_items", "highlight_doctrine",
+            "pricer_highlight_doctrine", language_code,
+            help_key="pricer.highlight_doctrine_items_help",
         )
     with c4:
-        ss_set(
-            "pricer_fit_equivalents",
-            st.checkbox(
-                translate_text(language_code, "pricer.fits.toggle_equivalents"),
-                value=ss_get("pricer_fit_equivalents", True),
-                key="pricer_fit_equivalents_cb",
-                help=translate_text(
-                    language_code, "pricer.fits.toggle_equivalents_help"
-                ),
-            ),
+        _render_display_toggle(
+            "pricer.fits.toggle_equivalents", "pricer_fit_equivalents_cb",
+            "pricer_fit_equivalents", language_code,
+            help_key="pricer.fits.toggle_equivalents_help",
         )
 
 
@@ -777,6 +785,48 @@ def _render_fit_availability_section(
 # =============================================================================
 
 
+@st.fragment(key=_RESULTS_FRAGMENT_KEY)
+def _render_results(
+    result: PricerResult | None, market: MarketConfig, sde_repo, language_code: str,
+) -> None:
+    """Appraisal results. A keyed fragment so the display checkboxes rerun only this.
+
+    It renders on every full run, even with no result, so the checkbox
+    callbacks can always target its key.
+    """
+    if result is None:
+        return
+    if result.jita_provider_failed:
+        st.warning(
+            translate_text(
+                language_code,
+                "pricer.jita_provider_failed",
+                count=result.failed_jita_count,
+            )
+        )
+    if result.input_type == InputFormat.EFT:
+        _render_fit_appraisal_header(
+            result=result, language_code=language_code, sde_repo=sde_repo
+        )
+        _render_summary_stats_grid(result, market, language_code)
+        _render_fit_availability_section(result, market, language_code)
+    else:
+        _render_summary_stats_grid(result, market, language_code)
+        _render_items_table(result, market, sde_repo, language_code)
+    _render_action_chips(result, language_code)
+    if result.parse_errors:
+        with st.expander(
+            translate_text(
+                language_code,
+                "pricer.unpriced_items",
+                count=len(result.parse_errors),
+            ),
+            expanded=False,
+        ):
+            for error in result.parse_errors:
+                st.warning(error)
+
+
 def _process_input(input_text: str):
     """Run pricing and store the result in session state."""
     language_code = get_active_language()
@@ -808,11 +858,9 @@ def main():
     ss_init(
         {
             "pricer_show_jita": True,
-            "pricer_show_doctrine": True,
             "pricer_highlight_doctrine": True,
             "pricer_show_stock_metrics": True,
             "pricer_fit_equivalents": True,
-            "pricer_eft_result": False,
             "pricer_input_text": "",
         }
     )
@@ -826,44 +874,11 @@ def main():
         ss_get("pricer_result") if ss_has("pricer_result") else None
     )
 
-    if result is not None:
-        eft_type = result.input_type == InputFormat.EFT
-        ss_set("pricer_eft_result", eft_type)
-
     cached_input_text = ss_get("pricer_input_text", None)
 
     with st.container(border=True):
         _render_appraisal_title(result, market, language_code)
-        if result is not None:
-            if result.jita_provider_failed:
-                st.warning(
-                    translate_text(
-                        language_code,
-                        "pricer.jita_provider_failed",
-                        count=result.failed_jita_count,
-                    )
-                )
-            if eft_type:
-                _render_fit_appraisal_header(
-                    result=result, language_code=language_code, sde_repo=sde_repo
-                )
-                _render_summary_stats_grid(result, market, language_code)
-                _render_fit_availability_section(result, market, language_code)
-            else:
-                _render_summary_stats_grid(result, market, language_code)
-                _render_items_table(result, market, sde_repo, language_code)
-            _render_action_chips(result, language_code)
-            if result.parse_errors:
-                with st.expander(
-                    translate_text(
-                        language_code,
-                        "pricer.unpriced_items",
-                        count=len(result.parse_errors),
-                    ),
-                    expanded=False,
-                ):
-                    for error in result.parse_errors:
-                        st.warning(error)
+        _render_results(result, market, sde_repo, language_code)
 
         st.divider()
         _render_control_row(language_code)
@@ -883,6 +898,7 @@ def main():
                 type="primary",
                 width='stretch',
                 key="pricer_submit",
+                wrap=True,
             )
 
     if price_button:

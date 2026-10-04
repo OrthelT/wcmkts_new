@@ -18,7 +18,7 @@ It covers three market hubs (primary, deployment, market3) in one app; `ui/marke
 ### UI Pages (`pages/` directory)
 All pages follow consistent patterns with Streamlit best practices:
 
-1. **`market_dashboard.py`** (🏠 Market Dashboard, default landing page) - Doctrine Ships, Popular Modules, Minerals, and Isotopes tables with checkbox-driven deep links into Doctrine Status / Market Stats. Constrained to low-stock doctrine items by default (toggle to view all). KPIs sourced from the marketorders order book (matches Market Stats sell-order value).
+1. **`market_dashboard.py`** (🏠 Market Dashboard, default landing page) - Doctrine Ships, Popular Modules, Minerals, and Isotopes tables with pinned `ButtonColumn` icons (📈 Market Stats, ⚔️ Doctrine Status) that call `st.switch_page` from the click callback, so navigation skips the dashboard rerun. `click.row` indexes the data passed to `st.dataframe`, not the visual order after a header sort. Constrained to low-stock doctrine items by default (toggle to view all). KPIs sourced from the marketorders order book (matches Market Stats sell-order value).
 2. **`market_stats.py`** (📈 Market Stats) - Primary market data visualization with interactive Plotly charts, market orders, statistics, and historical data. The ISK volume chart's window is a day selector (7/30/60/90/120/365/all, default 30) in Chart Controls; the per-date sum happens in SQL, so the page never loads the full history frame. 30-Day stats expander includes category pills (all/ships/doctrine ships/modules/materials, shuttles excluded from ships) and a daily ISK+volume activity chart.
 3. **`doctrine_status.py`** (⚔️ Doctrine Status) - Doctrine fit status tracking with stock levels, costs, and market availability. Supports `module_id` query param for module-filtered deep links from the dashboard.
 4. **`doctrine_report.py`** (📝 Doctrine Report) - Detailed doctrine analysis and reporting
@@ -73,7 +73,7 @@ All pages follow consistent patterns with Streamlit best practices:
 - **`domain/market_config.py`**: `MarketConfig` frozen dataclass representing a market hub's configuration (key, name, short_name, region_id, database_alias)
 
 **UI Components (`ui/` directory):**
-- **`ui/popovers.py`**: Reusable market data popover components with item images, market stats, Jita prices, and doctrine usage. Pass pre-fetched `jita_prices` dict to avoid per-popover API calls (Jita fetching is disabled by default)
+- **`ui/popovers.py`**: Reusable market data popover components with item images, market stats, Jita prices, and doctrine usage. Pass pre-fetched `jita_prices` dict to avoid per-popover API calls (Jita fetching is disabled by default). Pass a `doctrine_usage` map from `services.doctrine_service.build_doctrine_usage(raw_df)` for the "Used In Fits" section; the popover runs no doctrine query of its own
 - **`ui/formatters.py`**: Pure formatting functions for prices, percentages, image URLs
 - **`ui/column_definitions.py`**: Streamlit column_config definitions for data tables; supports localized column headers via `get_doctrine_report_column_config(language_code)` and friends
 - **`ui/i18n.py`**: Lightweight UI translation system with ~132 keys covering navigation, labels, tooltips, and column headers across 8 languages (EN, ZH, DE, FR, RU, ES, JP, KR). Used via `translate_text(language_code, key)`.
@@ -215,11 +215,14 @@ with DatabaseConfig("wcmktnewkeep").engine.connect() as conn:
 ### Performance Considerations
 
 - **Caching**: Use `@st.cache_data` for volatile data with TTL tiers (600s/1800s/3600s). Use `@st.cache_resource` for immutable data (SDE lookups, no TTL)
+- **Background cache refresh**: Replica-backed caches on render paths use `refresh_mode="background"`, so a TTL expiry serves the expired entry while a worker thread recomputes it. This is safe only because TTL expiry never brings new data: a sync that changes a replica clears the caches (`refresh_market_caches()` / `invalidate_build_cost_caches()`), and the next read recomputes in the foreground. The clear is driven by `config.replica_version(alias)`, which `sync()` increments whenever a pull changes the replica: `clear_caches_for_changed_replicas()` in `pages/components/db_refresh.py` runs on every page run and covers every sync caller (`check_db()`, `read_df()` recovery, bootstrap). Session-state copies of replica data (`DoctrineService._cached_result`, doctrine_status `rendered_export_data`) store the version they were built from and rebuild on mismatch. Add background mode only to a cache that sync invalidation clears (`tests/test_cache_refresh_mode.py` enforces this). Pass a concrete `db_alias`: the worker thread has no session state, so `DatabaseConfig("wcmkt")` would resolve to the primary hub
 - **Database connections**: Use `@st.cache_resource` for database engines
 - **Cache invalidation**: Use targeted invalidation (e.g., `invalidate_market_caches()`) after sync, not global clears
 - **Connection pooling**: DatabaseConfig manages connection pooling automatically
 - **Malformed DB recovery**: Built into `BaseRepository.read_df()` and repository `_impl()` functions
 - **Lazy download generation**: Use `st.download_button(data=callable)` pattern for on-demand data generation. Pass a function reference (not the result) to defer data loading until user clicks download. See `pages/downloads.py` for examples.
+- **Keyed fragment reruns**: A control that changes only one section calls `st.rerun("<fragment key>")` from its `on_change`, so only that fragment reruns: doctrine_status `selection_panel`, market_stats `isk_chart` + `isk_table`, pricer `pricer_results`. The keyed fragment must have rendered in the last full run, or `st.rerun()` raises. Because the rest of the page does not run, the callback must update any state the fragment reads
+- **No `iterrows()` on render paths**: building a Series per row costs far more than the cached reads. In builder_helper and low_stock it was 85–90% of a filter change (about 350 ms and 790 ms; now about 43 ms and 72 ms). Use vectorized pandas, or iterate `df.to_dict("records")` when per-row Python logic is needed. Profile before adding a cache: a cache hides this cost, and it needs sync invalidation
 - **Batch API fetching for popovers**: Streamlit popover content executes on every page rerun even when closed. Avoid API calls inside popovers by batch-fetching data before render loops. See `prefetch_popover_data()` in `pages/doctrine_status.py` for the pattern.
 
 ### Data Synchronization
@@ -252,7 +255,7 @@ with DatabaseConfig("wcmktnewkeep").engine.connect() as conn:
 
 ### Current Test Coverage
 The test suite covers repositories, services, database config, i18n, parser, pricer/fit-availability, and infrastructure:
-- 725 tests + 22 subtests passing (`uv run pytest -q`)
+- 759 tests passing (`uv run pytest -q`)
 
 ## Commit & Pull Request Guidelines
 
@@ -494,7 +497,7 @@ from state.session_state import ss_get  # ✗ state!
 - **`pages/`**: Streamlit application pages
 - **`pages/components/`**: Extracted Streamlit rendering components (market_components, dashboard_components, db_refresh, page_chrome)
 - **`parser/`**: EFT fitting and item list parser (open source contribution)
-- **`tests/`**: pytest unit tests (725 tests, 22 subtests)
+- **`tests/`**: pytest unit tests (759 tests)
 - **`docs/`**: Documentation
 - **`logs/`**: Application logs (git-ignored)
 - **`images/`**: UI assets

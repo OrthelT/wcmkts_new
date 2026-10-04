@@ -24,6 +24,15 @@ CHART_WINDOW_OPTIONS: list[int | None] = [7, 30, 60, 90, 120, 365, None]
 CHART_WINDOW_DEFAULT_INDEX = 1
 CHART_WINDOW_DEFAULT_DAYS = CHART_WINDOW_OPTIONS[CHART_WINDOW_DEFAULT_INDEX]
 
+# Fragment keys for the ISK volume chart and its table on market_stats.
+ISK_CHART_FRAGMENT_KEY = "isk_chart"
+ISK_TABLE_FRAGMENT_KEY = "isk_table"
+
+
+def _rerun_isk_chart_and_table() -> None:
+    """Rerun the chart and the table so the table follows the chart's window."""
+    st.rerun([ISK_CHART_FRAGMENT_KEY, ISK_TABLE_FRAGMENT_KEY])
+
 
 def _format_days_option(days: int | None, language_code: str) -> str:
     """Label one day-window option: '7d', '1y', or 'All'."""
@@ -38,14 +47,21 @@ def _format_days_option(days: int | None, language_code: str) -> str:
 # ISK Volume Chart UI
 # =============================================================================
 
-def render_isk_volume_chart_ui(service, language_code: str = "en") -> None:
+def render_isk_volume_chart_ui(
+    service, language_code: str = "en", with_table: bool = False,
+) -> None:
     """Render ISK volume chart with all controls as a Streamlit fragment.
 
     Args:
         service: MarketService instance.
+        with_table: True when render_isk_volume_table_ui renders in the same run.
+            The window and period controls then rerun the table fragment too.
+            It must be False otherwise: st.rerun() raises for a fragment key
+            that did not render.
     """
+    rerun_with_table = _rerun_isk_chart_and_table if with_table else None
 
-    @st.fragment
+    @st.fragment(key=ISK_CHART_FRAGMENT_KEY)
     def chart_fragment():
         selected_category = st.session_state.get("selected_category", None)
         selected_category_id = st.session_state.get("selected_category_id", None)
@@ -88,6 +104,7 @@ def render_isk_volume_chart_ui(service, language_code: str = "en") -> None:
                 format_func=lambda d: _format_days_option(d, language_code),
                 horizontal=True,
                 key="chart_days_radio",
+                on_change=rerun_with_table,
             )
         with col2:
             st.write(f"**{translate_text(language_code, 'market_stats.moving_average_period')}:**")
@@ -107,6 +124,7 @@ def render_isk_volume_chart_ui(service, language_code: str = "en") -> None:
                 format_func=lambda x: translate_text(language_code, f"market_stats.period_{x}"),
                 horizontal=True,
                 key="chart_date_period_radio",
+                on_change=rerun_with_table,
             )
 
         chart = service.create_isk_volume_chart(
@@ -116,7 +134,7 @@ def render_isk_volume_chart_ui(service, language_code: str = "en") -> None:
             selected_category=selected_category,
             selected_category_id=selected_category_id,
         )
-        st.plotly_chart(chart, config={"width": "stretch"})
+        st.plotly_chart(chart, width="stretch")
 
     chart_fragment()
 
@@ -128,67 +146,77 @@ def render_isk_volume_chart_ui(service, language_code: str = "en") -> None:
 def render_isk_volume_table_ui(service, language_code: str = "en") -> None:
     """Render ISK volume data table with chart-matching filters.
 
+    A keyed fragment: the chart's window and period controls rerun it so the
+    table never lags the chart.
+
     Args:
         service: MarketService instance.
     """
-    days = (
-        st.session_state["chart_days_radio"]
-        if "chart_days_radio" in st.session_state
-        else CHART_WINDOW_DEFAULT_DAYS
-    )
-    date_period = st.session_state.get("chart_date_period_radio") or "daily"
-    selected_category = st.session_state.get("selected_category", None)
-    selected_category_id = st.session_state.get("selected_category_id", None)
 
-    data_table_config = {
-        "Date": st.column_config.DateColumn(
-            translate_text(language_code, "market_stats.date"),
-            help=translate_text(language_code, "market_stats.date_help"),
-            format="YYYY-MM-DD",
-        ),
-        "ISK Volume": st.column_config.NumberColumn(
-            translate_text(language_code, "market_stats.isk_volume"),
-            help=translate_text(language_code, "market_stats.isk_volume_help"),
-            format="compact",
-        ),
-    }
+    @st.fragment(key=ISK_TABLE_FRAGMENT_KEY)
+    def table_fragment():
+        days = (
+            st.session_state["chart_days_radio"]
+            if "chart_days_radio" in st.session_state
+            else CHART_WINDOW_DEFAULT_DAYS
+        )
+        date_period = st.session_state.get("chart_date_period_radio") or "daily"
+        selected_category = st.session_state.get("selected_category", None)
+        selected_category_id = st.session_state.get("selected_category_id", None)
 
-    table = service.create_isk_volume_table(
-        date_period=str(date_period).lower(),
-        days=days,
-        selected_category=selected_category,
-        selected_category_id=selected_category_id,
-    )
+        data_table_config = {
+            "Date": st.column_config.DateColumn(
+                translate_text(language_code, "market_stats.date"),
+                help=translate_text(language_code, "market_stats.date_help"),
+                format="YYYY-MM-DD",
+            ),
+            "ISK Volume": st.column_config.NumberColumn(
+                translate_text(language_code, "market_stats.isk_volume"),
+                help=translate_text(language_code, "market_stats.isk_volume_help"),
+                format="compact",
+            ),
+        }
 
-    filter_info = translate_text(
-        language_code,
-        "market_stats.filter_info_window",
-        window=f":orange[{_format_days_option(days, language_code)}]",
-        date_period=(
-            f":orange[{translate_text(language_code, f'market_stats.period_{date_period}')}]"
-        ),
-    )
-    if selected_category:
-        filter_info += translate_text(
+        table = service.create_isk_volume_table(
+            date_period=str(date_period).lower(),
+            days=days,
+            selected_category=selected_category,
+            selected_category_id=selected_category_id,
+        )
+
+        filter_info = translate_text(
             language_code,
-            "market_stats.filter_info_category",
-            category_name=f":orange[{selected_category}]",
+            "market_stats.filter_info_window",
+            window=f":orange[{_format_days_option(days, language_code)}]",
+            date_period=(
+                f":orange[{translate_text(language_code, f'market_stats.period_{date_period}')}]"
+            ),
         )
-    st.markdown(filter_info)
-
-    if table.empty:
-        msg = (
-            translate_text(
+        if selected_category:
+            filter_info += translate_text(
                 language_code,
-                "market_stats.no_market_history_for_category",
-                category_name=selected_category,
+                "market_stats.filter_info_category",
+                category_name=f":orange[{selected_category}]",
             )
-            if selected_category
-            else translate_text(language_code, "market_stats.no_market_history_selected_filters")
-        )
-        st.warning(msg)
-    else:
-        st.dataframe(table, width="content", column_config=data_table_config, hide_index=True)
+        st.markdown(filter_info)
+
+        if table.empty:
+            msg = (
+                translate_text(
+                    language_code,
+                    "market_stats.no_market_history_for_category",
+                    category_name=selected_category,
+                )
+                if selected_category
+                else translate_text(
+                    language_code, "market_stats.no_market_history_selected_filters"
+                )
+            )
+            st.warning(msg)
+        else:
+            st.dataframe(table, width="content", column_config=data_table_config, hide_index=True)
+
+    table_fragment()
 
 
 # =============================================================================
@@ -253,10 +281,10 @@ def render_top_n_items_ui(
     """
     from services.market_service import MarketService
 
-    configure_top_n_items_ui()
-
+    # The controls live inside the fragment so a change reruns only this section.
     @st.fragment
     def top_n_fragment():
+        configure_top_n_items_ui()
         if ss_has("week_month_pill", "daily_total_pill", "isk_volume_pill", "top_items_count"):
             top_n_items = MarketService.get_top_n_items(
                 df_7days, df_30days,

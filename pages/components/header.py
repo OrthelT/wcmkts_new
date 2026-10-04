@@ -66,6 +66,8 @@ def render_page_title(
                 back_label or "← Dashboard",
                 key=f"back_to_{back_page}",
                 type="tertiary",
+                # Streamlit 1.63+ truncates labels of controls placed directly in st.columns.
+                wrap=True,
             )
         with title_col:
             st.title(title)

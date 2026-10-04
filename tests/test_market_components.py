@@ -186,10 +186,15 @@ def test_30day_pills_hidden_when_item_selected():
 CHART_WINDOW_OPTIONS = [7, 30, 60, 90, 120, 365, None]
 
 
+def _passthrough_fragment(func=None, **_kwargs):
+    """Stand-in for ``st.fragment`` in both ``@st.fragment`` and ``@st.fragment(key=...)`` forms."""
+    return func if func is not None else (lambda f: f)
+
+
 def _radio_st(radio_values: dict):
     """Mock ``st`` whose radios answer by key and whose fragment is a no-op."""
     mock_st = MagicMock()
-    mock_st.fragment = lambda f: f
+    mock_st.fragment = _passthrough_fragment
     mock_st.columns.side_effect = lambda *a, **k: [MagicMock() for _ in range(
         a[0] if a and isinstance(a[0], int) else len(a[0]) if a else 2
     )]
@@ -271,6 +276,7 @@ def test_table_follows_the_chart_window():
     from pages.components import market_components
 
     mock_st = MagicMock()
+    mock_st.fragment = _passthrough_fragment
     mock_st.session_state = {"chart_days_radio": 90, "chart_date_period_radio": "daily"}
     service = Mock()
     service.create_isk_volume_table.return_value = pd.DataFrame(
@@ -289,6 +295,7 @@ def test_table_defaults_to_30_days_before_the_chart_renders():
     from pages.components import market_components
 
     mock_st = MagicMock()
+    mock_st.fragment = _passthrough_fragment
     mock_st.session_state = {}
     service = Mock()
     service.create_isk_volume_table.return_value = pd.DataFrame(
@@ -300,6 +307,58 @@ def test_table_defaults_to_30_days_before_the_chart_renders():
         market_components.render_isk_volume_table_ui(service, language_code="en")
 
     assert service.create_isk_volume_table.call_args.kwargs["days"] == 30
+
+
+def _radio_on_change(mock_st, key):
+    return next(
+        c for c in mock_st.radio.call_args_list if c.kwargs.get("key") == key
+    ).kwargs.get("on_change")
+
+
+def test_window_controls_rerun_the_table_when_it_renders_alongside():
+    """market_stats: a window/period change must rerun the table, or it lags the chart."""
+    from pages.components import market_components
+
+    radio_values = {
+        "chart_days_radio": 30,
+        "chart_moving_avg_radio": 14,
+        "chart_date_period_radio": "daily",
+    }
+    mock_st = _radio_st(radio_values)
+
+    with patch.object(market_components, "st", mock_st), \
+            patch.object(market_components, "translate_text", return_value="x"):
+        market_components.render_isk_volume_chart_ui(
+            _chart_service(), language_code="en", with_table=True,
+        )
+        for key in ("chart_days_radio", "chart_date_period_radio"):
+            callback = _radio_on_change(mock_st, key)
+            assert callback is not None, key
+            callback()
+            mock_st.rerun.assert_called_with([
+                market_components.ISK_CHART_FRAGMENT_KEY,
+                market_components.ISK_TABLE_FRAGMENT_KEY,
+            ])
+    assert _radio_on_change(mock_st, "chart_moving_avg_radio") is None
+
+
+def test_window_controls_do_not_target_a_table_that_did_not_render():
+    """Dashboard: st.rerun() raises for an unrendered fragment key, so no callback."""
+    from pages.components import market_components
+
+    radio_values = {
+        "chart_days_radio": 30,
+        "chart_moving_avg_radio": 14,
+        "chart_date_period_radio": "daily",
+    }
+    mock_st = _radio_st(radio_values)
+
+    with patch.object(market_components, "st", mock_st), \
+            patch.object(market_components, "translate_text", return_value="x"):
+        market_components.render_isk_volume_chart_ui(_chart_service(), language_code="en")
+
+    for key in ("chart_days_radio", "chart_date_period_radio"):
+        assert _radio_on_change(mock_st, key) is None, key
 
 
 def test_window_option_labels():

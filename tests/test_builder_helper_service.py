@@ -5,7 +5,11 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-from services.builder_helper_service import BuilderHelperService, _compute_need
+from services.builder_helper_service import (
+    BuilderHelperService,
+    _build_numeric_map,
+    _compute_need,
+)
 from services.price_service import BatchPriceResult, PriceResult, PriceSource
 
 
@@ -294,6 +298,23 @@ class TestBuilderHelperService:
         assert row["group"] == "Stats Group"
         assert row["category"] == "Stats Cat"
         assert mock_async_client.call_count == 0
+
+
+class TestBuildNumericMap:
+    def test_maps_keys_to_floats_and_drops_missing_or_non_numeric_rows(self):
+        df = pd.DataFrame(
+            {
+                "type_id": [34, 35, None, "36", "bad", 37],
+                "price": [5, None, 7.0, "8.5", 9.0, "n/a"],
+            }
+        )
+        result = _build_numeric_map(df, "type_id", "price")
+        assert result == {34: 5.0, 36: 8.5}
+        assert all(type(k) is int and type(v) is float for k, v in result.items())
+
+    def test_missing_column_or_empty_frame_returns_empty_map(self):
+        assert _build_numeric_map(pd.DataFrame(), "type_id", "price") == {}
+        assert _build_numeric_map(pd.DataFrame({"type_id": [34]}), "type_id", "price") == {}
 
 
 class TestComputeNeed:

@@ -647,7 +647,7 @@ def main():
         )
         chart_col, history_col = st.columns([2, 1])
         with chart_col:
-            render_isk_volume_chart_ui(market_service, language_code)
+            render_isk_volume_chart_ui(market_service, language_code, with_table=True)
         with history_col:
             render_isk_volume_table_ui(market_service, language_code)
 
@@ -669,7 +669,7 @@ def main():
         selected_history = market_service._repo.get_history_by_type(selected_item_id)
 
         if history_chart:
-            st.plotly_chart(history_chart, config={'width': 'content'})
+            st.plotly_chart(history_chart, width="stretch")
 
         if selected_history is not None and not selected_history.empty:
                     logger.info(f"Displaying history data for {selected_item_id}")

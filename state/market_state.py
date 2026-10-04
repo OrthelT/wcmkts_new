@@ -125,16 +125,20 @@ def refresh_market_caches() -> None:
             get_all_fits_with_cache,
             get_fit_by_id_with_cache,
             get_all_targets_with_cache,
+            get_target_quantities_with_cache,
             get_target_by_fit_id_with_cache,
             get_target_by_ship_id_with_cache,
             get_fit_name_with_cache,
+            get_friendly_names_with_cache,
         )
         get_all_fits_with_cache.clear()
         get_fit_by_id_with_cache.clear()
         get_all_targets_with_cache.clear()
+        get_target_quantities_with_cache.clear()
         get_target_by_fit_id_with_cache.clear()
         get_target_by_ship_id_with_cache.clear()
         get_fit_name_with_cache.clear()
+        get_friendly_names_with_cache.clear()
     except ImportError:
         pass
 
@@ -143,9 +147,11 @@ def refresh_market_caches() -> None:
         from services.module_equivalents_service import (
             _get_equivalence_group_cached,
             _get_all_equivalence_groups_cached,
+            _get_equivalent_type_ids_cached,
         )
         _get_equivalence_group_cached.clear()
         _get_all_equivalence_groups_cached.clear()
+        _get_equivalent_type_ids_cached.clear()
     except ImportError:
         pass
 

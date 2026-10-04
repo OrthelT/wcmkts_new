@@ -30,7 +30,8 @@ class TestFetchIndustryIndices(unittest.TestCase):
         repo = MagicMock()
         service = BuildCostService(repo)
 
-        def fake_get(url, headers=None):
+        def fake_get(url, headers=None, timeout=None):
+            assert timeout, "ESI request must set a timeout"
             return DummyResponse(
                 304,
                 headers={
@@ -66,7 +67,8 @@ class TestFetchIndustryIndices(unittest.TestCase):
             "Expires": "Mon, 01 Jan 2024 02:00:00 GMT",
         }
 
-        def fake_get(url, headers=None):
+        def fake_get(url, headers=None, timeout=None):
+            assert timeout, "ESI request must set a timeout"
             return DummyResponse(200, headers=server_headers, json_data=systems)
 
         with patch("services.build_cost_service.requests.get", side_effect=fake_get):

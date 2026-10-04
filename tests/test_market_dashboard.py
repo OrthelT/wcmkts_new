@@ -409,9 +409,7 @@ class TestComputeModuleTargetsMissingTargets:
 
 
 class TestRenderPopularModulesTableEarlyExits:
-    """The function must return a (None, None) tuple — not bare None — on
-    every early-exit path so the caller's tuple-unpacking never crashes.
-    """
+    """Every early-exit path returns without rendering a table."""
 
     def _kwargs(self):
         return {
@@ -423,22 +421,24 @@ class TestRenderPopularModulesTableEarlyExits:
             "dataframe_key": "test_key",
         }
 
-    def test_value_error_returns_none_none(self):
+    def test_value_error_renders_no_table(self):
         from pages.components import dashboard_components as dc
 
         with patch.object(dc, "_compute_module_targets", side_effect=ValueError("missing")):
-            with patch.object(dc.st, "error"):
-                result = dc.render_popular_modules_table(**self._kwargs())
-        assert result == (None, None)
+            with patch.object(dc, "st") as mock_st:
+                assert dc.render_popular_modules_table(**self._kwargs()) is None
+        mock_st.error.assert_called_once()
+        mock_st.dataframe.assert_not_called()
 
-    def test_empty_module_targets_returns_none_none(self):
+    def test_empty_module_targets_renders_no_table(self):
         from pages.components import dashboard_components as dc
 
         with patch.object(dc, "_compute_module_targets", return_value=pd.DataFrame()):
-            result = dc.render_popular_modules_table(**self._kwargs())
-        assert result == (None, None)
+            with patch.object(dc, "st") as mock_st:
+                assert dc.render_popular_modules_table(**self._kwargs()) is None
+        mock_st.dataframe.assert_not_called()
 
-    def test_empty_snapshot_returns_none_none(self):
+    def test_empty_snapshot_renders_no_table(self):
         from pages.components import dashboard_components as dc
 
         targets = pd.DataFrame({"type_id": [100], "qty_needed": [1], "target_pct": [50], "fits_on_mkt": [1]})
@@ -446,8 +446,9 @@ class TestRenderPopularModulesTableEarlyExits:
         kwargs["market_service"].get_current_market_snapshot.return_value = pd.DataFrame()
 
         with patch.object(dc, "_compute_module_targets", return_value=targets):
-            result = dc.render_popular_modules_table(**kwargs)
-        assert result == (None, None)
+            with patch.object(dc, "st") as mock_st:
+                assert dc.render_popular_modules_table(**kwargs) is None
+        mock_st.dataframe.assert_not_called()
 
 
 # =========================================================================
@@ -625,169 +626,128 @@ class TestRequireJitaPrices:
         mock_st.error.assert_not_called()
 
 
-class TestGetSelectedTypeId:
-    """Lock the on_select extraction contract reused by the doctrine tables."""
+class TestOpenClickedItem:
+    """ButtonColumn on_click: resolve click.row to a type_id and navigate."""
 
-    def _df(self):
-        return pd.DataFrame({"type_id": [11, 22, 33]})
+    TYPE_IDS = [11, 22, 33]
 
-    def _event(self, rows):
+    def _call(self, click):
         from types import SimpleNamespace
-        return SimpleNamespace(selection={"rows": rows})
-
-    def test_none_event_returns_none(self):
-        from pages.components.dashboard_components import _get_selected_type_id
-        assert _get_selected_type_id(None, self._df()) is None
-
-    def test_empty_selection_returns_none(self):
-        from pages.components.dashboard_components import _get_selected_type_id
-        assert _get_selected_type_id(self._event([]), self._df()) is None
-
-    def test_valid_row_returns_positional_type_id(self):
-        from pages.components.dashboard_components import _get_selected_type_id
-        # row index 1 → second row → type_id 22 (positional, index-label agnostic)
-        assert _get_selected_type_id(self._event([1]), self._df()) == 22
-
-    def test_out_of_range_row_returns_none(self):
-        from pages.components.dashboard_components import _get_selected_type_id
-        assert _get_selected_type_id(self._event([99]), self._df()) is None
-
-    def test_negative_row_returns_none(self):
-        # Streamlit never emits a negative on_select index, but the guard must
-        # reject it rather than letting iloc[-1] silently wrap to the last row.
-        from pages.components.dashboard_components import _get_selected_type_id
-        assert _get_selected_type_id(self._event([-1]), self._df()) is None
-
-    def test_out_of_range_row_logs_error(self):
-        # An out-of-range index means realignment drift (a legit click cannot
-        # produce one), so it must be logged loudly, not swallowed.
         from pages.components import dashboard_components as dc
-        with patch.object(dc.logger, "error") as mock_err:
-            assert dc._get_selected_type_id(self._event([99]), self._df()) is None
-        mock_err.assert_called_once()
 
-    def test_normal_no_selection_does_not_log(self):
-        # None-event and empty-rows are normal "nothing selected" states — silent.
-        from pages.components import dashboard_components as dc
-        with patch.object(dc.logger, "error") as mock_err:
-            assert dc._get_selected_type_id(None, self._df()) is None
-            assert dc._get_selected_type_id(self._event([]), self._df()) is None
+        state = {} if click is None else {"k": SimpleNamespace(row=click, label="x")}
+        with patch.object(dc, "st") as mock_st, patch.object(dc.logger, "error") as mock_err:
+            mock_st.session_state = state
+            dc._open_clicked_item("k", self.TYPE_IDS, "pages/market_stats.py", "item_id")
+        return mock_st.switch_page, mock_err
+
+    def test_navigates_to_clicked_row(self):
+        switch_page, mock_err = self._call(1)
+        switch_page.assert_called_once_with(
+            "pages/market_stats.py", query_params={"item_id": "22"},
+        )
         mock_err.assert_not_called()
 
+    def test_no_click_state_does_nothing(self):
+        switch_page, mock_err = self._call(None)
+        switch_page.assert_not_called()
+        mock_err.assert_not_called()
 
-class TestResolveSelection:
-    """Realignment guard for the doctrine tables' on_select handling.
+    def test_out_of_range_row_logs_and_does_not_navigate(self):
+        switch_page, mock_err = self._call(3)
+        switch_page.assert_not_called()
+        mock_err.assert_called_once()
 
-    on_select returns a POSITIONAL index into the *displayed* (possibly
-    low-stock-filtered, alphabetically-sorted) rows, but the source frame is the
-    full unfiltered frame. _resolve_selection must realign source -> display
-    order before positional extraction. Restores the protection of the deleted
-    TestResolveTableSelection, which guarded the same off-by-row navigation bug.
+    def test_negative_row_does_not_wrap_to_last_item(self):
+        switch_page, mock_err = self._call(-1)
+        switch_page.assert_not_called()
+        mock_err.assert_called_once()
+
+
+class TestWithOpenButtons:
+    def _build(self, doctrine_param=None):
+        from pages.components import dashboard_components as dc
+
+        table_df = pd.DataFrame({"type_name": ["a", "b"]}, index=[7, 3])
+        config = {"type_name": "existing"}
+        with patch.object(dc, "st") as mock_st:
+            out_df, out_config = dc._with_open_buttons(
+                table_df, config, "dash_x", [101, 102], "en", doctrine_param=doctrine_param,
+            )
+        return table_df, config, out_df, out_config, mock_st.column_config.ButtonColumn
+
+    def test_market_only_prepends_one_button_column(self):
+        table_df, config, out_df, out_config, button_column = self._build()
+
+        assert list(out_df.columns) == ["open_market_stats", "type_name"]
+        assert list(out_df.index) == [7, 3]
+        assert set(out_config) == {"type_name", "open_market_stats"}
+        kwargs = button_column.call_args.kwargs
+        assert kwargs["key"] == "dash_x_open_market_stats"
+        assert kwargs["args"] == (
+            "dash_x_open_market_stats", [101, 102], "pages/market_stats.py", "item_id",
+        )
+        assert kwargs["pinned"] is True
+        # Inputs are not mutated.
+        assert list(table_df.columns) == ["type_name"]
+        assert config == {"type_name": "existing"}
+
+    def test_doctrine_param_adds_doctrine_status_button(self):
+        _, _, out_df, out_config, button_column = self._build(doctrine_param="module_id")
+
+        assert list(out_df.columns) == ["open_market_stats", "open_doctrine_status", "type_name"]
+        doctrine_kwargs = button_column.call_args_list[1].kwargs
+        assert doctrine_kwargs["args"] == (
+            "dash_x_open_doctrine_status", [101, 102], "pages/doctrine_status.py", "module_id",
+        )
+
+
+class TestDoctrineShipsButtonAlignment:
+    """The ships table shows fit_id, not type_id, and the low-stock filter drops
+    rows. The button type_ids must follow the displayed rows, or a click opens
+    the wrong hull.
     """
 
-    def _event(self, rows):
-        from types import SimpleNamespace
-        return SimpleNamespace(selection={"rows": rows})
-
-    def test_filtered_frame_maps_position_to_displayed_row(self):
-        from pages.components.dashboard_components import _resolve_selection
-
-        # Full source: 4 rows. Low-stock filter kept only labels 2 and 3.
-        source_df = pd.DataFrame({"type_id": [11, 22, 33, 44]}, index=[0, 1, 2, 3])
-        display_df = source_df.loc[[2, 3]]
-        # Displayed position 1 -> label 3 -> type_id 44.
-        # The pre-fix bug (source_df.iloc[1] on the full frame) would return 22.
-        assert _resolve_selection(
-            self._event([1]), source_df, display_df, "market_stats",
-        ) == (44, "market_stats")
-
-    def test_reordered_display_maps_by_position_not_label(self):
-        from pages.components.dashboard_components import _resolve_selection
-
-        # Alphabetical sort can leave labels non-monotonic in display order.
-        source_df = pd.DataFrame({"type_id": [11, 22, 33]}, index=[0, 1, 2])
-        display_df = source_df.loc[[2, 0, 1]]  # display order: 33, 11, 22
-        assert _resolve_selection(
-            self._event([0]), source_df, display_df, "doctrine_status",
-        ) == (33, "doctrine_status")
-
-    def test_returns_destination_passed_through(self):
-        from pages.components.dashboard_components import _resolve_selection
-
-        source_df = pd.DataFrame({"type_id": [11, 22]}, index=[0, 1])
-        assert _resolve_selection(
-            self._event([0]), source_df, source_df, "doctrine_status",
-        ) == (11, "doctrine_status")
-
-    def test_no_selection_returns_none_none(self):
-        from pages.components.dashboard_components import _resolve_selection
-
-        source_df = pd.DataFrame({"type_id": [11, 22]}, index=[0, 1])
-        assert _resolve_selection(
-            self._event([]), source_df, source_df, "market_stats",
-        ) == (None, None)
-
-
-class TestDestinationToggle:
-    def test_returns_choice_when_segment_selected(self):
+    def test_type_ids_follow_filtered_display_rows(self):
         from pages.components import dashboard_components as dc
-        with patch.object(dc, "st") as mock_st:
-            mock_st.columns.return_value = (MagicMock(), MagicMock())
-            mock_st.segmented_control.return_value = "market_stats"
-            assert dc._render_destination_toggle("k", "en") == "market_stats"
 
-    def test_falls_back_to_doctrine_status_when_none(self):
-        from pages.components import dashboard_components as dc
-        with patch.object(dc, "st") as mock_st:
-            mock_st.columns.return_value = (MagicMock(), MagicMock())
-            mock_st.segmented_control.return_value = None
-            assert dc._render_destination_toggle("k", "en") == "doctrine_status"
-
-
-class TestRowOpenHint:
-    def test_renders_caption_with_destination_label(self):
-        from pages.components import dashboard_components as dc
-        with patch.object(dc, "st") as mock_st:
-            dc._render_row_open_hint("market_stats", "en")
-        mock_st.caption.assert_called_once()
-        caption_text = mock_st.caption.call_args.args[0]
-        # The hint interpolates the translated nav.page.market_stats label.
-        from ui.i18n import translate_text
-        expected_label = translate_text("en", "nav.page.market_stats")
-        assert expected_label in caption_text
-
-
-class TestTableFunctionsDropDestinationParam:
-    def test_ships_table_has_no_destination_param(self):
-        import inspect
-        from pages.components.dashboard_components import render_doctrine_ships_table
-        assert "destination" not in inspect.signature(render_doctrine_ships_table).parameters
-
-    def test_modules_table_has_no_destination_param(self):
-        import inspect
-        from pages.components.dashboard_components import render_popular_modules_table
-        assert "destination" not in inspect.signature(render_popular_modules_table).parameters
-
-
-class TestCommodityGridNoGlobalToggle:
-    def test_grid_source_has_no_global_destination_toggle(self):
-        # Read the source directly to avoid triggering main() at import time
-        import pathlib
-        source_path = pathlib.Path(__file__).parent.parent / "pages" / "market_dashboard.py"
-        source = source_path.read_text()
-
-        # Extract the _render_commodity_grid function body
-        # Find from "def _render_commodity_grid" to the next "def " at same indentation
-        import re
-        match = re.search(
-            r"def _render_commodity_grid\(.*?\):\n(.*?)(?=\ndef )",
-            source,
-            re.DOTALL
+        fits_df = pd.DataFrame({
+            "fit_id": [1, 2, 3],
+            "ship_id": [500, 600, 700],
+            "type_id": [500, 600, 700],
+            "ship_name": ["Full", "Low", "Lower"],
+            "fits_on_mkt": [10, 2, 1],
+            "fit_qty": [1, 1, 1],
+            "price": [1.0, 1.0, 1.0],
+            "total_stock": [10, 2, 1],
+        })
+        doctrine_repo = MagicMock()
+        doctrine_repo.get_all_fits.return_value = fits_df
+        doctrine_repo.get_all_targets.return_value = pd.DataFrame(
+            {"fit_id": [1, 2, 3], "ship_target": [10, 10, 10]}
         )
-        if not match:
-            pytest.fail("Could not find _render_commodity_grid function")
+        market_service = MagicMock()
+        market_service.get_current_market_snapshot.return_value = pd.DataFrame()
 
-        func_body = match.group(1)
-        assert "dash_row_destination" not in func_body, "Orphaned dash_row_destination key found"
-        assert "segmented_control" not in func_body, "Orphaned segmented_control found"
-        assert "destination=dest" not in func_body, "Orphaned destination=dest kwarg found"
+        captured = {}
+
+        def fake_with_open_buttons(table_df, column_config, key, type_ids, lang, doctrine_param):
+            captured.update(type_ids=type_ids, fit_ids=table_df["fit_id"].tolist(),
+                            doctrine_param=doctrine_param)
+            return table_df, column_config
+
+        with patch.object(dc, "st"), \
+                patch.object(dc, "_apply_equivalents_to_fits", side_effect=lambda df: df), \
+                patch.object(dc, "_require_jita_prices", return_value={}), \
+                patch.object(dc, "apply_localized_type_names", side_effect=lambda df, *a: df), \
+                patch.object(dc, "_render_filter_columns", return_value="low_stock"), \
+                patch.object(dc, "_with_open_buttons", side_effect=fake_with_open_buttons):
+            dc.render_doctrine_ships_table(
+                doctrine_repo, market_service, MagicMock(), MagicMock(), "en",
+                dataframe_key="dash_doctrine_ships",
+            )
+
+        # Fit 1 is at 100% and filtered out; the rest keep their own hull ids.
+        assert captured == {
+            "type_ids": [600, 700], "fit_ids": [2, 3], "doctrine_param": "ship_id",
+        }

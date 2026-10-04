@@ -405,19 +405,8 @@ class LowStockService:
         """
         filters = filters or LowStockFilters()
 
-        # Base query joining marketstats with doctrines
-        query = """
-        SELECT ms.*,
-               CASE WHEN d.type_id IS NOT NULL THEN 1 ELSE 0 END as is_doctrine,
-               d.ship_name,
-               d.fits_on_mkt
-        FROM marketstats ms
-        LEFT JOIN doctrines d ON ms.type_id = d.type_id
-        """
-
         try:
-            with self._mkt_db.engine.connect() as conn:
-                df = pd.read_sql_query(query, conn)
+            df = self._market_repo.get_stats_with_doctrine_usage()
 
             if df.empty:
                 return df
@@ -500,27 +489,22 @@ class LowStockService:
                 faction_ids = self.get_type_ids_by_metagroup(4)
                 df = df[df["type_id"].isin(faction_ids)]
 
-            # Aggregate ship/fit usage for each item
+            # Aggregate ship/fit usage for each item: ["Ferox (12)", ...]
             if not df.empty:
-                ship_groups = (
-                    df.groupby("type_id", group_keys=False)
-                    .apply(
-                        lambda x: [
-                            f"{row['ship_name']} ({int(row['fits_on_mkt'])})"
-                            for _, row in x.iterrows()
-                            if pd.notna(row["ship_name"])
-                            and pd.notna(row["fits_on_mkt"])
-                        ],
-                        include_groups=False,
-                    )
-                    .to_dict()
+                usage = df[df["ship_name"].notna() & df["fits_on_mkt"].notna()]
+                labels = (
+                    usage["ship_name"].astype(str)
+                    + " ("
+                    + usage["fits_on_mkt"].astype(int).astype(str)
+                    + ")"
                 )
+                ship_groups = labels.groupby(usage["type_id"]).agg(list).to_dict()
 
                 # De-duplicate rows (keep one per type_id)
                 df = df.drop_duplicates(subset=["type_id"])
 
-                # Add ships column
-                df["ships"] = df["type_id"].map(ship_groups)
+                # Add ships column; items used in no fit get an empty list
+                df["ships"] = df["type_id"].map(lambda tid: ship_groups.get(tid, []))
                 df = apply_localized_type_names(df, self._sde_repo, language_code, self._logger)
 
             return df

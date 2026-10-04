@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from config import DatabaseConfig, SyncResult
+from config import DatabaseConfig, SyncResult, replica_version
 
 
 @pytest.fixture
@@ -224,6 +224,20 @@ class TestSync:
         conn = _mock_sync_conn(pull_returns=False)  # bootstrap then no-op pull
         result, _ = self._run_sync(db, conn)
         assert result.changed is True
+
+    def test_changed_pull_advances_replica_version(self, db):
+        _make_db(db.path)
+        _write_info(db)
+        before = replica_version(db.alias)
+        self._run_sync(db, _mock_sync_conn(pull_returns=True))
+        assert replica_version(db.alias) == before + 1
+
+    def test_unchanged_pull_keeps_replica_version(self, db):
+        _make_db(db.path)
+        _write_info(db)
+        before = replica_version(db.alias)
+        self._run_sync(db, _mock_sync_conn(pull_returns=False))
+        assert replica_version(db.alias) == before
 
     def test_force_rebuild_nukes_replica_and_checks_integrity(self, db):
         """A .db whose data pages are corrupt still satisfies

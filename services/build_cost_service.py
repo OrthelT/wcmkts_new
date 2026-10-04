@@ -307,7 +307,7 @@ class BuildCostService:
         if etag:
             headers["If-None-Match"] = etag
 
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=API_TIMEOUT)
         logger.debug(f"ESI status: {response.status_code}")
 
         new_etag = response.headers.get("ETag")

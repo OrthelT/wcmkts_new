@@ -133,15 +133,13 @@ class TestLowStockService:
         assert [doctrine.fit_ids for doctrine in result] == [[20], [21]]
 
     @patch("services.low_stock_service.apply_localized_type_names")
-    @patch("pandas.read_sql_query")
     def test_get_low_stock_items_hides_zero_volume_items_by_default(
         self,
-        mock_read_sql,
         mock_localize,
     ):
         from services.low_stock_service import LowStockFilters, LowStockService
 
-        mock_read_sql.return_value = pd.DataFrame(
+        base_df = pd.DataFrame(
             {
                 "type_id": [34, 35, 36],
                 "total_volume_remain": [12, 20, 8],
@@ -164,6 +162,7 @@ class TestLowStockService:
         mock_localize.side_effect = lambda df, *_args, **_kwargs: df
 
         market_repo = Mock()
+        market_repo.get_stats_with_doctrine_usage.return_value = base_df
         market_repo.get_30day_volume_metrics.return_value = pd.DataFrame(
             {
                 "type_id": [34, 36],
@@ -185,15 +184,13 @@ class TestLowStockService:
         assert shown_result["type_id"].tolist() == [34, 35, 36]
 
     @patch("services.low_stock_service.apply_localized_type_names")
-    @patch("pandas.read_sql_query")
     def test_get_low_stock_items_uses_history_based_avg_volume_and_recalculates_days(
         self,
-        mock_read_sql,
         mock_localize,
     ):
         from services.low_stock_service import LowStockService
 
-        mock_read_sql.return_value = pd.DataFrame(
+        base_df = pd.DataFrame(
             {
                 "type_id": [34],
                 "total_volume_remain": [12],
@@ -216,6 +213,7 @@ class TestLowStockService:
         mock_localize.side_effect = lambda df, *_args, **_kwargs: df
 
         market_repo = Mock()
+        market_repo.get_stats_with_doctrine_usage.return_value = base_df
         market_repo.get_30day_volume_metrics.return_value = pd.DataFrame(
             {
                 "type_id": [34],
@@ -234,15 +232,13 @@ class TestLowStockService:
         assert result.iloc[0]["days_remaining"] == 24.0
 
     @patch("services.low_stock_service.apply_localized_type_names")
-    @patch("pandas.read_sql_query")
     def test_get_low_stock_items_applies_localized_names(
         self,
-        mock_read_sql,
         mock_localize,
     ):
         from services.low_stock_service import LowStockService
 
-        mock_read_sql.return_value = pd.DataFrame(
+        base_df = pd.DataFrame(
             {
                 "type_id": [34],
                 "total_volume_remain": [1200],
@@ -286,6 +282,7 @@ class TestLowStockService:
         )
 
         market_repo = Mock()
+        market_repo.get_stats_with_doctrine_usage.return_value = base_df
         market_repo.get_30day_volume_metrics.return_value = pd.DataFrame(
             {
                 "type_id": [34],
@@ -302,3 +299,34 @@ class TestLowStockService:
         assert len(result) == 1
         assert result.iloc[0]["type_name"] == "三钛合金"
         mock_localize.assert_called_once()
+
+    @patch("services.low_stock_service.apply_localized_type_names")
+    def test_get_low_stock_items_lists_each_fit_using_an_item(self, mock_localize):
+        """One row per type_id; ships lists every fit in row order; no fit gives []."""
+        from services.low_stock_service import LowStockService
+
+        market_repo = Mock()
+        market_repo.get_stats_with_doctrine_usage.return_value = pd.DataFrame(
+            {
+                "type_id": [34, 34, 34, 35],
+                "total_volume_remain": [12, 12, 12, 20],
+                "category_id": [4, 4, 4, 4],
+                "category_name": ["Mineral"] * 4,
+                "type_name": ["Tritanium"] * 3 + ["Pyerite"],
+                "is_doctrine": [1, 1, 1, 0],
+                "ship_name": ["Ferox", "Hurricane", None, None],
+                "fits_on_mkt": [12.0, 3.0, 5.0, None],
+            }
+        )
+        market_repo.get_30day_volume_metrics.return_value = pd.DataFrame(
+            {"type_id": [34, 35], "volume_30d": [30.0, 30.0], "avg_volume_30d": [1.0, 1.0]}
+        )
+        mock_localize.side_effect = lambda df, *_args, **_kwargs: df
+
+        with patch("settings_service.SettingsService") as mock_settings_service:
+            mock_settings_service.return_value.use_equivalents = False
+            service = LowStockService(_mock_db(), Mock(), market_repo)
+            result = service.get_low_stock_items(language_code="en")
+
+        assert result["type_id"].tolist() == [34, 35]
+        assert result["ships"].tolist() == [["Ferox (12)", "Hurricane (3)"], []]

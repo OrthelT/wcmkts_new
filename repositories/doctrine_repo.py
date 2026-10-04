@@ -106,6 +106,11 @@ class DoctrineRepository:
         self._logger = logger or logging.getLogger(__name__)
         self._reader = BaseRepository(db, self._logger)
 
+    @property
+    def db_alias(self) -> str:
+        """Alias of the market database this repository reads."""
+        return self._db.alias
+
     # =========================================================================
     # Core Fit Data
     # =========================================================================
@@ -573,7 +578,10 @@ def get_doctrine_repository() -> DoctrineRepository:
 # =============================================================================
 # Caching Functions
 # =============================================================================
-@st.cache_data(ttl=600, show_spinner="Getting all fits...")
+# Background refresh is safe here for the same reason as in market_repo: TTL
+# expiry never brings new data, and refresh_market_caches() clears every cache
+# below after a sync changes the replica.
+@st.cache_data(ttl=600, show_spinner="Getting all fits...", refresh_mode="background")
 def get_all_fits_with_cache(db_alias: str = "wcmkt", market_key: str = "primary") -> pd.DataFrame:
     """Get fit data from the doctrines table, filtered by market_flag.
 
@@ -616,7 +624,7 @@ def get_all_fits_with_cache(db_alias: str = "wcmkt", market_key: str = "primary"
         logger.error(f"Failed to get all fits: {e}")
         return pd.DataFrame()
 
-@st.cache_data(ttl=600, show_spinner="Getting fit {fit_id}...")
+@st.cache_data(ttl=600, show_spinner="Getting fit {fit_id}...", refresh_mode="background")
 def get_fit_by_id_with_cache(fit_id: int, db_alias: str = "wcmkt") -> pd.DataFrame:
     """Get all items for a specific fit."""
     logger.debug(f"Getting fit {fit_id}...with cache")
@@ -628,7 +636,7 @@ def get_fit_by_id_with_cache(fit_id: int, db_alias: str = "wcmkt") -> pd.DataFra
         logger.error(f"Failed to get fit {fit_id}: {e}")
         return pd.DataFrame()
 
-@st.cache_data(ttl=600, show_spinner="Getting all ship targets...")
+@st.cache_data(ttl=600, show_spinner="Getting all ship targets...", refresh_mode="background")
 def get_all_targets_with_cache(db_alias: str = "wcmkt") -> pd.DataFrame:
     """Get all ship targets."""
     logger.debug("Getting all ship targets...")
@@ -640,7 +648,10 @@ def get_all_targets_with_cache(db_alias: str = "wcmkt") -> pd.DataFrame:
         logger.error(f"Failed to get all targets: {e}")
         return pd.DataFrame()
 
-@st.cache_data(ttl=600, show_spinner="Getting doctrine target quantities...")
+@st.cache_data(
+    ttl=600, show_spinner="Getting doctrine target quantities...",
+    refresh_mode="background",
+)
 def get_target_quantities_with_cache(db_alias: str = "wcmkt", market_key: str = "primary") -> pd.DataFrame:
     """Total doctrine demand per type_id: MAX(fit_qty * ship_target) across the
     active market's fits that use each type. Joins doctrines to ship_targets on
@@ -689,7 +700,10 @@ def get_target_quantities_with_cache(db_alias: str = "wcmkt", market_key: str = 
         logger.error(f"Failed to get doctrine target quantities: {e}")
         return pd.DataFrame(columns=["type_id", "target_qty"])
 
-@st.cache_data(ttl=600, show_spinner="Getting target for fit {fit_id}...")
+@st.cache_data(
+    ttl=600, show_spinner="Getting target for fit {fit_id}...",
+    refresh_mode="background",
+)
 def get_target_by_fit_id_with_cache(fit_id: int, default: int = DEFAULT_SHIP_TARGET, db_alias: str = "wcmkt") -> int:
     """Get target stock level for a specific fit."""
     logger.debug(f"Getting target for fit {fit_id}...")
@@ -704,7 +718,10 @@ def get_target_by_fit_id_with_cache(fit_id: int, default: int = DEFAULT_SHIP_TAR
         logger.error(f"Failed to get target for fit {fit_id}: {e}")
         return default
 
-@st.cache_data(ttl=600, show_spinner="Getting target for ship {ship_id}...")
+@st.cache_data(
+    ttl=600, show_spinner="Getting target for ship {ship_id}...",
+    refresh_mode="background",
+)
 def get_target_by_ship_id_with_cache(ship_id: int, default: int = DEFAULT_SHIP_TARGET, db_alias: str = "wcmkt") -> int:
     """Get target stock level for a specific ship type."""
     logger.debug(f"Getting target for ship {ship_id}...")
@@ -731,7 +748,7 @@ def _resolve_doctrine_display_alias(db_alias: str | None = None) -> str | None:
         return None
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, refresh_mode="background")
 def get_friendly_names_with_cache(db_alias: str = "wcmktnewkeep") -> dict[str, str]:
     """Load doctrine_name -> friendly_name mapping from the doctrine_fits table.
 
@@ -761,7 +778,7 @@ def get_doctrine_display_name(raw_name: str, db_alias: str | None = None) -> str
     return get_friendly_names_with_cache(resolved_alias).get(raw_name, raw_name)
 
 
-@st.cache_data(ttl=600, show_spinner="Getting fit name for {fit_id}...")
+@st.cache_data(ttl=600, show_spinner="Getting fit name for {fit_id}...", refresh_mode="background")
 def get_fit_name_with_cache(fit_id: int, default: str = "Unknown Fit", db_alias: str = "wcmkt") -> str:
     """Get the display name for a fit.
 
