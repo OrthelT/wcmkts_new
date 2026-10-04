@@ -1,4 +1,4 @@
-# Winter Coalition Market App (v.0.7.3)
+# Winter Coalition Market App (v.0.7.4)
 A Streamlit application for viewing EVE Online market statistics for Winter Coalition. This tool provides real-time market data analysis, historical price tracking, and fitting information for various items in EVE Online markets.
 
 SUPPORT: Join the Discord for support https://discord.gg/BxatJE572Y
@@ -7,6 +7,18 @@ CONTRIBUTING: Contributors welcome. This project is fully open source under MIT 
 **Note:** Admin pages (watchlist and doctrine management) are currently disabled during the pyturso migration. Re-enabling them requires a local-write-plus-push redesign.
 
 # UPDATES
+## Version 0.7.4 
+Various performance and ui enhancements, bump to Streamlit version 1.64
+- Fewer loading pauses: when a table's cache expires and no new data has arrived, the app
+  keeps showing the table and reloads it in the background.
+- Faster controls: changing a fit checkbox on Doctrine Status, the ISK chart options on
+  Market Stats, or the Pricer results reruns only that section, not the whole page.
+- Dashboard shortcuts: each dashboard table row has buttons that open the item in
+  Market Stats or Doctrine Status.
+- Faster filters on Builder Helper and Low Stock.
+- Doctrine Status export shows "—" for items with no stock data, not 0.
+- After a data update, every open session sees the new data.
+
 ## Versions 0.7.1 and 0.7.2
 Versions 0.7.1 and 0.7.2 include a number of performance optimizations that significantly reduce startup and page load times.
 ### Performance Improvements

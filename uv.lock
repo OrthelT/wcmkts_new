@@ -1175,7 +1175,7 @@ wheels = [
 
 [[package]]
 name = "wcmkts-production"
-version = "0.7.3"
+version = "0.7.4"
 source = { editable = "." }
 dependencies = [
     { name = "httpx", extra = ["http2"] },
