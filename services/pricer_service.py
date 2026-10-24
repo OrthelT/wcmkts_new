@@ -73,16 +73,19 @@ class SDELookupService:
 
         Returns:
             Dict with typeID, typeName, groupName, categoryName, volume
+            (repackaged volume when the type has one, since market items trade repackaged)
             or None if not found
         """
         query = """
-            SELECT typeID, typeName, groupName, categoryName, volume
+            SELECT typeID, typeName, groupName, categoryName,
+                   COALESCE(repackagedVolume, volume) AS volume
             FROM sdetypes
             WHERE typeName = :type_name COLLATE NOCASE
             LIMIT 1
         """
         localized_query = """
-            SELECT s.typeID, s.typeName, s.groupName, s.categoryName, s.volume
+            SELECT s.typeID, s.typeName, s.groupName, s.categoryName,
+                   COALESCE(s.repackagedVolume, s.volume) AS volume
             FROM localizations l
             JOIN sdetypes s ON s.typeID = l.type_id
             WHERE l.type_name = :type_name COLLATE NOCASE
@@ -113,14 +116,16 @@ class SDELookupService:
         """Attempt fuzzy matching for item name."""
         # Try with wildcards
         query = """
-            SELECT typeID, typeName, groupName, categoryName, volume
+            SELECT typeID, typeName, groupName, categoryName,
+                   COALESCE(repackagedVolume, volume) AS volume
             FROM sdetypes
             WHERE typeName LIKE :pattern COLLATE NOCASE
             ORDER BY LENGTH(typeName)
             LIMIT 1
         """
         localized_query = """
-            SELECT s.typeID, s.typeName, s.groupName, s.categoryName, s.volume
+            SELECT s.typeID, s.typeName, s.groupName, s.categoryName,
+                   COALESCE(s.repackagedVolume, s.volume) AS volume
             FROM localizations l
             JOIN sdetypes s ON s.typeID = l.type_id
             WHERE l.type_name LIKE :pattern COLLATE NOCASE
@@ -592,3 +597,7 @@ def get_pricer_service() -> PricerService:
     except ImportError:
         logger.debug("state module unavailable, creating new PricerService instance")
         return _create_pricer_service()
+
+def get_sde_lookup_service(db: DatabaseConfig, logger_instance: str | None):
+    sde = SDELookupService(db,logger_instance=logger_instance)
+    return sde
