@@ -96,6 +96,7 @@ class ParsedItem:
     category_name: str = ""
     slot_type: SlotType = SlotType.UNKNOWN
     parse_error: Optional[str] = None
+    repackaged_volume: Optional[str] = None
 
     @property
     def is_resolved(self) -> bool:

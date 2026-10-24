@@ -174,6 +174,11 @@ def get_pricer_column_config(short_name: str = "4H", language_code: str = "en") 
             help=translate_text(language_code, "pricer.column_volume_help"),
             format="localized",
         ),
+        "Repackaged Volume": st.column_config.NumberColumn(
+            translate_text(language_code, "pricer.column_volume"),
+            help=translate_text(language_code, "pricer.column_volume_help"),
+            format="localized",
+        ),
         "Total Volume": st.column_config.NumberColumn(
             translate_text(language_code, "pricer.column_total_volume"),
             help=translate_text(language_code, "pricer.column_total_volume_help"),
@@ -258,6 +263,11 @@ def _fit_availability_column_config(language_code: str, short_name: str = "4H") 
             translate_text(language_code, "pricer.fits.column_equivalents"),
             help=translate_text(language_code, "pricer.fits.column_equivalents_help"),
             width="small",
+        ),
+        "Repackaged Volume": st.column_config.NumberColumn(
+            translate_text(language_code, "pricer.column_volume"),
+            help=translate_text(language_code, "pricer.column_volume_help"),
+            format="localized",
         ),
     }
 

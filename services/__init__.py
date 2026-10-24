@@ -55,6 +55,7 @@ from services.pricer_service import (
     get_pricer_service,
     # Supporting classes
     SDELookupService,
+    get_sde_lookup_service,
 )
 
 from services.low_stock_service import (
@@ -154,6 +155,7 @@ __all__ = [
     "PricerService",
     "get_pricer_service",
     "SDELookupService",
+    "get_sde_lookup_service",
     # Low Stock Service
     "LowStockService",
     "get_low_stock_service",
