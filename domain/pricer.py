@@ -81,7 +81,7 @@ class ParsedItem:
         quantity: Quantity requested
         type_id: Resolved EVE type ID (None if not found in SDE)
         resolved_name: Canonical name from SDE (None if not resolved)
-        volume: Item volume in m3
+        volume: Item volume in m3 (repackaged volume when the type has one)
         group_name: Item group (e.g., "Medium Energy Turret")
         category_name: Category (e.g., "Module", "Drone")
         slot_type: EFT slot type (high/med/low/rig/drone/cargo)
@@ -96,7 +96,6 @@ class ParsedItem:
     category_name: str = ""
     slot_type: SlotType = SlotType.UNKNOWN
     parse_error: Optional[str] = None
-    repackaged_volume: Optional[str] = None
 
     @property
     def is_resolved(self) -> bool:

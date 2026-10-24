@@ -16,7 +16,8 @@ def _build_lookup_service():
             " typeName TEXT,"
             " groupName TEXT,"
             " categoryName TEXT,"
-            " volume REAL)"
+            " volume REAL,"
+            " repackagedVolume REAL)"
         ))
         conn.execute(text(
             "CREATE TABLE localizations ("
@@ -26,8 +27,9 @@ def _build_lookup_service():
         ))
         conn.execute(text(
             "INSERT INTO sdetypes VALUES "
-            " (18, 'Plagioclase', 'Ore', 'Asteroid', 0.35),"
-            " (34, 'Tritanium', 'Mineral', 'Material', 0.01)"
+            " (18, 'Plagioclase', 'Ore', 'Asteroid', 0.35, NULL),"
+            " (34, 'Tritanium', 'Mineral', 'Material', 0.01, NULL),"
+            " (587, 'Rifter', 'Frigate', 'Ship', 27289.0, 2500.0)"
         ))
         conn.execute(text(
             "INSERT INTO localizations VALUES "
@@ -59,3 +61,10 @@ def test_resolve_item_matches_localized_prefix():
     assert result is not None
     assert result["type_id"] == 34
     assert result["type_name"] == "Tritanium"
+
+
+def test_resolve_item_prefers_repackaged_volume():
+    service = _build_lookup_service()
+
+    assert service.resolve_item("Rifter")["volume"] == 2500.0
+    assert service.resolve_item("Tritanium")["volume"] == 0.01

@@ -62,7 +62,6 @@ class SDELookupService:
             "group_name": row[2] or "",
             "category_name": row[3] or "",
             "volume": row[4] or 0.0,
-            "repackagedVolume": row[5] or 0.0,
         }
 
     def resolve_item(self, type_name: str) -> Optional[dict]:
@@ -74,16 +73,19 @@ class SDELookupService:
 
         Returns:
             Dict with typeID, typeName, groupName, categoryName, volume
+            (repackaged volume when the type has one, since market items trade repackaged)
             or None if not found
         """
         query = """
-            SELECT typeID, typeName, groupName, categoryName, volume, repackagedVolume
+            SELECT typeID, typeName, groupName, categoryName,
+                   COALESCE(repackagedVolume, volume) AS volume
             FROM sdetypes
             WHERE typeName = :type_name COLLATE NOCASE
             LIMIT 1
         """
         localized_query = """
-            SELECT s.typeID, s.typeName, s.groupName, s.categoryName, s.volume, s.repackagedVolume
+            SELECT s.typeID, s.typeName, s.groupName, s.categoryName,
+                   COALESCE(s.repackagedVolume, s.volume) AS volume
             FROM localizations l
             JOIN sdetypes s ON s.typeID = l.type_id
             WHERE l.type_name = :type_name COLLATE NOCASE
@@ -114,14 +116,16 @@ class SDELookupService:
         """Attempt fuzzy matching for item name."""
         # Try with wildcards
         query = """
-            SELECT typeID, typeName, groupName, categoryName, volume, repackagedVolume
+            SELECT typeID, typeName, groupName, categoryName,
+                   COALESCE(repackagedVolume, volume) AS volume
             FROM sdetypes
             WHERE typeName LIKE :pattern COLLATE NOCASE
             ORDER BY LENGTH(typeName)
             LIMIT 1
         """
         localized_query = """
-            SELECT s.typeID, s.typeName, s.groupName, s.categoryName, s.volume, s.repackagedVolume
+            SELECT s.typeID, s.typeName, s.groupName, s.categoryName,
+                   COALESCE(s.repackagedVolume, s.volume) AS volume
             FROM localizations l
             JOIN sdetypes s ON s.typeID = l.type_id
             WHERE l.type_name LIKE :pattern COLLATE NOCASE
