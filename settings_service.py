@@ -124,6 +124,10 @@ class SettingsService:
         return self.settings.get("i18n", {}).get("default_language", "en")
 
     @property
+    def show_sde_version(self) -> bool:
+        return bool(self.settings.get("ui", {}).get("show_sde_version", False))
+
+    @property
     def eve_sso_client_id(self) -> str:
         return str(self.settings.get("eve_sso", {}).get("client_id", ""))
 

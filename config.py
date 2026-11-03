@@ -557,17 +557,27 @@ class DatabaseConfig:
             return None
         return update_time.replace(tzinfo=timezone.utc)
 
-    def get_sde_version(self):
-        if self.alias == "sde":
-            engine= self.engine
-            version = {}
-            with engine.connect() as conn:
-                res = conn.execute(text("SELECT * FROM _sde"))
-                data  = res.fetchone()
-            version =  {"build": data[1], "releaseDate": data[2]}
-            return version
-        else:
-            return "use DatabaseConfig('sde') to run"
+    def get_sde_version(self) -> dict | None:
+        """Return ``{"build", "releaseDate"}`` from the SDE ``_sde`` table.
+
+        Returns None when the local replica is not initialized. The content
+        check runs first because opening the sync-dialect engine against a
+        missing file would create an empty ``.db`` as a side effect.
+        """
+        if self.alias != "sde":
+            raise ValueError("get_sde_version() requires DatabaseConfig('sde')")
+        from init_db import verify_db_content  # deferred: init_db imports config
+
+        if not verify_db_content(self.path):
+            logger.warning(f"SDE replica not ready at {self.path}; skipping version lookup")
+            return None
+        with self.engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT buildNumber, releaseDate FROM _sde LIMIT 1")
+            ).fetchone()
+        if row is None:
+            return None
+        return {"build": row[0], "releaseDate": row[1]}
 
 if __name__ == "__main__":
     import argparse

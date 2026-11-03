@@ -143,6 +143,9 @@
 [i18n]
     default_language = "en"
 
+[ui]
+    show_sde_version = true # footer below the legal notice
+
 [eve_sso]
     client_id = "f9aae67fb3af430db7242e1f26d46f1d"
     callback_url = "https://wcmkts.streamlit.app/admin_login"
