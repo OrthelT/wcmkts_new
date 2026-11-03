@@ -557,6 +557,17 @@ class DatabaseConfig:
             return None
         return update_time.replace(tzinfo=timezone.utc)
 
+    def get_sde_version(self):
+        if self.alias == "sde":
+            engine= self.engine
+            version = {}
+            with engine.connect() as conn:
+                res = conn.execute(text("SELECT * FROM _sde"))
+                data  = res.fetchone()
+            version =  {"build": data[1], "releaseDate": data[2]}
+            return version
+        else:
+            return "use DatabaseConfig('sde') to run"
 
 if __name__ == "__main__":
     import argparse
