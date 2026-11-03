@@ -463,7 +463,7 @@ def main():
             with img_col:
                 if image_id:
                     if isship:
-                        st.image(f'https://images.evetech.net/types/{image_id}/render?size=64')
+                        st.image(f'https://images.evetech.net/types/{image_id}/render?size=64',link=f'https://images.evetech.net/types/{image_id}/render')
                     else:
                         st.image(f'https://images.evetech.net/types/{image_id}/icon?size=64')
             with name_col:
