@@ -1,8 +1,11 @@
 
 # WinterCo Markets Change Log 
 
-## Version pre-0.7.5r1 
+## Version 0.7.5 
 - pricer: use packaged volume for items that can be packaged)
+- ui: render ships by clicking on image in market stats
+- ui: add sde sync version and configuration setting to page footer 
+- fix:restore filtering for supercarrier construction
 
 ## Version 0.7.4 
 Various performance and ui enhancements, bump to Streamlit version 1.64
