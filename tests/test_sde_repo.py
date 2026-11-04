@@ -161,7 +161,7 @@ class TestGetTypesForCategory:
         result = _get_types_for_category_impl(repo, 17)
 
         assert result.empty
-        assert list(result.columns) == ["typeID", "typeName"]
+        assert list(result.columns) == ["typeID", "typeName", "groupID"]
 
     def test_returns_empty_when_read_df_raises(self):
         """repo.read_df already exhausted its own recovery ladder (sync +
@@ -172,7 +172,7 @@ class TestGetTypesForCategory:
         result = _get_types_for_category_impl(repo, 6)
 
         assert result.empty
-        assert list(result.columns) == ["typeID", "typeName"]
+        assert list(result.columns) == ["typeID", "typeName", "groupID"]
 
 
 class TestGetTypesForGroup:

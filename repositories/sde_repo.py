@@ -109,7 +109,7 @@ def _get_groups_for_category_impl(engine, category_id: int) -> pd.DataFrame:
         return pd.read_sql_query(query, conn, params={"category_id": category_id})
 
 def _get_types_for_category_impl(repo: BaseRepository, category_id: int) -> pd.DataFrame:
-    """Fetch types (typeID, typeName) for a category ID, with malformed-DB recovery via repo.
+    """Fetch types (typeID, typeName, groupID) for a category ID via repo.read_df().
 
     Special cases:
     - category_id 17 (Build Components / Commodity): uses the group IDs in
@@ -123,9 +123,9 @@ def _get_types_for_category_impl(repo: BaseRepository, category_id: int) -> pd.D
             groups = group_df["groupID"].dropna().astype(int).tolist()
         except (FileNotFoundError, pd.errors.EmptyDataError, KeyError) as e:
             logger.error(f"Failed to read commodity groups CSV {_COMMODITY_GROUPS_CSV}: {e}")
-            return pd.DataFrame(columns=["typeID", "typeName"])
+            return pd.DataFrame(columns=["typeID", "typeName", "groupID"])
         query = text("""
-            SELECT DISTINCT s.typeID, s.typeName
+            SELECT DISTINCT s.typeID, s.typeName, s.groupID
             FROM sdetypes s
             WHERE s.groupID IN :groups
             AND EXISTS (
@@ -136,13 +136,13 @@ def _get_types_for_category_impl(repo: BaseRepository, category_id: int) -> pd.D
         params = {"groups": groups}
     elif category_id == 4:
         query = text(
-            "SELECT DISTINCT typeID, typeName FROM sdetypes "
+            "SELECT DISTINCT typeID, typeName, groupID FROM sdetypes "
             "WHERE categoryID = :category_id AND groupID = 1136"
         ).bindparams(bindparam("category_id"))
         params = {"category_id": category_id}
     else:
         query = text(
-            "SELECT DISTINCT typeID, typeName FROM sdetypes "
+            "SELECT DISTINCT typeID, typeName, groupID FROM sdetypes "
             "WHERE categoryID = :category_id"
         ).bindparams(bindparam("category_id"))
         params = {"category_id": category_id}
@@ -151,7 +151,7 @@ def _get_types_for_category_impl(repo: BaseRepository, category_id: int) -> pd.D
         return repo.read_df(query, params=params)
     except Exception as e:
         logger.error(f"Error fetching types for category {category_id}: {e}")
-        return pd.DataFrame(columns=["typeID", "typeName"])
+        return pd.DataFrame(columns=["typeID", "typeName", "groupID"])
 
 def _get_types_for_group_impl(repo: BaseRepository, group_id: int) -> pd.DataFrame:
     """Fetch types for a group ID, with malformed-DB recovery via repo.
@@ -407,7 +407,7 @@ class SDERepository(BaseRepository):
     def get_types_for_category(self, category_id: int) -> pd.DataFrame:
         """Get types for a category ID (cached).
 
-        Returns a DataFrame with columns: typeID, typeName.
+        Returns a DataFrame with columns: typeID, typeName, groupID.
         Category 17 (Build Components / Commodity) returns manufacturable
         sdetypes whose groupID is listed in build_commodity_groups.csv.
         Category 4 (Fuel Blocks) filters to group 1136 (Fuel Block).

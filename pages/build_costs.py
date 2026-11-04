@@ -606,6 +606,10 @@ def main():
                     selected_item = None
                 else:
                     type_id = filtered_df["typeID"].values[0]
+                    # Only the category query returns groupID; the Sovereignty Hub
+                    # path sets group_id explicitly. is_super_group() needs it.
+                    if "groupID" in filtered_df.columns:
+                        group_id = int(filtered_df["groupID"].values[0])
         except Exception as e:
             st.warning(translate_text(language_code, "build_costs.invalid_item", error=str(e)))
             logger.error(f"Exception selecting item: {e}")
