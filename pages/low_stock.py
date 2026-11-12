@@ -82,6 +82,7 @@ def create_days_remaining_chart(df: pd.DataFrame, language_code: str):
         },
         color="category_name",
         color_discrete_sequence=px.colors.qualitative.Set3,
+        hover_data={"days_remaining": ":.1f"},
     )
 
     fig.update_layout(
