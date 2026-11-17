@@ -10,6 +10,40 @@ It covers three market hubs (primary, deployment, market3) in one app; `ui/marke
 
 **Important:** ESI calls to update market data are handled in a separate repository: https://github.com/OrthelT/mkts_backend
 
+## Pending: `sdetypes` changes at the next production SDE update
+
+Status as of 2026-11-14: **not yet in production.** Remove this section once the steps below are done.
+
+The SDE builder (`/home/orthel/workspace/eve/sdeupdate`, see its `CLAUDE.md` "November updates") changes the `sdetypes` table in the `sdelite` database. The changes were pushed to the test database (`sdelitetest`) on 2026-11-14 and passed verification. Production (`sdelite2`) receives them on the next `pipeline.py update` run against it.
+
+### What changes in `sdetypes`
+
+1. **New column `is_buildable INTEGER`** (0 or 1, never NULL). 1 means the type is the product of a published manufacturing blueprint and is practical to build. Rules:
+   - Always buildable by category: Celestial (2), Material (4), Ship (6, including faction ships), Drone (18), Deployable (22), Starbase (23), Reaction (24), Subsystem (32), Infrastructure Upgrades (39), Sovereignty Structures (40), Orbitals (46), Structure (65), Structure Module (66), Fighter (87).
+   - Module (7): Tech I and Tech II only.
+   - Charge (8): Tech I, Tech II, structure meta groups, or no meta group. Faction ammunition is 0.
+   - Commodity (17): all except Abyssal (mutaplasmids).
+   - Implant (20): controlled by `[buildable] implants` in the SDE builder's `settings.toml`. The current value is `"all"`.
+   - In the test database 3,419 of 27,424 types are 1.
+2. **`metaGroupID` / `metaGroupName` fallback.** CCP omits the meta group for base items without variations. 726 such types (e.g. Tormentor, bombs, Large Micro Jump Drive, 467 implants) change from NULL to `1` / `Tech I`. About 15,300 types (SKINs, commodities, skills, minerals, blueprints) stay NULL.
+
+### Required change in this repo, after production has the column
+
+Do not make this change earlier: `SdeTypes` ORM queries select every mapped column, so mapping a column that production lacks raises `no such column: is_buildable`.
+
+1. Confirm production has the column: `PRAGMA table_info(sdetypes)` on the pulled `sdelite` replica lists `is_buildable`.
+2. In `sdemodels.py::SdeTypes`, add the field after `repackagedVolume` and add it to `__repr__`:
+   ```python
+   is_buildable: Mapped[int] = mapped_column(Integer, nullable=True)
+   ```
+3. Add `is_buildable` to the `sdetypes` fixtures that create the table by hand (`tests/test_admin_repo.py`, `tests/test_pricer_service.py`) and to the `SdeTypes` rows in `demo_data.py`, where a test or demo page reads the column.
+4. Add an entry to `changelog.md`.
+
+### Behavior to check after the production update
+
+- Any filter on `metaGroupID = 1` now matches 726 more types. `services/low_stock_service.py` accepts a `metagroup_id` filter. The Tech II (`= 2`) and Faction (`= 4`) lookups in `repositories/sde_repo.py` are unaffected.
+- No code in this repo reads `is_buildable` yet. Read it with raw SQL through `read_df()`, per the read convention below.
+
 ## Project Structure & Module Organization
 
 ### Application Entry Point

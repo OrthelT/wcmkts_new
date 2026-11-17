@@ -108,13 +108,14 @@ class TestCalculate30dayMetrics:
     def test_category_filter(self, sample_history_df, mock_repo):
         """A non-ship category uses the (shuttle-inclusive) category resolver."""
         mock_repo.get_category_type_ids.return_value = [34]
-        mock_repo.get_history_by_type_ids.return_value = sample_history_df
+        mock_repo.get_history_window.return_value = sample_history_df
 
         from services.market_service import MarketService
         service = MarketService(mock_repo)
         result = service.calculate_30day_metrics(selected_category="Drone")
 
         mock_repo.get_category_type_ids.assert_called_once_with("Drone", category_id=None)
+        mock_repo.get_history_window.assert_called_once_with(30, [34])
         assert result[0] > 0  # avg_vol
 
     def test_ship_category_excludes_shuttles_via_pill_resolver(self, sample_history_df, mock_repo):
@@ -123,7 +124,7 @@ class TestCalculate30dayMetrics:
         (get_30day_filter_type_ids('ships')) rather than the shuttle-inclusive
         get_category_type_ids. See market_dashboard shuttle-exclusion rule."""
         mock_repo.get_30day_filter_type_ids.return_value = [587]
-        mock_repo.get_history_by_type_ids.return_value = sample_history_df
+        mock_repo.get_history_window.return_value = sample_history_df
 
         from services.market_service import MarketService
         service = MarketService(mock_repo)
@@ -133,13 +134,13 @@ class TestCalculate30dayMetrics:
 
         mock_repo.get_30day_filter_type_ids.assert_called_once_with("ships")
         mock_repo.get_category_type_ids.assert_not_called()
-        mock_repo.get_history_by_type_ids.assert_called_once_with([587])
+        mock_repo.get_history_window.assert_called_once_with(30, [587])
         assert result[0] > 0  # avg_vol
 
     def test_ship_category_detected_by_id_without_name(self, sample_history_df, mock_repo):
         """Ship detection works from category_id alone (name not required)."""
         mock_repo.get_30day_filter_type_ids.return_value = [587]
-        mock_repo.get_history_by_type_ids.return_value = sample_history_df
+        mock_repo.get_history_window.return_value = sample_history_df
 
         from services.market_service import MarketService
         service = MarketService(mock_repo)
@@ -165,7 +166,7 @@ class TestCalculate30dayMetrics:
             "average": [100.0] * n,
             "volume": volumes,
         })
-        mock_repo.get_history_by_type_ids.return_value = item_df
+        mock_repo.get_history_window.return_value = item_df
 
         from services.market_service import MarketService
         service = MarketService(mock_repo)
@@ -182,23 +183,24 @@ class TestCalculate30dayMetrics:
             "average": [5.0] * 10,
             "volume": [100] * 10,
         })
-        mock_repo.get_history_by_type_ids.return_value = item_df
+        mock_repo.get_history_window.return_value = item_df
 
         from services.market_service import MarketService
         service = MarketService(mock_repo)
         result = service.calculate_30day_metrics(selected_item_id=34)
 
+        mock_repo.get_history_window.assert_called_once_with(30, [34])
         assert result[0] > 0
 
     def test_type_ids_filter(self, sample_history_df, mock_repo):
         """Explicit type_ids (pill filters) query history for exactly those ids."""
-        mock_repo.get_history_by_type_ids.return_value = sample_history_df
+        mock_repo.get_history_window.return_value = sample_history_df
 
         from services.market_service import MarketService
         service = MarketService(mock_repo)
         result = service.calculate_30day_metrics(selected_type_ids=[34, 35])
 
-        mock_repo.get_history_by_type_ids.assert_called_once_with([34, 35])
+        mock_repo.get_history_window.assert_called_once_with(30, [34, 35])
         assert result[0] > 0
 
     def test_empty_type_ids_returns_zeros_without_query(self, mock_repo):
@@ -212,7 +214,7 @@ class TestCalculate30dayMetrics:
         mock_repo.get_history_window.assert_not_called()
 
     def test_type_ids_take_precedence_over_category(self, sample_history_df, mock_repo):
-        mock_repo.get_history_by_type_ids.return_value = sample_history_df
+        mock_repo.get_history_window.return_value = sample_history_df
 
         from services.market_service import MarketService
         service = MarketService(mock_repo)
