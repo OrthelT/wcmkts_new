@@ -219,11 +219,11 @@ class MarketService:
         """
         try:
             if selected_item_id:
-                df = self._repo.get_history_by_type_ids([selected_item_id])
+                df = self._repo.get_history_window(30, [selected_item_id])
             elif selected_type_ids is not None:
                 if not selected_type_ids:
                     return 0, 0, 0, 0, 0, 0
-                df = self._repo.get_history_by_type_ids(selected_type_ids)
+                df = self._repo.get_history_window(30, selected_type_ids)
             elif selected_category_id is not None or selected_category:
                 if selected_category_id == SHIP_CATEGORY_ID or selected_category == "Ship":
                     # Ship scope excludes shuttles here (matches the Ships pill),
@@ -237,7 +237,7 @@ class MarketService:
                     )
                 if not type_ids:
                     return 0, 0, 0, 0, 0, 0
-                df = self._repo.get_history_by_type_ids(type_ids)
+                df = self._repo.get_history_window(30, type_ids)
             else:
                 # Unfiltered scope: fetch the window this method reports on
                 # rather than the whole table. The pandas cutoffs below still

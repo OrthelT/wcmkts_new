@@ -224,9 +224,9 @@ def _get_30day_volume_metrics_impl(type_ids: list[int], db_alias: str = "wcmkt")
             COALESCE(SUM(volume), 0) AS volume_30d,
             COALESCE(SUM(volume), 0) / 30.0 AS avg_volume_30d
         FROM market_history
-        WHERE CAST(type_id AS INTEGER) IN :type_ids
+        WHERE type_id IN :type_ids
           AND date >= :cutoff
-        GROUP BY CAST(type_id AS INTEGER)
+        GROUP BY type_id
         """
     ).bindparams(bindparam("type_ids", expanding=True))
 
