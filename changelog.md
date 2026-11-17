@@ -1,6 +1,9 @@
 
 # WinterCo Markets Change Log 
 
+## Version 0.7.6 
+- performance enhancements that implement new indexes for market_history queries. 
+
 ## Version 0.7.5 
 - pricer: use packaged volume for items that can be packaged)
 - ui: render ships by clicking on image in market stats
