@@ -59,7 +59,7 @@ def test_industry_index_is_seeded_where_build_costs_reads_it(tmp_path, monkeypat
 
 
 def test_seed_build_cost_db_holds_rigs_and_structures_only(tmp_path):
-    """The shared buildcost replica carries rigs/structures; industry_index is
+    """The shared buildcost replica carries rigs/structures/structure_rigs; industry_index is
     a per-viewer ESI cache and must not be seeded into it."""
     from sqlalchemy import create_engine
 
@@ -72,5 +72,6 @@ def test_seed_build_cost_db_holds_rigs_and_structures_only(tmp_path):
     with engine.connect() as conn:
         assert conn.execute(text("SELECT count(*) FROM rigs")).scalar() == 1
         assert conn.execute(text("SELECT count(*) FROM structures")).scalar() == 2
+        assert conn.execute(text("SELECT count(*) FROM structure_rigs")).scalar() == 2
         assert conn.execute(text("SELECT count(*) FROM industry_index")).scalar() == 0
     engine.dispose()

@@ -8,7 +8,7 @@ from pathlib import Path
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
-from build_cost_models import Base as BuildCostBase, Rig, Structure
+from build_cost_models import Base as BuildCostBase, Rig, Structure, StructureRig
 from models import (
     Base as MarketBase,
     DoctrineFit,
@@ -505,6 +505,9 @@ def _seed_build_cost_db(path: Path) -> None:
                 tax=0.03,
                 region="The Forge",
                 region_id=10000002,
+                has_manufacturing_plant=1,
+                has_capital_shipyard=1,
+                is_open=1,
             )
         )
         session.add(
@@ -521,8 +524,12 @@ def _seed_build_cost_db(path: Path) -> None:
                 tax=0.04,
                 region="Lonetrek",
                 region_id=10000016,
+                has_manufacturing_plant=1,
+                is_open=1,
             )
         )
+        session.add(StructureRig(structure_id=1035466617946, rig_type_id=9001))
+        session.add(StructureRig(structure_id=1046831245129, rig_type_id=9001))
         session.commit()
 
 

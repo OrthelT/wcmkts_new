@@ -140,6 +140,15 @@
 [import_helper]
     default_shipping_cost = 445
 
+[build_costs]
+    # Material breakdown shows this structure when no compare structure is selected
+    # and it is among the results (4-HWWF - WinterCo. Construction Center).
+    default_material_structure_id = 1035603743755
+    # Structures left out of standard capital builds even though a shipyard
+    # flag would qualify them. Supercapital builds are unaffected.
+    # 1046452498926 = C-J7CR - New Super No Cap
+    no_capital_structure_ids = [1046452498926]
+
 [i18n]
     default_language = "en"
 

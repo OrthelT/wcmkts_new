@@ -27,7 +27,6 @@ from repositories.build_cost_repo import (
     BuildCostRepository,
     get_build_cost_repository,
     invalidate_build_cost_caches,
-    invalidate_structure_caches,
 )
 from repositories.sde_repo import SDERepository, get_sde_repository
 
@@ -44,7 +43,6 @@ __all__ = [
     "BuildCostRepository",
     "get_build_cost_repository",
     "invalidate_build_cost_caches",
-    "invalidate_structure_caches",
     "SDERepository",
     "get_sde_repository",
 ]

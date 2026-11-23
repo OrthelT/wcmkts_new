@@ -21,6 +21,14 @@ class Structure(Base):
     tax: Mapped[float | None] = mapped_column(Float, nullable=True)
     region: Mapped[str | None] = mapped_column(String, nullable=True)
     region_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    owner: Mapped[str | None] = mapped_column(String, nullable=True)
+    owner_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # 1 when the Structure Engineering Service Module is online.
+    has_manufacturing_plant: Mapped[int] = mapped_column(Integer, default=0)
+    has_capital_shipyard: Mapped[int] = mapped_column(Integer, default=0)
+    has_supercapital_shipyard: Mapped[int] = mapped_column(Integer, default=0)
+    # 0 for structures not open to the public.
+    is_open: Mapped[int] = mapped_column(Integer, default=0)
 
     def __repr__(self) -> str:
         return (
@@ -29,7 +37,26 @@ class Structure(Base):
             f"rig_1={self.rig_1}, rig_2={self.rig_2}, rig_3={self.rig_3}, "
             f"structure_type={self.structure_type}, "
             f"structure_type_id={self.structure_type_id}, tax={self.tax}, "
-            f"region={self.region}, region_id={self.region_id})>"
+            f"region={self.region}, region_id={self.region_id}, "
+            f"owner={self.owner}, owner_id={self.owner_id}, "
+            f"has_manufacturing_plant={self.has_manufacturing_plant}, "
+            f"has_capital_shipyard={self.has_capital_shipyard}, "
+            f"has_supercapital_shipyard={self.has_supercapital_shipyard}, "
+            f"is_open={self.is_open})>"
+        )
+
+
+class StructureRig(Base):
+    """One row per rig fitted to a structure; rig names come from ``rigs``."""
+
+    __tablename__ = "structure_rigs"
+    structure_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    rig_type_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    def __repr__(self) -> str:
+        return (
+            f"<StructureRig(structure_id={self.structure_id}, "
+            f"rig_type_id={self.rig_type_id})>"
         )
 
 

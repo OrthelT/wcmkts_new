@@ -26,9 +26,14 @@ logger = setup_logging(__name__, log_file="build_cost_repo.log")
 # Constants
 # =============================================================================
 
-VALID_STRUCTURE_TYPE_IDS = [35827, 35825, 35826]
-SUPER_SHIPYARD_ID = 1046452498926
 INVALID_RIG_IDS = [46640, 46641, 46496, 46497, 46634]
+
+# structures columns flagging an online Structure Engineering Service Module.
+SERVICE_MODULE_FLAGS = (
+    "has_manufacturing_plant",
+    "has_capital_shipyard",
+    "has_supercapital_shipyard",
+)
 
 # =============================================================================
 # Local-only ESI cache (industry_index)
@@ -84,36 +89,22 @@ def _build_cost_reader() -> BaseRepository:
     return BaseRepository(DatabaseConfig("build_cost"), logger)
 
 
-def _fetch_rigs_impl(repo: BaseRepository) -> dict[str, int]:
-    """Fetch all rigs as {type_name: type_id} dict."""
-    df = repo.read_df(text("SELECT type_name, type_id FROM rigs"))
-    return dict(zip(df["type_name"], df["type_id"]))
+def _get_structure_rigs_impl(repo: BaseRepository) -> pd.DataFrame:
+    """Fetch fitted rigs, one row per (structure, rig), excluding INVALID_RIG_IDS.
 
-
-def _get_valid_rigs_impl(repo: BaseRepository) -> dict[str, int]:
-    """Fetch rigs, filtering out invalid rig IDs."""
-    all_rigs = _fetch_rigs_impl(repo)
-    return {name: tid for name, tid in all_rigs.items() if tid not in INVALID_RIG_IDS}
-
-
-def _get_structure_rigs_impl(repo: BaseRepository) -> dict[str, list[str]]:
-    """Get rigs per structure as {structure_name: [rig_name, ...]}."""
-    valid_rigs = _get_valid_rigs_impl(repo)
+    Columns: structure_id, structure, rig_type_id, rig_name.
+    """
     query = text(
-        "SELECT structure, rig_1, rig_2, rig_3 FROM structures "
-        "WHERE structure_type_id IN :ids"
-    ).bindparams(bindparam("ids", expanding=True))
-    df = repo.read_df(query, params={"ids": VALID_STRUCTURE_TYPE_IDS})
-
-    rig_dict = {}
-    for row in df.itertuples(index=False):
-        raw_rigs = [row.rig_1, row.rig_2, row.rig_3]
-        clean_rigs = [
-            r for r in raw_rigs
-            if r is not None and r != "0" and r in valid_rigs
-        ]
-        rig_dict[row.structure] = clean_rigs
-    return rig_dict
+        """
+        SELECT sr.structure_id, s.structure, sr.rig_type_id, r.type_name AS rig_name
+        FROM structure_rigs sr
+        JOIN structures s ON s.structure_id = sr.structure_id
+        JOIN rigs r ON r.type_id = sr.rig_type_id
+        WHERE sr.rig_type_id NOT IN :invalid
+        ORDER BY s.structure, r.type_name
+        """
+    ).bindparams(bindparam("invalid", expanding=True))
+    return repo.read_df(query, params={"invalid": INVALID_RIG_IDS})
 
 
 def _get_manufacturing_cost_index_impl(system_id: int) -> float:
@@ -131,22 +122,23 @@ def _get_manufacturing_cost_index_impl(system_id: int) -> float:
     return float(df["manufacturing"].iloc[0])
 
 
-def _get_all_structures_impl(repo: BaseRepository, is_super: bool) -> pd.DataFrame:
-    """Fetch structures filtered by super mode.
+def _get_all_structures_impl(
+    repo: BaseRepository, module_flags: tuple[str, ...], include_closed: bool
+) -> pd.DataFrame:
+    """Fetch structures with any of ``module_flags`` set.
 
+    Closed structures (``is_open = 0``) are left out unless ``include_closed``.
     Returns a DataFrame (picklable for st.cache_data); the repository method
     converts rows to attribute-access tuples for consumers.
     """
-    if is_super:
-        query = text("SELECT * FROM structures WHERE structure_id = :sid")
-        params = {"sid": SUPER_SHIPYARD_ID}
-    else:
-        query = text(
-            "SELECT * FROM structures WHERE structure_id != :sid "
-            "AND structure_type_id IN :ids"
-        ).bindparams(bindparam("ids", expanding=True))
-        params = {"sid": SUPER_SHIPYARD_ID, "ids": VALID_STRUCTURE_TYPE_IDS}
-    return repo.read_df(query, params=params)
+    unknown = set(module_flags) - set(SERVICE_MODULE_FLAGS)
+    if not module_flags or unknown:
+        raise ValueError(f"module_flags must be from {SERVICE_MODULE_FLAGS}, got {module_flags}")
+    # Column names come from the whitelist above, so formatting them is safe.
+    where = "(" + " OR ".join(f"{flag} = 1" for flag in module_flags) + ")"
+    if not include_closed:
+        where += " AND is_open = 1"
+    return repo.read_df(text(f"SELECT * FROM structures WHERE {where} ORDER BY structure"))
 
 
 def _write_industry_index_impl(df: pd.DataFrame) -> None:
@@ -184,12 +176,7 @@ def _get_builder_cost_catalog_impl() -> pd.DataFrame:
 # =============================================================================
 
 @st.cache_data(ttl=3600)
-def _get_valid_rigs_cached(_url: str) -> dict[str, int]:
-    return _get_valid_rigs_impl(_build_cost_reader())
-
-
-@st.cache_data(ttl=3600)
-def _get_structure_rigs_cached(_url: str) -> dict[str, list[str]]:
+def _get_structure_rigs_cached(_url: str) -> pd.DataFrame:
     return _get_structure_rigs_impl(_build_cost_reader())
 
 
@@ -199,8 +186,10 @@ def _get_manufacturing_cost_index_cached(_url: str, system_id: int) -> float:
 
 
 @st.cache_data(ttl=3600)
-def _get_all_structures_cached(_url: str, is_super: bool) -> pd.DataFrame:
-    return _get_all_structures_impl(_build_cost_reader(), is_super)
+def _get_all_structures_cached(
+    _url: str, module_flags: tuple[str, ...], include_closed: bool
+) -> pd.DataFrame:
+    return _get_all_structures_impl(_build_cost_reader(), module_flags, include_closed)
 
 
 # Background refresh: TTL expiry never brings new data, and
@@ -216,18 +205,11 @@ def _get_builder_cost_catalog_cached(_url: str) -> pd.DataFrame:
 
 def invalidate_build_cost_caches():
     """Clear only build cost caches."""
-    _get_valid_rigs_cached.clear()
     _get_structure_rigs_cached.clear()
     _get_manufacturing_cost_index_cached.clear()
     _get_all_structures_cached.clear()
     _get_builder_cost_catalog_cached.clear()
     logger.info("Build cost caches invalidated")
-
-
-def invalidate_structure_caches():
-    """Clear only the structures cache (e.g. after super-mode toggle)."""
-    _get_all_structures_cached.clear()
-    logger.info("Structure caches invalidated")
 
 
 # =============================================================================
@@ -245,24 +227,39 @@ class BuildCostRepository(BaseRepository):
         super().__init__(db, logger_instance)
         self._cache_key = db.url
 
-    def get_valid_rigs(self) -> dict[str, int]:
-        """Get valid rigs (excludes invalid rig IDs), cached TTL=3600s."""
-        return _get_valid_rigs_cached(self._cache_key)
-
     def get_structure_rigs(self) -> dict[str, list[str]]:
-        """Get rigs per structure, cached TTL=3600s."""
-        return _get_structure_rigs_cached(self._cache_key)
+        """Get rig names per structure name, cached TTL=3600s.
+
+        Structures with no rigs are absent from the result.
+        """
+        df = _get_structure_rigs_cached(self._cache_key)
+        return df.groupby("structure")["rig_name"].apply(list).to_dict()
+
+    def get_structure_rig_ids(self) -> dict[int, list[int]]:
+        """Get rig type_ids per structure_id, cached TTL=3600s.
+
+        Structures with no rigs are absent from the result.
+        """
+        df = _get_structure_rigs_cached(self._cache_key)
+        return {
+            int(sid): [int(r) for r in rigs]
+            for sid, rigs in df.groupby("structure_id")["rig_type_id"]
+        }
 
     def get_manufacturing_cost_index(self, system_id: int) -> float:
         """Get manufacturing cost index for a solar system, cached TTL=3600s."""
         return _get_manufacturing_cost_index_cached(self._cache_key, system_id)
 
-    def get_all_structures(self, is_super: bool = False):
-        """Get structures filtered by super mode, cached TTL=3600s.
+    def get_all_structures(
+        self, module_flags: tuple[str, ...], include_closed: bool = False
+    ):
+        """Get structures with any of ``module_flags`` set, cached TTL=3600s.
 
-        Returns attribute-access rows (structure.rig_1, structure.system_id).
+        Closed structures are included only when ``include_closed`` is True.
+
+        Returns attribute-access rows (structure.structure_id, structure.system_id).
         """
-        df = _get_all_structures_cached(self._cache_key, is_super)
+        df = _get_all_structures_cached(self._cache_key, tuple(module_flags), include_closed)
         return list(df.itertuples(index=False))
 
     def write_industry_index(self, df: pd.DataFrame) -> None:
@@ -272,10 +269,6 @@ class BuildCostRepository(BaseRepository):
     def get_builder_cost_catalog(self) -> pd.DataFrame:
         """Get the synced builder-cost catalog (cached, TTL=600s)."""
         return _get_builder_cost_catalog_cached(self._cache_key)
-
-    def invalidate_structure_caches(self):
-        """Clear the structures cache (e.g. after super-mode toggle)."""
-        invalidate_structure_caches()
 
 
 # =============================================================================

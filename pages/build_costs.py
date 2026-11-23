@@ -16,6 +16,7 @@ from services.build_cost_service import (
 )
 from pages.components.layout import render_legal_notice
 from logging_config import setup_logging
+from settings_service import SettingsService
 import pathlib
 
 import pandas as pd
@@ -246,7 +247,6 @@ def initialise_session_state():
             "calculate_clicked": False,
             "button_label": "Calculate",
             "selected_structure": None,
-            "super": False,
         }
     )
     st.session_state.initialised = True
@@ -296,6 +296,23 @@ def _resolve_type_names_from_esi(type_ids: tuple[int, ...]) -> dict[int, str]:
         return {}
 
 
+MATERIAL_SELECTOR_KEY = "material_structure_selector"
+_MATERIAL_PREFERRED_KEY = "material_structure_preferred"
+
+
+def sync_material_selection(state, options: list, preferred: str | None) -> None:
+    """Point the material selector at ``preferred`` whenever ``preferred`` changes.
+
+    A keyed selectbox keeps its session-state value across reruns and ignores
+    ``index``, so the value is written to ``state`` directly. A structure the
+    user picks in the selector stays selected until ``preferred`` changes.
+    """
+    target = preferred if preferred in options else options[0]
+    if state.get(_MATERIAL_PREFERRED_KEY) != target or state.get(MATERIAL_SELECTOR_KEY) not in options:
+        state[_MATERIAL_PREFERRED_KEY] = target
+        state[MATERIAL_SELECTOR_KEY] = target
+
+
 @st.fragment()
 def display_material_costs(
     results: dict,
@@ -305,15 +322,12 @@ def display_material_costs(
     language_code: str,
 ):
     """Display material costs for a selected structure with proper formatting."""
-    default_index = 0
-    if selected_structure and selected_structure in structure_names_for_materials:
-        default_index = structure_names_for_materials.index(selected_structure)
+    sync_material_selection(st.session_state, structure_names_for_materials, selected_structure)
 
     selected_structure_for_materials = st.selectbox(
         translate_text(language_code, "build_costs.material_breakdown_selector"),
         structure_names_for_materials,
-        index=default_index,
-        key="material_structure_selector",
+        key=MATERIAL_SELECTOR_KEY,
         help=translate_text(language_code, "build_costs.material_breakdown_selector_help"),
     )
 
@@ -658,13 +672,13 @@ def main():
     url = f"https://images.evetech.net/types/{type_id}/render?size=256"
     alt_url = f"https://images.evetech.net/types/{type_id}/icon"
 
-    # Handle super-mode toggling
-    is_super = BuildCostService.is_super_group(group_id)
-    if is_super != st.session_state.super:
-        st.session_state.super = is_super
-        repo.invalidate_structure_caches()
+    include_closed = st.sidebar.checkbox(
+        translate_text(language_code, "build_costs.show_closed_structures_label"),
+        value=False,
+        help=translate_text(language_code, "build_costs.show_closed_structures_help"),
+    )
 
-    all_structures = repo.get_all_structures(is_super=st.session_state.super)
+    all_structures = service.get_structures(group_id, include_closed=include_closed)
     structure_names = sorted([structure.structure for structure in all_structures])
 
     selected_structure = st.sidebar.selectbox(
@@ -683,6 +697,7 @@ def main():
         "me": me,
         "te": te,
         "price_source": st.session_state.price_source,
+        "include_closed": include_closed,
     }
     logger.info(f"Current job params: {current_job_params}")
 
@@ -725,6 +740,7 @@ def main():
             me=me,
             te=te,
             material_prices=st.session_state.price_source,
+            include_closed=include_closed,
         )
         logger.info("=" * 80)
 
@@ -770,10 +786,10 @@ def main():
 
         build_cost_df = pd.DataFrame.from_dict(results, orient="index")
 
+        # Structures without rigs are absent from structure_rigs.
         structure_rigs = repo.get_structure_rigs()
-        build_cost_df["structure_rigs"] = build_cost_df.index.map(structure_rigs)
-        build_cost_df["structure_rigs"] = build_cost_df["structure_rigs"].apply(
-            lambda x: ", ".join(x)
+        build_cost_df["structure_rigs"] = build_cost_df.index.map(
+            lambda name: ", ".join(structure_rigs.get(name, []))
         )
 
         build_cost_df = build_cost_df.sort_values(by="total_cost", ascending=True)
@@ -906,15 +922,21 @@ def main():
             column_order=col_order,
             width="stretch",
         )
-        if st.session_state.super:
+        if BuildCostService.is_super_group(group_id):
             st.markdown(translate_text(language_code, "build_costs.super_note"), unsafe_allow_html=True)
 
         st.subheader(translate_text(language_code, "build_costs.material_breakdown"))
         results = st.session_state.cost_results
         structure_names_for_materials = sorted(list(results.keys()))
+        # Without a compare structure, prefer the configured default over the
+        # alphabetically first structure.
+        default_id = SettingsService().default_material_structure_id
+        default_structure = next(
+            (s.structure for s in all_structures if s.structure_id == default_id), None
+        )
         display_material_costs(
             results,
-            selected_structure,
+            selected_structure or default_structure,
             structure_names_for_materials,
             selected_item_display,
             language_code,
