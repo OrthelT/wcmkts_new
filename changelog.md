@@ -1,6 +1,13 @@
 
 # WinterCo Markets Change Log 
 
+## Unreleased
+- build costs: each item is priced only at structures with the engineering service module that can build it. Supercapitals need a Supercapital Shipyard; capitals need a Capital or Supercapital Shipyard; everything else needs a Manufacturing Plant. This replaces the single hard-coded supercapital structure, so all three Supercapital Shipyards now appear.
+- build costs: new "Show closed structures" checkbox (off by default) adds structures that are not open to the public.
+- build costs: rigs are read from the new `structure_rigs` table.
+- build costs: `[build_costs].no_capital_structure_ids` in settings.toml keeps listed structures out of standard capital builds (C-J7CR - New Super No Cap).
+- build costs: choosing a compare structure switches the material breakdown to it; with none chosen it shows `[build_costs].default_material_structure_id`.
+
 ## Version 0.7.6 
 - performance enhancements that implement new indexes for market_history queries. 
 

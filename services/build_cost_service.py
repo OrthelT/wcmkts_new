@@ -8,7 +8,7 @@ fetching, industry index management. No Streamlit imports.
 import asyncio
 import datetime
 from dataclasses import dataclass
-from typing import Protocol, Optional
+from typing import Iterable, Protocol, Optional
 
 import httpx
 import pandas as pd
@@ -30,6 +30,9 @@ PRICE_SOURCE_MAP = {
 }
 
 SUPER_GROUP_IDS = [30, 659]
+# Groups built on the Capital Shipyard assembly line (SDE industryAssemblyLines
+# 176), other than supers. A Supercapital Shipyard also runs that line.
+CAPITAL_GROUP_IDS = [485, 547, 883, 1538, 4594, 5120]
 
 API_TIMEOUT = 20.0
 MAX_CONCURRENCY = 6
@@ -73,10 +76,12 @@ class BuildCostJob:
     security: str = "NULL_SEC"
     system_cost_bonus: float = 0.0
     material_prices: str = "ESI_AVG"
+    include_closed: bool = False
 
     @property
     def is_super(self) -> bool:
         return self.group_id in SUPER_GROUP_IDS
+
 
 
 # =============================================================================
@@ -88,10 +93,29 @@ class BuildCostService:
 
     Args:
         repo: BuildCostRepository instance for data access.
+        no_capital_structure_ids: Structures left out of standard capital
+            builds (settings.toml ``[build_costs].no_capital_structure_ids``).
     """
 
-    def __init__(self, repo):
+    def __init__(self, repo, no_capital_structure_ids: Iterable[int] = ()):
         self._repo = repo
+        self._no_capital_structure_ids = frozenset(no_capital_structure_ids)
+
+    def get_structures(self, group_id: int, include_closed: bool = False) -> list:
+        """Structures that can build items in ``group_id``.
+
+        Filters on the required service-module flags, then drops
+        ``no_capital_structure_ids`` for standard capital groups.
+        """
+        structures = self._repo.get_all_structures(
+            self.module_flags_for_group(group_id), include_closed=include_closed
+        )
+        if group_id in CAPITAL_GROUP_IDS:
+            structures = [
+                s for s in structures
+                if s.structure_id not in self._no_capital_structure_ids
+            ]
+        return structures
 
     # -----------------------------------------------------------------
     # URL Construction
@@ -103,27 +127,22 @@ class BuildCostService:
         Returns:
             List of (url, structure_name, structure_type) tuples.
         """
-        structures = self._repo.get_all_structures(is_super=job.is_super)
-        valid_rigs = self._repo.get_valid_rigs()
+        structures = self.get_structures(job.group_id, include_closed=job.include_closed)
+        rig_ids = self._repo.get_structure_rig_ids()
         urls = []
 
         for structure in structures:
-            url = self._construct_url(job, structure, valid_rigs)
+            url = self._construct_url(job, structure, rig_ids.get(structure.structure_id, []))
             urls.append((url, structure.structure, structure.structure_type))
 
         return urls
 
-    def _construct_url(self, job: BuildCostJob, structure, valid_rigs: dict[str, int]) -> str:
+    def _construct_url(self, job: BuildCostJob, structure, rig_ids: list[int]) -> str:
         """Construct a single EverRef API URL for a structure."""
-        rigs = [structure.rig_1, structure.rig_2, structure.rig_3]
-        clean_rigs = [rig for rig in rigs if rig != "0" and rig is not None]
-        clean_rigs = [rig for rig in clean_rigs if rig in valid_rigs]
-        clean_rig_ids = [valid_rigs[rig] for rig in clean_rigs]
-
         system_cost_index = self._repo.get_manufacturing_cost_index(structure.system_id)
         tax = structure.tax
 
-        formatted_rigs = "".join(f"&rig_id={rig_id}" for rig_id in clean_rig_ids)
+        formatted_rigs = "".join(f"&rig_id={rig_id}" for rig_id in rig_ids)
         url = (
             f"https://api.everef.net/v1/industry/cost?"
             f"product_id={job.item_id}&runs={job.runs}&me={job.me}&te={job.te}"
@@ -369,6 +388,18 @@ class BuildCostService:
         """Check if a group_id is a supercapital group."""
         return group_id in SUPER_GROUP_IDS
 
+    @staticmethod
+    def module_flags_for_group(group_id: int) -> tuple[str, ...]:
+        """Return the structures flag columns that can build ``group_id``.
+
+        A structure qualifies when any returned flag is set.
+        """
+        if group_id in SUPER_GROUP_IDS:
+            return ("has_supercapital_shipyard",)
+        if group_id in CAPITAL_GROUP_IDS:
+            return ("has_capital_shipyard", "has_supercapital_shipyard")
+        return ("has_manufacturing_plant",)
+
 
 # =============================================================================
 # Factory Function
@@ -382,8 +413,12 @@ def get_build_cost_service() -> BuildCostService:
     """
     def _create() -> BuildCostService:
         from repositories.build_cost_repo import get_build_cost_repository
+        from settings_service import SettingsService
+
         repo = get_build_cost_repository()
-        return BuildCostService(repo)
+        return BuildCostService(
+            repo, no_capital_structure_ids=SettingsService().no_capital_structure_ids
+        )
 
     try:
         from state import get_service

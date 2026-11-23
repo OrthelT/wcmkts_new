@@ -11,13 +11,10 @@ import pytest
 from sqlalchemy import create_engine
 
 from repositories import build_cost_repo
+from build_cost_models import Base as BuildCostBase, Rig, Structure, StructureRig
 from repositories.build_cost_repo import (
     INVALID_RIG_IDS,
-    SUPER_SHIPYARD_ID,
-    VALID_STRUCTURE_TYPE_IDS,
     BuildCostRepository,
-    _fetch_rigs_impl,
-    _get_valid_rigs_impl,
     _get_structure_rigs_impl,
     _get_manufacturing_cost_index_impl,
     _get_all_structures_impl,
@@ -25,63 +22,100 @@ from repositories.build_cost_repo import (
 )
 
 
-def _repo_returning(*dfs):
-    """Fake BaseRepository whose read_df returns the given DataFrames in order."""
-    repo = MagicMock()
-    if len(dfs) == 1:
-        repo.read_df.return_value = dfs[0]
-    else:
-        repo.read_df.side_effect = list(dfs)
-    return repo
+class _SqliteReader:
+    """Stands in for BaseRepository: read_df runs the query on a real SQLite DB."""
+
+    def __init__(self, engine):
+        self.engine = engine
+
+    def read_df(self, query, params=None):
+        with self.engine.connect() as conn:
+            return pd.read_sql_query(query, conn, params=params)
 
 
-class TestFetchRigsImpl(unittest.TestCase):
-    def test_returns_dict_from_query(self):
-        repo = _repo_returning(
-            pd.DataFrame({"type_name": ["Rig A", "Rig B"], "type_id": [100, 200]})
-        )
-        result = _fetch_rigs_impl(repo)
-        self.assertEqual(result, {"Rig A": 100, "Rig B": 200})
+def _structure(sid, name, *, m=0, c=0, s=0, is_open=1):
+    return Structure(
+        structure_id=sid, structure=name, structure_type="Sotiyo",
+        structure_type_id=35827, system_id=1, tax=0.01,
+        has_manufacturing_plant=m, has_capital_shipyard=c,
+        has_supercapital_shipyard=s, is_open=is_open,
+    )
 
 
-class TestGetValidRigsImpl(unittest.TestCase):
-    def test_filters_invalid_rig_ids(self):
-        repo = _repo_returning(
-            pd.DataFrame(
-                {
-                    "type_name": ["Valid Rig", "Invalid Rig"],
-                    "type_id": [999, INVALID_RIG_IDS[0]],
-                }
-            )
-        )
-        result = _get_valid_rigs_impl(repo)
-        self.assertIn("Valid Rig", result)
-        self.assertNotIn("Invalid Rig", result)
+@pytest.fixture
+def buildcost_reader(tmp_path):
+    from sqlalchemy.orm import Session
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'buildcost.db'}")
+    BuildCostBase.metadata.create_all(engine)
+    with Session(engine) as session:
+        session.add_all([
+            _structure(1, "A Manufacturing", m=1),
+            _structure(2, "B Capital", m=1, c=1),
+            _structure(3, "C Super", c=0, s=1),
+            _structure(4, "D Closed", m=1, is_open=0),
+            Rig(type_id=100, type_name="Rig A", icon_id=0),
+            Rig(type_id=INVALID_RIG_IDS[0], type_name="Invalid Rig", icon_id=0),
+            StructureRig(structure_id=1, rig_type_id=100),
+            StructureRig(structure_id=1, rig_type_id=INVALID_RIG_IDS[0]),
+            StructureRig(structure_id=2, rig_type_id=100),
+        ])
+        session.commit()
+    yield _SqliteReader(engine)
+    engine.dispose()
 
 
-class TestGetStructureRigsImpl(unittest.TestCase):
-    def test_maps_structures_to_clean_rigs(self):
-        rigs_df = pd.DataFrame({"type_name": ["Good Rig"], "type_id": [999]})
-        structures_df = pd.DataFrame(
-            {
-                "structure": ["Azbel"],
-                "rig_1": ["Good Rig"],
-                "rig_2": ["0"],
-                "rig_3": [None],
-            }
-        )
-        repo = _repo_returning(rigs_df, structures_df)
-        result = _get_structure_rigs_impl(repo)
-        self.assertEqual(result, {"Azbel": ["Good Rig"]})
+def _names(df):
+    return list(df["structure"])
 
-    def test_structure_query_uses_expanding_ids_param(self):
-        repo = _repo_returning(
-            pd.DataFrame({"type_name": [], "type_id": []}),
-            pd.DataFrame({"structure": [], "rig_1": [], "rig_2": [], "rig_3": []}),
-        )
-        _get_structure_rigs_impl(repo)
-        _, kwargs = repo.read_df.call_args
-        self.assertEqual(kwargs["params"], {"ids": VALID_STRUCTURE_TYPE_IDS})
+
+class TestGetAllStructuresImpl:
+    """_get_all_structures_impl returns a DataFrame — the cache layer pickles
+    its value, so row conversion happens in the repo method instead."""
+
+    def test_manufacturing_plant_filter_excludes_closed(self, buildcost_reader):
+        df = _get_all_structures_impl(buildcost_reader, ("has_manufacturing_plant",), False)
+        assert _names(df) == ["A Manufacturing", "B Capital"]
+
+    def test_include_closed_adds_closed_structures(self, buildcost_reader):
+        df = _get_all_structures_impl(buildcost_reader, ("has_manufacturing_plant",), True)
+        assert _names(df) == ["A Manufacturing", "B Capital", "D Closed"]
+
+    def test_capital_accepts_capital_or_super_shipyard(self, buildcost_reader):
+        flags = ("has_capital_shipyard", "has_supercapital_shipyard")
+        df = _get_all_structures_impl(buildcost_reader, flags, False)
+        assert _names(df) == ["B Capital", "C Super"]
+
+    def test_super_requires_super_shipyard(self, buildcost_reader):
+        df = _get_all_structures_impl(buildcost_reader, ("has_supercapital_shipyard",), False)
+        assert _names(df) == ["C Super"]
+
+    @pytest.mark.parametrize("flags", [(), ("is_open",), ("1=1 OR has_manufacturing_plant",)])
+    def test_rejects_unknown_flags(self, buildcost_reader, flags):
+        with pytest.raises(ValueError):
+            _get_all_structures_impl(buildcost_reader, flags, False)
+
+
+class TestGetStructureRigsImpl:
+    def test_joins_rig_names_and_drops_invalid_rigs(self, buildcost_reader):
+        df = _get_structure_rigs_impl(buildcost_reader)
+        rows = list(df[["structure_id", "structure", "rig_type_id", "rig_name"]].itertuples(index=False, name=None))
+        assert rows == [(1, "A Manufacturing", 100, "Rig A"), (2, "B Capital", 100, "Rig A")]
+
+
+class TestStructureRigMethods:
+    @patch("repositories.build_cost_repo._get_structure_rigs_cached")
+    def test_groups_rigs_by_structure(self, mock_cached):
+        mock_cached.return_value = pd.DataFrame({
+            "structure_id": [1, 1, 2],
+            "structure": ["A", "A", "B"],
+            "rig_type_id": [100, 200, 100],
+            "rig_name": ["Rig A", "Rig B", "Rig A"],
+        })
+        repo = BuildCostRepository.__new__(BuildCostRepository)
+        repo._cache_key = "url"
+        assert repo.get_structure_rigs() == {"A": ["Rig A", "Rig B"], "B": ["Rig A"]}
+        assert repo.get_structure_rig_ids() == {1: [100, 200], 2: [100]}
 
 
 class TestGetManufacturingCostIndexImpl(unittest.TestCase):
@@ -130,32 +164,6 @@ class TestGetManufacturingCostIndexImpl(unittest.TestCase):
                 _get_manufacturing_cost_index_impl(99999)
 
 
-class TestGetAllStructuresImpl(unittest.TestCase):
-    """_get_all_structures_impl returns a DataFrame — the cache layer pickles
-    its value, so row conversion happens in the repo method instead."""
-
-    def test_super_mode_filters_by_shipyard(self):
-        df = pd.DataFrame({"structure": ["Super Structure"], "system_id": [1]})
-        repo = _repo_returning(df)
-        result = _get_all_structures_impl(repo, is_super=True)
-        _, kwargs = repo.read_df.call_args
-        self.assertEqual(kwargs["params"], {"sid": SUPER_SHIPYARD_ID})
-        pd.testing.assert_frame_equal(result, df)
-
-    def test_non_super_excludes_shipyard(self):
-        df = pd.DataFrame(
-            {"structure": ["Structure A", "Structure B"], "system_id": [1, 2]}
-        )
-        repo = _repo_returning(df)
-        result = _get_all_structures_impl(repo, is_super=False)
-        _, kwargs = repo.read_df.call_args
-        self.assertEqual(
-            kwargs["params"],
-            {"sid": SUPER_SHIPYARD_ID, "ids": VALID_STRUCTURE_TYPE_IDS},
-        )
-        self.assertEqual(len(result), 2)
-
-
 class TestGetAllStructuresMethod(unittest.TestCase):
     @patch("repositories.build_cost_repo._get_all_structures_cached")
     def test_converts_cached_df_to_attribute_rows(self, mock_cached):
@@ -166,8 +174,10 @@ class TestGetAllStructuresMethod(unittest.TestCase):
         )
         repo = BuildCostRepository.__new__(BuildCostRepository)
         repo._cache_key = "url"
-        rows = BuildCostRepository.get_all_structures(repo, is_super=False)
+        rows = BuildCostRepository.get_all_structures(repo, ["has_manufacturing_plant"])
         self.assertEqual(rows[0].structure, "Fortizar")
+        # The cache key must be hashable, so a list of flags becomes a tuple.
+        mock_cached.assert_called_once_with("url", ("has_manufacturing_plant",), False)
 
 
 class TestIndustryIndexIsLocalOnly:

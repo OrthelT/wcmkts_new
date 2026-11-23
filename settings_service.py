@@ -120,6 +120,16 @@ class SettingsService:
         return float(self.settings.get("import_helper", {}).get("default_shipping_cost", 445))
 
     @property
+    def default_material_structure_id(self) -> int | None:
+        value = self.settings.get("build_costs", {}).get("default_material_structure_id")
+        return int(value) if value is not None else None
+
+    @property
+    def no_capital_structure_ids(self) -> frozenset[int]:
+        ids = self.settings.get("build_costs", {}).get("no_capital_structure_ids", [])
+        return frozenset(int(i) for i in ids)
+
+    @property
     def default_language(self) -> str:
         return self.settings.get("i18n", {}).get("default_language", "en")
 

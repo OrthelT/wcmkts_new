@@ -112,3 +112,33 @@ def test_freshness_probe_accessor_removed():
     import settings_service
 
     assert not hasattr(settings_service, "get_freshness_probe_aliases")
+
+
+def test_default_material_structure_id_is_none_without_section(monkeypatch):
+    monkeypatch.setattr(settings_service, "_cached_settings", {}, raising=False)
+    assert settings_service.SettingsService().default_material_structure_id is None
+
+
+def test_default_material_structure_id_reads_build_costs_section(monkeypatch):
+    monkeypatch.setattr(
+        settings_service,
+        "_cached_settings",
+        {"build_costs": {"default_material_structure_id": 1035603743755}},
+        raising=False,
+    )
+    assert settings_service.SettingsService().default_material_structure_id == 1035603743755
+
+
+def test_no_capital_structure_ids_defaults_to_empty(monkeypatch):
+    monkeypatch.setattr(settings_service, "_cached_settings", {}, raising=False)
+    assert settings_service.SettingsService().no_capital_structure_ids == frozenset()
+
+
+def test_no_capital_structure_ids_reads_build_costs_section(monkeypatch):
+    monkeypatch.setattr(
+        settings_service,
+        "_cached_settings",
+        {"build_costs": {"no_capital_structure_ids": [1046452498926]}},
+        raising=False,
+    )
+    assert settings_service.SettingsService().no_capital_structure_ids == frozenset({1046452498926})

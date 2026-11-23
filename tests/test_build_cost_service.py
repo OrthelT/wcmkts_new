@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 from services.build_cost_service import (
     BuildCostJob,
     BuildCostService,
+    CAPITAL_GROUP_IDS,
     SUPER_GROUP_IDS,
 )
 
@@ -29,6 +30,7 @@ class TestBuildCostJob(unittest.TestCase):
         self.assertEqual(job.security, "NULL_SEC")
         self.assertEqual(job.system_cost_bonus, 0.0)
         self.assertEqual(job.material_prices, "ESI_AVG")
+        self.assertFalse(job.include_closed)
 
 
 class TestBuildCostServiceBuildUrls(unittest.TestCase):
@@ -36,23 +38,20 @@ class TestBuildCostServiceBuildUrls(unittest.TestCase):
         repo = MagicMock()
         return BuildCostService(repo), repo
 
-    def _make_structure(self, name="Test Station", rig1="Rig A", rig2=None, rig3=None):
+    def _make_structure(self, name="Test Station", structure_id=1):
         s = MagicMock()
         s.structure = name
+        s.structure_id = structure_id
         s.structure_type = "Sotiyo"
         s.structure_type_id = 35827
-        s.rig_1 = rig1
-        s.rig_2 = rig2
-        s.rig_3 = rig3
         s.system_id = 30004759
         s.tax = 0.1
         return s
 
     def test_build_urls_returns_list(self):
         service, repo = self._make_service()
-        structure = self._make_structure()
-        repo.get_all_structures.return_value = [structure]
-        repo.get_valid_rigs.return_value = {"Rig A": 100}
+        repo.get_all_structures.return_value = [self._make_structure()]
+        repo.get_structure_rig_ids.return_value = {1: [100]}
         repo.get_manufacturing_cost_index.return_value = 0.05
 
         job = BuildCostJob(item="Drake", item_id=24690, group_id=25, runs=1, me=0, te=0)
@@ -64,26 +63,41 @@ class TestBuildCostServiceBuildUrls(unittest.TestCase):
         self.assertIn("rig_id=100", url)
         self.assertEqual(name, "Test Station")
 
-    def test_build_urls_filters_invalid_rigs(self):
+    def test_build_urls_passes_module_flags_and_include_closed(self):
         service, repo = self._make_service()
-        structure = self._make_structure(rig1="Invalid Rig", rig2="Valid Rig")
-        repo.get_all_structures.return_value = [structure]
-        # "Invalid Rig" not in valid_rigs, so it gets filtered
-        repo.get_valid_rigs.return_value = {"Valid Rig": 200}
+        repo.get_all_structures.return_value = []
+        repo.get_structure_rig_ids.return_value = {}
+
+        job = BuildCostJob(
+            item="Naglfar", item_id=19722, group_id=485, runs=1, me=0, te=0,
+            include_closed=True,
+        )
+        service.build_urls(job)
+
+        repo.get_all_structures.assert_called_once_with(
+            ("has_capital_shipyard", "has_supercapital_shipyard"), include_closed=True
+        )
+
+    def test_build_urls_uses_each_structures_own_rigs(self):
+        service, repo = self._make_service()
+        repo.get_all_structures.return_value = [
+            self._make_structure("A", 1),
+            self._make_structure("B", 2),
+        ]
+        repo.get_structure_rig_ids.return_value = {1: [100, 200], 2: [300]}
         repo.get_manufacturing_cost_index.return_value = 0.05
 
         job = BuildCostJob(item="Drake", item_id=24690, group_id=25, runs=1, me=0, te=0)
-        urls = service.build_urls(job)
+        urls = {name: url for url, name, _ in service.build_urls(job)}
 
-        url = urls[0][0]
-        self.assertNotIn("Invalid Rig", url)
-        self.assertIn("rig_id=200", url)
+        self.assertIn("&rig_id=100&rig_id=200&", urls["A"])
+        self.assertNotIn("rig_id=300", urls["A"])
+        self.assertIn("&rig_id=300&", urls["B"])
 
     def test_build_urls_no_rigs(self):
         service, repo = self._make_service()
-        structure = self._make_structure(rig1=None, rig2=None, rig3=None)
-        repo.get_all_structures.return_value = [structure]
-        repo.get_valid_rigs.return_value = {}
+        repo.get_all_structures.return_value = [self._make_structure()]
+        repo.get_structure_rig_ids.return_value = {}
         repo.get_manufacturing_cost_index.return_value = 0.05
 
         job = BuildCostJob(item="Drake", item_id=24690, group_id=25, runs=1, me=0, te=0)
@@ -91,6 +105,62 @@ class TestBuildCostServiceBuildUrls(unittest.TestCase):
 
         url = urls[0][0]
         self.assertNotIn("rig_id=", url)
+
+
+class TestNoCapitalStructureOverride(unittest.TestCase):
+    """no_capital_structure_ids drops a structure from standard capital builds only."""
+
+    def _service(self):
+        repo = MagicMock()
+        super_only = MagicMock(structure="C-J7CR", structure_id=1046452498926)
+        shipyard = MagicMock(structure="Other", structure_id=2)
+        repo.get_all_structures.return_value = [super_only, shipyard]
+        return BuildCostService(repo, no_capital_structure_ids=[1046452498926]), repo
+
+    def _names(self, structures):
+        return [s.structure for s in structures]
+
+    def test_capital_build_excludes_listed_structure(self):
+        service, _ = self._service()
+        self.assertEqual(self._names(service.get_structures(485)), ["Other"])
+
+    def test_super_build_keeps_listed_structure(self):
+        service, _ = self._service()
+        self.assertEqual(self._names(service.get_structures(30)), ["C-J7CR", "Other"])
+
+    def test_build_urls_uses_the_override(self):
+        service, repo = self._service()
+        repo.get_structure_rig_ids.return_value = {}
+        repo.get_manufacturing_cost_index.return_value = 0.05
+        job = BuildCostJob(item="Naglfar", item_id=19722, group_id=485, runs=1, me=0, te=0)
+        self.assertEqual([name for _, name, _ in service.build_urls(job)], ["Other"])
+
+    def test_no_override_by_default(self):
+        _, repo = self._service()
+        service = BuildCostService(repo)
+        self.assertEqual(self._names(service.get_structures(485)), ["C-J7CR", "Other"])
+
+
+class TestModuleFlagsForGroup(unittest.TestCase):
+    def test_supers_need_a_supercapital_shipyard(self):
+        for gid in SUPER_GROUP_IDS:
+            self.assertEqual(
+                BuildCostService.module_flags_for_group(gid), ("has_supercapital_shipyard",)
+            )
+
+    def test_capitals_accept_capital_or_supercapital_shipyard(self):
+        for gid in CAPITAL_GROUP_IDS:
+            self.assertEqual(
+                BuildCostService.module_flags_for_group(gid),
+                ("has_capital_shipyard", "has_supercapital_shipyard"),
+            )
+
+    def test_everything_else_needs_a_manufacturing_plant(self):
+        # Battlecruiser, Freighter, Jump Freighter, Sovereignty Hub
+        for gid in (25, 513, 902, 1012):
+            self.assertEqual(
+                BuildCostService.module_flags_for_group(gid), ("has_manufacturing_plant",)
+            )
 
 
 class TestIsSuperGroup(unittest.TestCase):

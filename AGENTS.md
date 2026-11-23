@@ -75,7 +75,7 @@ All pages follow consistent patterns with Streamlit best practices:
 - **`models.py`**: SQLAlchemy ORM models using modern `mapped_column()` syntax
   - MarketStats, MarketOrders, MarketHistory, Doctrines, ShipTargets, DoctrineFits, ModuleEquivalents, etc.
 - **`sdemodels.py`**: SDE (Static Data Export) ORM models for InvTypes, InvGroups, InvCategories, Localization
-- **`build_cost_models.py`**: Manufacturing models for Structures, IndustryIndex, Rigs
+- **`build_cost_models.py`**: Manufacturing models for Structures, StructureRig, IndustryIndex, Rigs. `structures` carries `has_manufacturing_plant` / `has_capital_shipyard` / `has_supercapital_shipyard` / `is_open` flags (imported by the backend's `add-structure`); `BuildCostService.module_flags_for_group()` maps an item's group to the flags that can build it, and `BuildCostService.get_structures()` (used by both the page and the cost requests) also drops `settings.toml [build_costs].no_capital_structure_ids` from standard capital builds. `rig_1..rig_3` are deprecated in favor of `structure_rigs` and will be dropped by the backend
 
 **Pricer Module (`parser/` directory):**
 - **`parser.py`**: Input parsing for EFT fittings and tab-separated item lists (contributed open source code)
