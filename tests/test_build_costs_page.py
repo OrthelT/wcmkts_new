@@ -97,3 +97,34 @@ class TestSyncMaterialSelection:
     def test_resets_a_stale_pick_missing_from_new_results(self):
         state = {build_costs.MATERIAL_SELECTOR_KEY: "Gone", "material_structure_preferred": "B Azbel"}
         assert self._sync(state, "B Azbel") == "B Azbel"
+
+
+class TestVisibleResults:
+    """Stored results come from the last calculation, but the structure filters
+    ("Show closed structures") can change before the user recalculates."""
+
+    RESULTS = {"Open A": {"total_cost": 1}, "Closed B": {"total_cost": 2}}
+
+    def test_unchecking_closed_drops_closed_results(self):
+        # Calculated with closed structures, then the box was unchecked.
+        shown, compare = build_costs.visible_results(self.RESULTS, {"Open A"}, None)
+        assert shown == {"Open A": {"total_cost": 1}}
+        assert compare is None
+
+    def test_compare_structure_without_a_result_is_dropped(self):
+        # Calculated without closed structures, then checked and a closed one picked.
+        results = {"Open A": {"total_cost": 1}}
+        shown, compare = build_costs.visible_results(results, {"Open A", "Closed B"}, "Closed B")
+        assert shown == results
+        assert compare is None
+
+    def test_compare_structure_with_a_result_is_kept(self):
+        shown, compare = build_costs.visible_results(
+            self.RESULTS, {"Open A", "Closed B"}, "Closed B"
+        )
+        assert shown == self.RESULTS
+        assert compare == "Closed B"
+
+    def test_compare_structure_hidden_by_filter_is_dropped(self):
+        shown, compare = build_costs.visible_results(self.RESULTS, {"Open A"}, "Closed B")
+        assert compare is None

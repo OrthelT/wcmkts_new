@@ -597,6 +597,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.price_source_jita_buy": "Jita Buy",
         "build_costs.show_closed_structures_label": "Show closed structures",
         "build_costs.show_closed_structures_help": "Show structures not open to the public.",
+        "build_costs.recalculate_for_structure": "Recalculate to see costs for {structure}.",
         "build_costs.structure_compare_label": "Structures",
         "build_costs.structure_compare_placeholder": "All Structures",
         "build_costs.structure_compare_help": (
@@ -1281,6 +1282,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "build_costs.price_source_jita_buy": "吉他买价",
         "build_costs.show_closed_structures_label": "显示非公开建筑",
         "build_costs.show_closed_structures_help": "显示不对公众开放的建筑。",
+        "build_costs.recalculate_for_structure": "重新计算以查看 {structure} 的成本。",
         "build_costs.structure_compare_label": "建筑",
         "build_costs.structure_compare_placeholder": "所有建筑",
         "build_costs.structure_compare_help": "选择一个建筑来比较制造成本；留空则显示所有建筑。",
@@ -1843,6 +1845,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "market_stats.pill_materials": "Materialien",
         "build_costs.show_closed_structures_label": "Geschlossene Strukturen anzeigen",
         "build_costs.show_closed_structures_help": "Strukturen anzeigen, die nicht öffentlich zugänglich sind.",
+        "build_costs.recalculate_for_structure": "Neu berechnen, um die Kosten für {structure} zu sehen.",
         "build_costs.structure_compare_label": "Strukturen",
         "build_costs.structure_compare_placeholder": "Alle Strukturen",
         "build_costs.structure_compare_help": (
@@ -2429,6 +2432,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "market_stats.pill_materials": "Matériaux",
         "build_costs.show_closed_structures_label": "Afficher les structures fermées",
         "build_costs.show_closed_structures_help": "Afficher les structures non ouvertes au public.",
+        "build_costs.recalculate_for_structure": "Recalculez pour voir les coûts de {structure}.",
         "build_costs.structure_compare_label": "Structures",
         "build_costs.structure_compare_placeholder": "Toutes les structures",
         "build_costs.structure_compare_help": (
@@ -3015,6 +3019,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "market_stats.pill_materials": "Материалы",
         "build_costs.show_closed_structures_label": "Показывать закрытые структуры",
         "build_costs.show_closed_structures_help": "Показывать структуры, закрытые для публичного доступа.",
+        "build_costs.recalculate_for_structure": "Пересчитайте, чтобы увидеть стоимость для {structure}.",
         "build_costs.structure_compare_label": "Структуры",
         "build_costs.structure_compare_placeholder": "Все структуры",
         "build_costs.structure_compare_help": (
@@ -3524,6 +3529,7 @@ TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
         "market_stats.pill_materials": "Materiales",
         "build_costs.show_closed_structures_label": "Mostrar estructuras cerradas",
         "build_costs.show_closed_structures_help": "Mostrar estructuras no abiertas al público.",
+        "build_costs.recalculate_for_structure": "Recalcule para ver los costos de {structure}.",
         "build_costs.structure_compare_label": "Estructuras",
         "build_costs.structure_compare_placeholder": "Todas las estructuras",
         "build_costs.structure_compare_help": (

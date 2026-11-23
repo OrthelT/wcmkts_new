@@ -296,6 +296,19 @@ def _resolve_type_names_from_esi(type_ids: tuple[int, ...]) -> dict[int, str]:
         return {}
 
 
+def visible_results(
+    results: dict, eligible: set[str], selected_structure: str | None
+) -> tuple[dict, str | None]:
+    """Limit stored results to structures eligible now.
+
+    The structure filters (e.g. "Show closed structures") can change after a
+    calculation. Results for structures no longer eligible are dropped, and a
+    compare structure with no result yet is returned as None.
+    """
+    shown = {name: r for name, r in results.items() if name in eligible}
+    return shown, selected_structure if selected_structure in shown else None
+
+
 MATERIAL_SELECTOR_KEY = "material_structure_selector"
 _MATERIAL_PREFERRED_KEY = "material_structure_preferred"
 
@@ -769,11 +782,24 @@ def main():
         st.session_state.selected_item_for_display = selected_item
         st.rerun()
 
+    results, compare_structure = {}, None
+    if st.session_state.cost_results is not None:
+        results, compare_structure = visible_results(
+            st.session_state.cost_results,
+            {s.structure for s in all_structures},
+            selected_structure,
+        )
+
     # Display results if available
-    if (
-        st.session_state.cost_results is not None
-        and st.session_state.selected_item_for_display == selected_item
-    ):
+    if results and st.session_state.selected_item_for_display == selected_item:
+        if selected_structure and compare_structure is None:
+            st.info(
+                translate_text(
+                    language_code,
+                    "build_costs.recalculate_for_structure",
+                    structure=selected_structure,
+                )
+            )
         vale_price = get_market_repository().get_local_price(type_id)
         jita_price = get_price_service().get_jita_price(type_id).sell_price
         if jita_price:
@@ -781,7 +807,6 @@ def main():
         if vale_price:
             vale_price = float(vale_price)
 
-        results = st.session_state.cost_results
         selected_item_display = selected_item_display or selected_item
 
         build_cost_df = pd.DataFrame.from_dict(results, orient="index")
@@ -874,7 +899,7 @@ def main():
                 )
 
             display_df, col_config, col_order = display_data(
-            build_cost_df, language_code, selected_structure
+            build_cost_df, language_code, compare_structure
             )
 
         if vale_price:
@@ -926,7 +951,6 @@ def main():
             st.markdown(translate_text(language_code, "build_costs.super_note"), unsafe_allow_html=True)
 
         st.subheader(translate_text(language_code, "build_costs.material_breakdown"))
-        results = st.session_state.cost_results
         structure_names_for_materials = sorted(list(results.keys()))
         # Without a compare structure, prefer the configured default over the
         # alphabetically first structure.
@@ -936,7 +960,7 @@ def main():
         )
         display_material_costs(
             results,
-            selected_structure or default_structure,
+            compare_structure or default_structure,
             structure_names_for_materials,
             selected_item_display,
             language_code,
