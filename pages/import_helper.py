@@ -198,7 +198,7 @@ def main():
         "rrp",
         "jita_sell_price",
         "jita_buy_price",
-        "shipping_cost",
+        "shipping_cost", #728049
         "profit_jita_sell_30d",
         "turnover_30d",
     ]
@@ -209,7 +209,7 @@ def main():
         """Apply green background to estimated prices and grey background to floored volumes."""
         styles = pd.DataFrame("", index=data.index, columns=data.columns)
         grey = "background-color: #d3d3d3"
-        light_green = "background-color: #d9f2d9"
+        light_green = "background-color: #728049"
         if "price" in styles.columns:
             styles.loc[price_estimated, "price"] = light_green
         if "volume_30d" in styles.columns:
